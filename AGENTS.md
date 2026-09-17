@@ -57,3 +57,24 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Use the `providedIn: 'root'` option for singleton services
 - Prefer the `@Service` decorator over `@Injectable({providedIn: 'root'})` for new singleton services (Angular v22+)
 - Use the `inject()` function instead of constructor injection
+
+## Design Principles
+
+Build production-quality Angular interfaces using Tailwind CSS and spartan/ui
+
+- Strong visual hierarchy
+- Generous but consistent spacing
+- Restrained color palette
+- Semantic Tailwind/spartan tokens
+- Clear typography scale
+- Subtle borders and shadows
+- Avoid excessive cards and nested containers
+- Avoid generic dashboard aesthetics
+- Responsive from mobile to desktop
+- Accessible interactions and keyboard navigation
+- Prefer spartan/ui components before custom primitives
+- Use Lucide icons consistently
+- Extract repeated UI patterns into Angular components
+- Keep templates readable
+- Prefer Angular Signals and modern Angular APIs
+- The result should feel intentionally designed, not AI-generated

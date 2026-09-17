@@ -2,10 +2,9 @@ import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 @Component({
-  imports: [RouterOutlet],
+  // imports: [RouterOutlet],
   selector: 'app-root',
-  styleUrl: './app.css',
-  templateUrl: './app.html',
+  template: ` <h1>Hola bro</h1> `,
 })
 export class App {
   protected readonly title = signal('real-maids-frontend');

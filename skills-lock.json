@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "spartan": {
+      "source": "spartan-ng/spartan",
+      "sourceType": "github",
+      "skillPath": "skills/spartan/SKILL.md",
+      "computedHash": "1f60e02863a89dc0adb58ff1a3b244904c3d6df3f6ea48177dff9158588e29f6"
+    },
+    "ui-craft": {
+      "source": "mofirojean/angular-ui-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-craft/SKILL.md",
+      "computedHash": "d24c4ff0ca7eec1294898bcfa6d20d249d66608c082081b4a03bbb80a8b29427"
+    }
+  }
+}
