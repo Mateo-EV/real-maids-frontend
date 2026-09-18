@@ -1,17 +1,17 @@
 @layer theme, base, components, utilities;
-@import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/preflight.css' layer(base);
-@import 'tailwindcss/utilities.css';
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
 
-@import '@spartan-ng/brain/hlm-tailwind-preset.css';
+@import "@spartan-ng/brain/hlm-tailwind-preset.css";
 /* You can add global styles to this file, and also import other style files */
 
 :root {
   color-scheme: light;
 
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
-    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
   /* The Real Maids palette: warm paper, navy structure, coral actions. */
   --navy: oklch(0.273 0.055 258.5); /* #172a46 */

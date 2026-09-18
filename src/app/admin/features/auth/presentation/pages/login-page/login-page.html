@@ -113,7 +113,7 @@
                   <ng-icon name="lucideCircleAlert" aria-hidden="true" />
                   <p hlmAlertTitle>No pudimos iniciar tu sesión</p>
                   <p hlmAlertDescription>
-                    @if (submitError()?.code === 'INVALID_CREDENTIALS') {
+                    @if (submitError()?.code === "INVALID_CREDENTIALS") {
                       Revisa el correo y la contraseña de prueba e inténtalo nuevamente.
                     } @else {
                       Ocurrió un problema inesperado. Inténtalo nuevamente.
@@ -133,11 +133,11 @@
                   inputmode="email"
                   placeholder="nombre@realmaids.com"
                 />
-                @if (form.controls.email.touched && form.controls.email.hasError('required')) {
+                @if (form.controls.email.touched && form.controls.email.hasError("required")) {
                   <hlm-field-error [forceShow]="true"
                     >Ingresa tu correo electrónico.</hlm-field-error
                   >
-                } @else if (form.controls.email.touched && form.controls.email.hasError('email')) {
+                } @else if (form.controls.email.touched && form.controls.email.hasError("email")) {
                   <hlm-field-error [forceShow]="true">Ingresa un correo válido.</hlm-field-error>
                 }
               </div>
@@ -168,16 +168,16 @@
                         [name]="passwordVisible() ? 'lucideEyeOff' : 'lucideEye'"
                         aria-hidden="true"
                       />
-                      {{ passwordVisible() ? 'Ocultar' : 'Mostrar' }}
+                      {{ passwordVisible() ? "Ocultar" : "Mostrar" }}
                     </button>
                   </div>
                 </div>
                 @if (
-                  form.controls.password.touched && form.controls.password.hasError('required')
+                  form.controls.password.touched && form.controls.password.hasError("required")
                 ) {
                   <hlm-field-error [forceShow]="true">Ingresa tu contraseña.</hlm-field-error>
                 } @else if (
-                  form.controls.password.touched && form.controls.password.hasError('minlength')
+                  form.controls.password.touched && form.controls.password.hasError("minlength")
                 ) {
                   <hlm-field-error [forceShow]="true">
                     La contraseña debe tener al menos 8 caracteres.

@@ -1,14 +1,14 @@
-import { Directive } from '@angular/core';
-import { classes } from '@spartan-ng/helm/utils';
+import { Directive } from "@angular/core"
+import { classes } from "@spartan-ng/helm/utils"
 
 @Directive({
-  selector: '[hlmAlertAction]',
+  selector: "[hlmAlertAction]",
   host: {
-    'data-slot': 'alert-action',
-  },
+    "data-slot": "alert-action"
+  }
 })
 export class HlmAlertAction {
   constructor() {
-    classes(() => 'absolute end-2 top-2');
+    classes(() => "absolute end-2 top-2")
   }
 }
