@@ -30,13 +30,13 @@ describe("LoginPage", () => {
     })
   })
 
-  it("marks invalid fields and does not submit an empty form", () => {
+  it("marks invalid fields and does not submit an empty form", async () => {
     const fixture = TestBed.createComponent(LoginPage)
 
-    fixture.componentInstance.submit()
+    await fixture.componentInstance.submit()
 
-    expect(fixture.componentInstance.form.controls.email.touched).toBe(true)
-    expect(fixture.componentInstance.form.controls.password.touched).toBe(true)
+    expect(fixture.componentInstance.loginForm.email().touched()).toBe(true)
+    expect(fixture.componentInstance.loginForm.password().touched()).toBe(true)
     expect(login).not.toHaveBeenCalled()
   })
 
@@ -45,21 +45,21 @@ describe("LoginPage", () => {
 
     fixture.componentInstance.fillDemoCredentials()
 
-    expect(fixture.componentInstance.form.getRawValue()).toEqual({
+    expect(fixture.componentInstance.loginForm().value()).toEqual({
       email: DEMO_AUTH.email,
       password: DEMO_AUTH.password
     })
   })
 
-  it("shows a recoverable error when credentials are rejected", () => {
+  it("shows a recoverable error when credentials are rejected", async () => {
     const fixture = TestBed.createComponent(LoginPage)
     login.mockReturnValue(of(Result.failure(new AuthError("INVALID_CREDENTIALS"))))
-    fixture.componentInstance.form.setValue({
+    fixture.componentInstance.loginForm().value.set({
       email: "wrong@realmaids.com",
       password: "incorrecta"
     })
 
-    fixture.componentInstance.submit()
+    await fixture.componentInstance.submit()
     fixture.detectChanges()
 
     const alert = fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement | null
@@ -67,16 +67,16 @@ describe("LoginPage", () => {
     expect(navigateByUrl).not.toHaveBeenCalled()
   })
 
-  it("navigates to the admin home after a successful login", () => {
+  it("navigates to the admin home after a successful login", async () => {
     const fixture = TestBed.createComponent(LoginPage)
     const session = UserSession.create(DEMO_AUTH.name, DEMO_AUTH.email)
     login.mockReturnValue(of(Result.success(session)))
-    fixture.componentInstance.form.setValue({
+    fixture.componentInstance.loginForm().value.set({
       email: DEMO_AUTH.email,
       password: DEMO_AUTH.password
     })
 
-    fixture.componentInstance.submit()
+    await fixture.componentInstance.submit()
 
     expect(navigateByUrl).toHaveBeenCalledWith("/admin")
   })

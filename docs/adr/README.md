@@ -13,6 +13,7 @@ Los ADR describen decisiones de largo alcance. Estados válidos: `Proposed`, `Ac
 | 007 | SSR, hidratación y prerender          | Accepted |
 | 008 | Vitest con builder oficial de Angular | Accepted |
 | 009 | Organización por feature y capas      | Accepted |
+| 010 | Angular Signal Forms                  | Accepted |
 
 Para una decisión nueva:
 

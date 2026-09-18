@@ -51,6 +51,7 @@ Componentes actuales: button, checkbox, field, input, label, separator y utils.
 ## Formularios
 
 - Componer campos con los componentes Spartan `field`, `label`, `input`, `checkbox`, etc.
+- Usar Angular Signal Forms con `formRoot`/`formField`, validadores declarativos y errores derivados de `errors()`.
 - Marcar requeridos y asociar error/ayuda al control accesible.
 - Confirmar éxito solo después de respuesta backend correcta.
 - Deshabilitar y mostrar progreso durante envíos sin crear acciones duplicadas.

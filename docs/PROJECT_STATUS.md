@@ -14,7 +14,7 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | Hidratación          | Implementada            | `provideClientHydration()`                                                         |
 | UI y estilos         | Parcial                 | Tailwind 4, tokens de tema y doce paquetes Spartan Helm locales                    |
 | Router               | Parcial                 | Rutas lazy `/login` y `/admin`, redirect y wildcard                                |
-| Autenticación        | Demo frontend funcional | Formulario, source en memoria, sesión signal, guards, redirección y logout         |
+| Autenticación        | Demo frontend funcional | Signal Form, source en memoria, sesión signal, guards, redirección y logout        |
 | API REST             | No implementada         | Existe `API_URL` como token sin valor; no hay cliente HTTP ni servicios remotos    |
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
@@ -26,7 +26,7 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 
 ## Build y pruebas
 
-El 18 de septiembre de 2026 se ejecutaron los targets con el MCP de Angular CLI:
+El 18 de septiembre de 2026 se ejecutaron los targets con el Angular CLI local del workspace después de migrar P01 a Signal Forms:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
 - `test`: **correcto**; 4 archivos y 13 pruebas aprobadas.
@@ -53,7 +53,7 @@ La feature `src/app/admin/features/auth` está separada en:
 
 `AUTH_REPOSITORY` se enlaza a `AuthRepositoryImpl` mediante inyección de dependencias. La fuente valida credenciales de demostración, simula latencia, devuelve un usuario y permite logout. `AuthService` mantiene la sesión solo en memoria; al recargar se pierde deliberadamente.
 
-P01 incluye validación accesible, visibilidad de contraseña, estado de carga, error recuperable, credenciales demo y redirección segura. `/admin` prueba el guard y logout, pero no constituye P02.
+P01 usa Angular Signal Forms con modelo signal, validación declarativa, bindings `formRoot`/`formField` y estado de envío reactivo. Incluye validación accesible, visibilidad de contraseña, error recuperable, credenciales demo y redirección segura. `/admin` prueba el guard y logout, pero no constituye P02.
 
 ### Capa UI
 

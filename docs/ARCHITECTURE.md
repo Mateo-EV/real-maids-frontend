@@ -79,7 +79,7 @@ La primera feature vertical implementada es autenticación. Su dirección concep
 
 ```mermaid
 flowchart LR
-    UI[Presentación\nLoginPage + AdminHomePage] --> APP[Application\nAuthService + signals]
+    UI[Presentación\nLoginPage + Signal Forms] --> APP[Application\nAuthService + signals]
     APP --> PORT[Domain\nAuthRepository]
     INFRA[Infrastructure\nAuthRepositoryImpl] -. implementa .-> PORT
     INFRA --> SOURCE[AuthInMemorySource\ncredenciales demo]
@@ -109,6 +109,8 @@ La decisión UI vigente es Spartan + Tailwind, no Angular Material ni Bootstrap.
 - Antes de crear markup propio se revisan los componentes Spartan instalados/disponibles.
 
 La configuración se encuentra en `components.json`; consulta ADR-006.
+
+Los formularios propios usan Angular Signal Forms como base: el modelo signal es la fuente de verdad, la validación se declara en el schema del formulario y Spartan compone campos y errores mediante `formRoot`/`formField`. No existe un wrapper compartido; consulta ADR-010.
 
 ## Bootstrap y providers
 

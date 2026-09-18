@@ -107,7 +107,7 @@
           </div>
 
           <div hlmCardContent>
-            <form class="flex flex-col gap-5" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <form class="flex flex-col gap-5" [formRoot]="loginForm" (submit)="submit()">
               @if (submitError()) {
                 <div hlmAlert variant="destructive">
                   <ng-icon name="lucideCircleAlert" aria-hidden="true" />
@@ -128,17 +128,18 @@
                   hlmInput
                   id="email"
                   type="email"
-                  formControlName="email"
+                  [formField]="loginForm.email"
                   autocomplete="email"
                   inputmode="email"
                   placeholder="nombre@realmaids.com"
+                  (input)="clearSubmitError()"
                 />
-                @if (form.controls.email.touched && form.controls.email.hasError("required")) {
-                  <hlm-field-error [forceShow]="true"
-                    >Ingresa tu correo electrónico.</hlm-field-error
-                  >
-                } @else if (form.controls.email.touched && form.controls.email.hasError("email")) {
-                  <hlm-field-error [forceShow]="true">Ingresa un correo válido.</hlm-field-error>
+                @if (loginForm.email().touched()) {
+                  @for (error of loginForm.email().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">
+                      {{ error.message }}
+                    </hlm-field-error>
+                  }
                 }
               </div>
 
@@ -149,9 +150,10 @@
                     hlmInputGroupInput
                     id="password"
                     [type]="passwordVisible() ? 'text' : 'password'"
-                    formControlName="password"
+                    [formField]="loginForm.password"
                     autocomplete="current-password"
                     placeholder="Mínimo 8 caracteres"
+                    (input)="clearSubmitError()"
                   />
                   <div hlmInputGroupAddon align="inline-end">
                     <button
@@ -172,16 +174,12 @@
                     </button>
                   </div>
                 </div>
-                @if (
-                  form.controls.password.touched && form.controls.password.hasError("required")
-                ) {
-                  <hlm-field-error [forceShow]="true">Ingresa tu contraseña.</hlm-field-error>
-                } @else if (
-                  form.controls.password.touched && form.controls.password.hasError("minlength")
-                ) {
-                  <hlm-field-error [forceShow]="true">
-                    La contraseña debe tener al menos 8 caracteres.
-                  </hlm-field-error>
+                @if (loginForm.password().touched()) {
+                  @for (error of loginForm.password().errors(); track error.kind) {
+                    <hlm-field-error [validator]="error.kind">
+                      {{ error.message }}
+                    </hlm-field-error>
+                  }
                 }
               </div>
 
@@ -190,10 +188,10 @@
                 size="lg"
                 class="w-full"
                 type="submit"
-                [disabled]="loading()"
-                [attr.aria-busy]="loading()"
+                [disabled]="loginForm().submitting()"
+                [attr.aria-busy]="loginForm().submitting()"
               >
-                @if (loading()) {
+                @if (loginForm().submitting()) {
                   <hlm-spinner aria-label="Iniciando sesión" />
                   Verificando acceso…
                 } @else {

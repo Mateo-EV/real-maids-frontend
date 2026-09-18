@@ -7,7 +7,7 @@ Aplicación web de The Real Maids construida con Angular. El repositorio está e
 - Angular 22 con componentes standalone y TypeScript 6.
 - Renderizado SSR con Node/Express, hidratación y prerender de `/login`.
 - Tailwind CSS 4 y Spartan UI (`@spartan-ng/brain` + componentes Helm copiados en `libs/ui`).
-- Login responsive P01 conectado a una fuente en memoria con credenciales de demostración.
+- Login responsive P01 con Angular Signal Forms, conectado a una fuente en memoria con credenciales de demostración.
 - Sesión efímera con Angular signals, guards de usuario/invitado, redirección segura y logout.
 - Rutas lazy `/login` y `/admin`; `/admin` es un destino temporal protegido, no el dashboard P02.
 - `/login` se prerenderiza; el resto de rutas usa renderizado cliente mientras no exista sesión backend.

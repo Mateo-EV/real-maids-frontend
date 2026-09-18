@@ -13,7 +13,7 @@
 
 | RF/HU                 | Módulo                      | Pantalla             | Estado         | Evidencia/brecha                                                                               |
 | --------------------- | --------------------------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
-| RF01 / HU01           | M01 Autenticación           | P01 Inicio de sesión | Parcial (demo) | UI, validación, source en memoria, sesión efímera, guards, logout y pruebas; falta backend/JWT |
+| RF01 / HU01           | M01 Autenticación           | P01 Inicio de sesión | Parcial (demo) | Signal Form, source en memoria, sesión efímera, guards, logout y pruebas; falta backend/JWT    |
 | RF02 / HU02           | M02 Usuarios/roles/permisos | P03                  | No iniciada    | Sin feature ni rutas                                                                           |
 | RF03 / HU03           | M03 Clientes                | P04                  | No iniciada    | Sin feature ni rutas                                                                           |
 | RF04 / HU04           | M04 Solicitudes             | P05                  | No iniciada    | Sin feature ni rutas                                                                           |
@@ -41,7 +41,7 @@
 | RNF08 responsive                   | Login implementado responsive; falta validación multinavegador |
 | RNF09 extensibilidad               | Estructura por feature iniciada                                |
 | RNF10 separación de capas          | Aplicada parcialmente en auth                                  |
-| RNF12 validación/mensajes          | Implementada en P01 para validación y error de acceso          |
+| RNF12 validación/mensajes          | Signal Forms en P01 para validación y error de acceso          |
 | RNF13-RNF14 QuickBooks vía backend | Límite documentado; integración no iniciada                    |
 
 ## Reglas de mantenimiento

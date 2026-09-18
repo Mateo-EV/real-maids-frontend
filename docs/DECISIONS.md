@@ -36,7 +36,7 @@ Estados:
 | DEC-022 | Render mode por rutas privadas/dinámicas                  | Parcial               | Login prerender; rutas protegidas CSR sin backend             |
 | DEC-023 | Alcance de landing pública                                | Abierta               | Trazabilidad funcional incompleta                             |
 | DEC-024 | Transiciones excepcionales y duplicados                   | Abierta               | Requieren validación de negocio/backend                       |
-| DEC-025 | Estrategia de formularios compartidos                     | Abierta               | No imponer abstracción antes de contar con formularios reales |
+| DEC-025 | Angular Signal Forms como base; abstracciones compartidas  | Implementada inicial  | ADR-010; P01 migrada, sin wrapper genérico                     |
 | DEC-026 | Política de caché y reintentos                            | Abierta               | Depende del contrato y semántica de cada operación            |
 | DEC-027 | Observabilidad frontend                                   | Abierta               | No hay proveedor ni política de datos definida                |
 | DEC-028 | Cliente registra directamente una solicitud               | Abierta               | La fuente funcional no resuelve el alcance del portal cliente |

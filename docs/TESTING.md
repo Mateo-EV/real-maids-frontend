@@ -2,7 +2,7 @@
 
 ## Estado verificable
 
-Última ejecución: **2026-09-18** mediante el MCP de Angular CLI.
+Última ejecución: **2026-09-18** mediante el Angular CLI local del workspace.
 
 - Target: `real-maids-frontend:test`.
 - Builder: `@angular/build:unit-test`.
@@ -10,7 +10,7 @@
 - Resultado actual: 4 archivos y 13 pruebas aprobadas.
 - E2E: sin target, dependencia ni suite configurada.
 
-La cobertura actual verifica source en memoria, servicio de aplicación, login, estados de error/redirección y guards. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
+La cobertura actual verifica source en memoria, servicio de aplicación, Signal Form de login, estados de validación/error/redirección y guards. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
 
 ## Comandos
 
@@ -20,7 +20,7 @@ Preferir el MCP Angular CLI `run_target` con target `test`. Para trabajo manual:
 npm test
 ```
 
-El target oficial ejecuta en modo headless/no-watch cuando se invoca desde el MCP.
+El target oficial se ejecuta en modo no-watch para verificación automatizada.
 
 ## Cobertura mínima por tipo de cambio
 
