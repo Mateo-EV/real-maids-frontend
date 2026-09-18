@@ -14,22 +14,22 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | Hidratación          | Implementada            | `provideClientHydration()`                                                         |
 | UI y estilos         | Parcial                 | Tailwind 4, tokens de tema y doce paquetes Spartan Helm locales                    |
 | Router               | Parcial                 | Rutas lazy `/login` y `/admin`, redirect y wildcard                                |
-| Autenticación        | Demo frontend funcional | Signal Form, source en memoria, sesión signal, guards, redirección y logout        |
+| Autenticación        | Demo frontend funcional | Signal Form, AuthStore, source en memoria, guards, redirección y logout            |
 | API REST             | No implementada         | Existe `API_URL` como token sin valor; no hay cliente HTTP ni servicios remotos    |
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
 | Features M02-M12     | No implementadas        | Sin código funcional asociado                                                      |
-| Unit tests           | Implementadas           | 4 archivos, 13 pruebas Vitest en verde                                             |
+| Unit tests           | Implementadas           | 6 archivos, 21 pruebas Vitest en verde                                             |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
 
 ## Build y pruebas
 
-El 18 de septiembre de 2026 se ejecutaron los targets con el Angular CLI local del workspace después de migrar P01 a Signal Forms:
+El 18 de septiembre de 2026 se ejecutaron los targets con el Angular CLI local del workspace después de migrar P01 a Signal Forms y NgRx SignalStore:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 4 archivos y 13 pruebas aprobadas.
+- `test`: **correcto**; 6 archivos y 21 pruebas aprobadas.
 
 La suite cubre source en memoria, servicio de aplicación, formulario, errores, navegación y guards.
 
@@ -50,10 +50,11 @@ La feature `src/app/admin/features/auth` está separada en:
 - `domain`: entidad `UserSession`, parámetros de login y contrato `AuthRepository`;
 - `application`: `AuthService` y `AuthError`;
 - `infrastructure`: `AuthRepositoryImpl` y `AuthInMemorySource`.
+- `presentation`: componente de formulario, páginas, guards y `AuthStore` con NgRx SignalStore.
 
-`AUTH_REPOSITORY` se enlaza a `AuthRepositoryImpl` mediante inyección de dependencias. La fuente valida credenciales de demostración, simula latencia, devuelve un usuario y permite logout. `AuthService` mantiene la sesión solo en memoria; al recargar se pierde deliberadamente.
+`AUTH_REPOSITORY` se enlaza a `AuthRepositoryImpl` mediante inyección de dependencias. La fuente valida credenciales de demostración, simula latencia, devuelve un usuario y permite logout. `AuthService` orquesta `login -> me` sin almacenar estado. `AuthStore`, provisto en root desde la capa de presentación, mantiene la sesión solo en memoria; al recargar se pierde deliberadamente.
 
-P01 usa Angular Signal Forms con modelo signal, validación declarativa, bindings `formRoot`/`formField` y estado de envío reactivo. Incluye validación accesible, visibilidad de contraseña, error recuperable, credenciales demo y redirección segura. `/admin` prueba el guard y logout, pero no constituye P02.
+P01 usa un `LoginFormComponent` standalone con Angular Signal Forms, modelo signal, validación declarativa, bindings `formRoot`/`formField` y estado de envío reactivo. La página compone la identidad visual y resuelve la redirección segura; el formulario encapsula validación accesible, visibilidad de contraseña, envío y error recuperable. La interfaz no expone que la fuente actual es de demostración. `/admin` prueba el guard y logout, pero no constituye P02.
 
 ### Capa UI
 

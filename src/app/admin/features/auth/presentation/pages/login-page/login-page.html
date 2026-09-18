@@ -6,12 +6,12 @@
     <div class="absolute -bottom-32 left-1/3 size-80 rounded-full bg-accent/15 blur-3xl"></div>
   </div>
 
-  <div class="relative grid min-h-dvh lg:grid-cols-[minmax(0,1.05fr)_minmax(30rem,0.95fr)]">
+  <div class="relative grid min-h-dvh lg:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]">
     <section
       class="relative hidden overflow-hidden bg-secondary px-12 py-10 text-secondary-foreground lg:flex lg:flex-col lg:justify-between xl:px-20 xl:py-14"
       aria-labelledby="brand-heading"
     >
-      <div aria-hidden="true" class="pointer-events-none absolute inset-0">
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
         <div class="absolute -left-28 top-1/4 size-80 rounded-full bg-primary/15 blur-3xl"></div>
         <div class="absolute -right-24 bottom-0 size-72 rounded-full bg-accent/10 blur-3xl"></div>
       </div>
@@ -30,17 +30,17 @@
 
       <div class="relative max-w-xl">
         <p class="text-sm font-medium uppercase tracking-widest text-secondary-foreground/65">
-          Todo tu equipo, en un solo lugar
+          Gestión diaria, sin fricción
         </p>
         <h2
           id="brand-heading"
           class="mt-4 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl"
         >
-          Una operación más clara empieza con un acceso seguro.
+          Tu operación comienza con una vista más clara.
         </h2>
         <p class="mt-5 max-w-lg text-base leading-7 text-secondary-foreground/75">
-          Coordina clientes, órdenes y personal de campo desde una experiencia diseñada para el
-          trabajo diario.
+          Organiza clientes, servicios y equipos desde un espacio pensado para acompañar cada
+          jornada de trabajo.
         </p>
 
         <ul class="mt-9 flex flex-col gap-4 text-sm text-secondary-foreground/85">
@@ -50,7 +50,7 @@
             >
               <ng-icon name="lucideCheck" aria-hidden="true" />
             </span>
-            Información operativa organizada por rol.
+            Información importante al alcance de tu equipo.
           </li>
           <li class="flex items-center gap-3">
             <span
@@ -58,7 +58,7 @@
             >
               <ng-icon name="lucideCheck" aria-hidden="true" />
             </span>
-            Experiencia responsive para oficina y campo.
+            Seguimiento ordenado de cada servicio.
           </li>
           <li class="flex items-center gap-3">
             <span
@@ -66,20 +66,15 @@
             >
               <ng-icon name="lucideCheck" aria-hidden="true" />
             </span>
-            Acceso preparado para permisos y trazabilidad.
+            Una experiencia consistente en oficina y en campo.
           </li>
         </ul>
       </div>
 
-      <p class="relative text-xs text-secondary-foreground/55">
-        © 2026 The Real Maids · Entorno de demostración
-      </p>
+      <p class="relative text-xs text-secondary-foreground/55">© 2026 The Real Maids</p>
     </section>
 
-    <section
-      class="flex items-center justify-center px-4 py-8 sm:px-8 lg:px-12"
-      aria-labelledby="login-title"
-    >
+    <section class="flex items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
       <div class="flex w-full max-w-md flex-col gap-6">
         <div class="flex items-center gap-3 lg:hidden">
           <span
@@ -93,130 +88,10 @@
           </div>
         </div>
 
-        <section hlmCard class="w-full shadow-lg">
-          <div hlmCardHeader>
-            <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Portal administrativo
-            </p>
-            <h1 hlmCardTitle id="login-title" class="text-2xl tracking-tight">
-              Bienvenido de nuevo
-            </h1>
-            <p hlmCardDescription class="leading-6">
-              Ingresa tus credenciales para continuar al panel de operaciones.
-            </p>
-          </div>
-
-          <div hlmCardContent>
-            <form class="flex flex-col gap-5" [formRoot]="loginForm" (submit)="submit()">
-              @if (submitError()) {
-                <div hlmAlert variant="destructive">
-                  <ng-icon name="lucideCircleAlert" aria-hidden="true" />
-                  <p hlmAlertTitle>No pudimos iniciar tu sesión</p>
-                  <p hlmAlertDescription>
-                    @if (submitError()?.code === "INVALID_CREDENTIALS") {
-                      Revisa el correo y la contraseña de prueba e inténtalo nuevamente.
-                    } @else {
-                      Ocurrió un problema inesperado. Inténtalo nuevamente.
-                    }
-                  </p>
-                </div>
-              }
-
-              <div hlmField>
-                <label hlmFieldLabel for="email">Correo electrónico</label>
-                <input
-                  hlmInput
-                  id="email"
-                  type="email"
-                  [formField]="loginForm.email"
-                  autocomplete="email"
-                  inputmode="email"
-                  placeholder="nombre@realmaids.com"
-                  (input)="clearSubmitError()"
-                />
-                @if (loginForm.email().touched()) {
-                  @for (error of loginForm.email().errors(); track error.kind) {
-                    <hlm-field-error [validator]="error.kind">
-                      {{ error.message }}
-                    </hlm-field-error>
-                  }
-                }
-              </div>
-
-              <div hlmField>
-                <label hlmFieldLabel for="password">Contraseña</label>
-                <div hlmInputGroup>
-                  <input
-                    hlmInputGroupInput
-                    id="password"
-                    [type]="passwordVisible() ? 'text' : 'password'"
-                    [formField]="loginForm.password"
-                    autocomplete="current-password"
-                    placeholder="Mínimo 8 caracteres"
-                    (input)="clearSubmitError()"
-                  />
-                  <div hlmInputGroupAddon align="inline-end">
-                    <button
-                      hlmInputGroupButton
-                      type="button"
-                      size="xs"
-                      [attr.aria-label]="
-                        passwordVisible() ? 'Ocultar contraseña' : 'Mostrar contraseña'
-                      "
-                      [attr.aria-pressed]="passwordVisible()"
-                      (click)="togglePasswordVisibility()"
-                    >
-                      <ng-icon
-                        [name]="passwordVisible() ? 'lucideEyeOff' : 'lucideEye'"
-                        aria-hidden="true"
-                      />
-                      {{ passwordVisible() ? "Ocultar" : "Mostrar" }}
-                    </button>
-                  </div>
-                </div>
-                @if (loginForm.password().touched()) {
-                  @for (error of loginForm.password().errors(); track error.kind) {
-                    <hlm-field-error [validator]="error.kind">
-                      {{ error.message }}
-                    </hlm-field-error>
-                  }
-                }
-              </div>
-
-              <button
-                hlmBtn
-                size="lg"
-                class="w-full"
-                type="submit"
-                [disabled]="loginForm().submitting()"
-                [attr.aria-busy]="loginForm().submitting()"
-              >
-                @if (loginForm().submitting()) {
-                  <hlm-spinner aria-label="Iniciando sesión" />
-                  Verificando acceso…
-                } @else {
-                  Iniciar sesión
-                  <ng-icon name="lucideArrowRight" aria-hidden="true" />
-                }
-              </button>
-            </form>
-          </div>
-
-          <div hlmCardFooter class="justify-between gap-4">
-            <div class="min-w-0">
-              <p class="text-xs font-medium text-foreground">Acceso de demostración</p>
-              <p class="mt-1 truncate text-xs text-muted-foreground">
-                {{ demoAuth.email }} · {{ demoAuth.password }}
-              </p>
-            </div>
-            <button hlmBtn type="button" variant="ghost" size="sm" (click)="fillDemoCredentials()">
-              Completar
-            </button>
-          </div>
-        </section>
+        <app-login-form (authenticated)="onAuthenticated()" />
 
         <p class="text-center text-xs leading-5 text-muted-foreground">
-          Esta sesión se mantiene solo en memoria y se cerrará al recargar la página.
+          ¿Necesitas ayuda para acceder? Comunícate con el administrador de tu cuenta.
         </p>
       </div>
     </section>

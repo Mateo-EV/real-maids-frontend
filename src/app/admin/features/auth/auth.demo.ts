@@ -1,5 +1,5 @@
 export const DEMO_AUTH = {
-  email: "admin@realmaids.com",
+  email: "riojamatthew@gmail.com",
   password: "demo2026",
-  name: "Administrador Demo"
+  name: "Mateo"
 } as const

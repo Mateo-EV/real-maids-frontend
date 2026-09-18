@@ -1,4 +1,4 @@
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
+import { AuthStore } from "@/app/admin/features/auth/presentation/state/auth.store"
 import { ChangeDetectionStrategy, Component, inject } from "@angular/core"
 import { Router } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
@@ -20,13 +20,13 @@ import { HlmCardImports } from "@spartan-ng/helm/card"
   templateUrl: "./admin-home-page.html"
 })
 export class AdminHomePage {
-  private readonly authService = inject(AuthService)
+  private readonly authStore = inject(AuthStore)
   private readonly router = inject(Router)
 
-  readonly session = this.authService.session
+  readonly session = this.authStore.session
 
   logout(): void {
-    this.authService.logout()
+    this.authStore.logout()
     void this.router.navigateByUrl("/login")
   }
 }

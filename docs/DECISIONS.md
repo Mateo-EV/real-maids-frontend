@@ -22,13 +22,13 @@ Estados:
 | DEC-008 | Spartan Brain/Helm + Tailwind CSS 4                       | Implementada          | ADR-006, `components.json`, `libs/ui`, `src/styles.css`       |
 | DEC-009 | Arquitectura por feature con capas cuando aporten límites | Implementada inicial  | ADR-009; feature auth vertical completa para demo             |
 | DEC-010 | Repositorios de dominio conectados por `InjectionToken`   | Implementada inicial  | Auth usa `AUTH_REPOSITORY` y adaptador en memoria             |
-| DEC-011 | Unit tests con builder Angular + Vitest                   | Implementada          | ADR-008; 13 pruebas aprobadas                                 |
+| DEC-011 | Unit tests con builder Angular + Vitest                   | Implementada          | ADR-008; 21 pruebas aprobadas                                 |
 | DEC-012 | Angular Material o Bootstrap                              | Descartada/sustituida | Sustituida por ADR-006                                        |
 | DEC-013 | Jasmine/Karma como runner actual                          | Descartada/sustituida | Sustituida por ADR-008                                        |
 | DEC-014 | Preparar interfaz en español e inglés                     | Abierta               | Falta estrategia i18n                                         |
 | DEC-015 | Mostrar zona horaria operativa                            | Abierta               | Falta contrato y formato                                      |
 | DEC-016 | Persistencia/renovación del JWT                           | Abierta               | No usar almacenamiento permanente sin ADR                     |
-| DEC-017 | Estado global                                             | Abierta               | No introducir store sin necesidad y ADR                       |
+| DEC-017 | NgRx SignalStore para estado compartido de presentación   | Implementada inicial  | ADR-011; store auth raíz, sin store monolítico                 |
 | DEC-018 | Cliente OpenAPI generado o servicios manuales             | Abierta               | Depende del contrato backend                                  |
 | DEC-019 | Manejo estándar de errores API                            | Abierta               | Falta esquema backend                                         |
 | DEC-020 | Hosting productivo                                        | Abierta               | Vercel era previsto, no está verificado                       |

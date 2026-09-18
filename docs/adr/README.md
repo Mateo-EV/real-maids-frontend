@@ -14,6 +14,7 @@ Los ADR describen decisiones de largo alcance. Estados válidos: `Proposed`, `Ac
 | 008 | Vitest con builder oficial de Angular | Accepted |
 | 009 | Organización por feature y capas      | Accepted |
 | 010 | Angular Signal Forms                  | Accepted |
+| 011 | NgRx SignalStore en presentación      | Accepted |
 
 Para una decisión nueva:
 

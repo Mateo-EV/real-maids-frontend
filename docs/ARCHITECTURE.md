@@ -45,7 +45,7 @@ flowchart TB
 - CSS global con Tailwind CSS 4 y preset de Spartan.
 - Pruebas unitarias mediante el builder oficial y Vitest.
 
-No hay NgRx, store global, cliente OpenAPI, HttpClient configurado, interceptor, librería i18n ni observabilidad implementados.
+NgRx SignalStore se usa únicamente para el estado compartido de presentación de autenticación. No hay store monolítico, cliente OpenAPI, HttpClient configurado, interceptor, librería i18n ni observabilidad implementados.
 
 ## Organización de código real
 
@@ -56,11 +56,14 @@ src/
       application/       # servicios de caso de uso y errores
       domain/            # entidad, parámetros y contrato de repositorio
       infrastructure/    # implementación y fuente en memoria
-      presentation/      # login y destino autenticado temporal
+      presentation/
+        components/      # formularios y piezas propias de la feature
+        guards/          # guards auth/guest propios de la feature
+        pages/           # login y destino autenticado temporal
+        state/           # AuthStore raíz con NgRx SignalStore
       auth.routes.ts     # rutas lazy login/admin
     core/
       config/            # configuración browser/server y placeholders de ambiente
-      guards/            # guards auth/guest
       services/          # placeholders
       tokens/            # API_URL, todavía sin provider
     shared/utils/        # Result<T, E>
@@ -79,7 +82,8 @@ La primera feature vertical implementada es autenticación. Su dirección concep
 
 ```mermaid
 flowchart LR
-    UI[Presentación\nLoginPage + Signal Forms] --> APP[Application\nAuthService + signals]
+    UI[Presentación\nLoginForm + pages + guards] --> STORE[AuthStore\nNgRx SignalStore]
+    STORE --> APP[Application\nAuthService sin estado]
     APP --> PORT[Domain\nAuthRepository]
     INFRA[Infrastructure\nAuthRepositoryImpl] -. implementa .-> PORT
     INFRA --> SOURCE[AuthInMemorySource\ncredenciales demo]
@@ -93,6 +97,7 @@ Reglas para extender esta arquitectura:
 - ubicar la orquestación en `application`;
 - ubicar HTTP, almacenamiento u otros adaptadores en `infrastructure`;
 - crear una capa `presentation` dentro de la feature para rutas, páginas y componentes propios;
+- mantener stores y guards específicos dentro de `presentation`, aunque un store pueda tener alcance root mediante DI;
 - reservar `core` para configuración transversal y singletons;
 - reservar `shared` para piezas realmente reutilizables y sin conocimiento de una feature concreta.
 
@@ -121,7 +126,7 @@ Los formularios propios usan Angular Signal Forms como base: el modelo signal es
 - hidratación de cliente;
 - binding `AUTH_REPOSITORY -> AuthRepositoryImpl`.
 
-`AuthService` orquesta login y consulta de usuario, y expone la sesión con signals de solo lectura. No persiste datos en browser storage.
+`AuthService` orquesta login y consulta de usuario sin conservar estado. `AuthStore` usa NgRx SignalStore, se provee en root y expone `session` e `isAuthenticated` a componentes, páginas y guards. `LoginFormComponent` encapsula Signal Forms, validación y envío; `LoginPage` conserva la composición de pantalla y la navegación posterior. No se persisten datos en browser storage ni se incorpora JWT; consulta ADR-011.
 
 El servidor combina esa configuración con `provideServerRendering(withRoutes(serverRoutes))`.
 
@@ -153,7 +158,7 @@ M01-M12 y P01-P13 siguen siendo el mapa de alcance proveniente del documento fun
 
 - persistencia y renovación de JWT;
 - contrato OpenAPI y generación de cliente;
-- estado global, si aparece una necesidad transversal demostrable;
+- extensión de NgRx SignalStore a otras features, solo cuando exista estado compartido demostrado;
 - i18n español/inglés;
 - política de caché y reintentos;
 - observabilidad frontend;

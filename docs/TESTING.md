@@ -7,10 +7,10 @@
 - Target: `real-maids-frontend:test`.
 - Builder: `@angular/build:unit-test`.
 - Runner detectado por configuración: Vitest (`vitest/globals` y `jsdom`).
-- Resultado actual: 4 archivos y 13 pruebas aprobadas.
+- Resultado actual: 6 archivos y 21 pruebas aprobadas.
 - E2E: sin target, dependencia ni suite configurada.
 
-La cobertura actual verifica source en memoria, servicio de aplicación, Signal Form de login, estados de validación/error/redirección y guards. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
+La cobertura actual verifica source en memoria, servicio de aplicación sin estado, transiciones de `AuthStore`, el `LoginFormComponent` con Signal Forms, estados de validación/error/emisión de éxito, redirección de la página y guards. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
 
 ## Comandos
 

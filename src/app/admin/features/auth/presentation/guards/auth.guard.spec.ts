@@ -1,3 +1,4 @@
+import { AuthStore } from "@/app/admin/features/auth/presentation/state/auth.store"
 import { signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import {
@@ -8,7 +9,6 @@ import {
   UrlTree
 } from "@angular/router"
 import { beforeEach, describe, expect, it } from "vitest"
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
 import { authGuard, guestGuard } from "./auth.guard"
 
 describe("auth guards", () => {
@@ -19,7 +19,7 @@ describe("auth guards", () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { isAuthenticated: authenticated.asReadonly() } }
+        { provide: AuthStore, useValue: { isAuthenticated: authenticated.asReadonly() } }
       ]
     })
   })

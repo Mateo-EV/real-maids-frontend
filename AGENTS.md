@@ -69,18 +69,19 @@ Reutiliza componentes instalados y genera nuevos con `@spartan-ng/cli:ui`; no ad
 - Organización por feature; dentro de una feature usa `domain`, `application`, `infrastructure` y `presentation` cuando esos límites aporten valor.
 - `core` contiene configuración transversal/singletons; `shared` solo piezas genuinamente reutilizables.
 - Contratos de repositorio pueden conectarse a adaptadores mediante `InjectionToken`.
+- Estado compartido de presentación: NgRx SignalStore por feature; `AuthStore` es root y `AuthService` permanece sin estado.
 - UI: Spartan Brain/Helm + Tailwind CSS 4; Helm vive en `libs/ui`.
 - Pruebas unitarias: builder oficial de Angular con Vitest.
 
-No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, SSR, runner de pruebas o estructura transversal requiere ADR.
+No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, estrategia de estado, SSR, runner de pruebas o estructura transversal requiere ADR.
 
 ## 4. Estado actual que debes respetar
 
 - Existen rutas lazy `/login` y `/admin`; `/admin` es solo un destino temporal protegido.
 - P01 funciona con fuente en memoria y credenciales demo; no es autenticación backend real.
-- La sesión vive en signals y se pierde al recargar; no reemplazar esto por storage sin ADR.
+- La sesión vive en `AuthStore` (NgRx SignalStore, root) dentro de `auth/presentation/state` y se pierde al recargar; no reemplazar esto por storage sin ADR.
 - `API_URL` no tiene provider y no hay cliente HTTP configurado.
-- Hay guards básicos auth/guest; no hay permisos por rol, interceptores, E2E ni CI/CD.
+- Hay guards básicos auth/guest en `auth/presentation/guards`; no hay permisos por rol, interceptores, E2E ni CI/CD.
 - Los archivos de environment y varios archivos de `core` son placeholders vacíos.
 
 No construyas sobre esos placeholders suponiendo contratos inexistentes. Conecta cada pieza explícitamente y actualiza `PROJECT_STATUS.md` y `TRACEABILITY.md` cuando cambie el estado.

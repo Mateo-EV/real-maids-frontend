@@ -7,11 +7,11 @@ Aplicación web de The Real Maids construida con Angular. El repositorio está e
 - Angular 22 con componentes standalone y TypeScript 6.
 - Renderizado SSR con Node/Express, hidratación y prerender de `/login`.
 - Tailwind CSS 4 y Spartan UI (`@spartan-ng/brain` + componentes Helm copiados en `libs/ui`).
-- Login responsive P01 con Angular Signal Forms, conectado a una fuente en memoria con credenciales de demostración.
-- Sesión efímera con Angular signals, guards de usuario/invitado, redirección segura y logout.
+- Login responsive P01 con formulario standalone en Angular Signal Forms, conectado a una fuente en memoria.
+- Sesión efímera con NgRx SignalStore, guards de usuario/invitado, redirección segura y logout.
 - Rutas lazy `/login` y `/admin`; `/admin` es un destino temporal protegido, no el dashboard P02.
 - `/login` se prerenderiza; el resto de rutas usa renderizado cliente mientras no exista sesión backend.
-- Build de producción y 13 pruebas Vitest verificados el 18 de septiembre de 2026.
+- Build de producción y 21 pruebas Vitest verificados el 18 de septiembre de 2026.
 - Sin integración HTTP real, persistencia JWT, dashboard funcional, E2E, CI/CD ni despliegue verificable.
 
 El detalle y la evidencia se mantienen en [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
@@ -42,6 +42,7 @@ La arquitectura de código implementada y sus límites están descritos en [`doc
 | npm                      | `11.19.0`                             |
 | Unit tests               | Angular unit-test builder + Vitest 4  |
 | CSS/UI                   | Tailwind CSS 4 + Spartan UI 1.4       |
+| Estado de presentación   | NgRx SignalStore `^22.0.1`            |
 
 ## Desarrollo local
 

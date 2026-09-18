@@ -25,7 +25,7 @@ describe("AuthService", () => {
     service = TestBed.inject(AuthService)
   })
 
-  it("stores the user session after a successful login", () => {
+  it("returns the user session after a successful login", () => {
     const session = UserSession.create("Administrador Demo", "admin@realmaids.com")
     vi.mocked(repository.login).mockReturnValue(of(Result.success<void>(undefined)))
     vi.mocked(repository.me).mockReturnValue(of(Result.success(session)))
@@ -36,8 +36,6 @@ describe("AuthService", () => {
     })
 
     expect(emittedSession).toBe(session)
-    expect(service.session()).toBe(session)
-    expect(service.isAuthenticated()).toBe(true)
   })
 
   it("does not request the session when credentials are rejected", () => {
@@ -51,19 +49,11 @@ describe("AuthService", () => {
 
     expect(emittedError).toBe(error)
     expect(repository.me).not.toHaveBeenCalled()
-    expect(service.isAuthenticated()).toBe(false)
   })
 
-  it("clears the session when logging out", () => {
-    const session = UserSession.create("Administrador Demo", "admin@realmaids.com")
-    vi.mocked(repository.login).mockReturnValue(of(Result.success<void>(undefined)))
-    vi.mocked(repository.me).mockReturnValue(of(Result.success(session)))
-    service.login({ email: session.email, password: "demo2026" }).subscribe()
-
+  it("delegates logout to the repository", () => {
     service.logout()
 
     expect(repository.logout).toHaveBeenCalledOnce()
-    expect(service.session()).toBeNull()
-    expect(service.isAuthenticated()).toBe(false)
   })
 })

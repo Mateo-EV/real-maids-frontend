@@ -9,7 +9,7 @@ La UI debe construirse con Spartan UI y Tailwind CSS 4:
 - Los colores del producto se expresan mediante tokens semánticos definidos en `src/styles.css`.
 - Angular Material y Bootstrap no forman parte del stack vigente.
 
-P01 es la primera pantalla implementada y aplica estas reglas: jerarquía clara, composición Spartan, responsive, validación junto al campo, estado de carga, error recuperable y acción principal única.
+P01 es la primera pantalla implementada y aplica estas reglas: jerarquía clara, composición Spartan, responsive, formulario standalone, validación junto al campo, estado de carga, error recuperable y acción principal única. La UI no revela detalles del source o la persistencia temporal usados durante el desarrollo.
 
 ## Flujo Spartan
 

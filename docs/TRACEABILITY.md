@@ -13,7 +13,7 @@
 
 | RF/HU                 | Módulo                      | Pantalla             | Estado         | Evidencia/brecha                                                                               |
 | --------------------- | --------------------------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
-| RF01 / HU01           | M01 Autenticación           | P01 Inicio de sesión | Parcial (demo) | Signal Form, source en memoria, sesión efímera, guards, logout y pruebas; falta backend/JWT    |
+| RF01 / HU01           | M01 Autenticación           | P01 Inicio de sesión | Parcial (demo) | LoginForm standalone, Signal Forms, AuthStore, source en memoria, guards y pruebas; falta backend/JWT |
 | RF02 / HU02           | M02 Usuarios/roles/permisos | P03                  | No iniciada    | Sin feature ni rutas                                                                           |
 | RF03 / HU03           | M03 Clientes                | P04                  | No iniciada    | Sin feature ni rutas                                                                           |
 | RF04 / HU04           | M04 Solicitudes             | P05                  | No iniciada    | Sin feature ni rutas                                                                           |
@@ -39,7 +39,7 @@
 | RNF06 navegación clara             | Login, redirecciones y destino protegido inicial               |
 | RNF07 navegadores                  | Objetivo sin matriz de pruebas                                 |
 | RNF08 responsive                   | Login implementado responsive; falta validación multinavegador |
-| RNF09 extensibilidad               | Estructura por feature iniciada                                |
+| RNF09 extensibilidad               | Feature auth con capas y NgRx SignalStore de presentación      |
 | RNF10 separación de capas          | Aplicada parcialmente en auth                                  |
 | RNF12 validación/mensajes          | Signal Forms en P01 para validación y error de acceso          |
 | RNF13-RNF14 QuickBooks vía backend | Límite documentado; integración no iniciada                    |

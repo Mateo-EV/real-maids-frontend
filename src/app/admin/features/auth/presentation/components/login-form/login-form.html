@@ -1,0 +1,109 @@
+<div class="rounded-xl shadow-xl shadow-foreground/5">
+  <section hlmCard class="w-full" aria-labelledby="login-title">
+    <div hlmCardHeader class="gap-2">
+      <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Portal administrativo
+      </p>
+      <h1 hlmCardTitle id="login-title" class="text-2xl tracking-tight sm:text-3xl">
+        Bienvenido de nuevo
+      </h1>
+      <p hlmCardDescription class="max-w-sm leading-6">
+        Ingresa tus credenciales para acceder a tu espacio de trabajo.
+      </p>
+    </div>
+
+    <div hlmCardContent>
+      <form class="flex flex-col gap-5" [formRoot]="loginForm" (submit)="submit()">
+        @if (submitError()) {
+          <div hlmAlert variant="destructive" aria-live="assertive">
+            <ng-icon name="lucideCircleAlert" aria-hidden="true" />
+            <p hlmAlertTitle>No pudimos iniciar tu sesión</p>
+            <p hlmAlertDescription>
+              @if (submitError()?.code === "INVALID_CREDENTIALS") {
+                Revisa el correo y la contraseña e inténtalo nuevamente.
+              } @else {
+                Ocurrió un problema inesperado. Inténtalo nuevamente.
+              }
+            </p>
+          </div>
+        }
+
+        <div hlmField>
+          <label hlmFieldLabel for="email">Correo electrónico</label>
+          <input
+            hlmInput
+            id="email"
+            type="email"
+            [formField]="loginForm.email"
+            autocomplete="username"
+            inputmode="email"
+            placeholder="nombre@empresa.com"
+            (input)="clearSubmitError()"
+          />
+          @if (loginForm.email().touched()) {
+            @for (error of loginForm.email().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">
+                {{ error.message }}
+              </hlm-field-error>
+            }
+          }
+        </div>
+
+        <div hlmField>
+          <label hlmFieldLabel for="password">Contraseña</label>
+          <div hlmInputGroup>
+            <input
+              hlmInputGroupInput
+              id="password"
+              [type]="passwordVisible() ? 'text' : 'password'"
+              [formField]="loginForm.password"
+              autocomplete="current-password"
+              placeholder="Ingresa tu contraseña"
+              (input)="clearSubmitError()"
+            />
+            <div hlmInputGroupAddon align="inline-end">
+              <button
+                hlmInputGroupButton
+                type="button"
+                size="xs"
+                [attr.aria-label]="passwordVisible() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="passwordVisible()"
+                (click)="togglePasswordVisibility()"
+              >
+                <ng-icon
+                  [name]="passwordVisible() ? 'lucideEyeOff' : 'lucideEye'"
+                  aria-hidden="true"
+                />
+                {{ passwordVisible() ? "Ocultar" : "Mostrar" }}
+              </button>
+            </div>
+          </div>
+          @if (loginForm.password().touched()) {
+            @for (error of loginForm.password().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">
+                {{ error.message }}
+              </hlm-field-error>
+            }
+          }
+        </div>
+
+        <button
+          hlmBtn
+          size="lg"
+          class="w-full"
+          type="submit"
+          [disabled]="loginForm().submitting()"
+          [attr.aria-busy]="loginForm().submitting()"
+        >
+          @if (loginForm().submitting()) {
+            <hlm-spinner aria-label="Iniciando sesión" />
+            Iniciando sesión…
+          } @else {
+            Iniciar sesión
+            <ng-icon name="lucideArrowRight" aria-hidden="true" />
+          }
+        </button>
+      </form>
+    </div>
+  </section>
+</div>

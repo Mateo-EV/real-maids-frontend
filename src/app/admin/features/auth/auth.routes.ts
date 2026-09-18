@@ -1,4 +1,4 @@
-import { authGuard, guestGuard } from "@/app/core/guards/auth.guard"
+import { authGuard, guestGuard } from "@/app/admin/features/auth/presentation/guards/auth.guard"
 import { Routes } from "@angular/router"
 
 export const AUTH_ROUTES: Routes = [

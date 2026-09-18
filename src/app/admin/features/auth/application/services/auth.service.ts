@@ -1,6 +1,6 @@
 import { Result } from "@/app/shared/utils/result"
-import { computed, inject, Injectable, signal } from "@angular/core"
-import { Observable, of, switchMap, tap } from "rxjs"
+import { inject, Injectable } from "@angular/core"
+import { Observable, of, switchMap } from "rxjs"
 import { LoginParams } from "../../domain/params/login.params"
 import { AUTH_REPOSITORY, AuthRepository } from "../../domain/repositories/auth.repository"
 import { UserSession } from "../../domain/entities/user-session.entity"
@@ -9,10 +9,6 @@ import { AuthError } from "../errors/auth.error"
 @Injectable({ providedIn: "root" })
 export class AuthService {
   private readonly authRepository = inject<AuthRepository>(AUTH_REPOSITORY)
-  private readonly currentSession = signal<UserSession | null>(null)
-
-  readonly session = this.currentSession.asReadonly()
-  readonly isAuthenticated = computed(() => this.currentSession() !== null)
 
   login(params: LoginParams): Observable<Result<UserSession, AuthError>> {
     return this.authRepository.login(params).pipe(
@@ -22,17 +18,11 @@ export class AuthService {
         }
 
         return this.authRepository.me()
-      }),
-      tap(result => {
-        if (result.success) {
-          this.currentSession.set(result.data)
-        }
       })
     )
   }
 
   logout(): void {
     this.authRepository.logout()
-    this.currentSession.set(null)
   }
 }

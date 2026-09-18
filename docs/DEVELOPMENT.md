@@ -63,7 +63,8 @@ Usa schematics Angular para artefactos normales cuando corresponda. Revisa que e
 - Orquestación/casos de uso en `application`.
 - Contratos y modelos de negocio en `domain` cuando no dependan de Angular.
 - Rutas y componentes propios en `presentation` o en la raíz de la feature si es suficientemente pequeña.
-- `core` para providers, guards, interceptores, configuración y servicios singleton transversales.
+- `core` para providers, guards/interceptores genuinamente transversales, configuración y servicios singleton compartidos.
+- Guards, stores y estado propios de una feature permanecen en su capa `presentation`.
 - `shared` para utilidades o UI compartida sin dependencia de una feature.
 
 ## Convenciones Angular
@@ -72,7 +73,8 @@ Usa schematics Angular para artefactos normales cuando corresponda. Revisa que e
 - `inject()` y providers explícitos cuando mejoren claridad/testabilidad.
 - Tipos estrictos; evitar `any`.
 - Rutas por feature y lazy loading cuando exista una frontera útil.
-- Signals para estado local cuando resulte natural; no adoptar store global sin ADR.
+- Signal Forms/signals para estado local y NgRx SignalStore para estado compartido de presentación según ADR-011.
+- Evitar un store monolítico: cada feature justifica y encapsula su propio estado.
 - No realizar llamadas HTTP desde componentes visuales.
 - No usar estado del navegador durante SSR sin comprobar plataforma o abstraer el acceso.
 
