@@ -1,6 +1,5 @@
 {
   "printWidth": 100,
-  "singleQuote": true,
   "overrides": [
     {
       "files": "*.html",
@@ -8,5 +7,13 @@
         "parser": "angular"
       }
     }
-  ]
+  ],
+  "tabWidth": 2,
+  "semi": false,
+  "singleQuote": false,
+  "trailingComma": "none",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "endOfLine": "lf",
+  "arrowParens": "avoid"
 }

@@ -1,80 +1,157 @@
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+# AGENTS.md
 
-## TypeScript Best Practices
+Guía obligatoria para agentes de código, asistentes de IA y automatizaciones que trabajen en el frontend de The Real Maids.
 
-- Use strict type checking
-- Prefer type inference when the type is obvious
-- Avoid the `any` type; use `unknown` when type is uncertain
+## 1. Orden de lectura y fuentes de verdad
 
-## Angular Best Practices
+Antes de cambiar código o documentación, revisar:
 
-- Always use standalone components over NgModules
-- Must NOT set `standalone: true` inside Angular decorators. It's the default in Angular v20+.
-- Do NOT set `changeDetection: ChangeDetectionStrategy.OnPush` explicitly. `OnPush` is the default in Angular v22+.
-- Use signals for state management
-- Implement lazy loading for feature routes
-- Do NOT use the `@HostBinding` and `@HostListener` decorators. Put host bindings inside the `host` object of the `@Component` or `@Directive` decorator instead
-- Use `NgOptimizedImage` for all static images.
-  - `NgOptimizedImage` does not work for inline base64 images.
+1. `README.md`;
+2. `docs/PROJECT_STATUS.md`;
+3. `docs/DECISIONS.md`;
+4. `docs/ARCHITECTURE.md`;
+5. `docs/TRACEABILITY.md`;
+6. el ADR relacionado en `docs/adr/`;
+7. `package.json`, `angular.json`, `components.json`, TypeScript config y código real.
 
-## Accessibility Requirements
+Prioridad de verdad:
 
-- It MUST pass all AXE checks.
-- It MUST follow all WCAG AA minimums, including focus management, color contrast, and ARIA attributes.
+- código/config/pruebas: estado implementado;
+- ADR y decisiones aceptadas: arquitectura vigente;
+- RF/RNF/HU/M/P: intención funcional;
+- OpenAPI del backend: contrato REST;
+- Figma aprobado: referencia visual.
 
-### Components
+No presentes un archivo vacío, dependencia instalada, tipo o token como funcionalidad terminada.
 
-- Keep components small and focused on a single responsibility
-- Use `input()` and `output()` functions instead of decorators
-- Use `model()` for two-way bound properties with `[(prop)]` syntax instead of pairing `input()` with `output()`
-- Use `computed()` for derived state
-- Use `linkedSignal()` for state derived from multiple reactive sources that must stay synchronized
-- Prefer inline templates for small components
-- Prefer Signal Forms (`@angular/forms/signals`) for new forms. They are stable in Angular v22+ and provide signal-based state, type-safe field access, and schema-based validation
-- When not using Signal Forms, prefer Reactive forms instead of Template-driven ones
-- Do NOT use `ngClass`, use `class` bindings instead
-- Do NOT use `ngStyle`, use `style` bindings instead
-- Do NOT import `CommonModule`, import only the directives and pipes the template uses, such as `AsyncPipe` or `DatePipe`
-- When using external templates/styles, use paths relative to the component TS file.
+## 2. Herramientas obligatorias
 
-## State Management
+### Codebase Memory MCP
 
-- Use signals for local component state
-- Use `computed()` for derived state
-- Keep state transformations pure and predictable
-- Do NOT use `mutate` on signals, use `update` or `set` instead
+Para descubrimiento estructural usa primero el MCP `codebase-memory`:
 
-## Templates
+1. `list_projects` o `index_status` al iniciar;
+2. `search_graph` para símbolos;
+3. `trace_path` para llamadas/dependencias;
+4. `get_code_snippet` para evidencia exacta;
+5. `check_index_coverage` sobre cada ruta relevante antes de conclusiones.
 
-- Keep templates simple and avoid complex logic
-- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
-- Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
+Usa búsqueda textual/lectura directa para literales, archivos de configuración, documentación y rangos que el índice marque parciales o no cubiertos.
 
-## Services
+Nivel de evidencia por defecto: verificación dirigida (Tier 2). Incluye búsquedas estructurales relevantes, trazas cuando existan llamadas, snippets exactos para afirmaciones materiales, paginación completa y cobertura. Usa un scout solo para hallazgos positivos provisionales; para afirmaciones negativas/exhaustivas audita el scope completo y declara las limitaciones.
 
-- Design services around a single responsibility
-- Use the `providedIn: 'root'` option for singleton services
-- Prefer the `@Service` decorator over `@Injectable({providedIn: 'root'})` for new singleton services (Angular v22+)
-- Use the `inject()` function instead of constructor injection
+### Angular MCP y Angular CLI
 
-## Design Principles
+El MCP oficial de Angular CLI está configurado en `.codex/config.toml` y es la vía preferida para tareas Angular:
 
-Build production-quality Angular interfaces using Tailwind CSS and spartan/ui
+1. ejecutar `list_projects` como primer paso del workspace;
+2. consultar `get_best_practices` antes de modificar código Angular;
+3. usar `search_documentation` para APIs o sintaxis Angular;
+4. usar `run_target` para `build`, `test` y demás targets configurados;
+5. usar las herramientas de dev server del MCP para ciclos de `serve`.
 
-- Strong visual hierarchy
-- Generous but consistent spacing
-- Restrained color palette
-- Semantic Tailwind/spartan tokens
-- Clear typography scale
-- Subtle borders and shadows
-- Avoid excessive cards and nested containers
-- Avoid generic dashboard aesthetics
-- Responsive from mobile to desktop
-- Accessible interactions and keyboard navigation
-- Prefer spartan/ui components before custom primitives
-- Use Lucide icons consistently
-- Extract repeated UI patterns into Angular components
-- Keep templates readable
-- Prefer Angular Signals and modern Angular APIs
-- The result should feel intentionally designed, not AI-generated
+Si una capacidad no está expuesta o el MCP falla, registra la limitación y usa el Angular CLI local del proyecto (`npx ng ...` o scripts de `package.json`), no una instalación global. Usa schematics para generar artefactos cuando corresponda.
+
+### Spartan CLI
+
+Este workspace usa Spartan. Antes de agregar UI ejecuta:
+
+```bash
+npx ng generate @spartan-ng/cli:info --json
+```
+
+Reutiliza componentes instalados y genera nuevos con `@spartan-ng/cli:ui`; no adivines selectores ni copies componentes manualmente.
+
+## 3. Arquitectura vigente
+
+- Angular 22 standalone con TypeScript 6.
+- SSR con Angular SSR + Express, hidratación y prerender actual de `/login`; el resto usa renderizado cliente.
+- Organización por feature; dentro de una feature usa `domain`, `application`, `infrastructure` y `presentation` cuando esos límites aporten valor.
+- `core` contiene configuración transversal/singletons; `shared` solo piezas genuinamente reutilizables.
+- Contratos de repositorio pueden conectarse a adaptadores mediante `InjectionToken`.
+- UI: Spartan Brain/Helm + Tailwind CSS 4; Helm vive en `libs/ui`.
+- Pruebas unitarias: builder oficial de Angular con Vitest.
+
+No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, SSR, runner de pruebas o estructura transversal requiere ADR.
+
+## 4. Estado actual que debes respetar
+
+- Existen rutas lazy `/login` y `/admin`; `/admin` es solo un destino temporal protegido.
+- P01 funciona con fuente en memoria y credenciales demo; no es autenticación backend real.
+- La sesión vive en signals y se pierde al recargar; no reemplazar esto por storage sin ADR.
+- `API_URL` no tiene provider y no hay cliente HTTP configurado.
+- Hay guards básicos auth/guest; no hay permisos por rol, interceptores, E2E ni CI/CD.
+- Los archivos de environment y varios archivos de `core` son placeholders vacíos.
+
+No construyas sobre esos placeholders suponiendo contratos inexistentes. Conecta cada pieza explícitamente y actualiza `PROJECT_STATUS.md` y `TRACEABILITY.md` cuando cambie el estado.
+
+## 5. Límites de seguridad e integración
+
+- Angular consume exclusivamente la API interna mediante REST/JSON.
+- Nunca llames a QuickBooks Online directamente desde Angular.
+- Nunca incluyas secretos, client secrets, credenciales privadas o tokens de backend en el bundle.
+- Ocultar UI no autoriza: usa guards/interceptores para UX y asume autorización definitiva en backend.
+- No registres contraseñas, JWT, datos de pago ni información sensible.
+- El almacenamiento/refresh del JWT sigue abierto. No fijes `localStorage`, `sessionStorage` o cookies como solución permanente sin ADR.
+- Maneja 401/403 consistentemente y sin filtrar datos sensibles.
+
+## 6. UI, UX y Spartan
+
+- Usa componentes Helm existentes antes de crear markup propio.
+- Usa variantes y tokens semánticos; evita colores Tailwind crudos para semántica de producto.
+- Mantén responsive desktop/tablet/móvil.
+- Distingue “Solicitud de servicio” de “Atención al cliente”.
+- Usa verbos concretos: “Registrar cliente”, “Programar servicio”, “Enviar solicitud”.
+- No uses color como único indicador.
+- Diferencia loading, empty, error y success.
+- Confirma cancelaciones y cambios de permisos.
+- En móvil prioriza tarjetas y acciones visibles; no traslades tablas extensas sin adaptación.
+- Prepara copy para español/inglés, pero no adoptes una librería i18n sin ADR.
+
+## 7. Estado de dominio
+
+Secuencia normal de órdenes:
+
+`Pendiente -> Programada -> En proceso -> Completada -> Pagado`
+
+La cancelación es una salida alternativa. No inventes reaperturas u otras transiciones excepcionales.
+
+Estados de atención al cliente:
+
+`Recibida -> En revisión -> Resuelta -> Cerrada`
+
+Son independientes de los estados de órdenes.
+
+## 8. API y contratos
+
+Antes de implementar o modificar integración:
+
+1. consulta OpenAPI/Swagger real;
+2. confirma DTO, errores, paginación, filtros, fechas y enums;
+3. registra cualquier diferencia en `docs/API_INTEGRATION.md`;
+4. no inventes endpoints ni permisos;
+5. agrega pruebas del adaptador/interceptor correspondiente.
+
+## 9. Trazabilidad
+
+Toda funcionalidad relevante debe enlazarse con al menos un `RFxx`, `RNFxx`, `HUxx`, `Mxx` o `Pxx`. Si no existe trazabilidad, documéntala antes de implementar.
+
+## 10. Calidad y verificación
+
+- Usa el target `test` actual con Vitest; no documentes Jasmine/Karma como runner vigente.
+- No hay E2E configurado. Si se incorpora, regístralo con decisión y target reproducible.
+- No deshabilites pruebas para hacer pasar CI.
+- Los schematics de componentes tienen `skipTests: true`; para una feature nueva crea las pruebas necesarias de forma explícita.
+- Valida responsive cuando el cambio tenga UI.
+
+Un cambio no está terminado hasta que:
+
+- compila;
+- pasa las pruebas relevantes;
+- respeta rutas y permisos cuando apliquen;
+- maneja loading/empty/error cuando consume datos;
+- no introduce secretos;
+- actualiza documentación/trazabilidad cuando cambia comportamiento;
+- incluye evidencia verificable.
+
+Para cambios solo documentales, verifica enlaces, coherencia con configuración/código y ausencia de afirmaciones no sustentadas.

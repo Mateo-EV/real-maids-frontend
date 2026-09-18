@@ -1,21 +1,38 @@
 import { Injectable } from '@angular/core';
 import { LoginParams } from '../../domain/params/login.params';
-import { delay, Observable } from 'rxjs';
+import { delay, Observable, of } from 'rxjs';
 import { Result } from '@/app/shared/utils/result';
 import { UserSession } from '../../domain/entities/user-session.entity';
+import { AuthError } from '../../application/errors/auth.error';
+import { DEMO_AUTH } from '../../auth.demo';
 
 @Injectable({ providedIn: 'root' })
 export class AuthInMemorySource {
-  login(_: LoginParams): Observable<Result> {
-    return new Observable<Result>((observer) => {
-      observer.next(Result.success(undefined));
-      observer.complete();
-    }).pipe(delay(500));
+  private authenticated = false;
+
+  login(params: LoginParams): Observable<Result<void, AuthError>> {
+    const hasValidCredentials =
+      params.email.trim().toLowerCase() === DEMO_AUTH.email &&
+      params.password === DEMO_AUTH.password;
+
+    this.authenticated = hasValidCredentials;
+
+    const result: Result<void, AuthError> = hasValidCredentials
+      ? Result.success<void>(undefined)
+      : Result.failure(new AuthError('INVALID_CREDENTIALS'));
+
+    return of(result).pipe(delay(650));
   }
-  me(): Observable<Result<UserSession>> {
-    return new Observable<Result<UserSession>>((observer) => {
-      observer.next(Result.success(UserSession.create('Mateo Rioja', 'mateo@realmaids.com')));
-      observer.complete();
-    }).pipe(delay(500));
+
+  me(): Observable<Result<UserSession, AuthError>> {
+    const result: Result<UserSession, AuthError> = this.authenticated
+      ? Result.success(UserSession.create(DEMO_AUTH.name, DEMO_AUTH.email))
+      : Result.failure(new AuthError('UNEXPECTED'));
+
+    return of(result).pipe(delay(250));
+  }
+
+  logout(): void {
+    this.authenticated = false;
   }
 }
