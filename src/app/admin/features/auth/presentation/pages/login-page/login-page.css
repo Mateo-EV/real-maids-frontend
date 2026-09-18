@@ -1,0 +1,218 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+  background: #f7f6f1;
+  color: #21312b;
+}
+
+.welcome-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 5.5rem);
+  background: #214c43;
+  color: #f7f6f1;
+}
+
+.welcome-panel::before,
+.welcome-panel::after {
+  position: absolute;
+  border: 1px solid rgb(231 236 212 / 25%);
+  border-radius: 50%;
+  content: '';
+}
+
+.welcome-panel::before {
+  width: min(47vw, 720px);
+  aspect-ratio: 1;
+  right: -18%;
+  top: 14%;
+}
+
+.welcome-panel::after {
+  width: min(30vw, 450px);
+  aspect-ratio: 1;
+  right: 8%;
+  top: 28%;
+}
+
+.brand-mark {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.3rem;
+  width: fit-content;
+  height: 2.4rem;
+}
+
+.brand-mark span {
+  display: block;
+  width: 0.5rem;
+  border-radius: 999px 999px 0.2rem 0.2rem;
+  background: #dce99e;
+}
+
+.brand-mark span:nth-child(1) {
+  height: 1.35rem;
+}
+.brand-mark span:nth-child(2) {
+  height: 2.4rem;
+}
+.brand-mark span:nth-child(3) {
+  height: 1.8rem;
+}
+
+.welcome-copy,
+.panel-note {
+  position: relative;
+  z-index: 1;
+  max-width: 36rem;
+}
+
+.welcome-copy {
+  margin-block: auto;
+  padding-block: 5rem;
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  color: #8ea99c;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.welcome-panel .eyebrow {
+  color: #dce99e;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  max-width: 10ch;
+  margin-bottom: 1.5rem;
+  font-size: clamp(3.2rem, 6vw, 6.8rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+}
+
+.welcome-text {
+  max-width: 29rem;
+  color: #c3d4c9;
+  font-size: clamp(1rem, 1.5vw, 1.2rem);
+  line-height: 1.6;
+}
+
+.panel-note {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #c3d4c9;
+  font-size: 0.8rem;
+}
+
+.panel-note p {
+  margin: 0;
+}
+.note-line {
+  width: 2.8rem;
+  height: 1px;
+  background: #dce99e;
+}
+
+.form-panel {
+  display: grid;
+  place-items: center;
+  padding: 3rem clamp(1.5rem, 6vw, 6rem);
+  background: #f7f6f1;
+}
+
+.form-panel-inner {
+  width: min(100%, 27rem);
+}
+
+.form-panel h2 {
+  margin-bottom: 0.75rem;
+  color: #21312b;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.form-intro {
+  margin-bottom: 2.5rem;
+  color: #728078;
+  line-height: 1.6;
+}
+.mobile-brand {
+  display: none;
+}
+
+.legal-copy {
+  margin: 2rem 0 0;
+  color: #8a948d;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.legal-copy a {
+  color: #486c5e;
+  text-underline-offset: 0.18em;
+}
+
+@media (max-width: 800px) {
+  .login-shell {
+    display: block;
+  }
+  .welcome-panel {
+    min-height: 36vh;
+    padding: 2rem 1.5rem 2.5rem;
+  }
+  .welcome-copy {
+    padding-block: 3rem 1.5rem;
+  }
+  .welcome-copy h1 {
+    font-size: clamp(2.8rem, 13vw, 4.5rem);
+  }
+  .welcome-text {
+    max-width: 22rem;
+    font-size: 0.95rem;
+  }
+  .welcome-panel::before {
+    width: 80vw;
+    right: -40%;
+    top: 10%;
+  }
+  .welcome-panel::after {
+    display: none;
+  }
+  .form-panel {
+    min-height: 64vh;
+    padding: 3.5rem 1.5rem;
+  }
+  .mobile-brand {
+    display: block;
+    margin-bottom: 3rem;
+    color: #214c43;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+  }
+}

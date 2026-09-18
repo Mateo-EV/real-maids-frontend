@@ -1,11 +1,9 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { LoginPage } from './admin/features/auth/presentation/pages/login-page/login-page';
 
 @Component({
-  // imports: [RouterOutlet],
+  imports: [LoginPage],
   selector: 'app-root',
-  template: ` <h1>Hola bro</h1> `,
+  template: '<app-login-page />',
 })
-export class App {
-  protected readonly title = signal('real-maids-frontend');
-}
+export class App {}

@@ -1,14 +1,14 @@
-import { Injectable } from '@angular/core';
-import { AuthRepository } from '../../domain/repositories/auth.repository';
-import { LoginCommand } from '../dto/login.command';
-import { Observable } from 'rxjs';
 import { Result } from '@/app/shared/utils/result';
+import { inject, Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { LoginParams } from '../../domain/params/login.params';
+import { AUTH_REPOSITORY, AuthRepository } from '../../domain/repositories/auth.repository';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class AuthService {
-  constructor(private readonly authRepository: AuthRepository) {}
+  private readonly authRepository = inject<AuthRepository>(AUTH_REPOSITORY);
 
-  login(command: LoginCommand): Observable<Result> {
-    return this.authRepository.login(command.email, command.password);
+  login(params: LoginParams): Observable<Result> {
+    return this.authRepository.login(params);
   }
 }
