@@ -18,8 +18,8 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | API REST             | No implementada         | Existe `API_URL` como token sin valor; no hay cliente HTTP ni servicios remotos    |
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
-| Features M02-M12     | No implementadas        | Sin código funcional asociado                                                      |
-| Unit tests           | Implementadas           | 6 archivos, 21 pruebas Vitest en verde                                             |
+| Features M02-M12     | No implementadas        | M03 cuenta con demo en memoria sin ruta, pantalla ni integración HTTP              |
+| Unit tests           | Implementadas           | 9 archivos, 26 pruebas Vitest en verde                                             |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
@@ -29,7 +29,7 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 El 18 de septiembre de 2026 se ejecutaron los targets con el Angular CLI local del workspace después de migrar P01 a Signal Forms y NgRx SignalStore:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 6 archivos y 21 pruebas aprobadas.
+- `test`: **correcto**; 9 archivos y 26 pruebas aprobadas.
 
 La suite cubre source en memoria, servicio de aplicación, formulario, errores, navegación y guards.
 
@@ -80,6 +80,13 @@ Los componentes Helm son código propiedad del proyecto en `libs/ui`; la capa Br
 5. Agregar estados loading/empty/error y comportamiento responsive en cada feature.
 6. Configurar E2E y CI cuando exista el primer recorrido funcional.
 7. Resolver i18n, zona horaria y hosting mediante sus decisiones correspondientes.
+
+### Base del catálogo de clientes
+
+Se creó `src/app/admin/features/customers` con las capas de ADR-009, la entidad de dominio
+`Customer`, su puerto de repositorio, `CustomerService` y un source en memoria demostrativo. Esto no
+cambia el estado funcional de M03/P04: no hay ruta ni pantalla, no define DTOs y no autoriza
+implementar `/api/clientes` sin OpenAPI.
 
 ## Regla de actualización
 
