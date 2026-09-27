@@ -19,7 +19,7 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
 | Features M02-M12     | M03 esqueleto           | Resto no iniciado; consultas demo sin ruta, pantalla ni HTTP                       |
-| Unit tests           | Implementadas           | 8 archivos, 25 pruebas Vitest en verde                                             |
+| Unit tests           | Implementadas           | 10 archivos, 25 pruebas Vitest en verde                                            |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
@@ -29,9 +29,9 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 El 27 de septiembre de 2026 se ejecutaron los targets `build:production` y `test` mediante el MCP de Angular CLI:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 8 archivos y 25 pruebas aprobadas.
+- `test`: **correcto**; 10 archivos y 25 pruebas aprobadas.
 
-La suite cubre autenticación, formulario, navegación, guards y consultas demo de clientes mediante source y servicio de aplicación.
+La suite cubre autenticación, formulario, navegación, guards y consultas demo de clientes mediante source y casos de uso.
 
 ## Implementación existente
 
@@ -85,7 +85,8 @@ Los componentes Helm son código propiedad del proyecto en `libs/ui`; la capa Br
 
 Se creó `src/app/admin/features/customers` con `domain`, `application` e `infrastructure`.
 La nomenclatura de código acordada para M03 es `customers`/`Customer*`. La entidad `Customer`
-contiene `id`, `name`, `email` y `phone` opcional. `CustomerService` delega `findAll` y `findById`
+contiene `id`, `name`, `email` y `phone` opcional. `ListCustomersUseCase.execute()` y
+`GetCustomerByIdUseCase.execute(id)` delegan `findAll` y `findById`, respectivamente,
 al puerto `CustomerRepository`, enlazado en `appConfig` con `CustomerRepositoryImpl` y
 `CustomerInMemorySource`. Las operaciones devuelven `Result<..., CustomerError>`; la búsqueda
 fallida usa `CUSTOMER_NOT_FOUND`. Los datos `DEMO_CUSTOMERS` están declarados en el mismo archivo
@@ -95,12 +96,11 @@ Es un esqueleto: no hay ruta, pantalla, capa `presentation` ni integración HTTP
 datos y errores de la fuente en memoria no definen DTOs o errores del backend ni autorizan
 implementar `/api/clientes` sin OpenAPI.
 
-### Deuda de límites de capas
+### Límites de capas
 
-El repositorio de `auth` ahora importa `AuthError` desde `domain/errors`, lo que corrige su deuda
-de dirección de dependencias. El repositorio de `customers` todavía importa `CustomerError`
-desde `application/errors`; esa deuda queda para la refactorización separada de `customers`.
-ADR-009 establece `domain/errors` como convención para los errores usados por contratos de dominio.
+Los repositorios de `auth` y `customers` importan `AuthError` y `CustomerError` desde sus
+respectivos `domain/errors`. Ambas features usan un caso de uso por acción de aplicación,
+con una operación `execute()` cada uno. ADR-009 establece estas reglas para futuras features.
 
 ## Regla de actualización
 

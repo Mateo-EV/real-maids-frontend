@@ -7,10 +7,10 @@
 - Target: `real-maids-frontend:test`.
 - Builder: `@angular/build:unit-test`.
 - Runner detectado por configuración: Vitest (`vitest/globals` y `jsdom`).
-- Resultado actual: 8 archivos y 25 pruebas aprobadas.
+- Resultado actual: 10 archivos y 25 pruebas aprobadas.
 - E2E: sin target, dependencia ni suite configurada.
 
-La cobertura actual verifica la fuente en memoria y el servicio de autenticación, las transiciones de `AuthStore`, el `LoginFormComponent` con Signal Forms, estados de validación/error/emisión de éxito, redirección de la página y guards. También verifica las consultas demo `findAll` y `findById` de `customers`, incluido `CUSTOMER_NOT_FOUND`. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
+La cobertura actual verifica la fuente en memoria y los casos de uso de autenticación, las transiciones de `AuthStore`, el `LoginFormComponent` con Signal Forms, estados de validación/error/emisión de éxito, redirección de la página y guards. También verifica las consultas demo `findAll` y `findById` de `customers`, incluido `CUSTOMER_NOT_FOUND`. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
 
 ## Comandos
 
@@ -27,7 +27,7 @@ El target oficial se ejecuta en modo no-watch para verificación automatizada.
 | Cambio                      | Pruebas esperadas                                     |
 | --------------------------- | ----------------------------------------------------- |
 | Entidad/utilidad de dominio | unitarias de casos límite                             |
-| Servicio de aplicación      | éxito, fallo y colaboración con repositorio mock      |
+| Caso de uso de aplicación   | éxito, fallo y colaboración con repositorio mock      |
 | Adaptador HTTP              | request, mapping, errores y contrato                  |
 | Guard/interceptor           | permisos, 401/403 y ausencia de filtración sensible   |
 | Componente/formulario       | render, validación, loading, error y acción principal |

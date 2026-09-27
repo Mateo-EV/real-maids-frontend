@@ -30,7 +30,7 @@ Organizar el código por feature funcional. Dentro de cada feature usar, cuando 
 
 - Los tipos de error usados por contratos de dominio viven en `domain/errors`; `domain` no debe importar desde `application`.
 - Cada acción de aplicación se representa mediante un `*UseCase` con una operación `execute()`. No se usan clases `*Service` de feature para agrupar acciones de aplicación.
-- `auth` sigue esta convención. El esqueleto de `customers` se migrará por separado; su dependencia actual de `application/errors` no constituye una excepción a la regla.
+- `auth` y `customers` siguen esta convención. La separación de casos de uso no convierte al esqueleto de `customers` en una pantalla o flujo funcional.
 
 ## Alternativas consideradas
 

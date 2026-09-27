@@ -12,7 +12,7 @@ Aplicación web de The Real Maids construida con Angular. El repositorio está e
 - Rutas lazy `/login` y `/admin`; `/admin` es un destino temporal protegido, no el dashboard P02.
 - M03 tiene un esqueleto `customers` con consultas demo en memoria; aún no hay ruta ni pantalla P04.
 - `/login` se prerenderiza; el resto de rutas usa renderizado cliente mientras no exista sesión backend.
-- Build de producción y 25 pruebas Vitest en 8 archivos verificados el 27 de septiembre de 2026.
+- Build de producción y 25 pruebas Vitest en 10 archivos verificados el 27 de septiembre de 2026.
 - Sin integración HTTP real, persistencia JWT, dashboard funcional, E2E, CI/CD ni despliegue verificable.
 
 El detalle y la evidencia se mantienen en [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).

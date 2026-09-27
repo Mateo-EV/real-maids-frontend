@@ -1,6 +1,6 @@
 import { InjectionToken } from "@angular/core"
 import { Observable } from "rxjs"
-import { CustomerError } from "../../application/errors/customer.error"
+import { CustomerError } from "../errors/customer.error"
 import { Customer } from "../entities/customer.entity"
 import { Result } from "@/app/shared/utils/result"
 

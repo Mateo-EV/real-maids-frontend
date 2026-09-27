@@ -63,8 +63,8 @@ src/
         state/           # AuthStore raíz con NgRx SignalStore
       auth.routes.ts     # rutas lazy login/admin
     admin/features/customers/
-      domain/            # Customer y contrato CustomerRepository
-      application/       # CustomerService y CustomerError
+      domain/            # Customer, CustomerError y contrato CustomerRepository
+      application/       # ListCustomersUseCase y GetCustomerByIdUseCase
       infrastructure/    # repositorio y source demo en memoria
       # sin presentation, rutas ni pantalla P04
     core/
@@ -112,17 +112,17 @@ No se debe replicar mecánicamente todas las capas para código trivial; la sepa
 ### Esqueleto de customers (M03)
 
 Para esta feature, la nomenclatura de código acordada es `customers`/`Customer*`. El flujo
-disponible va de `CustomerService` a `CustomerRepository`, luego a `CustomerRepositoryImpl` y
-finalmente a `CustomerInMemorySource`. `findAll` y `findById` devuelven
+disponible va de `ListCustomersUseCase.execute()` o `GetCustomerByIdUseCase.execute(id)` a
+`CustomerRepository`, luego a `CustomerRepositoryImpl` y finalmente a
+`CustomerInMemorySource`. `findAll` y `findById` devuelven
 `Result<..., CustomerError>`; si el identificador no existe, la fuente devuelve
 `CUSTOMER_NOT_FOUND`. `DEMO_CUSTOMERS` permanece en
 `customer-in-memory.source.ts`, junto a la fuente. No hay consumidor de presentación ni flujo P04.
 
-### Deuda de dirección de dependencias
+### Dirección de dependencias de dominio
 
-El repositorio de `auth` ahora importa `AuthError` desde `domain/errors`. El repositorio de
-`customers` todavía importa `CustomerError` desde `application/errors`; esa deuda de dirección
-de dependencias queda para la refactorización separada de `customers`. ADR-009 establece la regla
+Los repositorios de `auth` y `customers` importan sus respectivos errores desde `domain/errors`.
+Ninguno depende de `application` para sus tipos de error; ADR-009 establece esta regla también
 para las nuevas features.
 
 ## Composición UI

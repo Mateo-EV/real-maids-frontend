@@ -85,7 +85,7 @@ No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, estrategi
 - `API_URL` no tiene provider y no hay cliente HTTP configurado.
 - Hay guards básicos auth/guest en `auth/presentation/guards`; no hay permisos por rol, interceptores, E2E ni CI/CD.
 - M03 tiene un esqueleto en `admin/features/customers`: consultas demo en memoria y pruebas, sin ruta ni pantalla P04. Usa `customers` y `Customer*` como nomenclatura de código para esta feature; los datos demo permanecen en `customer-in-memory.source.ts`.
-- Se corrigió la dependencia del error de dominio en `auth`. El repositorio de `customers` aún importa su error desde `application/errors` hasta completar su refactorización.
+- Los contratos de repositorio de `auth` y `customers` importan sus errores desde `domain/errors`; ambas features expresan sus acciones de aplicación mediante casos de uso.
 - Los archivos de environment y varios archivos de `core` son placeholders vacíos.
 
 No construyas sobre esos placeholders suponiendo contratos inexistentes. Conecta cada pieza explícitamente y actualiza `PROJECT_STATUS.md` y `TRACEABILITY.md` cuando cambie el estado.
