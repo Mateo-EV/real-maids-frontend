@@ -4,7 +4,7 @@
 
 ### Repositorio
 
-Determina el estado implementado. Al 2026-09-18 evidencia Angular 22, SSR, Spartan/Tailwind, Vitest y P01 funcional con auth en memoria.
+Determina el estado implementado. La revisión de código y configuración al 2026-09-27 evidencia Angular 22, SSR, Spartan/Tailwind, Vitest y P01 funcional como demo con autenticación en memoria. La última ejecución documentada de build y pruebas está en [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 
 ### `Avance_1.pdf`
 
@@ -22,7 +22,7 @@ El PDF no demuestra implementación. El repositorio no puede alterar silenciosam
 | Cypress                    | Previsto                 | No instalado/configurado; decisión E2E abierta          |
 | Vercel                     | Previsto                 | Sin configuración/evidencia; hosting abierto            |
 | API REST                   | Arquitectura prevista    | Sin integración HTTP actual                             |
-| JWT/roles                  | Requisito previsto       | Sin sesión, persistencia ni guards funcionales          |
+| JWT/roles                  | Requisito previsto       | Sesión efímera en `AuthStore` y guards básicos auth/guest; sin JWT, persistencia ni permisos por rol |
 | M01 Auth                   | Funcionalidad prevista   | P01 funcional con source y sesión en memoria            |
 | SSR/prerender              | No era central en el PDF | Implementado y registrado en ADR-007                    |
 | Arquitectura por capas     | Modularidad prevista     | Estructura por feature/capas iniciada en auth (ADR-009) |
@@ -36,18 +36,18 @@ El PDF no demuestra implementación. El repositorio no puede alterar silenciosam
 - “Jefe” no posee una ACL formal.
 - Los endpoint base del PDF no sustituyen OpenAPI.
 
-## Evidencia técnica usada en esta actualización
+## Evidencia técnica de las reconciliaciones
 
 - `package.json`, lockfile y versiones locales;
 - `angular.json` y TypeScript configs;
 - `components.json`, `src/styles.css` y `libs/ui`;
 - bootstrap, configuración browser/server y servidor SSR;
-- rutas actuales y feature auth;
-- inventario del grafo Codebase Memory con verificación de cobertura;
-- Angular CLI MCP para descubrir workspace y ejecutar build/test;
+- rutas actuales, feature auth y esqueleto `customers`;
+- inventario del grafo Codebase Memory con verificación de cobertura y lectura directa del código;
+- Angular CLI MCP para descubrir workspace; el último build/test documentado se indica en `PROJECT_STATUS.md`;
 - Spartan CLI `info --json` para inventario UI.
 
-El MCP de Angular CLI detectó el workspace, Angular 22 y targets `build`, `serve` y `test`. Su operación `get_best_practices` devolvió un error de respuesta inesperada durante esta revisión; no se utilizó ese fallo para inferir arquitectura.
+El MCP de Angular CLI detectó el workspace, Angular 22 y targets `build`, `serve` y `test`. En una revisión previa, su operación `get_best_practices` devolvió un error de respuesta inesperada; ese fallo no se utilizó para inferir arquitectura. La revisión documental del 2026-09-27 no equivale a una nueva ejecución de build/test.
 
 ## Regla operativa
 

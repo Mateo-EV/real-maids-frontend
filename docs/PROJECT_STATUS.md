@@ -95,11 +95,16 @@ Es un esqueleto: no hay ruta, pantalla, capa `presentation` ni integración HTTP
 datos y errores de la fuente en memoria no definen DTOs o errores del backend ni autorizan
 implementar `/api/clientes` sin OpenAPI.
 
-Deuda arquitectónica detectada: `domain/repositories/customer.repository.ts` importa
-`CustomerError` desde `application/errors`, de modo que el contrato de dominio depende de una
-capa exterior. Revisar la ubicación o el tipo del error antes de ampliar M03; no se ha decidido
-todavía cómo corregirlo. Una opción a evaluar es definir el error del puerto en `domain` y
-actualizar los imports y pruebas de `application` e `infrastructure`.
+### Deuda de límites de capas
+
+Deuda arquitectónica detectada en **auth y customers**: los contratos
+`auth/domain/repositories/auth.repository.ts` y
+`customers/domain/repositories/customer.repository.ts` importan respectivamente `AuthError` y
+`CustomerError` desde `application/errors`. Así, ambos puertos de dominio dependen de una capa
+exterior, en contra de la dirección buscada por ADR-009. Revisar la ubicación o el tipo de esos
+errores antes de ampliar las features; no se ha decidido todavía cómo corregirlo. Una opción a
+evaluar es definir los errores de los puertos en `domain` y actualizar los imports y pruebas de
+`application` e `infrastructure`.
 
 ## Regla de actualización
 

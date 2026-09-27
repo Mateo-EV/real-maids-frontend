@@ -117,9 +117,13 @@ finalmente a `CustomerInMemorySource`. `findAll` y `findById` devuelven
 `CUSTOMER_NOT_FOUND`. `DEMO_CUSTOMERS` permanece en
 `customer-in-memory.source.ts`, junto a la fuente. No hay consumidor de presentación ni flujo P04.
 
-La dependencia `domain/repositories/customer.repository.ts -> application/errors/customer.error.ts`
-contradice la dirección de capas buscada por ADR-009. Es una deuda pendiente de revisión antes
-de ampliar la feature; no se ha acordado aún dónde debe vivir ese tipo de error.
+### Deuda de dirección de dependencias
+
+Los puertos `auth/domain/repositories/auth.repository.ts` y
+`customers/domain/repositories/customer.repository.ts` importan `AuthError` y `CustomerError`
+desde sus respectivas carpetas `application/errors`. Esto contradice la dirección de capas
+buscada por ADR-009 en **ambas** features. Es una deuda pendiente de revisión antes de ampliarlas;
+no se ha acordado aún dónde deben vivir esos tipos de error.
 
 ## Composición UI
 

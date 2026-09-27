@@ -1,6 +1,6 @@
 # The Real Maids — frontend
 
-Aplicación web de The Real Maids construida con Angular. El repositorio está en una fase inicial: la base técnica compila, pero las pantallas y los flujos funcionales del ERP todavía no están implementados.
+Aplicación web de The Real Maids construida con Angular. El repositorio está en una fase inicial: P01 funciona como demo frontend con autenticación en memoria, mientras que las demás pantallas y los flujos operativos del ERP todavía no están implementados.
 
 ## Estado verificable
 
