@@ -1,6 +1,6 @@
 # Estado actual del proyecto frontend
 
-Última verificación técnica: **2026-09-18**.
+Última verificación técnica: **2026-09-27**.
 
 ## Resumen ejecutivo
 
@@ -18,20 +18,20 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | API REST             | No implementada         | Existe `API_URL` como token sin valor; no hay cliente HTTP ni servicios remotos    |
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
-| Features M02-M12     | No implementadas        | M03 cuenta con demo en memoria sin ruta, pantalla ni integración HTTP              |
-| Unit tests           | Implementadas           | 9 archivos, 26 pruebas Vitest en verde                                             |
+| Features M02-M12     | M03 esqueleto           | Resto no iniciado; consultas demo sin ruta, pantalla ni HTTP                       |
+| Unit tests           | Implementadas           | 8 archivos, 25 pruebas Vitest en verde                                             |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
 
 ## Build y pruebas
 
-El 18 de septiembre de 2026 se ejecutaron los targets con el Angular CLI local del workspace después de migrar P01 a Signal Forms y NgRx SignalStore:
+El 27 de septiembre de 2026 se ejecutaron los targets `build:production` y `test` mediante el MCP de Angular CLI:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 9 archivos y 26 pruebas aprobadas.
+- `test`: **correcto**; 8 archivos y 25 pruebas aprobadas.
 
-La suite cubre source en memoria, servicio de aplicación, formulario, errores, navegación y guards.
+La suite cubre autenticación, formulario, navegación, guards y consultas demo de clientes mediante source y servicio de aplicación.
 
 ## Implementación existente
 
@@ -83,10 +83,23 @@ Los componentes Helm son código propiedad del proyecto en `libs/ui`; la capa Br
 
 ### Base del catálogo de clientes
 
-Se creó `src/app/admin/features/customers` con las capas de ADR-009, la entidad de dominio
-`Customer`, su puerto de repositorio, `CustomerService` y un source en memoria demostrativo. Esto no
-cambia el estado funcional de M03/P04: no hay ruta ni pantalla, no define DTOs y no autoriza
+Se creó `src/app/admin/features/customers` con `domain`, `application` e `infrastructure`.
+La nomenclatura de código acordada para M03 es `customers`/`Customer*`. La entidad `Customer`
+contiene `id`, `name`, `email` y `phone` opcional. `CustomerService` delega `findAll` y `findById`
+al puerto `CustomerRepository`, enlazado en `appConfig` con `CustomerRepositoryImpl` y
+`CustomerInMemorySource`. Las operaciones devuelven `Result<..., CustomerError>`; la búsqueda
+fallida usa `CUSTOMER_NOT_FOUND`. Los datos `DEMO_CUSTOMERS` están declarados en el mismo archivo
+que `CustomerInMemorySource`, sin archivo demo separado.
+
+Es un esqueleto: no hay ruta, pantalla, capa `presentation` ni integración HTTP para P04. Los
+datos y errores de la fuente en memoria no definen DTOs o errores del backend ni autorizan
 implementar `/api/clientes` sin OpenAPI.
+
+Deuda arquitectónica detectada: `domain/repositories/customer.repository.ts` importa
+`CustomerError` desde `application/errors`, de modo que el contrato de dominio depende de una
+capa exterior. Revisar la ubicación o el tipo del error antes de ampliar M03; no se ha decidido
+todavía cómo corregirlo. Una opción a evaluar es definir el error del puerto en `domain` y
+actualizar los imports y pruebas de `application` e `infrastructure`.
 
 ## Regla de actualización
 

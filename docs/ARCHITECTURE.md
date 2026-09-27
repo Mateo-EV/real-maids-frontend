@@ -2,7 +2,7 @@
 
 ## Estado
 
-Este documento describe la arquitectura observada en el repositorio al **2026-09-18**. Cuando menciona módulos de negocio futuros, los marca explícitamente como objetivo.
+Este documento describe la arquitectura observada en el repositorio al **2026-09-27**. Cuando menciona módulos de negocio futuros, los marca explícitamente como objetivo.
 
 ## Vista de ejecución actual
 
@@ -62,6 +62,11 @@ src/
         pages/           # login y destino autenticado temporal
         state/           # AuthStore raíz con NgRx SignalStore
       auth.routes.ts     # rutas lazy login/admin
+    admin/features/customers/
+      domain/            # Customer y contrato CustomerRepository
+      application/       # CustomerService y CustomerError
+      infrastructure/    # repositorio y source demo en memoria
+      # sin presentation, rutas ni pantalla P04
     core/
       config/            # configuración browser/server y placeholders de ambiente
       services/          # placeholders
@@ -103,6 +108,19 @@ Reglas para extender esta arquitectura:
 
 No se debe replicar mecánicamente todas las capas para código trivial; la separación debe proteger límites reales.
 
+### Esqueleto de customers (M03)
+
+Para esta feature, la nomenclatura de código acordada es `customers`/`Customer*`. El flujo
+disponible va de `CustomerService` a `CustomerRepository`, luego a `CustomerRepositoryImpl` y
+finalmente a `CustomerInMemorySource`. `findAll` y `findById` devuelven
+`Result<..., CustomerError>`; si el identificador no existe, la fuente devuelve
+`CUSTOMER_NOT_FOUND`. `DEMO_CUSTOMERS` permanece en
+`customer-in-memory.source.ts`, junto a la fuente. No hay consumidor de presentación ni flujo P04.
+
+La dependencia `domain/repositories/customer.repository.ts -> application/errors/customer.error.ts`
+contradice la dirección de capas buscada por ADR-009. Es una deuda pendiente de revisión antes
+de ampliar la feature; no se ha acordado aún dónde debe vivir ese tipo de error.
+
 ## Composición UI
 
 La decisión UI vigente es Spartan + Tailwind, no Angular Material ni Bootstrap.
@@ -124,7 +142,8 @@ Los formularios propios usan Angular Signal Forms como base: el modelo signal es
 - listeners globales de error del navegador;
 - Angular Router;
 - hidratación de cliente;
-- binding `AUTH_REPOSITORY -> AuthRepositoryImpl`.
+- binding `AUTH_REPOSITORY -> AuthRepositoryImpl`;
+- binding `CUSTOMER_REPOSITORY -> CustomerRepositoryImpl`.
 
 `AuthService` orquesta login y consulta de usuario sin conservar estado. `AuthStore` usa NgRx SignalStore, se provee en root y expone `session` e `isAuthenticated` a componentes, páginas y guards. `LoginFormComponent` encapsula Signal Forms, validación y envío; `LoginPage` conserva la composición de pantalla y la navegación posterior. No se persisten datos en browser storage ni se incorpora JWT; consulta ADR-011.
 

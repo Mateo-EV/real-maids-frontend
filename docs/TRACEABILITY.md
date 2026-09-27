@@ -1,6 +1,6 @@
 # Trazabilidad frontend
 
-Última reconciliación con el código: **2026-09-18**.
+Última reconciliación con el código: **2026-09-27**.
 
 ## Criterio de estado
 
@@ -15,7 +15,7 @@
 | --------------------- | --------------------------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
 | RF01 / HU01           | M01 Autenticación           | P01 Inicio de sesión | Parcial (demo) | LoginForm standalone, Signal Forms, AuthStore, source en memoria, guards y pruebas; falta backend/JWT |
 | RF02 / HU02           | M02 Usuarios/roles/permisos | P03                  | No iniciada    | Sin feature ni rutas                                                                           |
-| RF03 / HU03           | M03 Clientes                | P04                  | No iniciada    | Demo `features/customers` con source en memoria; sin ruta, pantalla ni contrato API             |
+| RF03 / HU03           | M03 Clientes                | P04                  | Esqueleto      | `customers` con `findAll`/`findById` demo y pruebas; sin ruta, pantalla ni contrato API         |
 | RF04 / HU04           | M04 Solicitudes             | P05                  | No iniciada    | Sin feature ni rutas                                                                           |
 | RF05-RF06 / HU05-HU06 | M05 Órdenes                 | P06/P09              | No iniciada    | Sin feature ni máquina/reglas de estado                                                        |
 | RF07 / HU07           | M06 Personal de campo       | P07                  | No iniciada    | Sin feature ni rutas                                                                           |

@@ -2,15 +2,15 @@
 
 ## Estado verificable
 
-Última ejecución: **2026-09-18** mediante el Angular CLI local del workspace.
+Última ejecución: **2026-09-27** mediante el MCP de Angular CLI.
 
 - Target: `real-maids-frontend:test`.
 - Builder: `@angular/build:unit-test`.
 - Runner detectado por configuración: Vitest (`vitest/globals` y `jsdom`).
-- Resultado actual: 6 archivos y 21 pruebas aprobadas.
+- Resultado actual: 8 archivos y 25 pruebas aprobadas.
 - E2E: sin target, dependencia ni suite configurada.
 
-La cobertura actual verifica source en memoria, servicio de aplicación sin estado, transiciones de `AuthStore`, el `LoginFormComponent` con Signal Forms, estados de validación/error/emisión de éxito, redirección de la página y guards. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
+La cobertura actual verifica la fuente en memoria y el servicio de autenticación, las transiciones de `AuthStore`, el `LoginFormComponent` con Signal Forms, estados de validación/error/emisión de éxito, redirección de la página y guards. También verifica las consultas demo `findAll` y `findById` de `customers`, incluido `CUSTOMER_NOT_FOUND`. Jasmine/Karma y Cypress pertenecían al plan original, pero no describen la implementación actual. Vitest queda registrado en ADR-008; la elección E2E permanece abierta.
 
 ## Comandos
 
