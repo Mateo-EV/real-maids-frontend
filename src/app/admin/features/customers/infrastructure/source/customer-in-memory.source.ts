@@ -1,6 +1,6 @@
 import { Injectable } from "@angular/core"
 import { delay, Observable, of } from "rxjs"
-import { CustomerError } from "../../application/errors/customer.error"
+import { CustomerError } from "../../domain/errors/customer.error"
 import { Customer } from "../../domain/entities/customer.entity"
 import { Result } from "@/app/shared/utils/result"
 

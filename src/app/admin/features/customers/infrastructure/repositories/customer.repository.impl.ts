@@ -1,6 +1,6 @@
 import { inject, Injectable } from "@angular/core"
 import { Observable } from "rxjs"
-import { CustomerError } from "../../application/errors/customer.error"
+import { CustomerError } from "../../domain/errors/customer.error"
 import { Customer } from "../../domain/entities/customer.entity"
 import { CustomerRepository } from "../../domain/repositories/customer.repository"
 import { CustomerInMemorySource } from "../source/customer-in-memory.source"
