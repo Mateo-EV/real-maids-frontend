@@ -1,4 +1,4 @@
-import { AuthError } from "@/app/admin/features/auth/application/errors/auth.error"
+import { AuthError } from "@/app/admin/features/auth/domain/errors/auth.error"
 import { AuthStore } from "@/app/admin/features/auth/presentation/state/auth.store"
 import { ChangeDetectionStrategy, Component, inject, output, signal } from "@angular/core"
 import {

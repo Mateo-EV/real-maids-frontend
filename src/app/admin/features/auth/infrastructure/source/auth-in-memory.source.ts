@@ -3,7 +3,7 @@ import { LoginParams } from "../../domain/params/login.params"
 import { delay, Observable, of } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserSession } from "../../domain/entities/user-session.entity"
-import { AuthError } from "../../application/errors/auth.error"
+import { AuthError } from "../../domain/errors/auth.error"
 import { DEMO_AUTH } from "../../auth.demo"
 
 @Injectable({ providedIn: "root" })

@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AuthRepository, AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
 import { UserSession } from "../../domain/entities/user-session.entity"
-import { AuthError } from "../errors/auth.error"
-import { AuthService } from "./auth.service"
+import { AuthError } from "../../domain/errors/auth.error"
+import { LoginUseCase } from "./login.use-case"
 
-describe("AuthService", () => {
-  let service: AuthService
+describe("LoginUseCase", () => {
+  let useCase: LoginUseCase
   let repository: AuthRepository
 
   beforeEach(() => {
@@ -19,10 +19,10 @@ describe("AuthService", () => {
     }
 
     TestBed.configureTestingModule({
-      providers: [AuthService, { provide: AUTH_REPOSITORY, useValue: repository }]
+      providers: [LoginUseCase, { provide: AUTH_REPOSITORY, useValue: repository }]
     })
 
-    service = TestBed.inject(AuthService)
+    useCase = TestBed.inject(LoginUseCase)
   })
 
   it("returns the user session after a successful login", () => {
@@ -31,7 +31,7 @@ describe("AuthService", () => {
     vi.mocked(repository.me).mockReturnValue(of(Result.success(session)))
 
     let emittedSession: UserSession | undefined
-    service.login({ email: session.email, password: "demo2026" }).subscribe(result => {
+    useCase.execute({ email: session.email, password: "demo2026" }).subscribe(result => {
       emittedSession = result.success ? result.data : undefined
     })
 
@@ -43,17 +43,11 @@ describe("AuthService", () => {
     vi.mocked(repository.login).mockReturnValue(of(Result.failure(error)))
 
     let emittedError: AuthError | undefined
-    service.login({ email: "wrong@realmaids.com", password: "incorrecta" }).subscribe(result => {
+    useCase.execute({ email: "wrong@realmaids.com", password: "incorrecta" }).subscribe(result => {
       emittedError = result.success ? undefined : result.error
     })
 
     expect(emittedError).toBe(error)
     expect(repository.me).not.toHaveBeenCalled()
-  })
-
-  it("delegates logout to the repository", () => {
-    service.logout()
-
-    expect(repository.logout).toHaveBeenCalledOnce()
   })
 })

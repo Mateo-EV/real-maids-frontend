@@ -5,7 +5,7 @@ import { Observable } from "rxjs"
 import { LoginParams } from "../../domain/params/login.params"
 import { AuthInMemorySource } from "../source/auth-in-memory.source"
 import { UserSession } from "../../domain/entities/user-session.entity"
-import { AuthError } from "../../application/errors/auth.error"
+import { AuthError } from "../../domain/errors/auth.error"
 
 @Injectable({ providedIn: "root" })
 export class AuthRepositoryImpl implements AuthRepository {

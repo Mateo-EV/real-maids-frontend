@@ -69,7 +69,9 @@ Reutiliza componentes instalados y genera nuevos con `@spartan-ng/cli:ui`; no ad
 - Organización por feature; dentro de una feature usa `domain`, `application`, `infrastructure` y `presentation` cuando esos límites aporten valor.
 - `core` contiene configuración transversal/singletons; `shared` solo piezas genuinamente reutilizables.
 - Contratos de repositorio pueden conectarse a adaptadores mediante `InjectionToken`.
-- Estado compartido de presentación: NgRx SignalStore por feature; `AuthStore` es root y `AuthService` permanece sin estado.
+- Estado de presentación con NgRx SignalStore por feature; `AuthStore` se provee en root y delega en `LoginUseCase` y `LogoutUseCase`, ambos sin estado.
+- Define un `*UseCase` con una operación `execute()` por cada acción de aplicación; no agregues clases `*Service` de feature para agrupar acciones de aplicación.
+- Ubica los tipos de error de cada feature en `domain/errors`; los contratos de dominio no deben importar desde `application`.
 - UI: Spartan Brain/Helm + Tailwind CSS 4; Helm vive en `libs/ui`.
 - Pruebas unitarias: builder oficial de Angular con Vitest.
 
@@ -83,7 +85,7 @@ No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, estrategi
 - `API_URL` no tiene provider y no hay cliente HTTP configurado.
 - Hay guards básicos auth/guest en `auth/presentation/guards`; no hay permisos por rol, interceptores, E2E ni CI/CD.
 - M03 tiene un esqueleto en `admin/features/customers`: consultas demo en memoria y pruebas, sin ruta ni pantalla P04. Usa `customers` y `Customer*` como nomenclatura de código para esta feature; los datos demo permanecen en `customer-in-memory.source.ts`.
-- Los contratos de repositorio de `auth` y `customers` en `domain` importan errores desde `application/errors`; es deuda de dirección de dependencias documentada, no una decisión arquitectónica nueva.
+- Se corrigió la dependencia del error de dominio en `auth`. El repositorio de `customers` aún importa su error desde `application/errors` hasta completar su refactorización.
 - Los archivos de environment y varios archivos de `core` son placeholders vacíos.
 
 No construyas sobre esos placeholders suponiendo contratos inexistentes. Conecta cada pieza explícitamente y actualiza `PROJECT_STATUS.md` y `TRACEABILITY.md` cuando cambie el estado.

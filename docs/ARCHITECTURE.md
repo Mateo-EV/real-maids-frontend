@@ -53,8 +53,8 @@ NgRx SignalStore se usa únicamente para el estado compartido de presentación d
 src/
   app/
     admin/features/auth/
-      application/       # servicios de caso de uso y errores
-      domain/            # entidad, parámetros y contrato de repositorio
+      application/       # casos de uso con nombre
+      domain/            # entidad, parámetros, errores y contrato de repositorio
       infrastructure/    # implementación y fuente en memoria
       presentation/
         components/      # formularios y piezas propias de la feature
@@ -88,7 +88,7 @@ La primera feature vertical implementada es autenticación. Su dirección concep
 ```mermaid
 flowchart LR
     UI[Presentación\nLoginForm + pages + guards] --> STORE[AuthStore\nNgRx SignalStore]
-    STORE --> APP[Application\nAuthService sin estado]
+    STORE --> APP[Application\nLoginUseCase + LogoutUseCase]
     APP --> PORT[Domain\nAuthRepository]
     INFRA[Infrastructure\nAuthRepositoryImpl] -. implementa .-> PORT
     INFRA --> SOURCE[AuthInMemorySource\ncredenciales demo]
@@ -99,7 +99,8 @@ Reglas para extender esta arquitectura:
 
 - organizar el código por feature, no por una carpeta global de componentes/servicios de negocio;
 - mantener entidades y contratos de dominio independientes de Angular cuando sea razonable;
-- ubicar la orquestación en `application`;
+- ubicar cada acción de aplicación en un `*UseCase` con un único método `execute()`; no agrupar acciones de la feature en un `*Service`;
+- ubicar los tipos de error de la feature en `domain/errors`, para que los contratos de dominio no dependan de `application`;
 - ubicar HTTP, almacenamiento u otros adaptadores en `infrastructure`;
 - crear una capa `presentation` dentro de la feature para rutas, páginas y componentes propios;
 - mantener stores y guards específicos dentro de `presentation`, aunque un store pueda tener alcance root mediante DI;
@@ -119,11 +120,10 @@ finalmente a `CustomerInMemorySource`. `findAll` y `findById` devuelven
 
 ### Deuda de dirección de dependencias
 
-Los puertos `auth/domain/repositories/auth.repository.ts` y
-`customers/domain/repositories/customer.repository.ts` importan `AuthError` y `CustomerError`
-desde sus respectivas carpetas `application/errors`. Esto contradice la dirección de capas
-buscada por ADR-009 en **ambas** features. Es una deuda pendiente de revisión antes de ampliarlas;
-no se ha acordado aún dónde deben vivir esos tipos de error.
+El repositorio de `auth` ahora importa `AuthError` desde `domain/errors`. El repositorio de
+`customers` todavía importa `CustomerError` desde `application/errors`; esa deuda de dirección
+de dependencias queda para la refactorización separada de `customers`. ADR-009 establece la regla
+para las nuevas features.
 
 ## Composición UI
 
@@ -149,7 +149,7 @@ Los formularios propios usan Angular Signal Forms como base: el modelo signal es
 - binding `AUTH_REPOSITORY -> AuthRepositoryImpl`;
 - binding `CUSTOMER_REPOSITORY -> CustomerRepositoryImpl`.
 
-`AuthService` orquesta login y consulta de usuario sin conservar estado. `AuthStore` usa NgRx SignalStore, se provee en root y expone `session` e `isAuthenticated` a componentes, páginas y guards. `LoginFormComponent` encapsula Signal Forms, validación y envío; `LoginPage` conserva la composición de pantalla y la navegación posterior. No se persisten datos en browser storage ni se incorpora JWT; consulta ADR-011.
+`LoginUseCase` orquesta el login y la consulta de sesión, mientras `LogoutUseCase` delega el logout; ninguno conserva estado de presentación. `AuthStore` usa NgRx SignalStore, se provee en root y expone `session` e `isAuthenticated` a componentes, páginas y guards. `LoginFormComponent` encapsula Signal Forms, validación y envío; `LoginPage` conserva la composición de pantalla y la navegación posterior. No se persisten datos en browser storage ni se incorpora JWT; consulta ADR-011.
 
 El servidor combina esa configuración con `provideServerRendering(withRoutes(serverRoutes))`.
 

@@ -47,12 +47,12 @@ La suite cubre autenticación, formulario, navegación, guards y consultas demo 
 
 La feature `src/app/admin/features/auth` está separada en:
 
-- `domain`: entidad `UserSession`, parámetros de login y contrato `AuthRepository`;
-- `application`: `AuthService` y `AuthError`;
+- `domain`: entidad `UserSession`, parámetros de login, `AuthError` en `domain/errors` y contrato `AuthRepository`;
+- `application`: `LoginUseCase` y `LogoutUseCase` sin estado;
 - `infrastructure`: `AuthRepositoryImpl` y `AuthInMemorySource`.
 - `presentation`: componente de formulario, páginas, guards y `AuthStore` con NgRx SignalStore.
 
-`AUTH_REPOSITORY` se enlaza a `AuthRepositoryImpl` mediante inyección de dependencias. La fuente valida credenciales de demostración, simula latencia, devuelve un usuario y permite logout. `AuthService` orquesta `login -> me` sin almacenar estado. `AuthStore`, provisto en root desde la capa de presentación, mantiene la sesión solo en memoria; al recargar se pierde deliberadamente.
+`AUTH_REPOSITORY` se enlaza a `AuthRepositoryImpl` mediante inyección de dependencias. La fuente valida credenciales de demostración, simula latencia, devuelve un usuario y permite logout. `LoginUseCase.execute()` orquesta `login -> me`; `LogoutUseCase.execute()` delega el logout. Ninguno conserva estado de presentación. `AuthStore`, provisto en root, mantiene la sesión solo en memoria; al recargar se pierde deliberadamente.
 
 P01 usa un `LoginFormComponent` standalone con Angular Signal Forms, modelo signal, validación declarativa, bindings `formRoot`/`formField` y estado de envío reactivo. La página compone la identidad visual y resuelve la redirección segura; el formulario encapsula validación accesible, visibilidad de contraseña, envío y error recuperable. La interfaz no expone que la fuente actual es de demostración. `/admin` prueba el guard y logout, pero no constituye P02.
 
@@ -97,14 +97,10 @@ implementar `/api/clientes` sin OpenAPI.
 
 ### Deuda de límites de capas
 
-Deuda arquitectónica detectada en **auth y customers**: los contratos
-`auth/domain/repositories/auth.repository.ts` y
-`customers/domain/repositories/customer.repository.ts` importan respectivamente `AuthError` y
-`CustomerError` desde `application/errors`. Así, ambos puertos de dominio dependen de una capa
-exterior, en contra de la dirección buscada por ADR-009. Revisar la ubicación o el tipo de esos
-errores antes de ampliar las features; no se ha decidido todavía cómo corregirlo. Una opción a
-evaluar es definir los errores de los puertos en `domain` y actualizar los imports y pruebas de
-`application` e `infrastructure`.
+El repositorio de `auth` ahora importa `AuthError` desde `domain/errors`, lo que corrige su deuda
+de dirección de dependencias. El repositorio de `customers` todavía importa `CustomerError`
+desde `application/errors`; esa deuda queda para la refactorización separada de `customers`.
+ADR-009 establece `domain/errors` como convención para los errores usados por contratos de dominio.
 
 ## Regla de actualización
 

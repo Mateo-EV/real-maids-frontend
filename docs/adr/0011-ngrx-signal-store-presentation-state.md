@@ -37,3 +37,7 @@ La adopción se limita inicialmente a autenticación. Otras features incorporar�
 - Store provisto por componente o ruta: descartado porque la sesión debe cruzar `/login`, `/admin` y guards.
 - Store en `core`: descartado porque el estado pertenece a la feature de autenticación.
 - NgRx Global Store clásico: descartado por mayor ceremonia para el alcance actual.
+
+## Actualización de implementación (2026-09-27)
+
+Las referencias anteriores a `AuthService` describen la implementación vigente cuando se tomó esta decisión y se conservan como contexto histórico. El `AuthStore` actual delega en `LoginUseCase.execute()` y `LogoutUseCase.execute()`, ambos sin estado. La propiedad de la sesión, el alcance root y la decisión de no persistirla permanecen iguales. Consulta ADR-009 para la convención de nombres de aplicación.

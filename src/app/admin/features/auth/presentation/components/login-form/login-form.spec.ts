@@ -1,5 +1,6 @@
-import { AuthError } from "@/app/admin/features/auth/application/errors/auth.error"
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
+import { AuthError } from "@/app/admin/features/auth/domain/errors/auth.error"
+import { LoginUseCase } from "@/app/admin/features/auth/application/use-cases/login.use-case"
+import { LogoutUseCase } from "@/app/admin/features/auth/application/use-cases/logout.use-case"
 import { DEMO_AUTH } from "@/app/admin/features/auth/auth.demo"
 import { UserSession } from "@/app/admin/features/auth/domain/entities/user-session.entity"
 import { AuthStore } from "@/app/admin/features/auth/presentation/state/auth.store"
@@ -17,7 +18,11 @@ describe("LoginFormComponent", () => {
 
     TestBed.configureTestingModule({
       imports: [LoginFormComponent],
-      providers: [AuthStore, { provide: AuthService, useValue: { login } }]
+      providers: [
+        AuthStore,
+        { provide: LoginUseCase, useValue: { execute: login } },
+        { provide: LogoutUseCase, useValue: { execute: vi.fn() } }
+      ]
     })
   })
 

@@ -1,5 +1,6 @@
-import { AuthError } from "@/app/admin/features/auth/application/errors/auth.error"
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
+import { AuthError } from "@/app/admin/features/auth/domain/errors/auth.error"
+import { LoginUseCase } from "@/app/admin/features/auth/application/use-cases/login.use-case"
+import { LogoutUseCase } from "@/app/admin/features/auth/application/use-cases/logout.use-case"
 import { UserSession } from "@/app/admin/features/auth/domain/entities/user-session.entity"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
@@ -17,7 +18,11 @@ describe("AuthStore", () => {
     logout.mockReset()
 
     TestBed.configureTestingModule({
-      providers: [AuthStore, { provide: AuthService, useValue: { login, logout } }]
+      providers: [
+        AuthStore,
+        { provide: LoginUseCase, useValue: { execute: login } },
+        { provide: LogoutUseCase, useValue: { execute: logout } }
+      ]
     })
 
     store = TestBed.inject(AuthStore)
