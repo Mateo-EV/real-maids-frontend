@@ -1,4 +1,5 @@
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
+import { LoginUseCase } from "@/app/admin/features/auth/application/use-cases/login.use-case"
+import { LogoutUseCase } from "@/app/admin/features/auth/application/use-cases/logout.use-case"
 import { UserSession } from "@/app/admin/features/auth/domain/entities/user-session.entity"
 import { LoginParams } from "@/app/admin/features/auth/domain/params/login.params"
 import { computed, inject } from "@angular/core"
@@ -19,19 +20,21 @@ export const AuthStore = signalStore(
   withComputed(({ session }) => ({
     isAuthenticated: computed(() => session() !== null)
   })),
-  withMethods((store, authService = inject(AuthService)) => ({
-    login(params: LoginParams) {
-      return authService.login(params).pipe(
-        tap(result => {
-          if (result.success) {
-            patchState(store, { session: result.data })
-          }
-        })
-      )
-    },
-    logout(): void {
-      authService.logout()
-      patchState(store, initialState)
-    }
-  }))
+  withMethods(
+    (store, loginUseCase = inject(LoginUseCase), logoutUseCase = inject(LogoutUseCase)) => ({
+      login(params: LoginParams) {
+        return loginUseCase.execute(params).pipe(
+          tap(result => {
+            if (result.success) {
+              patchState(store, { session: result.data })
+            }
+          })
+        )
+      },
+      logout(): void {
+        logoutUseCase.execute()
+        patchState(store, initialState)
+      }
+    })
+  )
 )

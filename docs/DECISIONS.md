@@ -20,7 +20,7 @@ Estados:
 | DEC-006 | Componentes standalone                                    | Implementada          | `bootstrapApplication` y componentes standalone implícitos    |
 | DEC-007 | SSR Angular + Express, hidratación y prerender            | Implementada          | ADR-007, `angular.json`, `src/server.ts`                      |
 | DEC-008 | Spartan Brain/Helm + Tailwind CSS 4                       | Implementada          | ADR-006, `components.json`, `libs/ui`, `src/styles.css`       |
-| DEC-009 | Arquitectura por feature con capas cuando aporten límites | Implementada inicial  | ADR-009; auth y esqueleto `customers`                          |
+| DEC-009 | Arquitectura por feature con errores en dominio y casos de uso | Implementada parcial | ADR-009; `auth` actualizado, `customers` pendiente             |
 | DEC-010 | Repositorios de dominio conectados por `InjectionToken`   | Implementada inicial  | Auth y customers enlazan adaptadores en memoria                |
 | DEC-011 | Unit tests con builder Angular + Vitest                   | Implementada          | ADR-008; 25 pruebas aprobadas el 2026-09-27                    |
 | DEC-012 | Angular Material o Bootstrap                              | Descartada/sustituida | Sustituida por ADR-006                                        |

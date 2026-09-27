@@ -26,6 +26,12 @@ Organizar el código por feature funcional. Dentro de cada feature usar, cuando 
 - No se crean capas vacías por ceremonia; features pequeñas pueden simplificar estructura.
 - La fuente en memoria de auth debe sustituirse por un adaptador real sin cambiar el contrato cuando OpenAPI esté confirmado.
 
+## Convención vigente (2026-09-27)
+
+- Los tipos de error usados por contratos de dominio viven en `domain/errors`; `domain` no debe importar desde `application`.
+- Cada acción de aplicación se representa mediante un `*UseCase` con una operación `execute()`. No se usan clases `*Service` de feature para agrupar acciones de aplicación.
+- `auth` sigue esta convención. El esqueleto de `customers` se migrará por separado; su dependencia actual de `application/errors` no constituye una excepción a la regla.
+
 ## Alternativas consideradas
 
 - Organización global por tipo (`components`, `services`, `models`): descartada para features de negocio porque dispersa responsabilidades.

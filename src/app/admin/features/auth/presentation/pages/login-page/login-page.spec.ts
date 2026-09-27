@@ -1,4 +1,5 @@
-import { AuthService } from "@/app/admin/features/auth/application/services/auth.service"
+import { LoginUseCase } from "@/app/admin/features/auth/application/use-cases/login.use-case"
+import { LogoutUseCase } from "@/app/admin/features/auth/application/use-cases/logout.use-case"
 import { AuthStore } from "@/app/admin/features/auth/presentation/state/auth.store"
 import { TestBed } from "@angular/core/testing"
 import { ActivatedRoute, convertToParamMap, Router } from "@angular/router"
@@ -13,7 +14,8 @@ describe("LoginPage", () => {
       imports: [LoginPage],
       providers: [
         AuthStore,
-        { provide: AuthService, useValue: { login: vi.fn() } },
+        { provide: LoginUseCase, useValue: { execute: vi.fn() } },
+        { provide: LogoutUseCase, useValue: { execute: vi.fn() } },
         { provide: Router, useValue: { navigateByUrl } },
         {
           provide: ActivatedRoute,
