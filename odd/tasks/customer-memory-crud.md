@@ -20,12 +20,13 @@ The customer repository and demo source currently support only list and lookup. 
 
 ## Task
 
-- [ ] T1 — Add repository CRUD methods, source-owned ID generation and isolated mutable in-memory state, focused success/missing-ID tests, and accurate M03 documentation. Acceptance: create returns an ID-bearing customer; subsequent reads reflect create/update/delete; missing update/delete return the established not-found error; no new application layer; full tests/build pass. Evidence: pending.
+- [x] T1 — Add repository CRUD methods, source-owned ID generation and isolated mutable in-memory state, focused success/missing-ID tests, and accurate M03 documentation. Acceptance: create returns an ID-bearing customer; subsequent reads reflect create/update/delete; missing update/delete return the established not-found error; no new application layer; full tests/build pass. Evidence: `4c66d68`; 31/31 Vitest tests passed in 10 files, production build passed, `git diff --check` passed, and targeted independent verification passed. Runtime boundary: direct source tests cover the in-memory seam; no UI route exists. Rollback boundary: the customer repository/source contract, tests, and M03 documentation in `4c66d68`.
 
 ## Verification and progress
 
 - Planned checks: focused customer tests, full `npm test -- --watch=false`, `npm run build`, `git diff --check`, and a search for accidental application-layer additions.
+- Observed: 290 authored changed lines (266 additions + 24 deletions) in the work-unit commit; no application use cases or UI were added. An initial verification found eager mutations and reference aliasing; both were corrected before the commit, with subscription-time and isolation tests. Angular MCP best-practices lookup was unavailable; repository conventions were used. Native risk assessment was unassessable due to untracked inventory; RDD remains off.
 - Runtime scenario: N/A for UI; direct repository/source tests exercise the in-memory boundary.
 - RDD status reported off with a local authority-path ownership warning; no review receipt is claimed.
 - Existing untracked `.atl/` is outside this task and must remain untouched.
-- Next step: implement T1.
+- Next step: review the local branch. Push and PR creation remain user-owned decisions.
