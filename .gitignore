@@ -45,3 +45,6 @@ Thumbs.db
 
 # Codebase memory
 .codebase-memory/
+
+# Local Skills Registry
+.atl/
