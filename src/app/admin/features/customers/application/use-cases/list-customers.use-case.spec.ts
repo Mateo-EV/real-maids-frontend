@@ -16,7 +16,10 @@ describe("ListCustomersUseCase", () => {
   beforeEach(() => {
     repository = {
       findAll: vi.fn(),
-      findById: vi.fn()
+      findById: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn()
     }
 
     TestBed.configureTestingModule({

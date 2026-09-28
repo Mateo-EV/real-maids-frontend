@@ -18,8 +18,8 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | API REST             | No implementada         | Existe `API_URL` como token sin valor; no hay cliente HTTP ni servicios remotos    |
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
-| Features M02-M12     | M03 esqueleto           | Resto no iniciado; consultas demo sin ruta, pantalla ni HTTP                       |
-| Unit tests           | Implementadas           | 10 archivos, 25 pruebas Vitest en verde                                            |
+| Features M02-M12     | M03 esqueleto           | Resto no iniciado; M03 tiene consultas y CRUD demo sin ruta, pantalla ni HTTP      |
+| Unit tests           | Implementadas           | 10 archivos, 31 pruebas Vitest en verde                                            |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
@@ -29,7 +29,7 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 El 27 de septiembre de 2026 se ejecutaron los targets `build:production` y `test` mediante el MCP de Angular CLI:
 
 - `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 10 archivos y 25 pruebas aprobadas.
+- `test`: **correcto**; 10 archivos y 31 pruebas aprobadas.
 
 La suite cubre autenticación, formulario, navegación, guards y consultas demo de clientes mediante source y casos de uso.
 
@@ -88,9 +88,12 @@ La nomenclatura de código acordada para M03 es `customers`/`Customer*`. La enti
 contiene `id`, `name`, `email` y `phone` opcional. `ListCustomersUseCase.execute()` y
 `GetCustomerByIdUseCase.execute(id)` delegan `findAll` y `findById`, respectivamente,
 al puerto `CustomerRepository`, enlazado en `appConfig` con `CustomerRepositoryImpl` y
-`CustomerInMemorySource`. Las operaciones devuelven `Result<..., CustomerError>`; la búsqueda
-fallida usa `CUSTOMER_NOT_FOUND`. Los datos `DEMO_CUSTOMERS` están declarados en el mismo archivo
-que `CustomerInMemorySource`, sin archivo demo separado.
+`CustomerInMemorySource`. `findAll`, `findById`, `create`, `update` y `delete` devuelven
+`Observable<Result<..., CustomerError>>`. La fuente mantiene una copia mutable por instancia de
+`DEMO_CUSTOMERS`, genera IDs al crear y devuelve `CUSTOMER_NOT_FOUND` al actualizar o eliminar
+IDs inexistentes. El CRUD es solo una capacidad demo en memoria: no implica UI, persistencia,
+contrato API ni exclusividad de correo. Los datos `DEMO_CUSTOMERS` están declarados en el mismo
+archivo que `CustomerInMemorySource`, sin archivo demo separado.
 
 Es un esqueleto: no hay ruta, pantalla, capa `presentation` ni integración HTTP para P04. Los
 datos y errores de la fuente en memoria no definen DTOs o errores del backend ni autorizan

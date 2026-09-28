@@ -17,4 +17,16 @@ export class CustomerRepositoryImpl implements CustomerRepository {
   findById(id: string): Observable<Result<Customer, CustomerError>> {
     return this.source.findById(id)
   }
+
+  create(customer: Omit<Customer, "id">): Observable<Result<Customer, CustomerError>> {
+    return this.source.create(customer)
+  }
+
+  update(customer: Customer): Observable<Result<Customer, CustomerError>> {
+    return this.source.update(customer)
+  }
+
+  delete(id: string): Observable<Result<void, CustomerError>> {
+    return this.source.delete(id)
+  }
 }

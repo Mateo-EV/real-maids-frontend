@@ -111,13 +111,14 @@ No se debe replicar mecánicamente todas las capas para código trivial; la sepa
 
 ### Esqueleto de customers (M03)
 
-Para esta feature, la nomenclatura de código acordada es `customers`/`Customer*`. El flujo
-disponible va de `ListCustomersUseCase.execute()` o `GetCustomerByIdUseCase.execute(id)` a
-`CustomerRepository`, luego a `CustomerRepositoryImpl` y finalmente a
-`CustomerInMemorySource`. `findAll` y `findById` devuelven
-`Result<..., CustomerError>`; si el identificador no existe, la fuente devuelve
-`CUSTOMER_NOT_FOUND`. `DEMO_CUSTOMERS` permanece en
-`customer-in-memory.source.ts`, junto a la fuente. No hay consumidor de presentación ni flujo P04.
+Para esta feature, la nomenclatura de código acordada es `customers`/`Customer*`. El contrato
+`CustomerRepository` ofrece `findAll`, `findById`, `create`, `update` y `delete`, con resultados
+`Observable<Result<..., CustomerError>>`. `CustomerRepositoryImpl` delega cada operación a
+`CustomerInMemorySource`. La fuente conserva una copia mutable por instancia de `DEMO_CUSTOMERS`,
+genera el ID durante la creación, reemplaza por ID al actualizar y devuelve `CUSTOMER_NOT_FOUND`
+al actualizar o eliminar un ID inexistente. `DEMO_CUSTOMERS` permanece en
+`customer-in-memory.source.ts`, junto a la fuente. Estas mutaciones son solo demo y volátiles; no
+implican consumidor de presentación, persistencia, contrato API ni flujo P04.
 
 ### Dirección de dependencias de dominio
 
