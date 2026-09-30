@@ -118,7 +118,21 @@ Para esta feature, la nomenclatura de código acordada es `customers`/`Customer*
 genera el ID durante la creación, reemplaza por ID al actualizar y devuelve `CUSTOMER_NOT_FOUND`
 al actualizar o eliminar un ID inexistente. `DEMO_CUSTOMERS` permanece en
 `customer-in-memory.source.ts`, junto a la fuente. Estas mutaciones son solo demo y volátiles; no
-implican consumidor de presentación, persistencia, contrato API ni flujo P04.
+implican persistencia, contrato API ni flujo P04. La capa `application` tiene los cinco casos
+de uso (`ListCustomers`, `GetCustomerById`, `CreateCustomer`, `UpdateCustomer` y
+`DeleteCustomer`), cada uno con un único `execute()` que delega en el contrato de dominio.
+
+`CustomersStore`, en `presentation/state`, usa NgRx SignalStore y delega las cinco operaciones
+en esos casos de uso. Mantiene catálogo y selección, estados loading/error/success y un `isEmpty`
+derivado que solo reporta vacío después de cargar exitosamente el catálogo. Las operaciones exitosas
+de creación/actualización/eliminación reflejan el cambio en el estado local; el store no accede
+al repositorio directamente. Se provee en root, pero aún no tiene ruta, pantalla o consumidor UI.
+Los errores `CustomerError` del contrato se preservan; errores RxJS inesperados se normalizan a
+`UNEXPECTED` para que la presentación no quede bloqueada en loading.
+Las operaciones se ejecutan al suscribirse; un contador de solicitudes concurrentes conserva
+loading hasta la última finalización y `finalize` lo limpia también ante cancelación o completion
+vacío. Las cargas de catálogo validan su secuencia y la revisión del catálogo antes de aplicar la
+respuesta, para que una carga antigua no revierta una mutación más reciente.
 
 ### Dirección de dependencias de dominio
 

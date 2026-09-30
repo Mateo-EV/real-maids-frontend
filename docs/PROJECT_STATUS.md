@@ -19,17 +19,17 @@ El repositorio contiene una base Angular moderna y compilable con el primer fluj
 | Guards/interceptores | Parcial                 | Guards auth/guest implementados; sin interceptor HTTP                              |
 | Pantallas P01-P13    | P01 parcial frontend    | Login completo para demo; `/admin` es solo destino temporal                        |
 | Features M02-M12     | M03 esqueleto           | Resto no iniciado; M03 tiene consultas y CRUD demo sin ruta, pantalla ni HTTP      |
-| Unit tests           | Implementadas           | 10 archivos, 31 pruebas Vitest en verde                                            |
+| Unit tests           | Implementadas           | 14 archivos, 40 pruebas Vitest en verde                                            |
 | E2E                  | No configurado          | Sin target ni dependencia Cypress/Playwright                                       |
 | CI/CD                | No verificado           | Sin workflow visible en el repositorio                                             |
 | Despliegue           | No verificado           | No hay evidencia de Vercel u otro hosting                                          |
 
 ## Build y pruebas
 
-El 27 de septiembre de 2026 se ejecutaron los targets `build:production` y `test` mediante el MCP de Angular CLI:
+El 27 de septiembre de 2026 se ejecutaron `npm run build` y `npm test -- --watch=false` mediante el CLI local. El MCP Angular devolvió una respuesta inesperada al consultar sus prácticas recomendadas; por eso se usó el CLI local para verificar:
 
-- `build:production`: **correcto**; generó browser, server y `/login` prerenderizado.
-- `test`: **correcto**; 10 archivos y 31 pruebas aprobadas.
+- `npm run build`: **correcto**; generó browser, server y `/login` prerenderizado.
+- `npm test -- --watch=false`: **correcto**; 14 archivos y 40 pruebas aprobadas.
 
 La suite cubre autenticación, formulario, navegación, guards y consultas demo de clientes mediante source y casos de uso.
 
@@ -83,11 +83,11 @@ Los componentes Helm son código propiedad del proyecto en `libs/ui`; la capa Br
 
 ### Base del catálogo de clientes
 
-Se creó `src/app/admin/features/customers` con `domain`, `application` e `infrastructure`.
+Se creó `src/app/admin/features/customers` con `domain`, `application`, `infrastructure` y una capa `presentation/state`.
 La nomenclatura de código acordada para M03 es `customers`/`Customer*`. La entidad `Customer`
-contiene `id`, `name`, `email` y `phone` opcional. `ListCustomersUseCase.execute()` y
-`GetCustomerByIdUseCase.execute(id)` delegan `findAll` y `findById`, respectivamente,
-al puerto `CustomerRepository`, enlazado en `appConfig` con `CustomerRepositoryImpl` y
+contiene `id`, `name`, `email` y `phone` opcional. Los casos de uso `ListCustomers`,
+`GetCustomerById`, `CreateCustomer`, `UpdateCustomer` y `DeleteCustomer` exponen una operación
+`execute()` y delegan sus operaciones al puerto `CustomerRepository`, enlazado en `appConfig` con `CustomerRepositoryImpl` y
 `CustomerInMemorySource`. `findAll`, `findById`, `create`, `update` y `delete` devuelven
 `Observable<Result<..., CustomerError>>`. La fuente mantiene una copia mutable por instancia de
 `DEMO_CUSTOMERS`, genera IDs al crear y devuelve `CUSTOMER_NOT_FOUND` al actualizar o eliminar
@@ -95,7 +95,13 @@ IDs inexistentes. El CRUD es solo una capacidad demo en memoria: no implica UI, 
 contrato API ni exclusividad de correo. Los datos `DEMO_CUSTOMERS` están declarados en el mismo
 archivo que `CustomerInMemorySource`, sin archivo demo separado.
 
-Es un esqueleto: no hay ruta, pantalla, capa `presentation` ni integración HTTP para P04. Los
+`CustomersStore` en `presentation/state` consume los cinco casos de uso, mantiene catálogo,
+selección, loading, error y feedback de éxito; distingue catálogo vacío y normaliza fallos
+inesperados del observable. El trabajo inicia con la suscripción, loading termina incluso ante
+cancelación/completion vacío y una carga antigua no revierte mutaciones posteriores. Es un store
+de presentación, aún sin consumidor de UI.
+
+La feature sigue siendo un esqueleto funcional de capas: no hay ruta, pantalla ni integración HTTP para P04. Los
 datos y errores de la fuente en memoria no definen DTOs o errores del backend ni autorizan
 implementar `/api/clientes` sin OpenAPI.
 
