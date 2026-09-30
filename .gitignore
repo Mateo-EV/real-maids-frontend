@@ -43,8 +43,5 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
-# Codebase memory
-.codebase-memory/
-
 # Local Skills Registry
 .atl/
