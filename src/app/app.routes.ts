@@ -9,7 +9,12 @@ export const routes: Routes = [
   {
     path: "",
     loadChildren: () =>
-      import("./admin/features/auth/auth.routes").then(routes => routes.AUTH_ROUTES)
+      import("./features/auth/auth.routes").then(routes => routes.AUTH_ROUTES)
+  },
+  {
+    path: "",
+    loadChildren: () =>
+      import("./experiences/admin/admin.routes").then(routes => routes.ADMIN_ROUTES)
   },
   {
     path: "**",
