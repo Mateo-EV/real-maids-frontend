@@ -1,77 +1,41 @@
 # The Real Maids — frontend
 
-Aplicación web de The Real Maids construida con Angular. El repositorio está en una fase inicial: P01 funciona como demo frontend con autenticación en memoria, mientras que las demás pantallas y los flujos operativos del ERP todavía no están implementados.
+Aplicación web para coordinar los servicios de limpieza de The Real Maids: gestión interna de clientes, solicitudes, órdenes, personal y programación, junto con un portal donde los clientes consultarán sus solicitudes y servicios y accederán a atención al cliente. El alcance es web adaptable a computadoras, tabletas y teléfonos, no una aplicación móvil nativa.
 
-## Estado verificable
+## Qué existe hoy
 
-- Angular 22 con componentes standalone y TypeScript 6.
-- Renderizado SSR con Node/Express, hidratación y prerender de `/login`.
-- Tailwind CSS 4 y Spartan UI (`@spartan-ng/brain` + componentes Helm copiados en `libs/ui`).
-- Login responsive P01 con formulario standalone en Angular Signal Forms, conectado a una fuente en memoria.
-- Sesión efímera con NgRx SignalStore, guards de usuario/invitado, redirección segura y logout.
-- Rutas lazy `/login` y `/admin`; `/admin` es un destino temporal protegido, no el dashboard P02.
-- M03 tiene un esqueleto `customers` con consultas y CRUD demo en memoria; aún no hay ruta ni pantalla P04.
-- `/login` se prerenderiza; el resto de rutas usa renderizado cliente mientras no exista sesión backend.
-- Build de producción y 31 pruebas Vitest en 10 archivos verificados el 27 de septiembre de 2026.
-- Sin integración HTTP real, persistencia JWT, dashboard funcional, E2E, CI/CD ni despliegue verificable.
+- P01: inicio de sesión de demostración, validación del formulario, redirección segura y cierre de sesión. La sesión vive en memoria y se pierde al recargar; no es autenticación real con el backend.
+- Rutas `/login` y `/admin` con guards básicos. `/admin` es un destino temporal protegido, no el dashboard P02.
+- M03: base de clientes con dominio, cinco casos de uso, store y CRUD de demostración en memoria. No tiene ruta ni pantalla P04, persistencia o integración HTTP.
+- Base técnica Angular 22/TypeScript 6, SSR e hidratación, Spartan/Tailwind y pruebas unitarias con Vitest. `/login` se prerenderiza; las demás rutas se renderizan en el cliente.
 
-El detalle y la evidencia se mantienen en [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+El resto de los módulos y el portal cliente son **alcance previsto**, no funcionalidades terminadas. No hay integración HTTP, JWT persistente, permisos por rol, E2E ni CI/CD configurados; el despliegue productivo no está verificado. No se afirma un resultado actual de compilación o pruebas en esta documentación.
 
-## Arquitectura actual
+## Recorridos previstos
 
-```mermaid
-flowchart LR
-    B[Browser] -->|hidratación| APP[Angular standalone]
-    APP --> ROUTER[Angular Router\nlogin + admin protegido]
-    APP --> AUTH[Feature auth\npresentation/application/domain/infrastructure]
-    AUTH --> MEM[Fuente en memoria\nsesión efímera]
-    APP --> UI[Spartan Helm local\nlibs/ui]
-    SSR[Node + Express\nAngular SSR] --> APP
-    API[Backend REST] -. integración pendiente .-> APP
-```
+- **Gestión interna:** cliente → solicitud de servicio → orden → programación y asignación → ejecución → seguimiento del pago.
+- **Personal de campo:** servicios asignados → detalle → actualización del estado permitido.
+- **Portal cliente:** mis solicitudes y servicios → detalle → atención al cliente. El alta directa de solicitudes por clientes sigue pendiente de definición.
+- **Supervisión:** dashboard e informes; consulta de la sincronización con QuickBooks a través del backend.
 
-La arquitectura de código implementada y sus límites están descritos en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Los módulos RF/HU/P del documento académico siguen siendo alcance funcional previsto, no evidencia de implementación.
-
-## Herramientas y versiones
-
-| Herramienta              | Versión/configuración del repositorio |
-| ------------------------ | ------------------------------------- |
-| Angular                  | `^22.1.0` (`@angular/core`)           |
-| Angular CLI/build        | `^22.1.8`                             |
-| TypeScript               | `~6.0.2`                              |
-| Node.js local verificado | `v24.21.0`                            |
-| npm                      | `11.19.0`                             |
-| Unit tests               | Angular unit-test builder + Vitest 4  |
-| CSS/UI                   | Tailwind CSS 4 + Spartan UI 1.4       |
-| Estado de presentación   | NgRx SignalStore `^22.0.1`            |
+Las solicitudes de servicio y la atención al cliente son procesos distintos. Las transiciones normales y las preguntas abiertas se conservan en la [guía de producto](docs/README.md), escrita en inglés, con los identificadores RF/RNF/HU/M/P existentes.
 
 ## Desarrollo local
+
+Con Node.js compatible con las dependencias Angular del proyecto y npm, usa el archivo de bloqueo del repositorio:
 
 ```bash
 npm ci
 npm start
 npm run build
-npm test
+npm test -- --watch=false
 ```
 
-`npm test` ejecuta la suite Vitest actual. No hay target `lint` ni `e2e` configurado actualmente.
-
-Para tareas automatizadas sobre Angular se debe usar primero el MCP de Angular CLI configurado en [`.codex/config.toml`](.codex/config.toml). Para generación de código se usa el Angular CLI local y los schematics del workspace; consulta [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Estos comandos instalan dependencias, inician el servidor local, compilan y ejecutan las pruebas unitarias, respectivamente. No hay targets de lint ni E2E configurados.
 
 ## Documentación
 
-- [`AGENTS.md`](AGENTS.md): reglas obligatorias para agentes y automatizaciones.
-- [`docs/README.md`](docs/README.md): índice y orden de lectura.
-- [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md): inventario implementado, parcial y pendiente.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): arquitectura real del repositorio.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md): decisiones vigentes y asuntos abiertos.
-- [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md): relación entre alcance funcional y evidencia de código.
-- [`docs/adr/`](docs/adr/): decisiones arquitectónicas persistentes.
+- [Guía de producto](docs/README.md): módulos, pantallas, recorridos, estados de negocio y decisiones pendientes; en inglés.
+- [Instrucciones para agentes](AGENTS.md): arquitectura, herramientas MCP/CLI, seguridad y criterios de calidad; en inglés.
 
-## Límites obligatorios
-
-- Angular consume únicamente la API interna del backend mediante REST/JSON.
-- QuickBooks Online se integra desde el backend, nunca directamente desde el navegador.
-- No se almacenan secretos ni credenciales privadas en el bundle frontend.
-- La autorización definitiva pertenece al backend; ocultar opciones o proteger rutas no la reemplaza.
-- El mecanismo de persistencia del JWT continúa abierto y no debe fijarse sin ADR.
+La guía de producto describe intención funcional; el código y la configuración determinan qué está implementado. Los contratos REST deben confirmarse con el backend antes de integrar nuevas funcionalidades.

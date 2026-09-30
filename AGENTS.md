@@ -1,148 +1,77 @@
-# AGENTS.md
+# Agent instructions
 
-Guía obligatoria para agentes de código, asistentes de IA y automatizaciones que trabajen en el frontend de The Real Maids.
+Mandatory guidance for coding agents and automation working on The Real Maids frontend.
 
-## 1. Orden de lectura y fuentes de verdad
+## Read first and establish evidence
 
-Antes de cambiar código o documentación, revisar:
+Read [README.md](README.md), [the product guide](docs/README.md), and this file before changing code or documentation. Then inspect the relevant `package.json`, `angular.json`, `components.json`, TypeScript configuration and source/tests.
 
-1. `README.md`;
-2. `docs/PROJECT_STATUS.md`;
-3. `docs/DECISIONS.md`;
-4. `docs/ARCHITECTURE.md`;
-5. `docs/TRACEABILITY.md`;
-6. el ADR relacionado en `docs/adr/`;
-7. `package.json`, `angular.json`, `components.json`, TypeScript config y código real.
+- Source, configuration and observed test results establish implementation status; installed dependencies, empty files, types and tokens do not establish completed features.
+- This file preserves the accepted technical constraints; the product guide preserves RF/RNF/HU/M/P intent, not implementation evidence.
+- Actual backend OpenAPI/Swagger establishes REST contracts; approved Figma designs establish visual references.
+- Do not silently change product scope or resolve open questions. Major changes to framework, UI, state, forms, SSR, test runner or cross-cutting architecture require an explicit human decision, recorded here as appropriate. No separate ADR process is required.
 
-Prioridad de verdad:
+## Tools: discover availability, then use local fallback
 
-- código/config/pruebas: estado implementado;
-- ADR y decisiones aceptadas: arquitectura vigente;
-- RF/RNF/HU/M/P: intención funcional;
-- OpenAPI del backend: contrato REST;
-- Figma aprobado: referencia visual.
+Do not assume any agent-specific configuration or MCP server is installed. Discover the tools actually exposed by the current environment and report unavailable capabilities or failed calls.
 
-No presentes un archivo vacío, dependencia instalada, tipo o token como funcionalidad terminada.
+**Angular CLI MCP**, when available, is preferred for Angular work:
 
-## 2. Herramientas obligatorias
+1. Run `list_projects` first to discover the workspace and targets.
+2. Consult `get_best_practices` before modifying Angular code.
+3. Use `search_documentation` for Angular APIs and syntax.
+4. Use `run_target` for configured build/test targets.
+5. Use the exposed dev-server tools for serve cycles.
 
-### Angular MCP y Angular CLI
+If the server or required operation is unavailable or fails, record the limitation and use the workspace-local Angular CLI (`npx ng ...`) or supported npm scripts, never a global CLI. Use Angular schematics for ordinary artifacts when appropriate. Available targets are `build`, `serve` and `test`; do not assume lint or E2E targets.
 
-El MCP oficial de Angular CLI está configurado en `.codex/config.toml` y es la vía preferida para tareas Angular:
+**Code intelligence MCP**, when exposed (for example Codebase Memory or CodeGraph), can support structural discovery. Discover the actual API, check index status/root/coverage where supported, and confirm relevant findings against source. Tool names such as `list_projects`, `index_status` and `check_index_coverage` are server-specific, not universal requirements. If unavailable, use read-only source/configuration inspection; do not claim graph coverage or infer absence from an incomplete index.
 
-1. ejecutar `list_projects` como primer paso del workspace;
-2. consultar `get_best_practices` antes de modificar código Angular;
-3. usar `search_documentation` para APIs o sintaxis Angular;
-4. usar `run_target` para `build`, `test` y demás targets configurados;
-5. usar las herramientas de dev server del MCP para ciclos de `serve`.
-
-Si una capacidad no está expuesta o el MCP falla, registra la limitación y usa el Angular CLI local del proyecto (`npx ng ...` o scripts de `package.json`), no una instalación global. Usa schematics para generar artefactos cuando corresponda.
-
-### Spartan CLI
-
-Este workspace usa Spartan. Antes de agregar UI ejecuta:
+**Spartan CLI:** before adding UI, run:
 
 ```bash
 npx ng generate @spartan-ng/cli:info --json
 ```
 
-Reutiliza componentes instalados y genera nuevos con `@spartan-ng/cli:ui`; no adivines selectores ni copies componentes manualmente.
+Reuse installed Helm components; generate missing available components with `npx ng generate @spartan-ng/cli:ui --name=<component>`. Do not guess selectors or manually copy component implementations.
 
-## 3. Arquitectura vigente
+## Architecture and current boundaries
 
-- Angular 22 standalone con TypeScript 6.
-- SSR con Angular SSR + Express, hidratación y prerender actual de `/login`; el resto usa renderizado cliente.
-- Organización por feature; dentro de una feature usa `domain`, `application`, `infrastructure` y `presentation` cuando esos límites aporten valor.
-- `core` contiene configuración transversal/singletons; `shared` solo piezas genuinamente reutilizables.
-- Contratos de repositorio pueden conectarse a adaptadores mediante `InjectionToken`.
-- Estado de presentación con NgRx SignalStore por feature; `AuthStore` se provee en root y delega en `LoginUseCase` y `LogoutUseCase`, ambos sin estado.
-- Define un `*UseCase` con una operación `execute()` por cada acción de aplicación; no agregues clases `*Service` de feature para agrupar acciones de aplicación.
-- Ubica los tipos de error de cada feature en `domain/errors`; los contratos de dominio no deben importar desde `application`.
-- UI: Spartan Brain/Helm + Tailwind CSS 4; Helm vive en `libs/ui`.
-- Pruebas unitarias: builder oficial de Angular con Vitest.
+- Angular 22 standalone with TypeScript 6; bootstrap through `bootstrapApplication`, strict typing and the configured `@/*` alias. Use explicit DI/providers and avoid `any`.
+- Angular SSR + Express and client hydration are part of the platform. `/login` uses prerender; all other routes currently use client rendering. Review route render modes when real backend sessions are introduced. Guard or abstract browser-only APIs for server execution; do not assume a hosting provider.
+- Organize by feature, currently under `src/app/admin/features`. Use `domain`, `application`, `infrastructure` and `presentation` when they protect real boundaries, not as empty ceremony.
+- Dependencies point toward domain contracts. Put feature error types in `domain/errors`; domain contracts must not import from `application`.
+- Represent each application action with a `*UseCase` exposing `execute()`; do not group feature actions into `*Service` classes. Keep use cases stateless and HTTP/storage adapters in `infrastructure`, not visual components. Bind repository implementations at the composition root, using `InjectionToken` where appropriate.
+- Keep feature routes, pages, guards and stores in the feature/presentation boundary. Reserve `core` for cross-cutting configuration/singletons and `shared` for genuinely reusable pieces.
+- Use NgRx SignalStore for demonstrated shared presentation state per feature, not a monolithic global store. `AuthStore` is root-provided in `auth/presentation/state` and delegates to `LoginUseCase`/`LogoutUseCase`; its session is memory-only and lost on reload. Local form state remains local.
+- Use Angular Signal Forms: signal model, declarative `form()` validation, `formRoot`/`formField`, reactive errors and `submit()`/`submitting()`. Do not introduce generic form wrappers without repeated real needs.
+- Use Spartan Brain/Helm + Tailwind CSS 4, not Angular Material or Bootstrap. Helm is maintained locally in `libs/ui`, imported through `@spartan-ng/helm/<component>`; `components.json` configures generation and `src/styles.css` holds semantic theme tokens.
+- M03 uses `customers`/`Customer*` naming. Demo data stays in `customer-in-memory.source.ts`. Its five CRUD/query use cases and `CustomersStore` are not a P04 screen or backend contract.
+- Current lazy routes are `/login` and the temporary protected `/admin`. Auth/guest guards exist; role authorization and HTTP interceptors do not. `API_URL` has no provider and HttpClient is not configured. Environment/core placeholders do not define usable contracts; connect new pieces explicitly.
 
-No introduzcas Angular Material ni Bootstrap. Cambiar la librería UI, estrategia de estado, SSR, runner de pruebas o estructura transversal requiere ADR.
+## Security and backend integration
 
-## 4. Estado actual que debes respetar
+- Angular consumes only the internal REST/JSON API; require HTTPS in production. Backend business validation and authorization are authoritative. Role-aware navigation and private-route protection improve UX but do not authorize requests; never infer a complete ACL from role names or planned landing screens.
+- Never call QuickBooks Online directly from Angular or bundle client secrets, private credentials, refresh tokens or backend secrets. QuickBooks OAuth, idempotency and reconciliation belong to the backend; frontend status/error/retry UI must use confirmed internal endpoints.
+- Never log passwords, JWTs, payment data or other sensitive information. Handle 401/403 consistently without leaking data.
+- JWT persistence/refresh remains open: do not adopt localStorage, sessionStorage or cookies as the permanent solution without an explicit human decision. Public environment configuration may include an API base, never secrets.
+- Before integration, obtain actual OpenAPI and confirm base URL/versioning, DTOs, errors, pagination, filters, date/time/timezone and enums. Do not invent endpoints, permissions, duplicate rules or retry semantics from demo data or the functional plan. Record contract differences/open issues in the product guide and test adapter/interceptor mapping, success and failure cases.
 
-- Existen rutas lazy `/login` y `/admin`; `/admin` es solo un destino temporal protegido.
-- P01 funciona con fuente en memoria y credenciales demo; no es autenticación backend real.
-- La sesión vive en `AuthStore` (NgRx SignalStore, root) dentro de `auth/presentation/state` y se pierde al recargar; no reemplazar esto por storage sin ADR.
-- `API_URL` no tiene provider y no hay cliente HTTP configurado.
-- Hay guards básicos auth/guest en `auth/presentation/guards`; no hay permisos por rol, interceptores, E2E ni CI/CD.
-- M03 tiene un esqueleto en `admin/features/customers`: consultas demo en memoria y pruebas, sin ruta ni pantalla P04. Usa `customers` y `Customer*` como nomenclatura de código para esta feature; los datos demo permanecen en `customer-in-memory.source.ts`.
-- Los contratos de repositorio de `auth` y `customers` importan sus errores desde `domain/errors`; ambas features expresan sus acciones de aplicación mediante casos de uso.
-- Los archivos de environment y varios archivos de `core` son placeholders vacíos.
+## UI and domain behavior
 
-No construyas sobre esos placeholders suponiendo contratos inexistentes. Conecta cada pieza explícitamente y actualiza `PROJECT_STATUS.md` y `TRACEABILITY.md` cuando cambie el estado.
+- Reuse Helm variants and semantic tokens. Maintain desktop/tablet/mobile layouts; prefer cards and visible actions over unadapted wide mobile tables.
+- Preserve title/context/action hierarchy, accessible labels, required-field/help/error associations, keyboard navigation and focus. Register icons with `provideIcons` when needed; color must never be the only status signal.
+- Distinguish loading, empty, error and success. Show progress during submission, prevent duplicate actions and confirm success only after the applicable operation succeeds. Confirm cancellations and permission changes with the affected record visible.
+- Distinguish service requests from customer support. Use concrete action verbs and preserve useful record/filter context across navigation.
+- Follow the business states in the product guide; do not invent reopenings or exceptional transitions.
+- Prepare UI copy for Spanish/English; the i18n library/fallback and operational timezone remain open. Do not choose them implicitly.
 
-## 5. Límites de seguridad e integración
+## Quality and completion
 
-- Angular consume exclusivamente la API interna mediante REST/JSON.
-- Nunca llames a QuickBooks Online directamente desde Angular.
-- Nunca incluyas secretos, client secrets, credenciales privadas o tokens de backend en el bundle.
-- Ocultar UI no autoriza: usa guards/interceptores para UX y asume autorización definitiva en backend.
-- No registres contraseñas, JWT, datos de pago ni información sensible.
-- El almacenamiento/refresh del JWT sigue abierto. No fijes `localStorage`, `sessionStorage` o cookies como solución permanente sin ADR.
-- Maneja 401/403 consistentemente y sin filtrar datos sensibles.
+Use the official Angular `test` target with Vitest, not Jasmine/Karma. Component schematics have `skipTests: true`; create required tests explicitly. Missing tests are not a successful empty suite; do not disable or weaken tests for a green result.
 
-## 6. UI, UX y Spartan
+For code changes, compile and run relevant tests through available Angular MCP operations or local CLI. Cover domain edge cases, use-case success/failure, adapter mapping/errors, guard permissions and component validation/loading/error/actions as applicable. Validate SSR/hydration safety and responsive/keyboard behavior for UI changes, including recent Chrome, Edge and Firefox where relevant. Report exact commands and observed outcomes, not inherited test counts.
 
-- Usa componentes Helm existentes antes de crear markup propio.
-- Usa variantes y tokens semánticos; evita colores Tailwind crudos para semántica de producto.
-- Mantén responsive desktop/tablet/móvil.
-- Distingue “Solicitud de servicio” de “Atención al cliente”.
-- Usa verbos concretos: “Registrar cliente”, “Programar servicio”, “Enviar solicitud”.
-- No uses color como único indicador.
-- Diferencia loading, empty, error y success.
-- Confirma cancelaciones y cambios de permisos.
-- En móvil prioriza tarjetas y acciones visibles; no traslades tablas extensas sin adaptación.
-- Prepara copy para español/inglés, pero no adoptes una librería i18n sin ADR.
+No E2E or CI/CD is currently configured. Adding E2E requires an explicit tool decision, a reproducible target and documentation; prioritize login, customer CRUD, request-to-assignment, mobile assigned services, allowed/rejected transitions, customer support and backend-only QuickBooks status flows.
 
-## 7. Estado de dominio
-
-Secuencia normal de órdenes:
-
-`Pendiente -> Programada -> En proceso -> Completada -> Pagado`
-
-La cancelación es una salida alternativa. No inventes reaperturas u otras transiciones excepcionales.
-
-Estados de atención al cliente:
-
-`Recibida -> En revisión -> Resuelta -> Cerrada`
-
-Son independientes de los estados de órdenes.
-
-## 8. API y contratos
-
-Antes de implementar o modificar integración:
-
-1. consulta OpenAPI/Swagger real;
-2. confirma DTO, errores, paginación, filtros, fechas y enums;
-3. registra cualquier diferencia en `docs/API_INTEGRATION.md`;
-4. no inventes endpoints ni permisos;
-5. agrega pruebas del adaptador/interceptor correspondiente.
-
-## 9. Trazabilidad
-
-Toda funcionalidad relevante debe enlazarse con al menos un `RFxx`, `RNFxx`, `HUxx`, `Mxx` o `Pxx`. Si no existe trazabilidad, documéntala antes de implementar.
-
-## 10. Calidad y verificación
-
-- Usa el target `test` actual con Vitest; no documentes Jasmine/Karma como runner vigente.
-- No hay E2E configurado. Si se incorpora, regístralo con decisión y target reproducible.
-- No deshabilites pruebas para hacer pasar CI.
-- Los schematics de componentes tienen `skipTests: true`; para una feature nueva crea las pruebas necesarias de forma explícita.
-- Valida responsive cuando el cambio tenga UI.
-
-Un cambio no está terminado hasta que:
-
-- compila;
-- pasa las pruebas relevantes;
-- respeta rutas y permisos cuando apliquen;
-- maneja loading/empty/error cuando consume datos;
-- no introduce secretos;
-- actualiza documentación/trazabilidad cuando cambia comportamiento;
-- incluye evidencia verificable.
-
-Para cambios solo documentales, verifica enlaces, coherencia con configuración/código y ausencia de afirmaciones no sustentadas.
+A feature is complete only when connected to its consumer/route as applicable, compiled, proportionately tested, secure, permission-aware and equipped with the required data/UI states. Update the implemented/planned distinction and link meaningful behavior to an existing RF/RNF/HU/M/P identifier in the product guide; document missing traceability before implementation. For documentation-only changes, verify relative links, language and claims against source/configuration without asserting unrun builds or tests.
