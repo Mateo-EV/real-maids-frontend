@@ -1,36 +1,44 @@
 # Users visual mock and dynamic roles
 
 ## Goal
+
 Deliver a screenshot-inspired responsive P03 demo using UserStore, with dynamic roles under users. User authorized a new branch; active branch is feat/users-management-ui. Preserve manual user.store.ts.
 
 ## Accepted scope
+
 Full visual mock with Spanish product copy matching the screenshot. User explicitly requires no demo, in-memory, fictitious or implementation wording in visible or accessible frontend copy. Fixture provenance remains identified only in code comments and technical documentation. Roles are real in-memory demo state, not ACL: Role has numeric id, name, description, isActive and createdAt. Exactly one roleId per user; lastAccess is Date|null (never accessed). Prevent deletion of assigned roles; allow deactivation preserving assignments. Sessions, Roles/RBAC and Audit tabs are disabled. No backend, secure credentials, real sessions/audit/IP/entity integrations or production/security claims.
 
 Mark all outside-store fixtures with FICTITIOUS DEMO DATA / TODO integration comments, isolated from stores. Use seeded demo fixtures deliberately via a demo initialization boundary, without changing repositories' empty defaults or claiming real login activity. Use actual role store data for assigned role display/filter/selection. Unsupported credential actions disabled. No permissions editing.
 
 ## Tasks
+
 - [x] UI1: Role domain/repository, five use cases, in-memory CRUD, RolesStore, user roleId/lastAccess, defensive copies and safe assigned-role deletion. Delegated, verified and committed in 8407558.
 - [x] UI2: Screenshot-inspired page, mock fixtures, navigation, filters/pagination/forms and palette/product-copy corrections. Delegated and independently unit-verified; user accepted the design. Committed in 8407558; real-browser cross-browser/keyboard acceptance remains unobserved.
 - [x] UI3: Docs, independent checks, human staging and exact snapshot/message approval completed. Commit 8407558fae3c4134aff0bd01f7f1254f2a5cbab9; native review declined for the exact final candidate, no approved receipt claimed.
 
 ## Acceptance and verification
+
 Use Signal Forms and installed/generated Helm + Tailwind semantic tokens; no manual Helm copies. Before UI run npx ng generate @spartan-ng/cli:info --json. Angular MCP unavailable; local ng target.
 Behavior changes use observed RED then GREEN/refactor, exact focused tests; full npm test -- --watch=false and npm run build. Cover CRUD/results, assigned-role deletion refusal, inactive role preservation, never-accessed users and Date isolation, store load/error/mutations, fixture repeat-navigation safety, filters/pagination, submit/loading/errors, routing guards and disabled tabs. Browser responsive/keyboard and Chrome/Edge/Firefox checks must be observed or reported unavailable, not invented. No E2E tooling choice implied.
 
 ## Delivery and evidence
+
 Estimated 1000–1800 authored lines; advisory, do not code-golf or omit tests. Human explicitly approved one combined 86-file work-unit commit (+3523/-25) with message `feat(users): add user management UI and dynamic roles`. No PR or push requested. Human stages all code/tests/config and approves precise staged snapshot/message; eligible primary docs may be auto-committed separately. Source work remains open until verified and committed. Rollback boundaries: UI1 role/user extensions and tests; UI2 page/fixtures/routes/navigation and tests; preserve unrelated auth/customers.
 
 Initial source: manual untracked user.store.ts; parent confirmed loadUsers loading/error flow exists (scout report incorrectly denied it); no tests/UI. Domain has no roleId/lastAccess. Main base ccfd9e4. UI1 writer: compile-level RED on missing APIs (zero behavior tests), GREEN/refactor 66 focused tests across 7 files; full 143 tests across 23 files, build passed with one prerendered route, diff whitespace check passed (tracked paths only; LF/CRLF warnings). Role deletion checks all users including inactive; user lastAccess cloned/preserved; sources default empty. Store loading/errors and stale-load protection strengthened with tests. CLI info confirmed table/badge/avatar/native-select/dialog/pagination/tooltip/empty available but not installed. Angular MCP and browser tools unavailable. UI2 observed runtime RED on missing initialization and native-select aria-describedby, then 95 focused tests across 16 files and 168 full tests across 31 files passed. Obsolete root route-composition assertion was corrected after explicit surface approval. Build passed; one successful-exit run reportedly had a zero-byte main bundle, repeat produced 312363 bytes; independent verifier investigating. Official generators added dialog/table/badge/avatar/native-select/empty and aliases, with tested description wiring in native-select. Human approved generator-only tsconfig.app.json (no content diff) and root route spec surfaces. UI2 authored estimate 1425 new lines plus edits and 961 library lines; no size-only compression. Independent verifier confirmed 95/95 focused tests (16 files), 168/168 full tests (31 files), build with nonzero main-K3IXAJZM.js (312363 bytes) and valid index references, tracked whitespace check and 0 findings across 70 untracked text/source files. Earlier zero-byte build cause remains unexplained, not reproduced. No source edits from verification. Residual coverage gap: partial seed failure can leave partial demo catalog; once-only flag avoids duplicate retry. Native-select description wiring has indirect form tests but no dedicated component spec. Browser/SSR runtime checks remain unavailable; no screenshot fidelity/keyboard/browser acceptance claim.
 
 ## Palette correction
+
 User requested closer screenshot colors. Audit confirmed global --primary is coral and all role/status/avatar/KPI accents were neutral. Scope UI2 correction: navy default CTA with gold plus, independently coral active-tab underline; navy/coral/green/amber/gray avatars; purple/blue/green/amber role chips; green/pink status pills; pastel KPI icon tiles. Keep warm base surfaces and semantic brand tokens; no global theme/shared Helm changes. Overlay dialogs do not inherit page variables; theme within their own component scope. Colors are decoration, not ACL, and status labels remain explicit. No new behavior or backend scope.
 
 Native preflight of prior candidate stopped lens_context_budget_exceeded with no authority/mutation. Do not retry that exact candidate; review scope must be reduced. Earlier final summary covers this stop; task file had not recorded it.
 
 ## Product-copy correction
+
 User approved removing demonstration/fiction/in-memory wording from rendered page, dialogues, success/errors, accessible labels and fixture display values, preserving internal fixture comments/TODOs. Disabled future features remain disabled with concise product-facing availability wording. No new backend or permission functionality. Do not invent deployment/verified-security claims. Palette correction already passed 37 focused/173 full tests and build, independently checked. Git now has 86 staged files (+3464/-24); edits must not stage or commit the index, and human must restage modified hunks later. Task documentation automatic commit was previously blocked; manual staging required.
 
 ## Final evidence and next step
+
 Product-copy RED10 expected failures, GREEN41 focused/174 full tests; independent copy41 tests passed. Final browser title `Usuarios | The Real Maids`: RED1/GREEN1, guard/lazy loading preserved. Final independent `npm test -- --watch=false`: 174 tests across31files passed. Prior successful build and independent nonzero JS312363/CSS92351 byte references confirmed; no build repeat for static title-only change. `git diff --cached --check` passed immediately before commit. Approved HEAD88f8fdd and raw staged binary diff hash dfef457d958c45c1818e3a9dbdef44ff3969283b56a3b1f55ff80b34edb438ba were rechecked unchanged before committing. Clean worktree observed immediately after code commit, before this task closure update.
 
 Native review was explicitly declined through interactive host for target sha256:bc55b1312b9751c9d95252dd890c2a559b932ee87bf6c8dea77b67130af74fdb; no lineage/authority/mutation created. High-risk fallback satisfied by writer and independent checks. Do not restart review for this exact declined candidate. Earlier oversized candidates remain historical stops, not approval.

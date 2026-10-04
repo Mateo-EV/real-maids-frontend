@@ -13,9 +13,7 @@ describe("GetCurrentUserUseCase", () => {
 
   beforeEach(() => {
     me.mockReset()
-    TestBed.configureTestingModule({ providers: [
-      { provide: AUTH_REPOSITORY, useValue: { me } }
-    ] })
+    TestBed.configureTestingModule({ providers: [{ provide: AUTH_REPOSITORY, useValue: { me } }] })
     useCase = TestBed.inject(GetCurrentUserUseCase)
   })
 

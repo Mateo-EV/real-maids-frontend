@@ -21,32 +21,53 @@ describe("RoleInMemorySource", () => {
   let source: RoleInMemorySource
   let users: UserInMemorySource
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [{ provide: USER_REPOSITORY, useExisting: UserInMemorySource }] })
+    TestBed.configureTestingModule({
+      providers: [{ provide: USER_REPOSITORY, useExisting: UserInMemorySource }]
+    })
     source = TestBed.inject(RoleInMemorySource)
     users = TestBed.inject(UserInMemorySource)
   })
 
-  it("starts empty and creates lazily with sequential IDs and independent dates", async () => {
+  it("starts with five stable roles and isolated valid dates", async () => {
+    const seeded = await data(source.getRoles())
+    expect(seeded.map(role => role.id)).toEqual([1, 2, 3, 4, 5])
+    expect(seeded.map(role => role.name)).toEqual([
+      "Administración",
+      "Operaciones",
+      "Personal Campo",
+      "Cliente (Portal)",
+      "Supervisión"
+    ])
+    expect(seeded.every(role => Number.isFinite(role.createdAt.getTime()))).toBe(true)
+    expect(seeded[0].createdAt).not.toBe(seeded[1].createdAt)
+    const original = await data(source.getRoleById(1))
+    seeded[0].createdAt.setTime(0)
+    seeded[0].name = "Leaked"
+    expect(await data(source.getRoleById(1))).toEqual(original)
+    expect((await data(source.createRole(params))).id).toBe(6)
+  })
+
+  it("creates lazily with sequential IDs and independent dates", async () => {
     const input = { ...params }
     const stream = source.createRole(input)
     input.name = "Changed"
-    expect(await data(source.getRoles())).toEqual([])
+    expect(await data(source.getRoles())).toHaveLength(5)
     const first = await data(stream)
     expect(first).toBeInstanceOf(Role)
-    expect(first).toMatchObject({ id: 1, ...params })
+    expect(first).toMatchObject({ id: 6, ...params })
     expect(first.createdAt).toBeInstanceOf(Date)
     first.createdAt.setTime(0)
     first.name = "Leaked"
     const second = await data(stream)
-    expect(second.id).toBe(2)
+    expect(second.id).toBe(7)
     const list = await data(source.getRoles())
-    expect(list[0].name).toBe(params.name)
-    expect(list[0].createdAt.getTime()).not.toBe(0)
-    list[0].createdAt.setTime(0)
+    expect(list[5].name).toBe(params.name)
+    expect(list[5].createdAt.getTime()).not.toBe(0)
+    list[5].createdAt.setTime(0)
     list.length = 0
-    expect((await data(source.getRoleById(1))).createdAt.getTime()).not.toBe(0)
-    await data(source.deleteRoleById(2))
-    expect((await data(source.createRole(params))).id).toBe(3)
+    expect((await data(source.getRoleById(6))).createdAt.getTime()).not.toBe(0)
+    await data(source.deleteRoleById(7))
+    expect((await data(source.createRole(params))).id).toBe(8)
   })
 
   it("updates lazily, preserves createdAt and isolates update/read results", async () => {
@@ -56,7 +77,11 @@ describe("RoleInMemorySource", () => {
     changes.name = "Leaked"
     expect(await data(source.getRoleById(created.id))).toEqual(created)
     const updated = await data(stream)
-    expect(updated).toMatchObject({ name: "Changed", isActive: false, createdAt: created.createdAt })
+    expect(updated).toMatchObject({
+      name: "Changed",
+      isActive: false,
+      createdAt: created.createdAt
+    })
     updated.createdAt.setTime(0)
     updated.description = "Leaked"
     const fresh = await data(source.getRoleById(created.id))
@@ -68,28 +93,51 @@ describe("RoleInMemorySource", () => {
 
   for (const operation of ["read", "update", "delete"] as const) {
     it(`reports missing ${operation} without altering the catalog`, async () => {
-      const existing = await data(source.createRole(params))
-      const request: Observable<Result<Role | void, RoleError>> = operation === "read" ? source.getRoleById(99)
-        : operation === "update" ? source.updateRoleById(99, params) : source.deleteRoleById(99)
-      expect(await firstValueFrom(request)).toMatchObject({ success: false, error: { code: "ROLE_NOT_FOUND" } })
-      expect(await data(source.getRoles())).toEqual([existing])
+      await data(source.createRole(params))
+      const before = await data(source.getRoles())
+      const request: Observable<Result<Role | void, RoleError>> =
+        operation === "read"
+          ? source.getRoleById(99)
+          : operation === "update"
+            ? source.updateRoleById(99, params)
+            : source.deleteRoleById(99)
+      expect(await firstValueFrom(request)).toMatchObject({
+        success: false,
+        error: { code: "ROLE_NOT_FOUND" }
+      })
+      expect(await data(source.getRoles())).toEqual(before)
     })
   }
 
   for (const isActive of [true, false]) {
     it(`refuses deletion assigned to an ${isActive ? "active" : "inactive"} user; allows deactivation`, async () => {
       const role = await data(source.createRole(params))
-      const result = await firstValueFrom(users.createUser({ name: "Demo", age: 30, email: "demo@example.com",
-        password: "unused", lang: Lang.EN, isActive, roleId: role.id }))
+      const result = await firstValueFrom(
+        users.createUser({
+          name: "Demo",
+          age: 30,
+          email: "demo@example.com",
+          password: "unused",
+          lang: Lang.EN,
+          isActive,
+          roleId: role.id
+        })
+      )
       if (!result.success) throw result.error
       const deletion = source.deleteRoleById(role.id)
       await data(source.updateRoleById(role.id, { ...params, isActive: false }))
-      expect(await firstValueFrom(deletion)).toMatchObject({ success: false, error: { code: "ROLE_IN_USE" } })
+      expect(await firstValueFrom(deletion)).toMatchObject({
+        success: false,
+        error: { code: "ROLE_IN_USE" }
+      })
       const user = await firstValueFrom(users.getUserById(result.data.id))
       expect(user).toMatchObject({ success: true, data: { roleId: role.id } })
       await firstValueFrom(users.deleteUserById(result.data.id))
       expect(await data(deletion)).toBeUndefined()
-      expect(await firstValueFrom(deletion)).toMatchObject({ success: false, error: { code: "ROLE_NOT_FOUND" } })
+      expect(await firstValueFrom(deletion)).toMatchObject({
+        success: false,
+        error: { code: "ROLE_NOT_FOUND" }
+      })
     })
   }
 
@@ -100,7 +148,10 @@ describe("RoleInMemorySource", () => {
     const stream = source.updateRoleById(role.id, changes)
     expect(await data(stream)).toMatchObject({ isActive: false })
     await data(source.deleteRoleById(role.id))
-    expect(await firstValueFrom(stream)).toMatchObject({ success: false, error: { code: "ROLE_NOT_FOUND" } })
+    expect(await firstValueFrom(stream)).toMatchObject({
+      success: false,
+      error: { code: "ROLE_NOT_FOUND" }
+    })
     expect(role).not.toHaveProperty("extra")
     expect(JSON.stringify(source)).not.toContain("not retained")
   })
@@ -109,26 +160,51 @@ describe("RoleInMemorySource", () => {
     const role = await data(source.createRole(params))
     const another = await data(source.createRole(params))
     const deletion = source.deleteRoleById(role.id)
-    const input = { name: "Demo", age: 30, email: "demo@example.com", password: "unused",
-      lang: Lang.EN, isActive: false, roleId: role.id }
+    const input = {
+      name: "Demo",
+      age: 30,
+      email: "demo@example.com",
+      password: "unused",
+      lang: Lang.EN,
+      isActive: false,
+      roleId: role.id
+    }
     const user = await firstValueFrom(users.createUser(input))
     if (!user.success) throw user.error
-    expect(await firstValueFrom(deletion)).toMatchObject({ success: false, error: { code: "ROLE_IN_USE" } })
+    expect(await firstValueFrom(deletion)).toMatchObject({
+      success: false,
+      error: { code: "ROLE_IN_USE" }
+    })
     await firstValueFrom(users.updateUserById(user.data.id, { ...input, roleId: another.id }))
     expect(await data(deletion)).toBeUndefined()
   })
 
   it("fails closed on failed, thrown or empty reference queries", async () => {
     const role = await data(source.createRole(params))
+    const before = await data(source.getRoles())
     const query = vi.spyOn(users, "getUsers")
     query.mockReturnValue(of(Result.failure(new UserError("UNEXPECTED"))))
-    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
+    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({
+      success: false,
+      error: { code: "UNEXPECTED" }
+    })
     query.mockReturnValue(throwError(() => new Error("offline")))
-    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
+    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({
+      success: false,
+      error: { code: "UNEXPECTED" }
+    })
     query.mockReturnValue(EMPTY)
-    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
-    query.mockImplementation(() => { throw new Error("sync") })
-    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
-    expect(await data(source.getRoles())).toEqual([role])
+    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({
+      success: false,
+      error: { code: "UNEXPECTED" }
+    })
+    query.mockImplementation(() => {
+      throw new Error("sync")
+    })
+    expect(await firstValueFrom(source.deleteRoleById(role.id))).toMatchObject({
+      success: false,
+      error: { code: "UNEXPECTED" }
+    })
+    expect(await data(source.getRoles())).toEqual(before)
   })
 })

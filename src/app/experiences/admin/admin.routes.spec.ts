@@ -16,13 +16,19 @@ class LoginDestination {}
 
 function setup(authenticated: boolean) {
   const identity = { name: "Demo Identity", email: "identity@example.test" }
-  const auth = { session: signal(authenticated ? identity : null), restoreSession: vi.fn(() => of(authenticated ? identity : null)), logout: vi.fn() }
-  TestBed.configureTestingModule({ providers: [
-    provideRouter([...ADMIN_ROUTES, { path: "login", component: LoginDestination }]),
-    { provide: AuthStore, useValue: auth },
-    { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-    { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
-  ] })
+  const auth = {
+    session: signal(authenticated ? identity : null),
+    restoreSession: vi.fn(() => of(authenticated ? identity : null)),
+    logout: vi.fn()
+  }
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([...ADMIN_ROUTES, { path: "login", component: LoginDestination }]),
+      { provide: AuthStore, useValue: auth },
+      { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
+      { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
+    ]
+  })
   return auth
 }
 
@@ -37,7 +43,8 @@ describe("Admin users navigation", () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin")
     expect(harness.routeNativeElement?.textContent).toContain("Bienvenido, Demo Identity")
-    const link = harness.routeNativeElement?.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')
+    const link =
+      harness.routeNativeElement?.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')
     expect(link?.textContent).toContain("Administración de usuarios")
     await harness.navigateByUrl("/admin/users")
     await harness.fixture.whenStable()

@@ -5,7 +5,8 @@ export const ADMIN_ROUTES: Routes = [
   {
     path: "admin/users",
     canActivate: [authGuard],
-    loadChildren: () => import("../../features/users/users.routes").then(routes => routes.USERS_ROUTES)
+    loadChildren: () =>
+      import("../../features/users/users.routes").then(routes => routes.USERS_ROUTES)
   },
   {
     path: "admin",

@@ -14,13 +14,20 @@ const params = { name: "Demo", description: "Fictitious", isActive: true }
 const role = Role.create(1, params.name, params.description, true, new Date())
 describe("RolesStore", () => {
   let store: InstanceType<typeof RolesStore>
-  const list = { execute: vi.fn() }, create = { execute: vi.fn() }, update = { execute: vi.fn() }, remove = { execute: vi.fn() }
+  const list = { execute: vi.fn() },
+    create = { execute: vi.fn() },
+    update = { execute: vi.fn() },
+    remove = { execute: vi.fn() }
   beforeEach(() => {
     vi.resetAllMocks()
-    TestBed.configureTestingModule({ providers: [
-      { provide: GetRolesUseCase, useValue: list }, { provide: CreateRoleUseCase, useValue: create },
-      { provide: UpdateRoleByIdUseCase, useValue: update }, { provide: DeleteRoleByIdUseCase, useValue: remove }
-    ] })
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: GetRolesUseCase, useValue: list },
+        { provide: CreateRoleUseCase, useValue: create },
+        { provide: UpdateRoleByIdUseCase, useValue: update },
+        { provide: DeleteRoleByIdUseCase, useValue: remove }
+      ]
+    })
     store = TestBed.inject(RolesStore)
   })
   it("defers requests and resets loading on completion, cancellation and empty completion", () => {
@@ -66,7 +73,9 @@ describe("RolesStore", () => {
     store.loadRoles().subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
     expect(store.roles()).toEqual([role])
-    create.execute.mockImplementation(() => { throw new Error("sync") })
+    create.execute.mockImplementation(() => {
+      throw new Error("sync")
+    })
     store.createRole(params).subscribe()
     expect(store.loading()).toBe(false)
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
@@ -94,7 +103,8 @@ describe("RolesStore", () => {
     store.loadRoles().subscribe()
     create.execute.mockReturnValue(of(Result.success(role)))
     store.createRole(params).subscribe()
-    stale.next(Result.failure(new RoleError("UNEXPECTED"))); stale.complete()
+    stale.next(Result.failure(new RoleError("UNEXPECTED")))
+    stale.complete()
     expect(store.error()).toBeUndefined()
     expect(store.roles()).toEqual([role])
     expect(store.loading()).toBe(false)
@@ -106,9 +116,11 @@ describe("RolesStore", () => {
     const mutation = new Subject<Result<Role, RoleError>>()
     create.execute.mockReturnValue(mutation)
     store.createRole(params).subscribe()
-    mutation.next(Result.success(role)); mutation.complete()
+    mutation.next(Result.success(role))
+    mutation.complete()
     expect(store.loading()).toBe(true)
-    stale.next(Result.success([])); stale.complete()
+    stale.next(Result.success([]))
+    stale.complete()
     expect(store.roles()).toEqual([role])
     expect(store.loading()).toBe(false)
     const older = new Subject<Result<Role[], RoleError>>()
@@ -116,7 +128,8 @@ describe("RolesStore", () => {
     store.loadRoles().subscribe()
     list.execute.mockReturnValue(of(Result.success([role])))
     store.loadRoles().subscribe()
-    older.next(Result.success([])); older.complete()
+    older.next(Result.success([]))
+    older.complete()
     expect(store.roles()).toEqual([role])
   })
 })

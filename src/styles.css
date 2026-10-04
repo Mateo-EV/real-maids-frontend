@@ -13,7 +13,7 @@
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
-  /* The Real Maids palette: warm paper, navy structure, coral actions. */
+  /* The Real Maids palette: warm paper, navy actions, coral decoration. */
   --navy: oklch(0.273 0.055 258.5); /* #172a46 */
   --navy-deep: oklch(0.213 0.052 257.3); /* #102038 */
   --coral: oklch(0.686 0.192 28.1); /* #ff6b60 */
@@ -38,8 +38,8 @@
   --card-foreground: var(--ink);
   --popover: var(--paper);
   --popover-foreground: var(--ink);
-  --primary: var(--coral);
-  --primary-foreground: var(--navy-deep);
+  --primary: var(--navy);
+  --primary-foreground: var(--paper);
   --secondary: var(--navy);
   --secondary-foreground: var(--cream);
   --muted: var(--fresh);
@@ -74,8 +74,8 @@
   --card-foreground: var(--cream);
   --popover: var(--navy);
   --popover-foreground: var(--cream);
-  --primary: var(--coral);
-  --primary-foreground: var(--navy-deep);
+  --primary: var(--navy);
+  --primary-foreground: var(--paper);
   --secondary: var(--fresh);
   --secondary-foreground: var(--navy-deep);
   --muted: color-mix(in oklch, var(--cream) 12%, transparent);
@@ -106,6 +106,14 @@
   --color-ink: var(--ink);
   --color-fresh: var(--fresh);
   --color-gold: var(--gold);
+}
+
+/* Share default Helm action hover across buttons, links and overlay hosts.
+   The utilities layer also overrides Nova's anchor-only primary/80 hover. */
+@layer utilities {
+  [data-slot="button"].bg-primary:hover:not([data-disabled]) {
+    background-color: var(--navy-deep);
+  }
 }
 
 @layer base {

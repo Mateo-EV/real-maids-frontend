@@ -40,9 +40,15 @@ describe("AuthInMemorySource", () => {
   })
 
   it("fails closed when accessing storage throws", async () => {
-    TestBed.overrideProvider(DOCUMENT, { useValue: {
-      defaultView: { get localStorage(): Storage { throw new Error("unavailable") } }
-    } })
+    TestBed.overrideProvider(DOCUMENT, {
+      useValue: {
+        defaultView: {
+          get localStorage(): Storage {
+            throw new Error("unavailable")
+          }
+        }
+      }
+    })
     const source = TestBed.inject(AuthInMemorySource)
     expect((await firstValueFrom(source.me())).success).toBe(false)
     expect((await firstValueFrom(source.login(demoCredentials))).success).toBe(false)
@@ -51,8 +57,12 @@ describe("AuthInMemorySource", () => {
 
   it("fails closed when storage operations throw", async () => {
     const storage = {
-      getItem: vi.fn(() => { throw new Error("read") }),
-      setItem: vi.fn(() => { throw new Error("write") })
+      getItem: vi.fn(() => {
+        throw new Error("read")
+      }),
+      setItem: vi.fn(() => {
+        throw new Error("write")
+      })
     }
     TestBed.overrideProvider(DOCUMENT, { useValue: { defaultView: { localStorage: storage } } })
     const source = TestBed.inject(AuthInMemorySource)

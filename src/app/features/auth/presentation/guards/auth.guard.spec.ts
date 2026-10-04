@@ -5,7 +5,13 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
 import { AuthInMemorySource } from "../../infrastructure/source/auth-in-memory.source"
-import { ActivatedRouteSnapshot, provideRouter, Router, RouterStateSnapshot, UrlTree } from "@angular/router"
+import {
+  ActivatedRouteSnapshot,
+  provideRouter,
+  Router,
+  RouterStateSnapshot,
+  UrlTree
+} from "@angular/router"
 import { firstValueFrom, isObservable, Observable, of, Subject, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { authGuard, guestGuard } from "./auth.guard"
@@ -18,10 +24,12 @@ describe("auth guards", () => {
   beforeEach(() => {
     currentUser = new Subject()
     me.mockReset().mockReturnValue(currentUser)
-    TestBed.configureTestingModule({ providers: [
-      provideRouter([]),
-      { provide: AUTH_REPOSITORY, useValue: { me, login: vi.fn(), logout: vi.fn() } }
-    ] })
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: AUTH_REPOSITORY, useValue: { me, login: vi.fn(), logout: vi.fn() } }
+      ]
+    })
   })
 
   function check(guard: typeof authGuard, url = "/admin/orders?status=open") {
@@ -112,9 +120,9 @@ describe("auth guards", () => {
     await firstValueFrom(TestBed.inject(AuthStore).restoreSession())
     me.mockClear()
     const decision = await firstValueFrom(check(guard) as Observable<boolean | UrlTree>)
-    expect(guard === authGuard ? decision : TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe(
-      guard === authGuard ? true : "/admin"
-    )
+    expect(
+      guard === authGuard ? decision : TestBed.inject(Router).serializeUrl(decision as UrlTree)
+    ).toBe(guard === authGuard ? true : "/admin")
     expect(me).not.toHaveBeenCalled()
   })
 
@@ -127,12 +135,17 @@ describe("auth guards", () => {
     )
   })
 
-  it.each(["//external.example", "https://external.example"])("rejects unsafe return URL %s", url => {
-    const next = vi.fn()
-    ;(check(authGuard, url) as Observable<boolean | UrlTree>).subscribe(next)
-    currentUser.next(Result.failure(new AuthError("UNEXPECTED")))
-    expect(TestBed.inject(Router).serializeUrl(next.mock.calls[0][0])).toBe("/login?returnUrl=%2Fadmin")
-  })
+  it.each(["//external.example", "https://external.example"])(
+    "rejects unsafe return URL %s",
+    url => {
+      const next = vi.fn()
+      ;(check(authGuard, url) as Observable<boolean | UrlTree>).subscribe(next)
+      currentUser.next(Result.failure(new AuthError("UNEXPECTED")))
+      expect(TestBed.inject(Router).serializeUrl(next.mock.calls[0][0])).toBe(
+        "/login?returnUrl=%2Fadmin"
+      )
+    }
+  )
 
   it("allows an absent user on login", () => {
     const next = vi.fn()

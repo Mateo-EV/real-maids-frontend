@@ -1,11 +1,10 @@
 import { DOCUMENT, isPlatformBrowser } from "@angular/common"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { LoginParams } from "../../domain/params/login.params"
-import { delay, Observable, of } from "rxjs"
+import { map, Observable, timer } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserSession } from "../../domain/entities/user-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
-import { AuthRepository } from "../../domain/repositories/auth.repository"
 
 const DEMO_AUTH = {
   email: "riojamatthew@gmail.com",
@@ -14,7 +13,7 @@ const DEMO_AUTH = {
 } as const
 
 @Injectable({ providedIn: "root" })
-export class AuthInMemorySource implements AuthRepository {
+export class AuthInMemorySource {
   private readonly platformId = inject(PLATFORM_ID)
   private readonly document = inject(DOCUMENT)
 
@@ -47,27 +46,31 @@ export class AuthInMemorySource implements AuthRepository {
   }
 
   login(params: LoginParams): Observable<Result<void, AuthError>> {
-    const hasValidCredentials =
-      params.email.trim().toLowerCase() === DEMO_AUTH.email &&
-      params.password === DEMO_AUTH.password
+    const input = { email: params.email, password: params.password }
+    return timer(650).pipe(
+      map(() => {
+        const hasValidCredentials =
+          input.email.trim().toLowerCase() === DEMO_AUTH.email &&
+          input.password === DEMO_AUTH.password
+        const stored = this.setAuthenticated(hasValidCredentials)
 
-    const stored = this.setAuthenticated(hasValidCredentials)
-
-    const result: Result<void, AuthError> = !hasValidCredentials
-      ? Result.failure(new AuthError("INVALID_CREDENTIALS"))
-      : stored
-        ? Result.success<void>(undefined)
-        : Result.failure(new AuthError("UNEXPECTED"))
-
-    return of(result).pipe(delay(650))
+        return !hasValidCredentials
+          ? Result.failure(new AuthError("INVALID_CREDENTIALS"))
+          : stored
+            ? Result.success<void>(undefined)
+            : Result.failure(new AuthError("UNEXPECTED"))
+      })
+    )
   }
 
   me(): Observable<Result<UserSession, AuthError>> {
-    const result: Result<UserSession, AuthError> = this.authenticated
-      ? Result.success(UserSession.create(DEMO_AUTH.name, DEMO_AUTH.email))
-      : Result.failure(new AuthError("UNEXPECTED"))
-
-    return of(result).pipe(delay(250))
+    return timer(250).pipe(
+      map(() =>
+        this.authenticated
+          ? Result.success(UserSession.create(DEMO_AUTH.name, DEMO_AUTH.email))
+          : Result.failure(new AuthError("UNEXPECTED"))
+      )
+    )
   }
 
   logout(): void {

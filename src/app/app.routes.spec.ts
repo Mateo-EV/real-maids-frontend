@@ -9,7 +9,9 @@ import { AdminHomePage } from "./experiences/admin/presentation/pages/admin-home
 
 const loadRouteSets = async (): Promise<Routes[]> =>
   Promise.all(
-    routes.filter(route => route.loadChildren).map(route => route.loadChildren!() as Promise<Routes>)
+    routes
+      .filter(route => route.loadChildren)
+      .map(route => route.loadChildren!() as Promise<Routes>)
   )
 
 describe("Application route composition", () => {
@@ -30,7 +32,10 @@ describe("Application route composition", () => {
     expect(lazyRoutes.every(route => route.providers === undefined)).toBe(true)
     expect(routeSets[0]).toBe(AUTH_ROUTES)
     expect(routeSets[1]).toBe(ADMIN_ROUTES)
-    expect(routeSets.map(set => set.map(route => route.path))).toEqual([["login"], ["admin/users", "admin"]])
+    expect(routeSets.map(set => set.map(route => route.path))).toEqual([
+      ["login"],
+      ["admin/users", "admin"]
+    ])
   })
 
   it("preserves page lazy loading, titles and guards", async () => {
