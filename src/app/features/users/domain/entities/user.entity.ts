@@ -12,7 +12,9 @@ export class User {
     public lang: Lang,
     public isActive: boolean,
     public createdAt: Date,
-    public updatedAt: Date
+    public updatedAt: Date,
+    public roleId: number,
+    public lastAccess: Date | null
   ) {}
 
   static create(
@@ -23,8 +25,10 @@ export class User {
     lang: Lang,
     isActive: boolean,
     createdAt: Date,
-    updatedAt: Date
+    updatedAt: Date,
+    roleId: number,
+    lastAccess: Date | null = null
   ): User {
-    return new User(id, name, age, email, lang, isActive, createdAt, updatedAt)
+    return new User(id, name, age, email, lang, isActive, createdAt, updatedAt, roleId, lastAccess)
   }
 }

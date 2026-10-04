@@ -1,0 +1,187 @@
+<div class="min-h-dvh bg-background text-foreground">
+  <div class="bg-sidebar px-4 py-2 text-xs text-sidebar-foreground sm:px-8">
+    <div class="mx-auto flex max-w-screen-2xl flex-wrap justify-between gap-2">
+      <p><strong>Administración del sistema</strong></p>
+      <p>Idioma de la interfaz: Español</p>
+    </div>
+  </div>
+  <header class="border-b bg-card px-4 py-4 sm:px-8">
+    <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="flex size-11 items-center justify-center rounded-xl bg-secondary font-bold text-secondary-foreground" aria-hidden="true">RM</span>
+        <div>
+          <p class="text-xl font-semibold tracking-tight">The Real Maids <span hlmBadge variant="outline">CORE BACKOFFICE</span></p>
+          <p class="text-xs text-muted-foreground">Usuarios y catálogo de roles</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="text-right">
+          <p class="text-sm font-semibold">{{ session()?.name }}</p>
+          <p class="text-xs text-muted-foreground">{{ session()?.email }}</p>
+        </div>
+        <hlm-avatar><span hlmAvatarFallback class="user-avatar" data-avatar-tone="coral">{{ initials(session()?.name ?? '') }}</span></hlm-avatar>
+        <a hlmBtn variant="outline" size="sm" routerLink="/admin">Inicio</a>
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="logout()"><ng-icon name="lucideLogOut" aria-hidden="true" />Salir</button>
+      </div>
+    </div>
+  </header>
+  <nav class="border-b bg-card px-4 sm:px-8" aria-label="Secciones de administración">
+    <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-5">
+      <span class="active-section flex items-center gap-2 py-4 text-sm font-semibold" aria-current="page">Administración de Usuarios <span hlmBadge variant="secondary">{{ users.users().length }}</span></span>
+      <button data-future-tab type="button" disabled aria-describedby="future-tabs-help" class="future-tab">Sesiones activas</button>
+      <button data-future-tab type="button" disabled aria-describedby="future-tabs-help" class="future-tab">Roles y Matriz RBAC</button>
+      <button data-future-tab type="button" disabled aria-describedby="future-tabs-help" class="future-tab">Visor de Auditoría</button>
+    </div>
+  </nav>
+  <main class="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 py-5 sm:px-8">
+    <p id="future-tabs-help" class="text-xs text-muted-foreground">Sesiones, matriz RBAC y auditoría: Próximamente.</p>
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumen del catálogo">
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Usuarios registrados</p><span hlmCardAction class="kpi-tile" data-kpi-tone="navy"><ng-icon name="lucideUsers" aria-hidden="true" size="24" /></span>
+          <p class="kpi-value">{{ users.users().length }}</p>
+          <p hlmCardDescription>{{ activeCount() }} activos · {{ users.users().length - activeCount() }} inactivos</p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Sesiones concurrentes</p><span hlmCardAction class="kpi-tile" data-kpi-tone="amber"><ng-icon name="lucideSmartphone" aria-hidden="true" size="24" /></span>
+          <p class="kpi-value">{{ metrics.sessions }}</p>
+          <p hlmCardDescription>{{ metrics.mobileSessions }} móviles</p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Roles definidos</p><span hlmCardAction class="kpi-tile" data-kpi-tone="blue"><ng-icon name="lucideShield" aria-hidden="true" size="24" /></span>
+          <p class="kpi-value">{{ roles.roles().length }}</p>
+          <p hlmCardDescription>Administración, Operaciones, Personal Campo…</p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Eventos auditados</p><span hlmCardAction class="kpi-tile" data-kpi-tone="green"><ng-icon name="lucideClipboardList" aria-hidden="true" size="24" /></span>
+          <p class="kpi-value">{{ metrics.auditEvents }}</p>
+          <p hlmCardDescription>Actividad del sistema</p>
+        </div>
+      </article>
+    </section>
+    <section class="overflow-hidden rounded-2xl border bg-card shadow-sm" aria-labelledby="users-title" [attr.aria-busy]="initializing()">
+      <div class="flex flex-wrap items-start justify-between gap-4 border-b p-5">
+        <div>
+          <h1 id="users-title" class="text-lg font-semibold tracking-tight">Catálogo de Usuarios del Sistema</h1>
+          <p class="mt-1 max-w-prose text-xs text-muted-foreground">Gestiona estados, roles y perfiles de usuario.</p>
+        </div>
+        <div class="flex flex-wrap items-end gap-3">
+          <div class="flex flex-col gap-1">
+            <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
+            <div class="flex items-center gap-2">
+              <ng-icon name="lucideSearch" aria-hidden="true" />
+              <input #searchInput hlmInput id="user-search" type="search" placeholder="Buscar nombre o email…" [value]="search()" (input)="setSearch(searchInput.value)" />
+            </div>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="role-filter" class="text-xs font-medium">Rol</label>
+            <hlm-native-select selectId="role-filter" [value]="roleFilter()" (valueChange)="setRoleFilter($event)">
+              <option value="">Todos los roles</option>
+              @for (role of roles.roles(); track role.id) { <option [value]="role.id">{{ role.name }}{{ role.isActive ? '' : ' (inactivo)' }}</option> }
+            </hlm-native-select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="status-filter" class="text-xs font-medium">Estado</label>
+            <hlm-native-select selectId="status-filter" [value]="statusFilter()" (valueChange)="setStatusFilter($event)">
+              <option value="all">Todos</option><option value="active">Activo</option><option value="inactive">Inactivo</option>
+            </hlm-native-select>
+          </div>
+          <button id="new-user" hlmBtn size="sm" type="button" [disabled]="initializing() || loadError()" (click)="editUser()"><ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b bg-background px-5 py-3">
+        <p class="max-w-prose text-xs text-muted-foreground">Último acceso: horas en UTC.</p>
+        <button hlmBtn variant="outline" size="sm" type="button" [disabled]="initializing() || loadError()" (click)="manageRoles()">Gestionar roles</button>
+      </div>
+      <div class="px-5" aria-live="polite" aria-atomic="true">
+        @if (success()) { <p class="py-3 text-sm" role="status">{{ success() }}</p> }
+      </div>
+      @if (initializing()) {
+        <div class="flex min-h-64 items-center justify-center gap-3" role="status"><hlm-spinner />Cargando catálogo…</div>
+      } @else if (loadError()) {
+        <div class="p-5">
+          <div hlmAlert variant="destructive" role="alert"><p hlmAlertTitle>No pudimos cargar el catálogo</p><p hlmAlertDescription>Los datos existentes se conservan. Reintenta para continuar.</p></div>
+          <button data-retry hlmBtn variant="outline" class="mt-4" type="button" (click)="retry()">Reintentar</button>
+        </div>
+      } @else if (filteredUsers().length === 0) {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <div hlmEmptyMedia variant="icon"><ng-icon name="lucideUsers" aria-hidden="true" /></div>
+            <h2 hlmEmptyTitle>{{ users.users().length ? 'Sin resultados' : 'Aún no hay usuarios' }}</h2>
+            <p hlmEmptyDescription>{{ users.users().length ? 'Prueba otra búsqueda o restablece los filtros.' : 'Crea un rol activo y registra un usuario.' }}</p>
+          </div>
+          <div hlmEmptyContent>
+            <button data-reset-filters hlmBtn variant="outline" type="button" (click)="clearFilters()">Restablecer filtros</button>
+            <button hlmBtn type="button" (click)="editUser()">Nuevo usuario</button>
+          </div>
+        </div>
+      } @else {
+        <div hlmTableContainer class="hidden lg:block">
+          <table hlmTable>
+            <caption class="sr-only">Catálogo de usuarios: perfiles, roles, vínculos, estado y último acceso en UTC.</caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr><th hlmTh scope="col">ID / Usuario</th><th hlmTh scope="col">Correo electrónico</th><th hlmTh scope="col">Rol asignado</th><th hlmTh scope="col">Idioma</th><th hlmTh scope="col">Vínculo entidad</th><th hlmTh scope="col">Último acceso · UTC</th><th hlmTh scope="col">Estado</th><th hlmTh scope="col">Acciones</th></tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (user of visibleUsers(); track user.id) {
+                <tr hlmTr [class.text-muted-foreground]="!user.isActive">
+                  <td hlmTd><div class="flex items-center gap-3"><hlm-avatar><span hlmAvatarFallback class="user-avatar" [attr.data-avatar-tone]="avatarTone(user)">{{ initials(user.name) }}</span></hlm-avatar><div><p class="font-semibold">{{ user.name }}</p><p class="text-xs text-muted-foreground">#USR-{{ user.id }}</p></div></div></td>
+                  <td hlmTd>{{ user.email }}</td>
+                  <td hlmTd><span hlmBadge variant="outline" class="role-chip" [attr.data-role-tone]="roleTone(user)">{{ roleName(user) }}</span></td>
+                  <td hlmTd>{{ user.lang === 'es' ? 'ES · Español' : 'EN · English' }}</td>
+                  <td hlmTd><p class="text-xs">{{ decoration(user).entity }}</p></td>
+                  <td hlmTd>
+                    <p class="text-xs tabular-nums">{{ user.lastAccess ? (user.lastAccess | date:'dd/MM/yyyy HH:mm':'UTC') : 'Nunca accedió' }}</p>
+                    @if (decoration(user).ip; as ip) { <p class="text-xs text-muted-foreground">IP: {{ ip }}</p> }
+                  </td>
+                  <td hlmTd><span hlmBadge variant="outline" class="status-chip" [attr.data-status]="user.isActive ? 'active' : 'inactive'">{{ user.isActive ? 'Activo' : 'Inactivo' }}</span></td>
+                  <td hlmTd><ng-container [ngTemplateOutlet]="userActions" [ngTemplateOutletContext]="{ $implicit: user }" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul class="flex flex-col gap-4 p-4 lg:hidden" aria-label="Usuarios">
+          @for (user of visibleUsers(); track user.id) {
+            <li class="rounded-xl border p-4" [class.text-muted-foreground]="!user.isActive">
+              <div class="flex items-center gap-3"><hlm-avatar><span hlmAvatarFallback class="user-avatar" [attr.data-avatar-tone]="avatarTone(user)">{{ initials(user.name) }}</span></hlm-avatar><div class="min-w-0 flex-1"><p class="font-semibold">{{ user.name }}</p><p class="text-xs">#USR-{{ user.id }}</p></div><span hlmBadge variant="outline" class="status-chip" [attr.data-status]="user.isActive ? 'active' : 'inactive'">{{ user.isActive ? 'Activo' : 'Inactivo' }}</span></div>
+              <dl class="my-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Correo</dt><dd class="break-all">{{ user.email }}</dd>
+                <dt class="text-muted-foreground">Rol</dt><dd><span hlmBadge variant="outline" class="role-chip" [attr.data-role-tone]="roleTone(user)">{{ roleName(user) }}</span></dd>
+                <dt class="text-muted-foreground">Idioma</dt><dd>{{ user.lang === 'es' ? 'Español' : 'English' }}</dd>
+                <dt class="text-muted-foreground">Vínculo</dt><dd>{{ decoration(user).entity }}</dd>
+                <dt class="text-muted-foreground">Acceso UTC</dt><dd>{{ user.lastAccess ? (user.lastAccess | date:'dd/MM/yyyy HH:mm':'UTC') : 'Nunca accedió' }}</dd>
+                @if (decoration(user).ip; as ip) { <dt class="text-muted-foreground">IP</dt><dd>{{ ip }}</dd> }
+              </dl>
+              <ng-container [ngTemplateOutlet]="userActions" [ngTemplateOutletContext]="{ $implicit: user }" />
+            </li>
+          }
+        </ul>
+      }
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t p-5">
+        <p class="text-xs text-muted-foreground" role="status">Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios{{ filteredUsers().length === users.users().length ? '' : ' filtrados' }} · Total: {{ users.users().length }}</p>
+        <nav class="flex flex-wrap gap-1" aria-label="Paginación de usuarios">
+          <button hlmBtn variant="outline" size="sm" type="button" [disabled]="currentPage() === 1 || initializing()" (click)="goToPage(currentPage() - 1)">Anterior</button>
+          @for (page of pages(); track page) {
+            <button hlmBtn [variant]="page === currentPage() ? 'secondary' : 'outline'" size="sm" type="button" [attr.aria-current]="page === currentPage() ? 'page' : null" [attr.aria-label]="'Página ' + page" [disabled]="initializing()" (click)="goToPage(page)">{{ page }}</button>
+          }
+          <button hlmBtn variant="outline" size="sm" type="button" [disabled]="currentPage() === pageCount() || initializing()" (click)="goToPage(currentPage() + 1)">Siguiente</button>
+        </nav>
+      </div>
+    </section>
+    <p id="credentials-help" class="text-xs text-muted-foreground">Credenciales: No disponible.</p>
+  </main>
+</div>
+<ng-template #userActions let-user>
+  <div class="flex flex-wrap items-center gap-1">
+    <button hlmBtn variant="outline" size="sm" type="button" (click)="editUser(user)" [attr.aria-label]="'Editar usuario ' + user.name"><ng-icon name="lucidePencil" aria-hidden="true" />Editar</button>
+    <button hlmBtn variant="outline" size="sm" type="button" disabled aria-describedby="credentials-help"><ng-icon name="lucideKeyRound" aria-hidden="true" />Clave</button>
+    <button hlmBtn variant="ghost" size="sm" type="button" (click)="deleteUser(user)" [attr.aria-label]="'Eliminar usuario ' + user.name"><ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar</button>
+  </div>
+</ng-template>

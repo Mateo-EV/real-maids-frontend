@@ -12,10 +12,10 @@ const createdAt = new Date("2026-01-01T10:00:00Z")
 const updatedAt = new Date("2026-01-02T11:00:00Z")
 const params: CreateUserParams = {
   name: "Demo user", age: 30, email: "demo@example.com", password: "demo-only",
-  lang: Lang.EN, isActive: true
+  lang: Lang.EN, isActive: true, roleId: 1
 }
 const changes: UpdateUserParams = {
-  name: "Updated user", age: 42, email: "updated@example.com", lang: Lang.ES, isActive: false
+  name: "Updated user", age: 42, email: "updated@example.com", lang: Lang.ES, isActive: false, roleId: 2
 }
 
 async function data<T>(stream: Observable<Result<T, UserError>>): Promise<T> {
@@ -31,6 +31,8 @@ function mutate(user: User) {
   user.email = "leaked@example.com"
   user.lang = Lang.ES
   user.isActive = false
+  user.roleId = 999
+  user.lastAccess?.setTime(0)
   user.createdAt.setTime(0)
   user.updatedAt.setTime(0)
 }
@@ -45,6 +47,31 @@ describe("UserInMemorySource", () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  it("stores the assignment and defaults access to never accessed", async () => {
+    const user = await data(source.createUser(params))
+    expect(user.roleId).toBe(1)
+    expect(user.lastAccess).toBeNull()
+    const updated = await data(source.updateUserById(user.id, changes))
+    expect(updated.roleId).toBe(2)
+    expect(updated.lastAccess).toBeNull()
+  })
+
+  it("snapshots demo-only access metadata and never refreshes it on administrative updates", async () => {
+    const access = new Date("2025-12-01T00:00:00Z")
+    const stream = source.createUser({ ...params, lastAccess: access })
+    access.setTime(0)
+    const user = await data(stream)
+    expect(user.lastAccess).toEqual(new Date("2025-12-01T00:00:00Z"))
+    user.lastAccess!.setTime(0)
+    const updated = await data(source.updateUserById(user.id, { ...changes, lastAccess: new Date() } as UpdateUserParams))
+    expect(updated.lastAccess).toEqual(new Date("2025-12-01T00:00:00Z"))
+    updated.lastAccess!.setTime(0)
+    expect((await data(source.getUserById(user.id))).lastAccess).toEqual(new Date("2025-12-01T00:00:00Z"))
+    const list = await data(source.getUsers())
+    list[0].lastAccess!.setTime(0)
+    expect((await data(source.getUsers()))[0].lastAccess).toEqual(new Date("2025-12-01T00:00:00Z"))
+  })
+
   it("starts empty", async () => {
     expect(await data(source.getUsers())).toEqual([])
   })
@@ -53,7 +80,7 @@ describe("UserInMemorySource", () => {
     const first = await data(source.createUser(params))
     expect(first).toBeInstanceOf(User)
     expect(first).toEqual(User.create(1, params.name, params.age, params.email, params.lang,
-      params.isActive, createdAt, createdAt))
+      params.isActive, createdAt, createdAt, params.roleId))
     expect((await data(source.createUser(params))).id).toBe(2)
     await data(source.deleteUserById(1))
     expect((await data(source.createUser(params))).id).toBe(3)
@@ -65,7 +92,7 @@ describe("UserInMemorySource", () => {
     vi.setSystemTime(updatedAt)
     const updated = await data(source.updateUserById(created.id, changes))
     expect(updated).toEqual(User.create(created.id, changes.name, changes.age, changes.email,
-      changes.lang, changes.isActive, createdAt, updatedAt))
+      changes.lang, changes.isActive, createdAt, updatedAt, changes.roleId))
     expect(await data(source.getUsers())).toEqual([updated])
     expect(await data(source.deleteUserById(created.id))).toBeUndefined()
     expect(await data(source.getUsers())).toEqual([])

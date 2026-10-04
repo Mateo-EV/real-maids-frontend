@@ -1,0 +1,10 @@
+/* CDK overlays are outside UsersPage: supply primary tokens at this host. */
+:host {
+  display: block;
+  --primary: var(--navy);
+  --primary-foreground: var(--paper);
+}
+
+[hlmBtn].bg-primary:hover:not([data-disabled]) {
+  background: var(--navy-deep);
+}

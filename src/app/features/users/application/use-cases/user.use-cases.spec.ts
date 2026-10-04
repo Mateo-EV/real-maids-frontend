@@ -15,11 +15,11 @@ import { DeleteUserByIdUseCase } from "./delete-user-by-id.use-case"
 
 const input: CreateUserParams = {
   name: "Demo user", age: 30, email: "demo@example.com", password: "demo-only",
-  lang: Lang.EN, isActive: true
+  lang: Lang.EN, isActive: true, roleId: 1
 }
 const update: UpdateUserParams = { ...input, name: "Updated user" }
 const user = User.create(7, input.name, input.age, input.email, input.lang, input.isActive,
-  new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"))
+  new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"), input.roleId)
 
 describe("Users use cases", () => {
   let repository: UserRepository

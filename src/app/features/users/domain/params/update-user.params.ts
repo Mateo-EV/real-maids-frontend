@@ -7,4 +7,6 @@ export interface UpdateUserParams {
   readonly password?: string
   readonly lang: Lang
   readonly isActive: boolean
+  readonly roleId: number
+  // lastAccess is read-only profile metadata; administrative edits never refresh it.
 }

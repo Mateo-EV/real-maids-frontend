@@ -7,4 +7,8 @@ export interface CreateUserParams {
   readonly password: string
   readonly lang: Lang
   readonly isActive: boolean
+  readonly roleId: number
+  // FICTITIOUS DEMO DATA only: initialization metadata, not real authentication activity.
+  // Omitted/null means never accessed. TODO integration: use confirmed backend profile metadata.
+  readonly lastAccess?: Date | null
 }

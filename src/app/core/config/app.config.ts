@@ -9,6 +9,8 @@ import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositorie
 
 import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
+import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
+import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -17,6 +19,7 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(),
     { useExisting: AuthInMemorySource, provide: AUTH_REPOSITORY },
     { useExisting: CustomerInMemorySource, provide: CUSTOMER_REPOSITORY },
-    { useExisting: UserInMemorySource, provide: USER_REPOSITORY }
+    { useExisting: UserInMemorySource, provide: USER_REPOSITORY },
+    { useExisting: RoleInMemorySource, provide: ROLE_REPOSITORY }
   ]
 }

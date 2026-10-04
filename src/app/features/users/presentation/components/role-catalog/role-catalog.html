@@ -1,0 +1,66 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Gestionar roles</h2>
+  <p hlmDialogDescription>Catálogo de roles del sistema.</p>
+</hlm-dialog-header>
+<div class="mt-4 flex flex-col gap-4">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert"><p hlmAlertTitle>No se completó la operación</p><p hlmAlertDescription>{{ error() }}</p></div>
+  }
+  @if (success()) { <p role="status" class="text-sm">{{ success() }}</p> }
+  <ul class="flex flex-col gap-3" aria-label="Catálogo de roles">
+    @for (role of roles.roles(); track role.id) {
+      <li class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+        <div class="min-w-0">
+          <p class="font-medium">{{ role.name }} <span hlmBadge variant="outline">{{ role.isActive ? 'Activo' : 'Inactivo' }}</span></p>
+          <p class="text-xs text-muted-foreground break-words">{{ role.description }}</p>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="busy()" (click)="edit(role)" [attr.aria-label]="'Editar rol ' + role.name">Editar</button>
+          <button hlmBtn variant="outline" size="sm" type="button" [disabled]="busy()" (click)="toggle(role)" [attr.aria-label]="(role.isActive ? 'Desactivar rol ' : 'Activar rol ') + role.name">{{ role.isActive ? 'Desactivar' : 'Activar' }}</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" [disabled]="busy()" (click)="requestDelete(role)" [attr.aria-label]="'Eliminar rol ' + role.name">Eliminar</button>
+        </div>
+      </li>
+    } @empty { <li class="text-sm text-muted-foreground">No hay roles. Crea el primero para asignar usuarios.</li> }
+  </ul>
+  @if (deleteTarget(); as target) {
+    <section class="rounded-lg border p-4" aria-label="Confirmar eliminación del rol">
+      <p class="font-semibold">¿Eliminar el rol {{ target.name }} (#{{ target.id }})?</p>
+      <p class="text-sm text-muted-foreground">Solo se eliminará si no está asignado a ningún usuario.</p>
+      <div class="mt-3 flex gap-2">
+        <button hlmBtn variant="outline" type="button" (click)="cancelDelete()" [disabled]="busy()">Cancelar eliminación</button>
+        <button hlmBtn variant="destructive" type="button" (click)="confirmDelete()" [disabled]="busy()">Confirmar eliminación</button>
+      </div>
+    </section>
+  }
+  <form class="flex flex-col gap-4 rounded-lg border p-4" [formRoot]="roleForm" (submit)="save()">
+    <h3 class="font-semibold">{{ editingId() === null ? 'Nuevo rol' : 'Editar rol #' + editingId() }}</h3>
+    <fieldset hlmFieldSet class="flex flex-col gap-3" [disabled]="busy()">
+      <legend hlmFieldLegend class="sr-only">Datos del rol</legend>
+      <div hlmField>
+        <label hlmFieldLabel for="role-name">Nombre (obligatorio)</label>
+        <input #nameInput hlmInput id="role-name" [formField]="roleForm.name" />
+        @if (roleForm.name().touched()) {
+          @for (error of roleForm.name().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+      <div hlmField>
+        <label hlmFieldLabel for="role-description">Descripción</label>
+        <textarea hlmTextarea id="role-description" rows="2" [formField]="roleForm.description"></textarea>
+      </div>
+      <div hlmField orientation="horizontal">
+        <input id="role-active" type="checkbox" [formField]="roleForm.isActive" class="size-4 accent-primary" />
+        <label hlmFieldLabel for="role-active">Rol activo</label>
+      </div>
+    </fieldset>
+    <p class="text-xs text-muted-foreground">Desactivar impide nuevas selecciones; no cambia los usuarios ya asignados.</p>
+    <div class="flex flex-wrap gap-2">
+      <button hlmBtn type="submit" [disabled]="busy()" [attr.aria-busy]="roleForm().submitting()">
+        @if (roleForm().submitting()) { <hlm-spinner aria-label="Guardando rol" /> } Guardar rol
+      </button>
+      <button hlmBtn variant="outline" type="button" (click)="discard()" [disabled]="busy()">Descartar borrador</button>
+    </div>
+  </form>
+  <hlm-dialog-footer><button hlmBtn variant="outline" type="button" (click)="close()" [disabled]="busy()">Cerrar catálogo</button></hlm-dialog-footer>
+</div>

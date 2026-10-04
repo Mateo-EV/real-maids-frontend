@@ -7,7 +7,7 @@ import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { UserRepository } from "../../domain/repositories/user.repository"
 
-type UserFields = Pick<User, "name" | "age" | "email" | "lang" | "isActive">
+type UserFields = Pick<User, "name" | "age" | "email" | "lang" | "isActive" | "roleId">
 
 // Explicitly select public fields: this demo does not retain credentials or extra input properties.
 const copyFields = (input: UserFields): UserFields => ({
@@ -15,12 +15,14 @@ const copyFields = (input: UserFields): UserFields => ({
   age: input.age,
   email: input.email,
   lang: input.lang,
-  isActive: input.isActive
+  isActive: input.isActive,
+  roleId: input.roleId
 })
 
 const cloneUser = (user: User): User => User.create(
   user.id, user.name, user.age, user.email, user.lang, user.isActive,
-  new Date(user.createdAt.getTime()), new Date(user.updatedAt.getTime())
+  new Date(user.createdAt.getTime()), new Date(user.updatedAt.getTime()), user.roleId,
+  user.lastAccess === null ? null : new Date(user.lastAccess.getTime())
 )
 
 @Injectable({ providedIn: "root" })
@@ -30,12 +32,14 @@ export class UserInMemorySource implements UserRepository {
 
   createUser(params: CreateUserParams): Observable<Result<User, UserError>> {
     const input = copyFields(params)
+    const lastAccess = params.lastAccess == null ? null : new Date(params.lastAccess.getTime())
 
     return defer(() => {
       const now = new Date()
       const user = User.create(
         this.nextUserId++, input.name, input.age, input.email, input.lang, input.isActive,
-        now, new Date(now.getTime())
+        now, new Date(now.getTime()), input.roleId,
+        lastAccess === null ? null : new Date(lastAccess.getTime())
       )
       this.users = [...this.users, user]
       return of(Result.success(cloneUser(user)))
@@ -75,7 +79,8 @@ export class UserInMemorySource implements UserRepository {
       }
       const updated = User.create(
         id, input.name, input.age, input.email, input.lang, input.isActive,
-        new Date(existing.createdAt.getTime()), new Date()
+        new Date(existing.createdAt.getTime()), new Date(), input.roleId,
+        existing.lastAccess === null ? null : new Date(existing.lastAccess.getTime())
       )
       this.users = this.users.map(user => user.id === id ? updated : user)
       return of(Result.success(cloneUser(updated)))

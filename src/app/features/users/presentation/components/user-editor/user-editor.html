@@ -1,0 +1,76 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.user ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+  <p hlmDialogDescription>Datos del usuario y rol asignado.</p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-4" [formRoot]="userForm" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se guardaron los cambios</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="flex flex-col gap-4" [disabled]="userForm().submitting()">
+    <legend hlmFieldLegend class="sr-only">Datos del perfil</legend>
+    <div hlmField>
+      <label hlmFieldLabel for="user-name">Nombre (obligatorio)</label>
+      <input hlmInput id="user-name" autocomplete="off" [formField]="userForm.name" />
+      @if (userForm.name().touched()) {
+        @for (error of userForm.name().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField>
+      <label hlmFieldLabel for="user-email">Correo electrónico (obligatorio)</label>
+      <input hlmInput id="user-email" type="email" autocomplete="off" [formField]="userForm.email" />
+      @if (userForm.email().touched()) {
+        @for (error of userForm.email().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField>
+      <label hlmFieldLabel for="user-age">Edad (años)</label>
+      <input hlmInput id="user-age" type="number" step="1" [formField]="userForm.age" aria-describedby="age-help" />
+      <p hlmFieldDescription id="age-help">Ingresa la edad en años.</p>
+      @if (userForm.age().touched()) {
+        @for (error of userForm.age().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField>
+      <label hlmFieldLabel for="user-role">Rol asignado (obligatorio)</label>
+      <hlm-native-select selectId="user-role" [formField]="userForm.roleId" class="w-full">
+        <option value="">Seleccionar rol</option>
+        @for (role of availableRoles(); track role.id) {
+          <option [value]="role.id">{{ role.name }}{{ role.isActive ? '' : ' (inactivo; asignación actual)' }}</option>
+        }
+      </hlm-native-select>
+      <p hlmFieldDescription>Un rol por usuario. Solo roles activos para nuevas asignaciones.</p>
+      @if (userForm.roleId().touched()) {
+        @for (error of userForm.roleId().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField>
+      <label hlmFieldLabel for="user-lang">Idioma</label>
+      <hlm-native-select selectId="user-lang" [formField]="userForm.lang" class="w-full">
+        <option value="es">Español</option><option value="en">English</option>
+      </hlm-native-select>
+    </div>
+    <div hlmField orientation="horizontal">
+      <input id="user-active" type="checkbox" [formField]="userForm.isActive" class="size-4 accent-primary" />
+      <label hlmFieldLabel for="user-active">Usuario activo</label>
+    </div>
+  </fieldset>
+  <p class="text-xs text-muted-foreground">El último acceso es de solo lectura y se conserva al editar.</p>
+  <hlm-dialog-footer>
+    <button hlmBtn variant="outline" type="button" (click)="cancel()" [disabled]="userForm().submitting()">Cancelar</button>
+    <button hlmBtn type="submit" [disabled]="userForm().submitting()" [attr.aria-busy]="userForm().submitting()">
+      @if (userForm().submitting()) { <hlm-spinner aria-label="Guardando" /> }
+      {{ userForm().submitting() ? 'Guardando…' : 'Guardar usuario' }}
+    </button>
+  </hlm-dialog-footer>
+</form>

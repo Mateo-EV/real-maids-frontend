@@ -1,13 +1,13 @@
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ChangeDetectionStrategy, Component, inject } from "@angular/core"
-import { Router } from "@angular/router"
+import { Router, RouterLink } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideLogOut, lucideShieldCheck, lucideSparkles } from "@ng-icons/lucide"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmCardImports } from "@spartan-ng/helm/card"
 
 @Component({
-  imports: [NgIcon, ...HlmButtonImports, ...HlmCardImports],
+  imports: [RouterLink, NgIcon, ...HlmButtonImports, ...HlmCardImports],
   selector: "app-admin-home-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [provideIcons({ lucideLogOut, lucideShieldCheck, lucideSparkles })],

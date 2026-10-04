@@ -16,6 +16,11 @@ import { UserInMemorySource } from "@/app/features/users/infrastructure/source/u
 import { CreateUserUseCase } from "@/app/features/users/application/use-cases/create-user.use-case"
 import { GetUserByIdUseCase } from "@/app/features/users/application/use-cases/get-user-by-id.use-case"
 import { Lang } from "@/app/features/users/domain/entities/user.entity"
+import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
+import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
+import { RolesStore } from "@/app/features/users/presentation/state/roles.store"
+import { UserStore } from "@/app/features/users/presentation/state/user.store"
+import { GetRoleByIdUseCase } from "@/app/features/users/application/use-cases/get-role-by-id.use-case"
 
 describe("Application repository composition", () => {
   beforeEach(() => {
@@ -37,10 +42,31 @@ describe("Application repository composition", () => {
     expect(TestBed.inject(USER_REPOSITORY)).toBe(TestBed.inject(UserInMemorySource))
   })
 
+  it("aliases roles and shares store/use-case mutations without a DI cycle", async () => {
+    const source = TestBed.inject(RoleInMemorySource)
+    expect(TestBed.inject(ROLE_REPOSITORY)).toBe(source)
+    const roles = TestBed.inject(RolesStore)
+    const users = TestBed.inject(UserStore)
+    expect(TestBed.inject(RolesStore)).toBe(roles)
+    expect(TestBed.inject(UserStore)).toBe(users)
+    const created = await firstValueFrom(roles.createRole({ name: "Demo", description: "Fictitious", isActive: true }))
+    if (!created.success) throw created.error
+    expect(await firstValueFrom(TestBed.inject(GetRoleByIdUseCase).execute(created.data.id))).toEqual(created)
+    const user = await firstValueFrom(users.createUser({ name: "Demo", age: 30, email: "demo@example.com",
+      password: "unused", lang: Lang.EN, isActive: false, roleId: created.data.id }))
+    if (!user.success) throw user.error
+    expect(user.data.lastAccess).toBeNull()
+    expect(await firstValueFrom(roles.deleteRoleById(created.data.id))).toMatchObject({ success: false, error: { code: "ROLE_IN_USE" } })
+    expect(roles.roles()).toEqual([created.data])
+    await firstValueFrom(users.deleteUserById(user.data.id))
+    expect((await firstValueFrom(roles.deleteRoleById(created.data.id))).success).toBe(true)
+    expect((await firstValueFrom(source.getRoles()))).toMatchObject({ success: true, data: [] })
+  })
+
   it("shares user mutations between root use cases and the source", async () => {
     const result = await firstValueFrom(TestBed.inject(CreateUserUseCase).execute({
       name: "Demo user", age: 30, email: "user@example.com", password: "demo-only",
-      lang: Lang.EN, isActive: true
+      lang: Lang.EN, isActive: true, roleId: 1
     }))
     if (!result.success) throw new Error("Expected successful user creation")
     const found = await firstValueFrom(TestBed.inject(GetUserByIdUseCase).execute(result.data.id))
