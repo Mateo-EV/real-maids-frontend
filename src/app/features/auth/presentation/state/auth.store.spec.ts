@@ -45,7 +45,8 @@ describe("AuthStore", () => {
   })
 
   it.each(["failure", "observable error", "empty"])(
-    "remains anonymous on restoration %s", async outcome => {
+    "remains anonymous on restoration %s",
+    async outcome => {
       const response = new Subject<Result<UserSession, AuthError>>()
       me.mockReturnValue(response)
       const restored = firstValueFrom(store.restoreSession())
@@ -71,14 +72,16 @@ describe("AuthStore", () => {
   })
 
   it.each(["success", "failure", "error", "empty"])(
-    "preserves a newer login over a pending restoration %s", async outcome => {
+    "preserves a newer login over a pending restoration %s",
+    async outcome => {
       const response = new Subject<Result<UserSession, AuthError>>()
       me.mockReturnValue(response)
       const restored = firstValueFrom(store.restoreSession())
       const newer = UserSession.create("New", "new@example.com")
       login.mockReturnValue(of(Result.success(newer)))
       store.login({ email: newer.email, password: "demo2026" }).subscribe()
-      if (outcome === "success") response.next(Result.success(UserSession.create("Old", "old@example.com")))
+      if (outcome === "success")
+        response.next(Result.success(UserSession.create("Old", "old@example.com")))
       else if (outcome === "failure") response.next(Result.failure(new AuthError("UNEXPECTED")))
       else if (outcome === "empty") response.complete()
       else response.error(new Error("offline"))
@@ -89,7 +92,9 @@ describe("AuthStore", () => {
   )
 
   it("fails closed when the use case throws before returning an observable", async () => {
-    me.mockImplementation(() => { throw new Error("offline") })
+    me.mockImplementation(() => {
+      throw new Error("offline")
+    })
     expect(await firstValueFrom(store.restoreSession())).toBeNull()
     expect(store.isAuthenticated()).toBe(false)
   })

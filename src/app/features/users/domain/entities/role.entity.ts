@@ -7,7 +7,13 @@ export class Role {
     public createdAt: Date
   ) {}
 
-  static create(id: number, name: string, description: string, isActive: boolean, createdAt: Date): Role {
+  static create(
+    id: number,
+    name: string,
+    description: string,
+    isActive: boolean,
+    createdAt: Date
+  ): Role {
     return new Role(id, name, description, isActive, createdAt)
   }
 }

@@ -10,17 +10,32 @@ import { UpdateUserByIdUseCase } from "../../application/use-cases/update-user-b
 import { DeleteUserByIdUseCase } from "../../application/use-cases/delete-user-by-id.use-case"
 import { UserStore } from "./user.store"
 
-const params = { name: "Demo", age: 30, email: "demo@example.com", password: "unused", lang: Lang.EN, isActive: true, roleId: 1 }
+const params = {
+  name: "Demo",
+  age: 30,
+  email: "demo@example.com",
+  password: "unused",
+  lang: Lang.EN,
+  isActive: true,
+  roleId: 1
+}
 const user = User.create(1, params.name, 30, params.email, Lang.EN, true, new Date(), new Date(), 1)
 describe("UserStore", () => {
   let store: InstanceType<typeof UserStore>
-  const list = { execute: vi.fn() }, create = { execute: vi.fn() }, update = { execute: vi.fn() }, remove = { execute: vi.fn() }
+  const list = { execute: vi.fn() },
+    create = { execute: vi.fn() },
+    update = { execute: vi.fn() },
+    remove = { execute: vi.fn() }
   beforeEach(() => {
     vi.resetAllMocks()
-    TestBed.configureTestingModule({ providers: [
-      { provide: GetUsersUseCase, useValue: list }, { provide: CreateUserUseCase, useValue: create },
-      { provide: UpdateUserByIdUseCase, useValue: update }, { provide: DeleteUserByIdUseCase, useValue: remove }
-    ] })
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: GetUsersUseCase, useValue: list },
+        { provide: CreateUserUseCase, useValue: create },
+        { provide: UpdateUserByIdUseCase, useValue: update },
+        { provide: DeleteUserByIdUseCase, useValue: remove }
+      ]
+    })
     store = TestBed.inject(UserStore)
   })
   it("retains the load flow and clears loading on cancellation and empty completion", () => {
@@ -28,7 +43,8 @@ describe("UserStore", () => {
     list.execute.mockReturnValue(response)
     const subscription = store.loadUsers().subscribe()
     expect(store.loading()).toBe(true)
-    response.next(Result.success([user])); response.complete()
+    response.next(Result.success([user]))
+    response.complete()
     expect(store.users()).toEqual([user])
     expect(store.loading()).toBe(false)
     subscription.unsubscribe()
@@ -44,7 +60,17 @@ describe("UserStore", () => {
     create.execute.mockReturnValue(of(Result.success(user)))
     store.createUser(params).subscribe()
     expect(store.users()).toEqual([user])
-    const changed = User.create(1, "Changed", 30, params.email, Lang.EN, false, user.createdAt, new Date(), 2)
+    const changed = User.create(
+      1,
+      "Changed",
+      30,
+      params.email,
+      Lang.EN,
+      false,
+      user.createdAt,
+      new Date(),
+      2
+    )
     update.execute.mockReturnValue(of(Result.success(changed)))
     store.updateUserById(1, { ...params, roleId: 2 }).subscribe()
     expect(store.users()).toEqual([changed])
@@ -63,7 +89,9 @@ describe("UserStore", () => {
     store.loadUsers().subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
     expect(store.loading()).toBe(false)
-    create.execute.mockImplementation(() => { throw new Error("sync") })
+    create.execute.mockImplementation(() => {
+      throw new Error("sync")
+    })
     store.createUser(params).subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
     expect(store.loading()).toBe(false)
@@ -85,7 +113,9 @@ describe("UserStore", () => {
     store.loadUsers().subscribe()
     list.execute.mockReturnValue(of(Result.success([user])))
     store.loadUsers().subscribe()
-    older.next(Result.failure(error)); older.next(Result.success([])); older.complete()
+    older.next(Result.failure(error))
+    older.next(Result.success([]))
+    older.complete()
     expect(store.users()).toEqual([user])
     expect(store.error()).toBeUndefined()
     expect(store.loading()).toBe(false)
@@ -97,7 +127,8 @@ describe("UserStore", () => {
     create.execute.mockReturnValue(of(Result.success(user)))
     store.createUser(params).subscribe()
     expect(store.loading()).toBe(true)
-    stale.next(Result.success([])); stale.complete()
+    stale.next(Result.success([]))
+    stale.complete()
     expect(store.users()).toEqual([user])
     expect(store.loading()).toBe(false)
   })

@@ -1,6 +1,13 @@
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
-import { ChangeDetectionStrategy, Component, inject, output, signal } from "@angular/core"
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  output,
+  signal
+} from "@angular/core"
 import {
   email,
   form,
@@ -20,6 +27,7 @@ import { HlmInputImports } from "@spartan-ng/helm/input"
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { firstValueFrom } from "rxjs"
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 
 @Component({
   imports: [
@@ -53,6 +61,7 @@ import { firstValueFrom } from "rxjs"
 })
 export class LoginFormComponent {
   private readonly authStore = inject(AuthStore)
+  private readonly destroyRef = inject(DestroyRef)
 
   readonly authenticated = output<void>()
   readonly passwordVisible = signal(false)
@@ -76,16 +85,26 @@ export class LoginFormComponent {
   }
 
   submit(): Promise<boolean> {
+    if (this.destroyRef.destroyed || this.loginForm().submitting()) return Promise.resolve(false)
     this.submitError.set(null)
 
     return submitForm(this.loginForm, async loginForm => {
       const { email, password } = loginForm().value()
-      const result = await firstValueFrom(this.authStore.login({ email: email.trim(), password }))
-
-      if (result.success) {
-        this.authenticated.emit()
-      } else {
-        this.submitError.set(result.error)
+      try {
+        const result = await firstValueFrom(
+          this.authStore
+            .login({ email: email.trim(), password })
+            .pipe(takeUntilDestroyed(this.destroyRef)),
+          { defaultValue: undefined }
+        )
+        if (this.destroyRef.destroyed || !result) return undefined
+        if (result.success) {
+          this.authenticated.emit()
+        } else {
+          this.submitError.set(result.error)
+        }
+      } catch {
+        if (!this.destroyRef.destroyed) this.submitError.set(new AuthError("UNEXPECTED"))
       }
 
       return undefined

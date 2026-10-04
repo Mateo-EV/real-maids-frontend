@@ -1,6 +1,10 @@
 import { TestBed } from "@angular/core/testing"
 import { Router } from "@angular/router"
-import { firstValueFrom } from "rxjs"
+import { firstValueFrom, Observable } from "rxjs"
+import { AuthRepositoryImpl } from "@/app/features/auth/infrastructure/repositories/auth.repository-impl"
+import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
+import { UserRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user.repository-impl"
+import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/repositories/role.repository-impl"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { appConfig } from "./app.config"
 import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.repository"
@@ -22,6 +26,12 @@ import { RolesStore } from "@/app/features/users/presentation/state/roles.store"
 import { UserStore } from "@/app/features/users/presentation/state/user.store"
 import { GetRoleByIdUseCase } from "@/app/features/users/application/use-cases/get-role-by-id.use-case"
 
+async function settle<T>(stream: Observable<T>): Promise<T> {
+  const pending = firstValueFrom(stream)
+  await vi.runAllTimersAsync()
+  return pending
+}
+
 describe("Application repository composition", () => {
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: appConfig.providers })
@@ -30,47 +40,77 @@ describe("Application repository composition", () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it("aliases the auth token to the root source instance", () => {
-    expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthInMemorySource))
+  it("aliases the auth token to the root implementation instance", () => {
+    expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthRepositoryImpl))
+    expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthInMemorySource))
   })
 
-  it("aliases the customer token to the root source instance", () => {
-    expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerInMemorySource))
+  it("aliases the customer token to the root implementation instance", () => {
+    expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
+    expect(TestBed.inject(CUSTOMER_REPOSITORY)).not.toBe(TestBed.inject(CustomerInMemorySource))
   })
 
-  it("aliases the user token to the root source instance", () => {
-    expect(TestBed.inject(USER_REPOSITORY)).toBe(TestBed.inject(UserInMemorySource))
+  it("aliases the user token to the root implementation instance", () => {
+    expect(TestBed.inject(USER_REPOSITORY)).toBe(TestBed.inject(UserRepositoryImpl))
+    expect(TestBed.inject(USER_REPOSITORY)).not.toBe(TestBed.inject(UserInMemorySource))
   })
 
   it("aliases roles and shares store/use-case mutations without a DI cycle", async () => {
     const source = TestBed.inject(RoleInMemorySource)
-    expect(TestBed.inject(ROLE_REPOSITORY)).toBe(source)
+    expect(TestBed.inject(ROLE_REPOSITORY)).toBe(TestBed.inject(RoleRepositoryImpl))
+    expect(TestBed.inject(ROLE_REPOSITORY)).not.toBe(source)
     const roles = TestBed.inject(RolesStore)
     const users = TestBed.inject(UserStore)
     expect(TestBed.inject(RolesStore)).toBe(roles)
     expect(TestBed.inject(UserStore)).toBe(users)
-    const created = await firstValueFrom(roles.createRole({ name: "Demo", description: "Fictitious", isActive: true }))
+    const created = await settle(
+      roles.createRole({ name: "Demo", description: "Fictitious", isActive: true })
+    )
     if (!created.success) throw created.error
-    expect(await firstValueFrom(TestBed.inject(GetRoleByIdUseCase).execute(created.data.id))).toEqual(created)
-    const user = await firstValueFrom(users.createUser({ name: "Demo", age: 30, email: "demo@example.com",
-      password: "unused", lang: Lang.EN, isActive: false, roleId: created.data.id }))
+    expect(await settle(TestBed.inject(GetRoleByIdUseCase).execute(created.data.id))).toEqual(
+      created
+    )
+    const user = await settle(
+      users.createUser({
+        name: "Demo",
+        age: 30,
+        email: "demo@example.com",
+        password: "unused",
+        lang: Lang.EN,
+        isActive: false,
+        roleId: created.data.id
+      })
+    )
     if (!user.success) throw user.error
     expect(user.data.lastAccess).toBeNull()
-    expect(await firstValueFrom(roles.deleteRoleById(created.data.id))).toMatchObject({ success: false, error: { code: "ROLE_IN_USE" } })
+    expect(await settle(roles.deleteRoleById(created.data.id))).toMatchObject({
+      success: false,
+      error: { code: "ROLE_IN_USE" }
+    })
     expect(roles.roles()).toEqual([created.data])
-    await firstValueFrom(users.deleteUserById(user.data.id))
-    expect((await firstValueFrom(roles.deleteRoleById(created.data.id))).success).toBe(true)
-    expect((await firstValueFrom(source.getRoles()))).toMatchObject({ success: true, data: [] })
+    await settle(users.deleteUserById(user.data.id))
+    expect((await settle(roles.deleteRoleById(created.data.id))).success).toBe(true)
+    const remaining = await settle(source.getRoles())
+    expect(remaining.success).toBe(true)
+    if (!remaining.success) throw remaining.error
+    expect(remaining.data.map(role => role.id)).toEqual([1, 2, 3, 4, 5])
   })
 
   it("shares user mutations between root use cases and the source", async () => {
-    const result = await firstValueFrom(TestBed.inject(CreateUserUseCase).execute({
-      name: "Demo user", age: 30, email: "user@example.com", password: "demo-only",
-      lang: Lang.EN, isActive: true, roleId: 1
-    }))
+    const result = await settle(
+      TestBed.inject(CreateUserUseCase).execute({
+        name: "Demo user",
+        age: 30,
+        email: "user@example.com",
+        password: "demo-only",
+        lang: Lang.EN,
+        isActive: true,
+        roleId: 1
+      })
+    )
     if (!result.success) throw new Error("Expected successful user creation")
-    const found = await firstValueFrom(TestBed.inject(GetUserByIdUseCase).execute(result.data.id))
-    const source = await firstValueFrom(TestBed.inject(UserInMemorySource).getUserById(result.data.id))
+    const found = await settle(TestBed.inject(GetUserByIdUseCase).execute(result.data.id))
+    const source = await settle(TestBed.inject(UserInMemorySource).getUserById(result.data.id))
     expect(found).toEqual(result)
     expect(source).toEqual(result)
     expect(TestBed.inject(CreateUserUseCase)).toBe(TestBed.inject(CreateUserUseCase))
@@ -79,7 +119,9 @@ describe("Application repository composition", () => {
   it("connects root auth state, its source and admin logout", async () => {
     const store = TestBed.inject(AuthStore)
     const source = TestBed.inject(AuthInMemorySource)
-    const login = firstValueFrom(store.login({ email: "riojamatthew@gmail.com", password: "demo2026" }))
+    const login = firstValueFrom(
+      store.login({ email: "riojamatthew@gmail.com", password: "demo2026" })
+    )
     await vi.runAllTimersAsync()
     expect((await login).success).toBe(true)
     expect(store.isAuthenticated()).toBe(true)
@@ -103,9 +145,13 @@ describe("Application repository composition", () => {
 
   it("shares customer mutations between the root store and source", async () => {
     const store = TestBed.inject(CustomersStore)
-    const created = firstValueFrom(store.createCustomer({
-      name: "Demo customer", email: "demo@example.com", phone: "+1 555 010 1003"
-    }))
+    const created = firstValueFrom(
+      store.createCustomer({
+        name: "Demo customer",
+        email: "demo@example.com",
+        phone: "+1 555 010 1003"
+      })
+    )
     await vi.runAllTimersAsync()
     const result = await created
     expect(result.success).toBe(true)

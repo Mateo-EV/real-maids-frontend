@@ -16,12 +16,23 @@ const role = Role.create(7, input.name, input.description, input.isActive, new D
 describe("Role use cases", () => {
   let repository: RoleRepository
   beforeEach(() => {
-    repository = { createRole: vi.fn(), getRoleById: vi.fn(), getRoles: vi.fn(),
-      updateRoleById: vi.fn(), deleteRoleById: vi.fn() }
-    TestBed.configureTestingModule({ providers: [{ provide: ROLE_REPOSITORY, useValue: repository }] })
+    repository = {
+      createRole: vi.fn(),
+      getRoleById: vi.fn(),
+      getRoles: vi.fn(),
+      updateRoleById: vi.fn(),
+      deleteRoleById: vi.fn()
+    }
+    TestBed.configureTestingModule({
+      providers: [{ provide: ROLE_REPOSITORY, useValue: repository }]
+    })
   })
-  function check<T>(method: keyof RoleRepository, result: Result<T, RoleError>,
-    execute: () => Observable<Result<T, RoleError>>, args: unknown[]) {
+  function check<T>(
+    method: keyof RoleRepository,
+    result: Result<T, RoleError>,
+    execute: () => Observable<Result<T, RoleError>>,
+    args: unknown[]
+  ) {
     const stream = of(result)
     Object.assign(repository, { [method]: vi.fn(() => stream) })
     const returned = execute()
@@ -32,20 +43,40 @@ describe("Role use cases", () => {
   for (const success of [true, false]) {
     const outcome = success ? "success" : "failure"
     const error = new RoleError("UNEXPECTED")
-    it(`delegates create and preserves ${outcome}`, () => check("createRole",
-      success ? Result.success(role) : Result.failure(error),
-      () => TestBed.inject(CreateRoleUseCase).execute(input), [input]))
-    it(`delegates read and preserves ${outcome}`, () => check("getRoleById",
-      success ? Result.success(role) : Result.failure(error),
-      () => TestBed.inject(GetRoleByIdUseCase).execute(7), [7]))
-    it(`delegates list and preserves ${outcome}`, () => check("getRoles",
-      success ? Result.success([role]) : Result.failure(error),
-      () => TestBed.inject(GetRolesUseCase).execute(), []))
-    it(`delegates update and preserves ${outcome}`, () => check("updateRoleById",
-      success ? Result.success(role) : Result.failure(error),
-      () => TestBed.inject(UpdateRoleByIdUseCase).execute(7, input), [7, input]))
-    it(`delegates delete and preserves ${outcome}`, () => check("deleteRoleById",
-      success ? Result.success<void>(undefined) : Result.failure(error),
-      () => TestBed.inject(DeleteRoleByIdUseCase).execute(7), [7]))
+    it(`delegates create and preserves ${outcome}`, () =>
+      check(
+        "createRole",
+        success ? Result.success(role) : Result.failure(error),
+        () => TestBed.inject(CreateRoleUseCase).execute(input),
+        [input]
+      ))
+    it(`delegates read and preserves ${outcome}`, () =>
+      check(
+        "getRoleById",
+        success ? Result.success(role) : Result.failure(error),
+        () => TestBed.inject(GetRoleByIdUseCase).execute(7),
+        [7]
+      ))
+    it(`delegates list and preserves ${outcome}`, () =>
+      check(
+        "getRoles",
+        success ? Result.success([role]) : Result.failure(error),
+        () => TestBed.inject(GetRolesUseCase).execute(),
+        []
+      ))
+    it(`delegates update and preserves ${outcome}`, () =>
+      check(
+        "updateRoleById",
+        success ? Result.success(role) : Result.failure(error),
+        () => TestBed.inject(UpdateRoleByIdUseCase).execute(7, input),
+        [7, input]
+      ))
+    it(`delegates delete and preserves ${outcome}`, () =>
+      check(
+        "deleteRoleById",
+        success ? Result.success<void>(undefined) : Result.failure(error),
+        () => TestBed.inject(DeleteRoleByIdUseCase).execute(7),
+        [7]
+      ))
   }
 })

@@ -22,65 +22,91 @@ const initialState: RolesState = { roles: [], loading: false, loaded: false, err
 export const RolesStore = signalStore(
   { providedIn: "root" },
   withState(initialState),
-  withMethods((store,
-    getRoles = inject(GetRolesUseCase), createRole = inject(CreateRoleUseCase),
-    updateRole = inject(UpdateRoleByIdUseCase), deleteRole = inject(DeleteRoleByIdUseCase)
-  ) => {
-    let pendingRequests = 0
-    let catalogRevision = 0
-    let latestLoad = 0
+  withMethods(
+    (
+      store,
+      getRoles = inject(GetRolesUseCase),
+      createRole = inject(CreateRoleUseCase),
+      updateRole = inject(UpdateRoleByIdUseCase),
+      deleteRole = inject(DeleteRoleByIdUseCase)
+    ) => {
+      let pendingRequests = 0
+      let catalogRevision = 0
+      let latestLoad = 0
 
-    const execute = <T>(request: () => Observable<Result<T, RoleError>>,
-      onSuccess: (data: T) => void,
-      isCurrent: () => boolean = () => true
-    ): Observable<Result<T, RoleError>> => defer(() => {
-      pendingRequests += 1
-      patchState(store, { loading: true, error: undefined })
-      return defer(request).pipe(
-        catchError((error: unknown) => of(Result.failure(
-          error instanceof RoleError ? error : new RoleError("UNEXPECTED")
-        ))),
-        tap(result => {
-          if (!isCurrent()) return
-          result.either(data => {
-            onSuccess(data)
-            patchState(store, { error: undefined })
-          }, error => patchState(store, { error }))
-        }),
-        finalize(() => {
-          pendingRequests -= 1
-          patchState(store, { loading: pendingRequests > 0 })
+      const execute = <T>(
+        request: () => Observable<Result<T, RoleError>>,
+        onSuccess: (data: T) => void,
+        isCurrent: () => boolean = () => true
+      ): Observable<Result<T, RoleError>> =>
+        defer(() => {
+          pendingRequests += 1
+          patchState(store, { loading: true, error: undefined })
+          return defer(request).pipe(
+            catchError((error: unknown) =>
+              of(Result.failure(error instanceof RoleError ? error : new RoleError("UNEXPECTED")))
+            ),
+            tap(result => {
+              if (!isCurrent()) return
+              result.either(
+                data => {
+                  onSuccess(data)
+                  patchState(store, { error: undefined })
+                },
+                error => patchState(store, { error })
+              )
+            }),
+            finalize(() => {
+              pendingRequests -= 1
+              patchState(store, { loading: pendingRequests > 0 })
+            })
+          )
         })
-      )
-    })
 
-    return {
-      loadRoles() {
-        return defer(() => {
-          const requestId = ++latestLoad
-          const revision = catalogRevision
-          return execute(() => getRoles.execute(), roles => patchState(store, { roles, loaded: true }),
-            () => requestId === latestLoad && revision === catalogRevision)
-        })
-      },
-      createRole(params: CreateRoleParams) {
-        return execute(() => createRole.execute(params), role => {
-          catalogRevision += 1
-          patchState(store, state => ({ roles: [...state.roles.filter(r => r.id !== role.id), role] }))
-        })
-      },
-      updateRoleById(id: number, params: UpdateRoleParams) {
-        return execute(() => updateRole.execute(id, params), role => {
-          catalogRevision += 1
-          patchState(store, state => ({ roles: state.roles.map(r => r.id === id ? role : r) }))
-        })
-      },
-      deleteRoleById(id: number) {
-        return execute(() => deleteRole.execute(id), () => {
-          catalogRevision += 1
-          patchState(store, state => ({ roles: state.roles.filter(r => r.id !== id) }))
-        })
+      return {
+        loadRoles() {
+          return defer(() => {
+            const requestId = ++latestLoad
+            const revision = catalogRevision
+            return execute(
+              () => getRoles.execute(),
+              roles => patchState(store, { roles, loaded: true }),
+              () => requestId === latestLoad && revision === catalogRevision
+            )
+          })
+        },
+        createRole(params: CreateRoleParams) {
+          return execute(
+            () => createRole.execute(params),
+            role => {
+              catalogRevision += 1
+              patchState(store, state => ({
+                roles: [...state.roles.filter(r => r.id !== role.id), role]
+              }))
+            }
+          )
+        },
+        updateRoleById(id: number, params: UpdateRoleParams) {
+          return execute(
+            () => updateRole.execute(id, params),
+            role => {
+              catalogRevision += 1
+              patchState(store, state => ({
+                roles: state.roles.map(r => (r.id === id ? role : r))
+              }))
+            }
+          )
+        },
+        deleteRoleById(id: number) {
+          return execute(
+            () => deleteRole.execute(id),
+            () => {
+              catalogRevision += 1
+              patchState(store, state => ({ roles: state.roles.filter(r => r.id !== id) }))
+            }
+          )
+        }
       }
     }
-  })
+  )
 )

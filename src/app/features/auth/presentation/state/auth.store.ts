@@ -41,7 +41,7 @@ export const AuthStore = signalStore(
               return session ? of(Result.success(session)) : getCurrentUserUseCase.execute()
             }).pipe(
               take(1),
-              map(result => result.success ? result.data : null),
+              map(result => (result.success ? result.data : null)),
               defaultIfEmpty(null),
               catchError(() => of(null)),
               map(session => {

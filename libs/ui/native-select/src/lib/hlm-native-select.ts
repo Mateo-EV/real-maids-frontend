@@ -13,7 +13,11 @@ import {
 import { NG_VALUE_ACCESSOR, type ControlValueAccessor } from "@angular/forms"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideChevronDown } from "@ng-icons/lucide"
-import { BrnFieldControl, BrnFieldControlDescribedBy, provideBrnLabelable } from "@spartan-ng/brain/field"
+import {
+  BrnFieldControl,
+  BrnFieldControlDescribedBy,
+  provideBrnLabelable
+} from "@spartan-ng/brain/field"
 import { type ChangeFn, type TouchFn } from "@spartan-ng/brain/forms"
 import { classes, hlm } from "@spartan-ng/helm/utils"
 import type { ClassValue } from "clsx"
