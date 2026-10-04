@@ -11,6 +11,12 @@ import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { AdminHomePage } from "@/app/experiences/admin/presentation/pages/admin-home-page/admin-home-page"
 
+import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
+import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
+import { CreateUserUseCase } from "@/app/features/users/application/use-cases/create-user.use-case"
+import { GetUserByIdUseCase } from "@/app/features/users/application/use-cases/get-user-by-id.use-case"
+import { Lang } from "@/app/features/users/domain/entities/user.entity"
+
 describe("Application repository composition", () => {
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: appConfig.providers })
@@ -25,6 +31,23 @@ describe("Application repository composition", () => {
 
   it("aliases the customer token to the root source instance", () => {
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerInMemorySource))
+  })
+
+  it("aliases the user token to the root source instance", () => {
+    expect(TestBed.inject(USER_REPOSITORY)).toBe(TestBed.inject(UserInMemorySource))
+  })
+
+  it("shares user mutations between root use cases and the source", async () => {
+    const result = await firstValueFrom(TestBed.inject(CreateUserUseCase).execute({
+      name: "Demo user", age: 30, email: "user@example.com", password: "demo-only",
+      lang: Lang.EN, isActive: true
+    }))
+    if (!result.success) throw new Error("Expected successful user creation")
+    const found = await firstValueFrom(TestBed.inject(GetUserByIdUseCase).execute(result.data.id))
+    const source = await firstValueFrom(TestBed.inject(UserInMemorySource).getUserById(result.data.id))
+    expect(found).toEqual(result)
+    expect(source).toEqual(result)
+    expect(TestBed.inject(CreateUserUseCase)).toBe(TestBed.inject(CreateUserUseCase))
   })
 
   it("connects root auth state, its source and admin logout", async () => {
