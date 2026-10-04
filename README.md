@@ -4,7 +4,7 @@ Aplicación web para coordinar los servicios de limpieza de The Real Maids: gest
 
 ## Qué existe hoy
 
-- P01: inicio de sesión de demostración, validación del formulario, redirección segura y cierre de sesión. La sesión vive en memoria y se pierde al recargar; no es autenticación real con el backend.
+- P01 (M01/RF01/HU01): inicio de sesión de demostración, validación del formulario, redirección segura y cierre de sesión. Los guards esperan la restauración de la sesión desde una bandera temporal `authenticated` en localStorage. No es autenticación segura ni integración con el backend; la política de persistencia definitiva sigue abierta. En el servidor o sin almacenamiento disponible no se restaura una sesión demo.
 - Rutas `/login` y `/admin` con guards básicos. `/admin` es un destino temporal protegido, no el dashboard P02.
 - M03: base de clientes con dominio, cinco casos de uso, store y CRUD de demostración en memoria. No tiene ruta ni pantalla P04, persistencia o integración HTTP.
 - Base técnica Angular 22/TypeScript 6, SSR e hidratación, Spartan/Tailwind y pruebas unitarias con Vitest. `/login` se prerenderiza; las demás rutas se renderizan en el cliente.

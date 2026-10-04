@@ -4,7 +4,7 @@ The Real Maids frontend is a responsive web application for managing cleaning se
 
 ## Current delivery boundary
 
-Only P01 is a connected frontend demo: login, form validation, safe redirects, session guards and logout with an in-memory source. Reloading loses the session. `/admin` is a temporary protected destination, not P02.
+Only P01 (M01/RF01/HU01) is a connected frontend demo: login, form validation, safe redirects, session guards and logout with an in-memory source. Auth and guest guards wait for current-user restoration through the use case and store. A user-approved temporary localStorage `authenticated` flag restores the demo session after reload; it is editable client-side, not secure authentication or backend authorization. Server rendering and inaccessible storage fail closed without a demo session. Logout clears the flag when storage is available and clears the loaded store session. Permanent session persistence/refresh remains open. `/admin` is a temporary protected destination, not P02.
 
 M03 has a `customers` domain, five query/CRUD use cases, an in-memory adapter and a presentation store, but no P04 route or UI. It does not deliver customer management/history to users or define backend DTOs, persistence or email uniqueness. All other screens and the customer portal remain planned. Real HTTP authentication/integration, JWT persistence, role permissions, E2E and CI/CD are absent; production deployment is unverified. Existing unit tests are not a claim of a newly verified pass or fixed test count.
 

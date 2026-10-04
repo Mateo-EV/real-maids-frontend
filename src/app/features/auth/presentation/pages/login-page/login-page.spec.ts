@@ -1,3 +1,4 @@
+import { GetCurrentUserUseCase } from "@/app/features/auth/application/use-cases/get-current-user.use-case"
 import { LoginUseCase } from "@/app/features/auth/application/use-cases/login.use-case"
 import { LogoutUseCase } from "@/app/features/auth/application/use-cases/logout.use-case"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -14,6 +15,7 @@ describe("LoginPage", () => {
       imports: [LoginPage],
       providers: [
         AuthStore,
+        { provide: GetCurrentUserUseCase, useValue: { execute: vi.fn() } },
         { provide: LoginUseCase, useValue: { execute: vi.fn() } },
         { provide: LogoutUseCase, useValue: { execute: vi.fn() } },
         { provide: Router, useValue: { navigateByUrl } },

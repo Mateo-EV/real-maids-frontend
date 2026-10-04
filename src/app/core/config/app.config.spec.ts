@@ -3,7 +3,6 @@ import { Router } from "@angular/router"
 import { firstValueFrom } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { appConfig } from "./app.config"
-import { DEMO_AUTH } from "@/app/features/auth/auth.demo"
 import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.repository"
 import { AuthInMemorySource } from "@/app/features/auth/infrastructure/source/auth-in-memory.source"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -31,7 +30,7 @@ describe("Application repository composition", () => {
   it("connects root auth state, its source and admin logout", async () => {
     const store = TestBed.inject(AuthStore)
     const source = TestBed.inject(AuthInMemorySource)
-    const login = firstValueFrom(store.login({ email: DEMO_AUTH.email, password: DEMO_AUTH.password }))
+    const login = firstValueFrom(store.login({ email: "riojamatthew@gmail.com", password: "demo2026" }))
     await vi.runAllTimersAsync()
     expect((await login).success).toBe(true)
     expect(store.isAuthenticated()).toBe(true)

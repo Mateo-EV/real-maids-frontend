@@ -4,28 +4,106 @@ import { LogoutUseCase } from "@/app/features/auth/application/use-cases/logout.
 import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
-import { of } from "rxjs"
+import { firstValueFrom, of, Subject } from "rxjs"
+import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "./auth.store"
 
 describe("AuthStore", () => {
   const login = vi.fn()
   const logout = vi.fn()
+  const me = vi.fn()
   let store: InstanceType<typeof AuthStore>
 
   beforeEach(() => {
     login.mockReset()
     logout.mockReset()
+    me.mockReset()
 
     TestBed.configureTestingModule({
       providers: [
         AuthStore,
         { provide: LoginUseCase, useValue: { execute: login } },
-        { provide: LogoutUseCase, useValue: { execute: logout } }
+        { provide: LogoutUseCase, useValue: { execute: logout } },
+        { provide: GetCurrentUserUseCase, useValue: { execute: me } }
       ]
     })
 
     store = TestBed.inject(AuthStore)
+  })
+
+  it("restores a delayed session and completes after the first result", async () => {
+    const response = new Subject<Result<UserSession, AuthError>>()
+    const session = UserSession.create("Demo", "demo@example.com")
+    me.mockReturnValue(response)
+    const restored = firstValueFrom(store.restoreSession())
+    expect(store.session()).toBeNull()
+    response.next(Result.success(session))
+    expect(await restored).toBe(session)
+    expect(store.session()).toBe(session)
+    expect(response.observed).toBe(false)
+  })
+
+  it.each(["failure", "observable error", "empty"])(
+    "remains anonymous on restoration %s", async outcome => {
+      const response = new Subject<Result<UserSession, AuthError>>()
+      me.mockReturnValue(response)
+      const restored = firstValueFrom(store.restoreSession())
+      if (outcome === "failure") response.next(Result.failure(new AuthError("UNEXPECTED")))
+      else if (outcome === "empty") response.complete()
+      else response.error(new Error("offline"))
+      expect(await restored).toBeNull()
+      expect(store.isAuthenticated()).toBe(false)
+    }
+  )
+
+  it("does not restore a pending successful session after logout", async () => {
+    const response = new Subject<Result<UserSession, AuthError>>()
+    me.mockReturnValue(response)
+    const restored = firstValueFrom(store.restoreSession())
+    expect(response.observed).toBe(true)
+    store.logout()
+    response.next(Result.success(UserSession.create("Old", "old@example.com")))
+    expect(await restored).toBeNull()
+    expect(store.session()).toBeNull()
+    expect(store.isAuthenticated()).toBe(false)
+    expect(logout).toHaveBeenCalledOnce()
+  })
+
+  it.each(["success", "failure", "error", "empty"])(
+    "preserves a newer login over a pending restoration %s", async outcome => {
+      const response = new Subject<Result<UserSession, AuthError>>()
+      me.mockReturnValue(response)
+      const restored = firstValueFrom(store.restoreSession())
+      const newer = UserSession.create("New", "new@example.com")
+      login.mockReturnValue(of(Result.success(newer)))
+      store.login({ email: newer.email, password: "demo2026" }).subscribe()
+      if (outcome === "success") response.next(Result.success(UserSession.create("Old", "old@example.com")))
+      else if (outcome === "failure") response.next(Result.failure(new AuthError("UNEXPECTED")))
+      else if (outcome === "empty") response.complete()
+      else response.error(new Error("offline"))
+      expect(await restored).toBe(newer)
+      expect(store.session()).toBe(newer)
+      expect(store.isAuthenticated()).toBe(true)
+    }
+  )
+
+  it("fails closed when the use case throws before returning an observable", async () => {
+    me.mockImplementation(() => { throw new Error("offline") })
+    expect(await firstValueFrom(store.restoreSession())).toBeNull()
+    expect(store.isAuthenticated()).toBe(false)
+  })
+
+  it("preserves an already loaded session without another repository request", async () => {
+    const session = UserSession.create("Demo", "demo@example.com")
+    login.mockReturnValue(of(Result.success(session)))
+    store.login({ email: session.email, password: "demo2026" }).subscribe()
+    expect(await firstValueFrom(store.restoreSession())).toBe(session)
+    expect(me).not.toHaveBeenCalled()
+    store.logout()
+    me.mockReturnValue(of(Result.failure(new AuthError("UNEXPECTED"))))
+    expect(await firstValueFrom(store.restoreSession())).toBeNull()
+    expect(me).toHaveBeenCalledOnce()
   })
 
   it("starts without an authenticated session", () => {

@@ -1,26 +1,63 @@
-import { Injectable } from "@angular/core"
+import { DOCUMENT, isPlatformBrowser } from "@angular/common"
+import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { LoginParams } from "../../domain/params/login.params"
 import { delay, Observable, of } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserSession } from "../../domain/entities/user-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
-import { DEMO_AUTH } from "../../auth.demo"
 import { AuthRepository } from "../../domain/repositories/auth.repository"
+
+const DEMO_AUTH = {
+  email: "riojamatthew@gmail.com",
+  password: "demo2026",
+  name: "Mateo"
+} as const
 
 @Injectable({ providedIn: "root" })
 export class AuthInMemorySource implements AuthRepository {
-  private authenticated = false
+  private readonly platformId = inject(PLATFORM_ID)
+  private readonly document = inject(DOCUMENT)
+
+  private get storage(): Storage | null {
+    if (!isPlatformBrowser(this.platformId)) return null
+    try {
+      return this.document.defaultView?.localStorage ?? null
+    } catch {
+      return null
+    }
+  }
+
+  private get authenticated(): boolean {
+    try {
+      return this.storage?.getItem("authenticated") === "true"
+    } catch {
+      return false
+    }
+  }
+
+  private setAuthenticated(authenticated: boolean): boolean {
+    try {
+      const storage = this.storage
+      if (!storage) return false
+      storage.setItem("authenticated", authenticated ? "true" : "false")
+      return true
+    } catch {
+      return false
+    }
+  }
 
   login(params: LoginParams): Observable<Result<void, AuthError>> {
     const hasValidCredentials =
       params.email.trim().toLowerCase() === DEMO_AUTH.email &&
       params.password === DEMO_AUTH.password
 
-    this.authenticated = hasValidCredentials
+    const stored = this.setAuthenticated(hasValidCredentials)
 
-    const result: Result<void, AuthError> = hasValidCredentials
-      ? Result.success<void>(undefined)
-      : Result.failure(new AuthError("INVALID_CREDENTIALS"))
+    const result: Result<void, AuthError> = !hasValidCredentials
+      ? Result.failure(new AuthError("INVALID_CREDENTIALS"))
+      : stored
+        ? Result.success<void>(undefined)
+        : Result.failure(new AuthError("UNEXPECTED"))
 
     return of(result).pipe(delay(650))
   }
@@ -34,6 +71,6 @@ export class AuthInMemorySource implements AuthRepository {
   }
 
   logout(): void {
-    this.authenticated = false
+    this.setAuthenticated(false)
   }
 }
