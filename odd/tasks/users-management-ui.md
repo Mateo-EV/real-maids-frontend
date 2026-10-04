@@ -9,8 +9,8 @@ Full visual mock with Spanish screenshot copy, clearly labeled fictitious data. 
 Mark all outside-store fixtures with FICTITIOUS DEMO DATA / TODO integration comments, isolated from stores. Use seeded demo fixtures deliberately via a demo initialization boundary, without changing repositories' empty defaults or claiming real login activity. Use actual role store data for assigned role display/filter/selection. Unsupported credential actions disabled. No permissions editing.
 
 ## Tasks
-- [ ] UI1: Role domain/repository, five use cases, in-memory CRUD, RolesStore, user roleId/lastAccess and defensive copies, safe role-reference deletion, composition and regression tests. In progress, delegated multi-file writer.
-- [ ] UI2: Screenshot visual page and route/navigation, mock fixtures and bootstrap, filters/pagination/forms/actions and responsive/a11y states. Pending, delegated UI writer after UI1 checks. Disabled future tabs; optional compact role catalog editor outside disabled RBAC tab.
+- [ ] UI1: Role domain/repository, five use cases, in-memory CRUD, RolesStore, user roleId/lastAccess and defensive copies, safe role-reference deletion, composition and regression tests. Implemented and writer-verified; awaiting human-approved code commit. Delegated multi-file writer.
+- [ ] UI2: Screenshot visual page and route/navigation, mock fixtures and bootstrap, filters/pagination/forms/actions and responsive/a11y states. In progress, delegated UI writer after successful UI1 checks. Disabled future tabs; optional compact role catalog editor outside disabled RBAC tab.
 - [ ] UI3: Independent verification, docs/current delivery boundaries and human staging/approved work-unit commits. Pending. No staging/code commits authorized.
 
 ## Acceptance and verification
@@ -20,7 +20,7 @@ Behavior changes use observed RED then GREEN/refactor, exact focused tests; full
 ## Delivery and evidence
 Estimated 1000–1800 authored lines; advisory, do not code-golf or omit tests. Separate coherent domain/role and UI slices; ask-on-risk PR chain decision before publication/commit, no PR now. Human stages all code/tests/config and approves precise staged snapshot/message; eligible primary docs may be auto-committed separately. Source work remains open until verified and committed. Rollback boundaries: UI1 role/user extensions and tests; UI2 page/fixtures/routes/navigation and tests; preserve unrelated auth/customers.
 
-Initial source: manual untracked user.store.ts; parent confirmed loadUsers loading/error flow exists (scout report incorrectly denied it); no tests/UI. Domain has no roleId/lastAccess. Main base ccfd9e4. No new checks observed yet.
+Initial source: manual untracked user.store.ts; parent confirmed loadUsers loading/error flow exists (scout report incorrectly denied it); no tests/UI. Domain has no roleId/lastAccess. Main base ccfd9e4. UI1 writer: compile-level RED on missing APIs (zero behavior tests), GREEN/refactor 66 focused tests across 7 files; full 143 tests across 23 files, build passed with one prerendered route, diff whitespace check passed (tracked paths only; LF/CRLF warnings). Role deletion checks all users including inactive; user lastAccess cloned/preserved; sources default empty. Store loading/errors and stale-load protection strengthened with tests. CLI info confirmed table/badge/avatar/native-select/dialog/pagination/tooltip/empty available but not installed. Angular MCP and browser tools unavailable.
 
 ## Next step
-Delegate UI1 with narrow users/config/test surfaces and read task file first. Then generate only required missing Helm via official CLI during bounded UI writer. No push or PR authorized.
+Delegate UI2, generate required missing Helm via official CLI, read actual generated APIs before composition. Seed once through stores with explicit demo fixtures and prevent route re-entry duplication. No push or PR authorized.
