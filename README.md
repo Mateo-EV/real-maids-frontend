@@ -5,8 +5,9 @@ Aplicación web para coordinar los servicios de limpieza de The Real Maids: gest
 ## Qué existe hoy
 
 - P01 (M01/RF01/HU01): inicio de sesión de demostración, validación del formulario, redirección segura y cierre de sesión. Los guards esperan la restauración de la sesión desde una bandera temporal `authenticated` en localStorage. No es autenticación segura ni integración con el backend; la política de persistencia definitiva sigue abierta. En el servidor o sin almacenamiento disponible no se restaura una sesión demo.
-- Rutas `/login` y `/admin` con guards básicos. `/admin` es un destino temporal protegido, no el dashboard P02.
-- M02 (RF02/HU02): dominio de usuarios con edad, cinco casos de uso y CRUD de demostración en memoria, conectado por DI. Empieza vacío, no almacena contraseñas y no implementa validación de edad, unicidad de email, permisos ni pantalla P03. No es gestión de usuarios productiva.
+- Rutas `/login`, `/admin` y `/admin/users` con guards básicos. `/admin` sigue siendo un destino temporal protegido, no el dashboard P02; desde allí se accede al catálogo de usuarios.
+- M02 (RF02/HU02/P03): maqueta visual de usuarios con búsqueda, filtros, paginación y formularios de CRUD en memoria. Incluye un catálogo dinámico de roles dentro de `users`, sus cinco casos de uso y store. Cada usuario tiene un `roleId` y un `lastAccess` nullable; editarlo no actualiza ese acceso. Se impide borrar roles asignados, aunque pueden desactivarse.
+- Los repositorios de usuarios y roles empiezan vacíos; la pantalla inicializa cinco roles y 48 usuarios ficticios únicamente en el navegador y si ambos catálogos están vacíos, sin duplicarlos al volver. Los datos decorativos fuera de los stores están aislados y marcados en `users-demo.fixture.ts`. Sesiones, RBAC, auditoría y credenciales están deshabilitados; no hay autorización por rol, gestión de contraseñas ni integración HTTP. Los cambios se pierden al recargar. No es gestión de usuarios productiva.
 - M03: base de clientes con dominio, cinco casos de uso, store y CRUD de demostración en memoria. No tiene ruta ni pantalla P04, persistencia o integración HTTP.
 - Base técnica Angular 22/TypeScript 6, SSR e hidratación, Spartan/Tailwind y pruebas unitarias con Vitest. `/login` se prerenderiza; las demás rutas se renderizan en el cliente.
 
