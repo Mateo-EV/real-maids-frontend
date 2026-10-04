@@ -4,12 +4,12 @@
 M01/RF01/HU01/P01: `GetCurrentUserUseCase` delegates to `AuthRepository.me()`, `AuthStore.restoreSession()` updates session, and auth/guest guards wait before redirecting. User approved existing localStorage demo flag, not real auth/permanent persistence. DEMO_AUTH remains internal to auth-in-memory.source.ts; specs use local fixtures. Preserve original auth.demo.ts deletion and moved credentials. Core config spec authorized for obsolete import/fixture correction only. No HTTP/JWT/roles/UI/framework changes; retain root store lifetime, login/logout and safe returnUrl behavior. Browser storage fails closed on server/unavailability.
 
 ## Tasks
-- [ ] T1 (prepared, commit pending; delegated multi-file writer): Current-user/store/guards and tests; delayed restoration invalidated by logout/new successful login.
-- [ ] T2 (prepared, commit pending; delegated writer): README.md, docs/README.md, AGENTS.md current-status alignment and tests/build.
-- [ ] T3 (in progress; parent/independent verifier): Checks complete, native review declined; waiting for human staging and exact staged snapshot/message approval before commit.
+- [x] T1 (committed 274a6e2; delegated multi-file writer): Current-user/store/guards and tests; delayed restoration invalidated by logout/new successful login.
+- [x] T2 (committed 274a6e2; delegated writer): README.md, docs/README.md, AGENTS.md current-status alignment and tests/build.
+- [x] T3 (committed 274a6e2; parent/independent verifier): Checks complete, native review declined; human staged and approved the exact snapshot/message. HEAD and staged-diff identity matched immediately before commit.
 
 ## Work unit and delivery
-One coherent behavior/tests/docs unit. Forecast 250–400 lines; native final behavior candidate 561 lines/15 files including original user edits. Strategy ask-on-risk; future PR slicing decision needed if publishing. No code-golf/scope reductions. Rollback restoration additions/tests/docs without undoing unrelated changes. Baseline/current HEAD: 773789a4ffbae8ba49a5b99994e68ae4c337485b, branch main. No staging/commit performed; all tasks remain open until commit evidence.
+One coherent behavior/tests/docs unit. Forecast 250–400 lines; native final behavior candidate 561 lines/15 files including original user edits. Strategy ask-on-risk; future PR slicing decision needed if publishing. No code-golf/scope reductions. Rollback restoration additions/tests/docs without undoing unrelated changes. Baseline/current HEAD: 773789a4ffbae8ba49a5b99994e68ae4c337485b, branch main. Implementation commit: 274a6e20e64242189e434cc0b68ef7f0787bef06, `feat(auth): restore temporary demo session before guard decisions` (16 files, 490 additions/98 deletions).
 
 ## Acceptance and evidence
 Fresh demo session allows protected route; absent/error/empty lookup fails closed; guest guard waits too. Late restoration cannot resurrect logout or replace a newer login. Server/unavailable storage safe. Angular MCP unavailable; configured local npm scripts used.
@@ -21,7 +21,7 @@ Correction RED 7 failures/46 passes; GREEN 53 then 54 focused tests. Writer `npm
 ## Review and pending controls
 Native preflight included new use-case/spec, excluded task log. High-risk 15 files/561 lines. User declined this candidate; confirmed declined_this_candidate, no lineage/receipt; future review enabled. ASSESS unavailable due untracked declaration limitation; high-equivalent plan required independent verification, satisfied above. No native approval claimed. Child Engram saves failed due multiple matching sessions; parent maintains mirror.
 
-Snapshot status: no staged paths or partial staging; 13 tracked unstaged paths including original deletion and 3 untracked paths (task log/use case/spec). Tests/docs present; no missing automated checks identified. Human must stage exact intended unit, then approve staged diff and proposed `feat(auth): restore temporary demo session before guard decisions`. Recheck HEAD/index immediately before commit. Advance permission does not waive snapshot approval. No push/PR/merge authorized.
+Human staged all 16 intended paths and explicitly approved their exact displayed diff and message. Approved base HEAD: 773789a4ffbae8ba49a5b99994e68ae4c337485b; approved staged binary-diff SHA-256: 6532aa3092758405eafb50497fa906e28fe16c81bedb032f41fbe15beaf08943. Both rechecked unchanged immediately before commit. Working tree was clean after commit. This post-commit task closure record remains an unstaged documentation update; no additional commit approved. No push/PR/merge authorized.
 
 ## Next step
-Human stages reviewed unit; parent presents exact staged diff/message for approval. Record commit identity only after approved commit, then close tasks. Manual browser/hydration validation remains an explicit follow-up.
+Implementation complete and committed. Post-commit task closure document awaits human staging/approval if a follow-up documentation commit is desired. Manual browser/hydration validation remains an explicit follow-up; no push performed.
