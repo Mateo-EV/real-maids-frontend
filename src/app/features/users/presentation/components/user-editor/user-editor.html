@@ -36,6 +36,26 @@
       }
     </div>
     <div hlmField>
+      <label hlmFieldLabel for="user-password"
+        >Contraseña
+        @if (!context.user) {
+          (obligatorio)
+        }
+      </label>
+      <input
+        hlmInput
+        id="user-password"
+        type="password"
+        autocomplete="off"
+        [formField]="userForm.password"
+      />
+      @if (userForm.password().touched()) {
+        @for (error of userForm.password().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField>
       <label hlmFieldLabel for="user-age">Edad (años)</label>
       <input
         hlmInput

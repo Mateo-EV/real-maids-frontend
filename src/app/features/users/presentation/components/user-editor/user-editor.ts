@@ -11,6 +11,7 @@ import {
   form,
   FormField,
   FormRoot,
+  minLength,
   required,
   submit,
   validate
@@ -64,6 +65,7 @@ export class UserEditor {
     name: this.context.user?.name ?? "",
     age: this.context.user?.age ?? 0,
     email: this.context.user?.email ?? "",
+    password: "",
     lang: this.context.user?.lang ?? Lang.ES,
     isActive: this.context.user?.isActive ?? true,
     roleId: this.context.user ? String(this.context.user.roleId) : ""
@@ -78,6 +80,12 @@ export class UserEditor {
     )
     required(path.email, { message: "Ingresa el correo." })
     email(path.email, { message: "Ingresa un correo válido." })
+    validate(path.password, ({ value }) =>
+      value().trim() || this.context.user
+        ? undefined
+        : { kind: "required", message: "Ingresa la contraseña." }
+    )
+    minLength(path.password, 8, { message: "La contraseña debe tener al menos 8 caracteres." })
     validate(path.age, ({ value }) =>
       Number.isInteger(value()) && value() >= 18
         ? undefined
@@ -109,12 +117,16 @@ export class UserEditor {
         ...value,
         name: value.name.trim(),
         email: value.email.trim(),
+        password: value.password.trim(),
         roleId: Number(value.roleId)
       }
       try {
         const request = this.context.user
-          ? this.users.updateUserById(this.context.user.id, params)
-          : this.users.createUser({ ...params, password: DEMO_PASSWORD_PLACEHOLDER })
+          ? this.users.updateUserById(this.context.user.id, {
+              ...params,
+              ...(params.password ? { password: params.password } : {})
+            })
+          : this.users.createUser(params)
         const result = await firstValueFrom(request.pipe(takeUntilDestroyed(this.destroyRef)), {
           defaultValue: undefined
         })
