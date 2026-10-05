@@ -11,12 +11,14 @@ import { UserRepositoryImpl } from "@/app/features/users/infrastructure/reposito
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
 import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/repositories/role.repository-impl"
 import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
+import { provideHotToastConfig } from "@ngxpert/hot-toast"
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideClientHydration(),
+    provideHotToastConfig(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },

@@ -46,6 +46,7 @@ import {
   DeleteUserDialog
 } from "../../components/delete-user-dialog/delete-user-dialog"
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
+import { HotToastService } from "@ngxpert/hot-toast"
 
 @Component({
   selector: "app-users-page",
@@ -91,13 +92,13 @@ export class UsersPage implements OnInit {
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
   readonly session = this.auth.session
   readonly metrics = DEMO_METRICS
   readonly initials = initials
   readonly decoration = demoDecoration
   readonly initializing = signal(false)
   readonly loadError = signal(false)
-  readonly success = signal("")
   readonly search = signal("")
   readonly roleFilter = signal("")
   readonly statusFilter = signal("all")
@@ -229,7 +230,7 @@ export class UsersPage implements OnInit {
       context: {
         user,
         onSaved: () => {
-          if (!this.destroyRef.destroyed) this.success.set("Usuario guardado.")
+          if (!this.destroyRef.destroyed) this.toast.success("Usuario guardado")
         }
       },
       showCloseButton: false,
@@ -247,7 +248,7 @@ export class UsersPage implements OnInit {
         onDeleted: () => {
           if (this.destroyRef.destroyed) return
           this.requestedPage.set(this.currentPage())
-          this.success.set(`Usuario ${user.name} eliminado.`)
+          this.toast.success(`Usuario ${user.name} eliminado`)
         }
       },
       showCloseButton: false,
