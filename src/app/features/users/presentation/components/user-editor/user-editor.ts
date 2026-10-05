@@ -79,11 +79,11 @@ export class UserEditor {
     required(path.email, { message: "Ingresa el correo." })
     email(path.email, { message: "Ingresa un correo válido." })
     validate(path.age, ({ value }) =>
-      Number.isInteger(value()) && value() >= 0
+      Number.isInteger(value()) && value() >= 18
         ? undefined
-        : { kind: "age", message: "Ingresa una edad entera no negativa." }
+        : { kind: "age", message: "Ingresa una edad entera mayor o igual a 18." }
     )
-    required(path.roleId, { message: "Selecciona un rol." })
+    // required(path.roleId, { message: "Selecciona un rol." })
     validate(path.roleId, ({ value }) =>
       this.availableRoles().some(role => String(role.id) === value())
         ? undefined

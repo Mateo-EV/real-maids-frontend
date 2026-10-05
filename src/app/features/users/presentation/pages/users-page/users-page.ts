@@ -45,6 +45,7 @@ import {
   DeleteUserContext,
   DeleteUserDialog
 } from "../../components/delete-user-dialog/delete-user-dialog"
+import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 
 @Component({
   selector: "app-users-page",
@@ -60,6 +61,7 @@ import {
     HlmBadgeImports,
     HlmAvatarImports,
     HlmInputImports,
+    HlmInputGroupImports,
     HlmNativeSelectImports,
     HlmEmptyImports,
     HlmAlertImports,

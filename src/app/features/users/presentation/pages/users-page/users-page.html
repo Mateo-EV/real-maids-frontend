@@ -142,24 +142,27 @@
         <div class="flex flex-wrap items-end gap-3">
           <div class="flex flex-col gap-1">
             <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
-            <div class="flex items-center gap-2">
-              <ng-icon name="lucideSearch" aria-hidden="true" />
+            <hlm-input-group>
               <input
                 #searchInput
-                hlmInput
+                hlmInputGroupInput
                 id="user-search"
                 type="search"
                 placeholder="Buscar nombre o email…"
                 [value]="search()"
                 (input)="setSearch(searchInput.value)"
               />
-            </div>
+              <hlm-input-group-addon>
+                <ng-icon name="lucideSearch" aria-hidden="true" />
+              </hlm-input-group-addon>
+            </hlm-input-group>
           </div>
           <div class="flex flex-col gap-1">
             <label for="role-filter" class="text-xs font-medium">Rol</label>
             <hlm-native-select
               selectId="role-filter"
               [value]="roleFilter()"
+              selectClass="h-10"
               (valueChange)="setRoleFilter($event)"
             >
               <option value="">Todos los roles</option>
@@ -174,6 +177,7 @@
             <label for="status-filter" class="text-xs font-medium">Estado</label>
             <hlm-native-select
               selectId="status-filter"
+              selectClass="h-10"
               [value]="statusFilter()"
               (valueChange)="setStatusFilter($event)"
             >
@@ -260,7 +264,7 @@
                 <th hlmTh scope="col">Correo electrónico</th>
                 <th hlmTh scope="col">Rol asignado</th>
                 <th hlmTh scope="col">Idioma</th>
-                <th hlmTh scope="col">Vínculo entidad</th>
+                <!-- <th hlmTh scope="col">Vínculo entidad</th> -->
                 <th hlmTh scope="col">Último acceso · UTC</th>
                 <th hlmTh scope="col">Estado</th>
                 <th hlmTh scope="col">Acciones</th>
@@ -296,9 +300,9 @@
                     >
                   </td>
                   <td hlmTd>{{ user.lang === "es" ? "ES · Español" : "EN · English" }}</td>
-                  <td hlmTd>
+                  <!-- <td hlmTd>
                     <p class="text-xs">{{ decoration(user).entity }}</p>
-                  </td>
+                  </td> -->
                   <td hlmTd>
                     <p class="text-xs tabular-nums">
                       {{
@@ -370,8 +374,8 @@
                 </dd>
                 <dt class="text-muted-foreground">Idioma</dt>
                 <dd>{{ user.lang === "es" ? "Español" : "English" }}</dd>
-                <dt class="text-muted-foreground">Vínculo</dt>
-                <dd>{{ decoration(user).entity }}</dd>
+                <!-- <dt class="text-muted-foreground">Vínculo</dt>
+                <dd>{{ decoration(user).entity }}</dd> -->
                 <dt class="text-muted-foreground">Acceso UTC</dt>
                 <dd>
                   {{
@@ -438,7 +442,6 @@
         </nav>
       </div>
     </section>
-    <p id="credentials-help" class="text-xs text-muted-foreground">Credenciales: No disponible.</p>
   </main>
 </div>
 <ng-template #userActions let-user>
