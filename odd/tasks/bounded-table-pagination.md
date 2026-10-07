@@ -6,9 +6,9 @@ Replace the unbounded users page list with reusable pagination controls showing 
 Approved examples for 50 pages: `1 2 3 … 50`, `1 … 24 25 26 … 50`, `1 … 48 49 50`. Short lists show all pages and single-page gaps show the missing number. Traceability: M02/RF02/HU02/P03; RNF06/RNF08/RNF09.
 
 ## Tasks
-- [x] T1 (implemented, delegated): bounded helper and shared Spartan controls/tests integrated with users. Multi-file write trigger; source remains uncommitted.
+- [x] T1 (implemented, delegated): bounded helper and shared Spartan controls/tests integrated with users. Multi-file write trigger; committed in `0fc8c1782f9a846b750f97b89953273188549314`.
 - [x] T2 (verified, delegated): independent focused rerun passed 58 tests in 3 files; structural review found no concrete defects. Writer full suite/build passed. Real-browser checks remain pending.
-- [x] T3 (documented): product guide updated with source links and delivery boundaries; evidence recorded. Source remains uncommitted and native review pending.
+- [x] T3 (documented): product guide updated with source links and delivery boundaries; evidence recorded. Included in `0fc8c1782f9a846b750f97b89953273188549314`; native source review was explicitly declined for this candidate.
 
 ## Acceptance
 - Constant bounded token count even for very large page counts; first, last and current pages visible, ordered, unique.
@@ -21,7 +21,7 @@ Approved examples for 50 pages: `1 2 3 … 50`, `1 … 24 25 26 … 50`, `1 … 
 - Angular MCP discovered Angular 22, build/serve/test targets and best practices.
 - Read-only scout mapped users source/template/spec and shared offset contracts.
 - Parent ran `npx ng generate @spartan-ng/cli:info --json`: success; pagination available but not installed. Scout lacked command execution; no claimed test results.
-- Implementation forecast: approximately 250–380 authored diff lines, excluding generated Helm. One coherent work unit; delivery strategy ask-on-risk. No commit authorized.
+- Implementation forecast: approximately 250–380 authored diff lines, excluding generated Helm. One coherent work unit; delivery strategy ask-on-risk. Human later approved the exact staged snapshot and commit message.
 
 ## Implementation evidence
 - Human approved generator-required Select dependency files and configuration scope; `tsconfig.app.json` has no resulting diff.
@@ -35,4 +35,9 @@ Approved examples for 50 pages: `1 2 3 … 50`, `1 … 24 25 26 … 50`, `1 … 
 ## Next step
 Independent verifier repeated the Angular MCP focused target: 58 tests passed in 3 files; `git diff --check` passed with line-ending advisories. No concrete defects found. Browser responsive/keyboard/contrast/hydration checks remain pending. Automatic documentation commit was blocked by HEAD/index/document provenance drift; manual staging required, no retry.
 
-Native source-candidate review and human staging/commit remain pending. No source commit or publishing authorized.
+## Delivery
+Human reviewed the result and approved the precise staged snapshot (37 files, +1497/-45) and message `feat(users): add reusable bounded table pagination`. HEAD and staged-diff SHA-256 were rechecked unchanged immediately before committing. Commit: `0fc8c1782f9a846b750f97b89953273188549314`. The working tree was clean immediately after the commit; this subsequent task-record update is documentation only.
+
+Native review was explicitly declined by interactive consent for source target `sha256:c6d069dd28a4edc0b9380d41358437bc6521bc75220a8fdd7dfa79fc8da85b75`; no review lineage was created. Independent verification remained required and passed. Human visual review accepted the result; this does not certify automated cross-browser checks.
+
+No push performed or authorized. Next step: push only if requested; cross-browser checks remain optional follow-up evidence.
