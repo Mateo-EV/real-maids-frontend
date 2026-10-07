@@ -6,9 +6,9 @@ Implement reusable plain TypeScript offset pagination in `src/app/shared/paginat
 Shared owns reusable contracts/functions; core retains singleton/configuration concerns. No other feature migration, UI, sessions, audit writes, HTTP contracts, persistence or production security claims. Preserve the user-created AuditLog and Session entities. The Session file is intentionally outside the audit candidate. Use `getAuditLogs`, `GetAuditLogsUseCase.execute()` and a distinct `AUDIT_LOG_REPOSITORY`; root implementations delegate to root sources, bound with `useExisting`.
 
 ## Tasks and route
-- [ ] T1: Implement shared pagination and audit query layers/DI/tests. Delegated writer; implementation and checks verified, work-unit commit pending.
-- [ ] T2: Verify focused/full tests and build. Delegated writer and independent verifier; verification performed, work-unit commit pending.
-- [ ] T3: Document delivery boundary and missing audit-specific traceability; inspect delivery state. Documentation updated; native review and human staging/commit decision pending.
+- [x] T1: Implement shared pagination and audit query layers/DI/tests. Delegated writer; verified and committed in `5babad56c7d6a8c6ba25cacee00ab6ee611f2256`.
+- [x] T2: Verify focused/full tests and build. Delegated writer and independent verifier; observed verification included in that work-unit commit.
+- [x] T3: Document delivery boundary and missing audit-specific traceability; inspect delivery state. Documentation included; human approved the exact staged snapshot/message and explicitly declined review for this candidate.
 
 ## Acceptance evidence
 - Strict safe-integer nonnegative offset and limit 1–100; defaults only for omitted values; invalid runtime values rejected.
@@ -31,9 +31,11 @@ Final writer evidence through Angular MCP (`workspace: D:/angular/real-maids-fro
 Independent verification reproduced the final focused 102-test pass and `git diff --check` exit 0. Earlier independent build passed; full suite was observed by the writer, not independently rerun. No audit implementation defect was identified. Preexisting users-page `aria-describedby` references to removed helper IDs remain out of scope; no browser/accessibility pass is claimed.
 
 ## Delivery and continuity
-No implementation commit. At the verifier's snapshot nothing was staged; afterward external staging changed the index and untracked inventory between native preflight and START. START failed before mutation (`untracked inventory changed`); no lineage/approval was created, no automatic replay and no index repair attempted. Current paths include staged, unstaged and mixed task-document changes. Final verifier counted 559 additions/12 deletions across tracked/untracked work, including documentation/task records and the untouched user-created Session file; this is not the exact audit review scope. Advisory 400-line threshold exceeded without removing useful tests. Delivery strategy: ask-on-risk; before a commit/PR, agree on reviewable slicing if required. Native assessment could not evaluate undeclared untracked files; preflight requires selecting only intended audit/pagination paths and excluding Session.
+Human approved all 21 staged files (576 additions/29 deletions), including the preexisting UserSession entity, and the exact Conventional Commit message. HEAD and raw staged-diff SHA-256 were rechecked unchanged immediately before commit. Commit: `5babad56c7d6a8c6ba25cacee00ab6ee611f2256` — `feat(users): add read-only audit queries with shared offset pagination`. Post-commit index/worktree were clean before this bookkeeping update. No push.
+
+An earlier START failed before mutation because external staging changed untracked inventory. Fresh preflight/START for the final target `sha256:428a2f2cf9685df0ec30ff07e58d5ac141d63e903686fb7f67f339936ba70778` received explicit candidate-scoped human decline through the interactive host. No lineage or review approval was created; RDD remains enabled. Independent ordinary checks stand. Candidate exceeds the advisory 400-line budget; the human approved this complete work-unit snapshot. PR splitting remains a separate future decision.
 
 Native Engram save/read restored after authorized shutdown of the conflicting WSL server; full task mirror uses `odd/audit-log-pagination/tasks`. No memory deletion or reinstall. Code/tests/configuration remain human-staged and require explicit staged-snapshot/message approval before a work-unit commit. Automatic documentation commits do not close implementation tasks.
 
 ## Next step
-Wait for the human to stabilize the intended staged/unstaged snapshot, then run a fresh native preflight and follow only its provider consent/continuations. Report the verified API and pending delivery decisions. Human staging and explicit commit approval remain separate. Rollback removes only new pagination/audit layers and their DI/tests/docs, preserving user entities and unrelated production behavior.
+Implementation work unit closed. Report commit and checks; push/PR or audit UI are separate human decisions. This bookkeeping documentation update follows the runtime's separate documentation policy and does not alter the committed implementation. Rollback scope is the committed audit/pagination layers, DI/tests/docs; preserve user entities and unrelated production behavior when selecting a rollback.
