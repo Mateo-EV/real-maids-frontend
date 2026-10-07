@@ -19,10 +19,10 @@ Shared is appropriate for reusable contracts/functions; core is reserved for cro
 - Document contextual M02/RF02/HU02/P03 and RNF09/RNF10 without inventing audit-specific traceability.
 
 ## Verification plan
-Test-first: add focused shared/audit specs and observe RED, then implement and observe GREEN. Run focused existing delegation/config/cancellation specs, `npm test -- --watch=false`, and `npm run build`. Angular MCP unavailable in mapping; use workspace-local npm scripts. No browser validation needed for this non-UI change.
+Test-first: add focused shared/audit specs and observe RED, then implement and observe GREEN. Run focused existing delegation/config/cancellation specs, `npm test -- --watch=false`, and `npm run build`. Angular MCP is now connected and its workspace discovery and version-specific best practices were verified. Prefer its `run_target` for focused/full tests and build; use workspace-local npm scripts only if an operation fails or is unavailable. Run project-local Prettier on the exact changed files before final checks. No browser validation needed for this non-UI change.
 
 ## Progress and delivery
-Mapping complete; implementation starting. Forecast approximately 300–400 authored lines; keep one cohesive additive work unit and surface any overage, without reducing useful tests. Delivery strategy: ask-on-risk. No implementation commit exists. Memory mirror unavailable: Engram reported server ownership mismatch; local progress remains authoritative until resynchronization.
+Mapping complete; implementation starting. Forecast approximately 300–400 authored lines; keep one cohesive additive work unit and surface any overage, without reducing useful tests. Delivery strategy: ask-on-risk. No implementation commit exists. Implementation was paused before any source edits. Angular MCP configuration is repaired and native Engram save/read now works after stopping the conflicting WSL server. Resume authorized; synchronize this document to Engram before the writer starts.
 
 ## Next step
 One bounded writer implements T1 and documentation within the mapped edit surfaces, returning exact test-first and verification evidence. Parent reviews the diff and reports pending staging/commit separately.
