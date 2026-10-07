@@ -392,42 +392,13 @@
           }}
           · Total: {{ users.users().length }}
         </p>
-        <nav class="flex flex-wrap gap-1" aria-label="Paginación de usuarios">
-          <button
-            hlmBtn
-            variant="outline"
-            size="sm"
-            type="button"
-            [disabled]="currentPage() === 1 || initializing()"
-            (click)="goToPage(currentPage() - 1)"
-          >
-            Anterior
-          </button>
-          @for (page of pages(); track page) {
-            <button
-              hlmBtn
-              [variant]="page === currentPage() ? 'secondary' : 'outline'"
-              size="sm"
-              type="button"
-              [attr.aria-current]="page === currentPage() ? 'page' : null"
-              [attr.aria-label]="'Página ' + page"
-              [disabled]="initializing()"
-              (click)="goToPage(page)"
-            >
-              {{ page }}
-            </button>
-          }
-          <button
-            hlmBtn
-            variant="outline"
-            size="sm"
-            type="button"
-            [disabled]="currentPage() === pageCount() || initializing()"
-            (click)="goToPage(currentPage() + 1)"
-          >
-            Siguiente
-          </button>
-        </nav>
+        <app-table-pagination
+          label="Paginación de usuarios"
+          [currentPage]="currentPage()"
+          [pageCount]="pageCount()"
+          [disabled]="initializing()"
+          (pageSelected)="goToPage($event)"
+        />
       </div>
     </section>
   </main>

@@ -47,6 +47,7 @@ import {
 } from "../../components/delete-user-dialog/delete-user-dialog"
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import { HotToastService } from "@ngxpert/hot-toast"
+import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 
 @Component({
   selector: "app-users-page",
@@ -66,7 +67,8 @@ import { HotToastService } from "@ngxpert/hot-toast"
     HlmNativeSelectImports,
     HlmEmptyImports,
     HlmAlertImports,
-    HlmSpinnerImports
+    HlmSpinnerImports,
+    TablePagination
   ],
   providers: [
     provideIcons({
@@ -134,7 +136,6 @@ export class UsersPage implements OnInit {
   readonly rangeEnd = computed(() =>
     Math.min(this.currentPage() * this.pageSize, this.filteredUsers().length)
   )
-  readonly pages = computed(() => Array.from({ length: this.pageCount() }, (_, index) => index + 1))
 
   ngOnInit(): void {
     this.retry()

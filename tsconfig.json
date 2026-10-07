@@ -30,7 +30,9 @@
       "@spartan-ng/helm/badge": ["./libs/ui/badge/src/index.ts"],
       "@spartan-ng/helm/avatar": ["./libs/ui/avatar/src/index.ts"],
       "@spartan-ng/helm/native-select": ["./libs/ui/native-select/src/index.ts"],
-      "@spartan-ng/helm/empty": ["./libs/ui/empty/src/index.ts"]
+      "@spartan-ng/helm/empty": ["./libs/ui/empty/src/index.ts"],
+      "@spartan-ng/helm/pagination": ["./libs/ui/pagination/src/index.ts"],
+      "@spartan-ng/helm/select": ["./libs/ui/select/src/index.ts"]
     }
   },
   "angularCompilerOptions": {

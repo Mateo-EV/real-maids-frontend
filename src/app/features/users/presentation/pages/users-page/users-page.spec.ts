@@ -307,22 +307,57 @@ describe("UsersPage", () => {
     page.setSearch("persona.48@")
     expect(page.filteredUsers()).toHaveLength(1)
     page.setSearch("")
+    page.goToPage(8)
     page.setRoleFilter(String(roles.roles()[2].id))
+    expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => user.roleId === roles.roles()[2].id)).toBe(true)
+    page.goToPage(2)
     page.setStatusFilter("inactive")
+    expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => !user.isActive)).toBe(true)
     page.clearFilters()
     expect(page.filteredUsers()).toHaveLength(48)
   })
 
+  it("connects bounded shared navigation to users slicing and filter resets", async () => {
+    const { page, fixture, element } = await setup()
+    const nav = () => element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
+    const select = (number: number) => {
+      nav().querySelector<HTMLButtonElement>(`button[aria-label="Página ${number}"]`)!.click()
+      fixture.detectChanges()
+    }
+    expect(nav()).not.toBeNull()
+    expect(nav().querySelectorAll('button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])')).toHaveLength(4)
+    select(10)
+    expect(page.currentPage()).toBe(10)
+    expect(page.visibleUsers()).toHaveLength(3)
+    expect(nav().querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("10")
+    nav().querySelector<HTMLButtonElement>('button[aria-label="Página anterior"]')!.click()
+    fixture.detectChanges()
+    expect(page.currentPage()).toBe(9)
+    expect(page.visibleUsers()).toHaveLength(5)
+    nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')!.click()
+    fixture.detectChanges()
+    expect(page.currentPage()).toBe(10)
+    page.setSearch("persona.48@")
+    fixture.detectChanges()
+    expect(page.currentPage()).toBe(1)
+    expect(nav().querySelectorAll('button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])')).toHaveLength(1)
+    expect(nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled).toBe(true)
+  })
+
   it("clamps the current page when last-page users are deleted", async () => {
-    const { page, users } = await setup()
+    const { page, users, fixture, element } = await setup()
     page.goToPage(10)
     expect(page.visibleUsers()).toHaveLength(3)
     for (const user of [...page.visibleUsers()])
       await flush(firstValueFrom(users.deleteUserById(user.id)))
     expect(page.currentPage()).toBe(9)
     expect(page.visibleUsers()).toHaveLength(5)
+    fixture.detectChanges()
+    const nav = element.querySelector('nav[aria-label="Paginación de usuarios"]')!
+    expect(nav.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("9")
+    expect(nav.querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled).toBe(true)
   })
 
   it("shows empty filtered results and offers a reset action", async () => {
