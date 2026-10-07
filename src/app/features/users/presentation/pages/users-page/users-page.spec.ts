@@ -17,6 +17,7 @@ import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memor
 import { UsersPage } from "./users-page"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
+import { UserStatusContext, UserStatusDialog } from "../../components/user-status-dialog/user-status-dialog"
 
 const providers = [
   { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
@@ -114,14 +115,14 @@ describe("UsersPage", () => {
       element.querySelector('ul[aria-label="Usuarios"]')!
     ]) {
       for (const user of page.visibleUsers()) {
-        for (const action of ["Editar usuario", "Eliminar usuario", "Credenciales de usuario"]) {
+        for (const action of ["Editar usuario", "Eliminar usuario", user.isActive ? "Desactivar usuario" : "Activar usuario"]) {
           const button = surface.querySelector<HTMLButtonElement>(
             `button[aria-label="${action} ${user.name}"]`
           )!
           expect(button).not.toBeNull()
           expect(button.textContent?.trim()).toBe("")
           expect(button.querySelector("ng-icon")?.getAttribute("aria-hidden")).toBe("true")
-          if (action === "Credenciales de usuario") expect(button.disabled).toBe(true)
+          expect(button.disabled).toBe(false)
         }
       }
     }
@@ -137,11 +138,48 @@ describe("UsersPage", () => {
     const saved = open.mock.calls.at(-1)![1]!.context as { onSaved: () => void }
     page.deleteUser(page.visibleUsers()[0])
     const deleted = open.mock.calls.at(-1)![1]!.context as { onDeleted: () => void }
+    page.changeUserStatus(page.visibleUsers()[0])
+    const changed = open.mock.calls.at(-1)![1]!.context as UserStatusContext
     fixture.destroy()
+    changed.onChanged()
     saved.onSaved()
     expect(success).not.toHaveBeenCalled()
     deleted.onDeleted()
     expect(success).not.toHaveBeenCalled()
+  })
+
+  it("wires both status directions on desktop/mobile to confirmation without mutation or early toast", async () => {
+    const { page, users, element } = await setup()
+    const update = vi.spyOn(users, "updateUserById")
+    const success = vi.spyOn(TestBed.inject(HotToastService), "success")
+    const open = vi.spyOn(TestBed.inject(HlmDialogService), "open").mockReturnValue(undefined as never)
+    for (const surface of [element.querySelector("tbody")!, element.querySelector('ul[aria-label="Usuarios"]')!]) {
+      for (const user of [page.visibleUsers()[0], page.visibleUsers()[4]]) {
+        const verb = user.isActive ? "Desactivar" : "Activar"
+        const button = surface.querySelector<HTMLButtonElement>(`button[aria-label="${verb} usuario ${user.name}"]`)!
+        expect(button.querySelector('ng-icon[name="lucidePower"]')).not.toBeNull()
+        button.click()
+        expect(open.mock.calls.at(-1)![0]).toBe(UserStatusDialog)
+        const options = open.mock.calls.at(-1)![1]!
+        expect(options.disableClose).toBe(true)
+        expect(options.showCloseButton).toBe(false)
+        const context = options.context as UserStatusContext
+        expect(context.user).toBe(user)
+        expect(update).not.toHaveBeenCalled()
+        expect(success).not.toHaveBeenCalled()
+      }
+    }
+    const context = open.mock.calls.at(-1)![1]!.context as UserStatusContext
+    page.setSearch("persona")
+    page.setRoleFilter("3")
+    page.setStatusFilter("inactive")
+    const filters = [page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]
+    context.onChanged()
+    expect(success).toHaveBeenCalledExactlyOnceWith(`Usuario ${context.user.name} activado`)
+    expect([page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]).toEqual(filters)
+    page.changeUserStatus(users.users()[0])
+    ;(open.mock.calls.at(-1)![1]!.context as UserStatusContext).onChanged()
+    expect(success).toHaveBeenLastCalledWith(`Usuario ${users.users()[0].name} desactivado`)
   })
 
   it("renders product copy, actual identity, dynamic counts and disabled future navigation", async () => {
@@ -167,8 +205,8 @@ describe("UsersPage", () => {
     const credentials = element.querySelectorAll<HTMLButtonElement>(
       'button[aria-describedby="credentials-help"]'
     )
-    expect(credentials).toHaveLength(10)
-    expect(Array.from(credentials).every(button => button.disabled)).toBe(true)
+    expect(credentials).toHaveLength(0)
+    expect(element.querySelector('ng-icon[name="lucideKeyRound"]')).toBeNull()
     expect(element.textContent).not.toContain("Super Administrador")
     const tabs = element.querySelectorAll<HTMLButtonElement>("[data-future-tab]")
     expect(tabs).toHaveLength(3)

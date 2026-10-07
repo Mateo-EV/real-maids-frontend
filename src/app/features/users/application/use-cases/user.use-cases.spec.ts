@@ -10,6 +10,7 @@ import { USER_REPOSITORY, UserRepository } from "../../domain/repositories/user.
 import { CreateUserUseCase } from "./create-user.use-case"
 import { GetUserByIdUseCase } from "./get-user-by-id.use-case"
 import { GetUsersUseCase } from "./get-users.use-case"
+import { UpdateUserStatusByIdUseCase } from "./update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "./update-user-by-id.use-case"
 import { DeleteUserByIdUseCase } from "./delete-user-by-id.use-case"
 
@@ -44,6 +45,7 @@ describe("Users use cases", () => {
       getUserById: vi.fn(),
       getUsers: vi.fn(),
       updateUserById: vi.fn(),
+      updateUserStatusById: vi.fn(),
       deleteUserById: vi.fn()
     }
     TestBed.configureTestingModule({
@@ -100,6 +102,16 @@ describe("Users use cases", () => {
         () => TestBed.inject(UpdateUserByIdUseCase).execute(7, update),
         [7, update]
       ))
+
+    for (const desired of [true, false]) {
+      it(`delegates status=${desired} and preserves ${outcome}`, () =>
+        check(
+          "updateUserStatusById",
+          success ? Result.success(user) : Result.failure(error),
+          () => TestBed.inject(UpdateUserStatusByIdUseCase).execute(7, desired),
+          [7, desired]
+        ))
+    }
 
     it(`delegates delete and preserves ${outcome}`, () =>
       check(

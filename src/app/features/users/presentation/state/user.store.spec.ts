@@ -6,6 +6,7 @@ import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError } from "../../domain/errors/user.error"
 import { CreateUserUseCase } from "../../application/use-cases/create-user.use-case"
 import { GetUsersUseCase } from "../../application/use-cases/get-users.use-case"
+import { UpdateUserStatusByIdUseCase } from "../../application/use-cases/update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "../../application/use-cases/update-user-by-id.use-case"
 import { DeleteUserByIdUseCase } from "../../application/use-cases/delete-user-by-id.use-case"
 import { UserStore } from "./user.store"
@@ -25,6 +26,7 @@ describe("UserStore", () => {
   const list = { execute: vi.fn() },
     create = { execute: vi.fn() },
     update = { execute: vi.fn() },
+    status = { execute: vi.fn() },
     remove = { execute: vi.fn() }
   beforeEach(() => {
     vi.resetAllMocks()
@@ -33,11 +35,69 @@ describe("UserStore", () => {
         { provide: GetUsersUseCase, useValue: list },
         { provide: CreateUserUseCase, useValue: create },
         { provide: UpdateUserByIdUseCase, useValue: update },
+        { provide: UpdateUserStatusByIdUseCase, useValue: status },
         { provide: DeleteUserByIdUseCase, useValue: remove }
       ]
     })
     store = TestBed.inject(UserStore)
   })
+  it("replaces only the status row, revises the catalog and tracks concurrent loading", () => {
+    const other = User.create(2, "Other", 31, "other@example.test", Lang.ES, true, new Date(), new Date(), 2)
+    list.execute.mockReturnValue(of(Result.success([user, other])))
+    store.loadUsers().subscribe()
+    const stale = new Subject<Result<User[], UserError>>()
+    list.execute.mockReturnValue(stale)
+    store.loadUsers().subscribe()
+    const response = new Subject<Result<User, UserError>>()
+    status.execute.mockReturnValue(response)
+    const request = store.updateUserStatusById(1, false)
+    expect(status.execute).not.toHaveBeenCalled()
+    request.subscribe()
+    expect(status.execute).toHaveBeenCalledExactlyOnceWith(1, false)
+    expect(store.loading()).toBe(true)
+    const changed = User.create(1, user.name, user.age, user.email, user.lang, false, user.createdAt, new Date(), user.roleId)
+    response.next(Result.success(changed))
+    response.complete()
+    expect(store.users()).toEqual([changed, other])
+    expect(store.users()[1]).toBe(other)
+    expect(store.loading()).toBe(true)
+    stale.next(Result.success([user]))
+    stale.next(Result.failure(new UserError("UNEXPECTED")))
+    stale.complete()
+    expect(store.users()).toEqual([changed, other])
+    expect(store.error()).toBeUndefined()
+    expect(store.loading()).toBe(false)
+  })
+
+  it("preserves rows on status errors, resets errors on retry and finalizes cancellation", () => {
+    list.execute.mockReturnValue(of(Result.success([user])))
+    store.loadUsers().subscribe()
+    const error = new UserError("USER_NOT_FOUND")
+    status.execute.mockReturnValue(of(Result.failure(error)))
+    store.updateUserStatusById(1, false).subscribe()
+    expect(store.error()).toBe(error)
+    expect(store.users()).toEqual([user])
+    expect(store.loading()).toBe(false)
+    status.execute.mockReturnValue(throwError(() => new Error("offline")))
+    store.updateUserStatusById(1, false).subscribe()
+    expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
+    status.execute.mockImplementation(() => { throw error })
+    store.updateUserStatusById(1, false).subscribe()
+    expect(store.error()).toBe(error)
+    const pending = new Subject<Result<User, UserError>>()
+    status.execute.mockReturnValue(pending)
+    const subscription = store.updateUserStatusById(1, false).subscribe()
+    expect(store.error()).toBeUndefined()
+    expect(store.loading()).toBe(true)
+    subscription.unsubscribe()
+    expect(pending.observed).toBe(false)
+    expect(store.loading()).toBe(false)
+    expect(store.users()).toEqual([user])
+    status.execute.mockReturnValue(EMPTY)
+    store.updateUserStatusById(1, false).subscribe()
+    expect(store.loading()).toBe(false)
+  })
+
   it("retains the load flow and clears loading on cancellation and empty completion", () => {
     const response = new Subject<Result<User[], UserError>>()
     list.execute.mockReturnValue(response)

@@ -1,6 +1,7 @@
 import { CreateUserUseCase } from "@/app/features/users/application/use-cases/create-user.use-case"
 import { DeleteUserByIdUseCase } from "@/app/features/users/application/use-cases/delete-user-by-id.use-case"
 import { GetUsersUseCase } from "@/app/features/users/application/use-cases/get-users.use-case"
+import { UpdateUserStatusByIdUseCase } from "@/app/features/users/application/use-cases/update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "@/app/features/users/application/use-cases/update-user-by-id.use-case"
 import { User } from "@/app/features/users/domain/entities/user.entity"
 import { UserError } from "@/app/features/users/domain/errors/user.error"
@@ -34,6 +35,7 @@ export const UserStore = signalStore(
       getUsersUseCase = inject(GetUsersUseCase),
       createUserUseCase = inject(CreateUserUseCase),
       updateUserUseCase = inject(UpdateUserByIdUseCase),
+      updateUserStatusUseCase = inject(UpdateUserStatusByIdUseCase),
       deleteUserUseCase = inject(DeleteUserByIdUseCase)
     ) => {
       let pendingRequests = 0
@@ -97,6 +99,17 @@ export const UserStore = signalStore(
         updateUserById(id: number, params: UpdateUserParams) {
           return execute(
             () => updateUserUseCase.execute(id, params),
+            user => {
+              catalogRevision += 1
+              patchState(store, state => ({
+                users: state.users.map(u => (u.id === id ? user : u))
+              }))
+            }
+          )
+        },
+        updateUserStatusById(id: number, isActive: boolean) {
+          return execute(
+            () => updateUserStatusUseCase.execute(id, isActive),
             user => {
               catalogRevision += 1
               patchState(store, state => ({

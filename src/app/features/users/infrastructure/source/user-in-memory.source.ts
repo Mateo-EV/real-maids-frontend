@@ -116,6 +116,22 @@ export class UserInMemorySource {
     )
   }
 
+  updateUserStatusById(id: number, isActive: boolean): Observable<Result<User, UserError>> {
+    return timer(250).pipe(
+      switchMap(() => {
+        const existing = this.users.find(user => user.id === id)
+        if (!existing) {
+          return of(Result.failure(new UserError("USER_NOT_FOUND")))
+        }
+        const updated = cloneUser(existing)
+        updated.isActive = isActive
+        updated.updatedAt = new Date()
+        this.users = this.users.map(user => (user.id === id ? updated : user))
+        return of(Result.success(cloneUser(updated)))
+      })
+    )
+  }
+
   updateUserById(id: number, params: UpdateUserParams): Observable<Result<User, UserError>> {
     const input = copyFields(params)
 

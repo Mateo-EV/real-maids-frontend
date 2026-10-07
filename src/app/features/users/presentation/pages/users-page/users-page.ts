@@ -17,7 +17,7 @@ import {
   lucideClipboardList,
   lucidePlus,
   lucidePencil,
-  lucideKeyRound,
+  lucidePower,
   lucideTrash2,
   lucideLogOut,
   lucideSearch
@@ -48,6 +48,7 @@ import {
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
+import { UserStatusContext, UserStatusDialog } from "../../components/user-status-dialog/user-status-dialog"
 
 @Component({
   selector: "app-users-page",
@@ -78,7 +79,7 @@ import { TablePagination } from "@/app/shared/components/table-pagination/table-
       lucideClipboardList,
       lucidePlus,
       lucidePencil,
-      lucideKeyRound,
+      lucidePower,
       lucideTrash2,
       lucideLogOut,
       lucideSearch
@@ -255,6 +256,25 @@ export class UsersPage implements OnInit {
       showCloseButton: false,
       disableClose: true,
       autoFocus: "#cancel-delete-user",
+      restoreFocus: "#new-user"
+    })
+  }
+
+  changeUserStatus(user: User): void {
+    if (this.destroyRef.destroyed) return
+    const status = user.isActive ? "desactivado" : "activado"
+    this.dialogs.open<void, UserStatusContext>(UserStatusDialog, {
+      context: {
+        user,
+        onChanged: () => {
+          if (this.destroyRef.destroyed) return
+          this.requestedPage.set(this.currentPage())
+          this.toast.success(`Usuario ${user.name} ${status}`)
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      autoFocus: "#cancel-status-user",
       restoreFocus: "#new-user"
     })
   }

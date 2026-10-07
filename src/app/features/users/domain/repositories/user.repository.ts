@@ -12,6 +12,7 @@ export interface UserRepository {
   getUsers(): Observable<Result<User[], UserError>>
   deleteUserById(id: number): Observable<Result<void, UserError>>
   updateUserById(id: number, params: UpdateUserParams): Observable<Result<User, UserError>>
+  updateUserStatusById(id: number, isActive: boolean): Observable<Result<User, UserError>>
 }
 
 export const USER_REPOSITORY = new InjectionToken<UserRepository>("user.repository")

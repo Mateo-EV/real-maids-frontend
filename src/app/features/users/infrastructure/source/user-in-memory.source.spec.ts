@@ -65,6 +65,66 @@ describe("UserInMemorySource", () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  const status = (id: number, isActive: boolean) => source.updateUserStatusById(id, isActive)
+
+  it("resolves the latest profile during delayed status execution and returns defensive copies", async () => {
+    const original = await data(source.getUserById(1))
+    const profile = firstValueFrom(source.updateUserById(1, changes))
+    await vi.advanceTimersByTimeAsync(100)
+    const pending = firstValueFrom(status(1, true))
+    await vi.advanceTimersByTimeAsync(150)
+    const latest = await profile
+    if (!latest.success) throw latest.error
+    await vi.advanceTimersByTimeAsync(99)
+    const expectedTime = new Date(Date.now() + 1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await pending
+    if (!result.success) throw result.error
+    expect(result.data).toEqual({ ...latest.data, isActive: true, updatedAt: expectedTime })
+    expect(result.data.createdAt).toEqual(original.createdAt)
+    expect(result.data.lastAccess).toEqual(original.lastAccess)
+    mutate(result.data)
+    expect(await data(source.getUserById(1))).toEqual({
+      ...latest.data, isActive: true, updatedAt: expectedTime
+    })
+  })
+
+  it.each([true, false])("sets desired status=%s idempotently, preserving all other fields", async desired => {
+    const original = await data(source.getUserById(5))
+    const stream = status(5, desired)
+    expect(await data(source.getUserById(5))).toEqual(original)
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const updated = await data(stream)
+      expect(updated).toEqual({ ...original, isActive: desired, updatedAt: new Date() })
+      expect(updated.createdAt).not.toBe(updated.updatedAt)
+      expect(updated.lastAccess).toBeNull()
+    }
+  })
+
+  it("rechecks missing status records at execution without mutation", async () => {
+    const deletion = firstValueFrom(source.deleteUserById(1))
+    await vi.advanceTimersByTimeAsync(100)
+    const pending = firstValueFrom(status(1, false))
+    await vi.runAllTimersAsync()
+    expect((await deletion).success).toBe(true)
+    expect(await pending).toMatchObject({ success: false, error: { code: "USER_NOT_FOUND" } })
+    const before = await data(source.getUsers())
+    expect(await settle(status(99, true))).toMatchObject({ success: false, error: { code: "USER_NOT_FOUND" } })
+    expect(await data(source.getUsers())).toEqual(before)
+  })
+
+  it("cancels status before 250ms without effects", async () => {
+    const before = await data(source.getUserById(1))
+    const next = vi.fn()
+    const subscription = status(1, false).subscribe(next)
+    await vi.advanceTimersByTimeAsync(249)
+    expect(next).not.toHaveBeenCalled()
+    subscription.unsubscribe()
+    await vi.runAllTimersAsync()
+    expect(next).not.toHaveBeenCalled()
+    expect(await data(source.getUserById(1))).toEqual(before)
+  })
+
   it("stores the assignment and defaults access to never accessed", async () => {
     const user = await data(source.createUser(params))
     expect(user.roleId).toBe(1)

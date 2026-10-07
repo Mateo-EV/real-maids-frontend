@@ -420,11 +420,11 @@
       variant="outline"
       size="icon-sm"
       type="button"
-      disabled
-      aria-describedby="credentials-help"
-      [attr.aria-label]="'Credenciales de usuario ' + user.name"
+      (click)="changeUserStatus(user)"
+      [attr.aria-label]="(user.isActive ? 'Desactivar usuario ' : 'Activar usuario ') + user.name"
+      [attr.title]="user.isActive ? 'Desactivar usuario' : 'Activar usuario'"
     >
-      <ng-icon name="lucideKeyRound" aria-hidden="true" />
+      <ng-icon name="lucidePower" aria-hidden="true" />
     </button>
     <button
       hlmBtn

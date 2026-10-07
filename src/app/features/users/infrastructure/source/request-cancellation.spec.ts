@@ -144,6 +144,7 @@ describe("Cancellable in-memory execution boundaries", () => {
       repository.updateUserById(49, { ...userInput, name: "Cancelled" }),
       250
     )
+    await cancelBeforeBoundary(repository.updateUserStatusById(49, true), 250)
     await cancelBeforeBoundary(repository.deleteUserById(49), 250)
     expect(await settle(source.getUsers())).toMatchObject({
       success: true,
@@ -210,6 +211,7 @@ describe("Cancellable in-memory execution boundaries", () => {
     const users = TestBed.inject(USER_REPOSITORY)
     const roles = TestBed.inject(ROLE_REPOSITORY)
     const customers = TestBed.inject(CUSTOMER_REPOSITORY)
+    await cancelBeforeBoundary(users.updateUserStatusById(99, true), 250)
     await cancelBeforeBoundary(users.updateUserById(99, userInput), 250)
     await cancelBeforeBoundary(roles.deleteRoleById(99), 250)
     expect(await settle(users.updateUserById(99, userInput))).toMatchObject({

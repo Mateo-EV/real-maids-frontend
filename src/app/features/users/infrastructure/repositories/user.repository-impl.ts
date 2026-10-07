@@ -24,6 +24,10 @@ export class UserRepositoryImpl implements UserRepository {
     return this.source.deleteUserById(id)
   }
 
+  updateUserStatusById(id: number, isActive: boolean) {
+    return this.source.updateUserStatusById(id, isActive)
+  }
+
   updateUserById(id: number, params: UpdateUserParams) {
     return this.source.updateUserById(id, params)
   }

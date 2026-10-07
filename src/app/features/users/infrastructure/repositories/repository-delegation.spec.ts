@@ -84,6 +84,7 @@ describe("Infrastructure repository delegation", () => {
     const read = vi.spyOn(source, "getUserById").mockReturnValue(response)
     const list = vi.spyOn(source, "getUsers").mockReturnValue(response)
     const update = vi.spyOn(source, "updateUserById").mockReturnValue(response)
+    const status = vi.spyOn(source, "updateUserStatusById").mockReturnValue(response)
     const remove = vi.spyOn(source, "deleteUserById").mockReturnValue(response)
     const params = {
       name: "Demo",
@@ -99,6 +100,8 @@ describe("Infrastructure repository delegation", () => {
     expect(repository.getUserById(1)).toBe(response)
     expect(repository.getUsers()).toBe(response)
     expect(repository.updateUserById(1, params)).toBe(response)
+    expect(repository.updateUserStatusById(1, false)).toBe(response)
+    expect(status).toHaveBeenCalledExactlyOnceWith(1, false)
     expect(repository.deleteUserById(1)).toBe(response)
     expect(create).toHaveBeenCalledExactlyOnceWith(params)
     expect(read).toHaveBeenCalledExactlyOnceWith(1)
