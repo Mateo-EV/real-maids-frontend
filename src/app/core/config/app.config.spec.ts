@@ -26,6 +26,11 @@ import { RolesStore } from "@/app/features/users/presentation/state/roles.store"
 import { UserStore } from "@/app/features/users/presentation/state/user.store"
 import { GetRoleByIdUseCase } from "@/app/features/users/application/use-cases/get-role-by-id.use-case"
 
+import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
+import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
+import { AuditLogInMemorySource } from "@/app/features/users/infrastructure/source/audit-log-in-memory.source"
+import { GetAuditLogsUseCase } from "@/app/features/users/application/use-cases/get-audit-logs.use-case"
+
 async function settle<T>(stream: Observable<T>): Promise<T> {
   const pending = firstValueFrom(stream)
   await vi.runAllTimersAsync()
@@ -39,6 +44,16 @@ describe("Application repository composition", () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it("aliases the distinct audit token to the root implementation and connects its query", async () => {
+    const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
+    expect(AUDIT_LOG_REPOSITORY).not.toBe(USER_REPOSITORY)
+    expect(repository).toBe(TestBed.inject(AuditLogRepositoryImpl))
+    expect(repository).not.toBe(TestBed.inject(AuditLogInMemorySource))
+    expect(await settle(TestBed.inject(GetAuditLogsUseCase).execute({ limit: 1 }))).toEqual(
+      await settle(TestBed.inject(AuditLogInMemorySource).getAuditLogs({ limit: 1 }))
+    )
+  })
 
   it("aliases the auth token to the root implementation instance", () => {
     expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthRepositoryImpl))

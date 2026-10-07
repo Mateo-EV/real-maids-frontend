@@ -18,7 +18,24 @@ import { RoleInMemorySource } from "../source/role-in-memory.source"
 import { UserRepositoryImpl } from "./user.repository-impl"
 import { RoleRepositoryImpl } from "./role.repository-impl"
 
+import { AuditLogError } from "../../domain/errors/audit-log.error"
+import { AuditLogInMemorySource } from "../source/audit-log-in-memory.source"
+import { AuditLogRepositoryImpl } from "./audit-log.repository-impl"
+
 describe("Infrastructure repository delegation", () => {
+  it("delegates audit pagination preserving the exact observable", () => {
+    const source = TestBed.inject(AuditLogInMemorySource)
+    const repository = TestBed.inject(AuditLogRepositoryImpl)
+    const response = of(Result.failure(new AuditLogError("INVALID_PAGINATION")))
+    const query = vi.spyOn(source, "getAuditLogs").mockReturnValue(response)
+    const params = { offset: 3, limit: 7 }
+    expect(repository.getAuditLogs(params)).toBe(response)
+    expect(query).toHaveBeenCalledExactlyOnceWith(params)
+    query.mockClear()
+    expect(repository.getAuditLogs()).toBe(response)
+    expect(query).toHaveBeenCalledExactlyOnceWith(undefined)
+  })
+
   afterEach(() => vi.restoreAllMocks())
 
   it("delegates auth login, restoration and synchronous logout to the shared source", () => {

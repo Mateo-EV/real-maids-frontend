@@ -13,6 +13,8 @@ import { Lang } from "../../domain/entities/user.entity"
 import { UserInMemorySource } from "./user-in-memory.source"
 import { RoleInMemorySource } from "./role-in-memory.source"
 
+import { AUDIT_LOG_REPOSITORY } from "../../domain/repositories/audit-log.repository"
+
 const userInput = {
   name: "Demo",
   age: 30,
@@ -47,6 +49,41 @@ describe("Cancellable in-memory execution boundaries", () => {
     TestBed.configureTestingModule({ providers: appConfig.providers })
   })
   afterEach(() => vi.useRealTimers())
+
+  it.each([1, 0])("cancels audit limit=%s without results or errors before 250ms", async limit => {
+    const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
+    const next = vi.fn()
+    const error = vi.fn()
+    const complete = vi.fn()
+    const query = repository.getAuditLogs({ limit })
+    const subscription = query.subscribe({ next, error, complete })
+    await vi.advanceTimersByTimeAsync(249)
+    expect(next).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+    subscription.unsubscribe()
+    await vi.runAllTimersAsync()
+    expect(next).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+
+    query.subscribe({ next, error, complete })
+    await vi.advanceTimersByTimeAsync(249)
+    expect(next).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(next).toHaveBeenCalledOnce()
+    expect(error).not.toHaveBeenCalled()
+    expect(complete).toHaveBeenCalledOnce()
+    const result = next.mock.calls[0][0]
+    if (limit === 1) {
+      expect(result).toMatchObject({ success: true, data: { total: 48, offset: 0, limit: 1 } })
+      expect(result.data.items).toHaveLength(1)
+    } else {
+      expect(result).toMatchObject({ success: false, error: { code: "INVALID_PAGINATION" } })
+    }
+  })
 
   it("binds every domain repository to an implementation distinct from its shared source", () => {
     expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthInMemorySource))

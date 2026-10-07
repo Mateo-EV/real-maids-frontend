@@ -14,6 +14,12 @@ The user editor collects a password: required on creation by a trimmed-value che
 
 M03 has a `customers` domain, five query/CRUD use cases, an in-memory adapter and a presentation store, but no P04 route or UI. It does not deliver customer management/history to users or define backend DTOs, persistence or email uniqueness. All other screens and the customer portal remain planned. Real HTTP authentication/integration, JWT persistence, role permissions, E2E and CI/CD are absent; production deployment is unverified. Existing unit tests are not a claim of a newly verified pass or fixed test count.
 
+### Read-only audit query boundary
+
+Audit-specific RF/HU traceability is missing from the inherited product plan. M02/RF02/HU02/P03 provides users-administration context and RNF09/RNF10 guides layering; these identifiers do not define new audit requirements. The authorized implementation scope is a read-only application/in-memory query, not a delivered audit screen or security monitoring capability.
+
+The implemented shared plain TypeScript offset pagination defaults to offset 0 and limit 20 (maximum 100), returning `{ items, total, offset, limit }`. Invalid runtime values produce typed failure Results; only omitted values receive defaults. The implemented demo query `getAuditLogs` / `GetAuditLogsUseCase.execute` orders by date descending then ID descending, computes total before slicing and returns defensive entity/date copies after cancellable 250 ms latency. Source-owned records are explicitly fictitious. A distinct audit repository token aliases a root implementation injecting the root source. No writes, session management, UI/store/routes, HTTP contract or persistence is authorized; existing decorative metrics and disabled Audit tab remain unchanged. Other features are not migrated to shared pagination. Verification through the configured Angular targets passed: 102 focused tests, 257 full-suite tests and the production browser/server build with one prerendered route. This verifies the query infrastructure, not audit UI delivery, browser behavior or production security.
+
 ## People and navigation
 
 Planned actors are administrators, administrative staff, field staff and customers. A “boss” or otherwise authorized supervisory profile appears in the plan, but its relation to formal roles and permissions is unresolved; do not equate it with administrator.

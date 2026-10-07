@@ -16,6 +16,7 @@ import { UserInMemorySource } from "../../../infrastructure/source/user-in-memor
 import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memory.source"
 import { UsersPage } from "./users-page"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
 
 const providers = [
   { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
@@ -128,6 +129,7 @@ describe("UsersPage", () => {
 
   it("ignores dialog callbacks after the owning page is destroyed", async () => {
     const { page, fixture } = await setup()
+    const success = vi.spyOn(TestBed.inject(HotToastService), "success")
     const open = vi
       .spyOn(TestBed.inject(HlmDialogService), "open")
       .mockReturnValue(undefined as never)
@@ -137,8 +139,9 @@ describe("UsersPage", () => {
     const deleted = open.mock.calls.at(-1)![1]!.context as { onDeleted: () => void }
     fixture.destroy()
     saved.onSaved()
+    expect(success).not.toHaveBeenCalled()
     deleted.onDeleted()
-    expect(page.success()).toBe("")
+    expect(success).not.toHaveBeenCalled()
   })
 
   it("renders product copy, actual identity, dynamic counts and disabled future navigation", async () => {
@@ -160,9 +163,7 @@ describe("UsersPage", () => {
     expect(`${element.textContent} ${accessibleCopy}`).not.toMatch(
       /demo|demostración|en memoria|fictici|sin backend|no implementad|RF02|HU02|P03|M02/i
     )
-    expect(element.querySelector("#credentials-help")?.textContent).toBe(
-      "Credenciales: No disponible."
-    )
+    expect(element.querySelector("#credentials-help")).toBeNull()
     const credentials = element.querySelectorAll<HTMLButtonElement>(
       'button[aria-describedby="credentials-help"]'
     )
@@ -176,25 +177,29 @@ describe("UsersPage", () => {
         tab => tab.disabled && tab.getAttribute("aria-describedby") === "future-tabs-help"
       )
     ).toBe(true)
-    expect(element.querySelector("#future-tabs-help")?.textContent).toContain("Próximamente")
+    expect(element.querySelector("#future-tabs-help")).toBeNull()
     expect(element.textContent).toContain("Nunca accedió")
   })
 
-  it("uses product-facing success feedback for user operations", async () => {
+  it("uses product-facing success toasts only after successful user operation callbacks", async () => {
     const { page, fixture, element } = await setup()
+    const success = vi.spyOn(TestBed.inject(HotToastService), "success")
     const open = vi
       .spyOn(TestBed.inject(HlmDialogService), "open")
       .mockReturnValue(undefined as never)
     page.editUser()
     const saved = open.mock.calls.at(-1)![1]!.context as { onSaved: () => void }
+    expect(success).not.toHaveBeenCalled()
     saved.onSaved()
     fixture.detectChanges()
-    expect(element.querySelector('[role="status"]')?.textContent).toBe("Usuario guardado.")
+    expect(success).toHaveBeenCalledExactlyOnceWith("Usuario guardado")
     page.deleteUser(page.visibleUsers()[0])
     const deleted = open.mock.calls.at(-1)![1]!.context as { onDeleted: () => void }
+    expect(success).toHaveBeenCalledTimes(1)
     deleted.onDeleted()
     fixture.detectChanges()
-    expect(element.textContent).toContain("Usuario Carlos Mendoza eliminado.")
+    expect(success).toHaveBeenCalledTimes(2)
+    expect(success).toHaveBeenLastCalledWith("Usuario Carlos Mendoza eliminado")
     expect(element.textContent).not.toMatch(/demo|demostración|en memoria|fictici/i)
   })
 

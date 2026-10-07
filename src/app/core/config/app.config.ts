@@ -11,6 +11,8 @@ import { UserRepositoryImpl } from "@/app/features/users/infrastructure/reposito
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
 import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/repositories/role.repository-impl"
 import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
+import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
+import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
 import { provideHotToastConfig } from "@ngxpert/hot-toast"
 
 export const appConfig: ApplicationConfig = {
@@ -22,6 +24,7 @@ export const appConfig: ApplicationConfig = {
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },
-    { useExisting: RoleRepositoryImpl, provide: ROLE_REPOSITORY }
+    { useExisting: RoleRepositoryImpl, provide: ROLE_REPOSITORY },
+    { useExisting: AuditLogRepositoryImpl, provide: AUDIT_LOG_REPOSITORY }
   ]
 }

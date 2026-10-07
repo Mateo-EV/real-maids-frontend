@@ -4,6 +4,7 @@ import { TestBed } from "@angular/core/testing"
 import { EMPTY, firstValueFrom, forkJoin, of, Subject } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { Result } from "@/app/shared/utils/result"
 import { Lang, User } from "../../../domain/entities/user.entity"
 import { UserError } from "../../../domain/errors/user.error"
@@ -115,6 +116,7 @@ describe("UserEditor Signal Forms", () => {
         name: "New",
         age: 20,
         email: "new@example.test",
+        password: "test-password",
         lang: Lang.ES,
         isActive: true,
         roleId: String(roles.roles()[0].id)
@@ -145,6 +147,7 @@ describe("UserEditor Signal Forms", () => {
       name: "Cancelled",
       age: 20,
       email: "cancelled@example.test",
+      password: "test-password",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)
@@ -188,6 +191,7 @@ describe("UserEditor Signal Forms", () => {
       name: "New",
       age: 20,
       email: "new@example.test",
+      password: "test-password",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)
@@ -235,6 +239,7 @@ describe("UserEditor Signal Forms", () => {
       name: "   ",
       age: -1,
       email: "invalid",
+      password: "",
       roleId: "",
       lang: Lang.ES,
       isActive: true
@@ -244,9 +249,15 @@ describe("UserEditor Signal Forms", () => {
     ref.forceClose()
   })
 
-  it("creates with actual active role id and no credential fields; cancellation discards the draft", async () => {
+  it("creates with an active role and valid password without persisting credentials; cancellation discards the draft", async () => {
     const { editor, users, roles, saved, element, ref } = await setup()
-    expect(element.querySelector('input[type="password"]')).toBeNull()
+    const password = element.querySelector<HTMLInputElement>('#user-password[type="password"]')!
+    expect(password).not.toBeNull()
+    expect(password.getAttribute("minlength")).toBe("8")
+    expect(element.querySelector('label[for="user-password"]')?.textContent).toContain(
+      "obligatorio"
+    )
+    const create = vi.spyOn(users, "createUser")
     expect(element.textContent).toContain("Datos del usuario")
     expect(element.textContent).not.toMatch(
       /demo|demostración|en memoria|fictici|adaptador|marcador/i
@@ -260,11 +271,28 @@ describe("UserEditor Signal Forms", () => {
       name: "  Nueva Persona  ",
       age: 28,
       email: "new@example.test",
+      password: "",
       roleId: String(roles.roles()[0].id),
       lang: Lang.EN,
       isActive: true
     })
     await flush(editor.save())
+    expect(create).not.toHaveBeenCalled()
+    expect(saved).not.toHaveBeenCalled()
+    password.value = "short"
+    password.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(editor.model().password).toBe("short")
+    await flush(editor.save())
+    expect(create).not.toHaveBeenCalled()
+    expect(saved).not.toHaveBeenCalled()
+    password.value = "  test-password  "
+    password.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(editor.model().password).toBe("  test-password  ")
+    expect(editor.userForm().valid()).toBe(true)
+    await flush(editor.save())
+    expect(create).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ password: "test-password" })
+    )
     expect(saved).toHaveBeenCalledOnce()
     expect(ref.state()).toBe("closed")
     const created = users.users().find(user => user.email === "new@example.test")!
@@ -323,6 +351,7 @@ describe("UserEditor Signal Forms", () => {
 
   it("disables duplicate submission and cancellation while pending and shows failures without success", async () => {
     const { editor, users, roles, saved, fixture, element, ref } = await setup()
+    const success = vi.spyOn(TestBed.inject(HotToastService), "success")
     const response = new Subject<Result<User, UserError>>()
     const create = vi.spyOn(users, "createUser").mockReturnValue(response)
     const close = vi.spyOn(ref, "close")
@@ -330,6 +359,7 @@ describe("UserEditor Signal Forms", () => {
       name: "New",
       age: 20,
       email: "new@example.test",
+      password: "test-password",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)
@@ -358,6 +388,7 @@ describe("UserEditor Signal Forms", () => {
     await flush(fixture.whenStable())
     expect(editor.error()).toContain("No pudimos guardar")
     expect(saved).not.toHaveBeenCalled()
+    expect(success).not.toHaveBeenCalled()
     expect(editor.userForm().submitting()).toBe(false)
     TestBed.tick()
     expect(element.querySelector<HTMLButtonElement>('button[type="button"]')?.disabled).toBe(false)
