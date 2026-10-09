@@ -37,6 +37,18 @@ npm test -- --watch=false
 
 Estos comandos instalan dependencias, inician el servidor local, compilan y ejecutan las pruebas unitarias, respectivamente. No hay targets de lint ni E2E configurados.
 
+## Encabezados de modales
+
+Los encabezados Helm comparten el navy global, texto claro y un punto dorado decorativo sin texto accesible (`src/styles.css`), también en futuros módulos. Usa `hlm-dialog-header` (o `hlmDialogHeader`) con `hlmDialogTitle` y `hlmDialogDescription`, sin clases de color específicas del módulo. Esta corrección visual de M02/RF02/HU02/P03 reutiliza el contrato global (RNF08/RNF09); no cambia formularios ni permisos.
+
+Coloca el encabezado primero, directamente dentro de `hlm-dialog-content` o del host sin padding de un componente abierto con `HlmDialogService`. No añadas wrappers con padding ni márgenes al encabezado: sus márgenes negativos compensan exactamente `--dialog-padding`, que controla también el padding real del overlay. Para ajustar el espacio, define ese token en el contenido, no utilidades `p-*`. `--dialog-radius` sincroniza las esquinas superiores con el overlay; cuerpo y pie conservan su padding. Mantén el scroll en el contenido cuando sea necesario; no uses `overflow-hidden` para redondear el encabezado, pues recortaría focos y barras de desplazamiento. La fidelidad visual y la interacción en navegadores requieren verificación renderizada.
+
+## Tipografía global
+
+La interfaz usa **Plus Jakarta Sans Variable**, alojada localmente mediante `@fontsource-variable/plus-jakarta-sans`. `src/styles.css` carga solo los dos subconjuntos WOFF2 verticales Latin/Latin-ext (pesos 200–800, español incluido) con `font-display: swap` y fuentes del sistema como respaldo. Angular empaqueta los archivos; no se solicita Google Fonts en tiempo de ejecución. El cambio aplica también a login, admin y overlays; no modifica los colores del tema.
+
+La fuente conserva el copyright de The Plus Jakarta Sans Project Authors y la licencia **SIL Open Font License 1.1**. [El aviso completo](public/fonts/plus-jakarta-sans-OFL.txt) es una copia exacta de `node_modules/@fontsource-variable/plus-jakarta-sans/LICENSE`; la regla existente de assets públicos lo incluye automáticamente en `dist/real-maids-frontend/browser/fonts/plus-jakarta-sans-OFL.txt`. Conservar ese archivo al distribuir la salida compilada junto con los WOFF2 de `browser/media`.
+
 ## Documentación
 
 - [Guía de producto](docs/README.md): módulos, pantallas, recorridos, estados de negocio y decisiones pendientes; en inglés.

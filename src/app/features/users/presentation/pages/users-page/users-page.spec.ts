@@ -128,6 +128,22 @@ describe("UsersPage", () => {
     }
   })
 
+  it("retains seven scoped table columns, mobile records and labelled filter controls", async () => {
+    const { element, page } = await setup()
+    const headings = Array.from(element.querySelectorAll("thead th"))
+    expect(headings).toHaveLength(7)
+    expect(headings.every(heading => heading.getAttribute("scope") === "col")).toBe(true)
+    expect(element.querySelectorAll("tbody tr")).toHaveLength(page.visibleUsers().length)
+    expect(element.querySelectorAll('ul[aria-label="Usuarios"] > li')).toHaveLength(
+      page.visibleUsers().length
+    )
+    for (const id of ["user-search", "role-filter", "status-filter"]) {
+      expect(element.querySelector(`label[for="${id}"]`)?.textContent?.trim()).toBeTruthy()
+      expect(element.querySelector(`#${id}`)).not.toBeNull()
+    }
+    expect(element.querySelector('main h1#users-title')).not.toBeNull()
+  })
+
   it("ignores dialog callbacks after the owning page is destroyed", async () => {
     const { page, fixture } = await setup()
     const success = vi.spyOn(TestBed.inject(HotToastService), "success")

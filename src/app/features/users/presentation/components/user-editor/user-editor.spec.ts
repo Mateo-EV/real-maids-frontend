@@ -80,6 +80,17 @@ describe("UserEditor Signal Forms", () => {
     }
   }
 
+  it("keeps the shared header first and its title/description free of decorative text", async () => {
+    const { element } = await setup()
+    const header = element.firstElementChild!
+    expect(header.getAttribute("data-slot")).toBe("dialog-header")
+    expect(header.querySelector('[data-slot="dialog-title"]')!.textContent).toBe("Nuevo usuario")
+    expect(header.querySelector('[data-slot="dialog-description"]')!.textContent).toBe(
+      "Datos del usuario y rol asignado."
+    )
+    expect(header.querySelector('[data-slot="dialog-title"]')!.children).toHaveLength(0)
+  })
+
   it.each(["backdrop", "outside", "escape"])(
     "routes idle %s overlay interaction through Cancel",
     async interaction => {

@@ -56,6 +56,17 @@ describe("DeleteUserDialog", () => {
       element
     }
   }
+  it("keeps the shared header first and its confirmation context unchanged", async () => {
+    const { element } = await setup()
+    const header = element.firstElementChild!
+    expect(header.getAttribute("data-slot")).toBe("dialog-header")
+    expect(header.querySelector('[data-slot="dialog-title"]')!.textContent).toBe("Eliminar usuario")
+    expect(header.querySelector('[data-slot="dialog-description"]')!.textContent).toBe(
+      "Esta acción elimina el perfil del usuario."
+    )
+    expect(header.querySelector('[data-slot="dialog-title"]')!.children).toHaveLength(0)
+  })
+
   it.each(["backdrop", "outside", "escape"])(
     "closes on idle %s but not an inside click",
     async interaction => {

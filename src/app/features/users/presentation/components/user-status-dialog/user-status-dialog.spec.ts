@@ -47,6 +47,18 @@ describe("UserStatusDialog", () => {
       dialog: injector.get(UserStatusDialog), cdk: injector.get(CdkDialogRef) }
   }
 
+  it.each([true, false])("keeps the shared header first for active=%s without decorative title text", async active => {
+    const { element } = await setup(active)
+    const header = element.firstElementChild!
+    expect(header.getAttribute("data-slot")).toBe("dialog-header")
+    const title = header.querySelector('[data-slot="dialog-title"]')!
+    expect(title.textContent).toBe(active ? "Desactivar usuario" : "Activar usuario")
+    expect(title.children).toHaveLength(0)
+    expect(header.querySelector('[data-slot="dialog-description"]')!.textContent).toBe(
+      "Confirma el cambio de estado de este perfil."
+    )
+  })
+
   it.each([true, false])("confirms the intended change for active=%s with ID/status only and preserved metadata", async active => {
     const { users, user, changed, ref, element, dialog } = await setup(active)
     const before = { ...user }

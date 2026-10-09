@@ -1,29 +1,29 @@
 <div class="min-h-dvh bg-background text-foreground">
   <div class="bg-sidebar px-4 py-2 text-xs text-sidebar-foreground sm:px-8">
-    <div class="mx-auto flex max-w-screen-2xl flex-wrap justify-between gap-2">
+    <div class="mx-auto flex max-w-7xl flex-wrap justify-between gap-2">
       <p><strong>Administración del sistema</strong></p>
       <p>Idioma de la interfaz: Español</p>
     </div>
   </div>
-  <header class="border-b bg-card px-4 py-4 sm:px-8">
-    <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-4">
+  <header class="border-b bg-card px-4 py-3 sm:px-6 lg:px-8">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
         <span
-          class="flex size-11 items-center justify-center rounded-xl bg-secondary font-bold text-secondary-foreground"
+          class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-gold/30 bg-secondary text-lg font-extrabold text-secondary-foreground shadow-sm"
           aria-hidden="true"
           >RM</span
         >
         <div>
-          <p class="text-xl font-semibold tracking-tight">
+          <p class="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-primary">
             The Real Maids <span hlmBadge variant="outline">CORE BACKOFFICE</span>
           </p>
           <p class="text-xs text-muted-foreground">Usuarios y catálogo de roles</p>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="text-right">
+      <div class="session-controls flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+        <div class="min-w-0 text-right">
           <p class="text-sm font-semibold">{{ session()?.name }}</p>
-          <p class="text-xs text-muted-foreground">{{ session()?.email }}</p>
+          <p class="break-all text-xs text-muted-foreground">{{ session()?.email }}</p>
         </div>
         <hlm-avatar
           ><span hlmAvatarFallback class="user-avatar" data-avatar-tone="coral">{{
@@ -37,10 +37,10 @@
       </div>
     </div>
   </header>
-  <nav class="border-b bg-card px-4 sm:px-8" aria-label="Secciones de administración">
-    <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-5">
+  <nav class="border-b bg-card px-4 sm:px-6 lg:px-8" aria-label="Secciones de administración">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4">
       <span
-        class="active-section flex items-center gap-2 py-4 text-sm font-semibold"
+        class="active-section flex items-center gap-2 py-3 text-sm font-semibold"
         aria-current="page"
         >Administración de Usuarios
         <span hlmBadge variant="secondary">{{ users.users().length }}</span></span
@@ -74,9 +74,9 @@
       </button>
     </div>
   </nav>
-  <main class="mx-auto flex max-w-screen-2xl flex-col gap-5 px-4 py-5 sm:px-8">
+  <main class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
     <section
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
       aria-label="Resumen del catálogo"
     >
       <article hlmCard>
@@ -123,23 +123,23 @@
       </article>
     </section>
     <section
-      class="overflow-hidden rounded-2xl border bg-card shadow-sm"
+      class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
       aria-labelledby="users-title"
       [attr.aria-busy]="initializing()"
     >
-      <div class="flex flex-wrap items-start justify-between gap-4 border-b p-5">
+      <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 id="users-title" class="text-lg font-semibold tracking-tight">
+          <h1 id="users-title" class="text-lg font-bold tracking-tight text-primary">
             Catálogo de Usuarios del Sistema
           </h1>
           <p class="mt-1 max-w-prose text-xs text-muted-foreground">
             Gestiona estados, roles y perfiles de usuario.
           </p>
         </div>
-        <div class="flex flex-wrap items-end gap-3">
+        <div class="catalog-filters flex min-w-0 flex-wrap items-end gap-2">
           <div class="flex flex-col gap-1">
             <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
-            <hlm-input-group>
+            <hlm-input-group class="w-full sm:w-60">
               <input
                 #searchInput
                 hlmInputGroupInput
@@ -159,7 +159,7 @@
             <hlm-native-select
               selectId="role-filter"
               [value]="roleFilter()"
-              selectClass="h-10"
+              selectClass="h-9"
               (valueChange)="setRoleFilter($event)"
             >
               <option value="">Todos los roles</option>
@@ -174,7 +174,7 @@
             <label for="status-filter" class="text-xs font-medium">Estado</label>
             <hlm-native-select
               selectId="status-filter"
-              selectClass="h-10"
+              selectClass="h-9"
               [value]="statusFilter()"
               (valueChange)="setStatusFilter($event)"
             >
@@ -186,8 +186,8 @@
           <button
             id="new-user"
             hlmBtn
-            size="lg"
-            class="h-10"
+            size="sm"
+            class="h-9"
             type="button"
             [disabled]="initializing() || loadError()"
             (click)="editUser()"
@@ -385,7 +385,7 @@
           }
         </ul>
       }
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3">
         <p class="text-xs text-muted-foreground" role="status">
           Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios{{
             filteredUsers().length === users.users().length ? "" : " filtrados"

@@ -23,8 +23,8 @@ export interface UserStatusContext {
       <h2 hlmDialogTitle>{{ action }} usuario</h2>
       <p hlmDialogDescription>Confirma el cambio de estado de este perfil.</p>
     </hlm-dialog-header>
-    <div class="my-4 rounded-lg bg-muted p-4">
-      <p class="font-semibold">{{ context.user.name }} · #USR-{{ context.user.id }}</p>
+    <div class="my-3 rounded-lg border bg-muted p-3">
+      <p class="break-words font-semibold">{{ context.user.name }} · #USR-{{ context.user.id }}</p>
       <p class="text-sm break-all">{{ context.user.email }}</p>
       <p class="mt-2 text-sm">{{ nextActive ? "Inactivo → Activo" : "Activo → Inactivo" }}</p>
     </div>
@@ -35,7 +35,7 @@ export interface UserStatusContext {
         <p hlmAlertDescription>{{ error() }}</p>
       </div>
     }
-    <hlm-dialog-footer class="mt-4">
+    <hlm-dialog-footer class="mt-4 border-t pt-3">
       <button id="cancel-status-user" hlmBtn variant="outline" type="button"
         [disabled]="submitting()" (click)="cancel()">Cancelar</button>
       <button hlmBtn type="button" [disabled]="submitting()"

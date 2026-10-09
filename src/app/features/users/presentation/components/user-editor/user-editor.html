@@ -2,14 +2,14 @@
   <h2 hlmDialogTitle>{{ context.user ? "Editar usuario" : "Nuevo usuario" }}</h2>
   <p hlmDialogDescription>Datos del usuario y rol asignado.</p>
 </hlm-dialog-header>
-<form class="mt-4 flex flex-col gap-4" [formRoot]="userForm" (submit)="save()">
+<form class="mt-4 flex flex-col gap-3" [formRoot]="userForm" (submit)="save()">
   @if (error()) {
     <div hlmAlert variant="destructive" role="alert">
       <p hlmAlertTitle>No se guardaron los cambios</p>
       <p hlmAlertDescription>{{ error() }}</p>
     </div>
   }
-  <fieldset hlmFieldSet class="flex flex-col gap-4" [disabled]="userForm().submitting()">
+  <fieldset hlmFieldSet class="editor-fields" [disabled]="userForm().submitting()">
     <legend hlmFieldLegend class="sr-only">Datos del perfil</legend>
     <div hlmField>
       <label hlmFieldLabel for="user-name">Nombre (obligatorio)</label>
@@ -106,10 +106,7 @@
       <label hlmFieldLabel for="user-active">Usuario activo</label>
     </div>
   </fieldset>
-  <p class="text-xs text-muted-foreground">
-    El último acceso es de solo lectura y se conserva al editar.
-  </p>
-  <hlm-dialog-footer>
+  <hlm-dialog-footer class="border-t pt-3">
     <button
       hlmBtn
       variant="outline"

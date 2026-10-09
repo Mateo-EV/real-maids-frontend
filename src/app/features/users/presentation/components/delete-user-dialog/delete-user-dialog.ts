@@ -24,8 +24,8 @@ export interface DeleteUserContext {
       <h2 hlmDialogTitle>Eliminar usuario</h2>
       <p hlmDialogDescription>Esta acción elimina el perfil del usuario.</p>
     </hlm-dialog-header>
-    <div class="my-4 rounded-lg bg-muted p-4">
-      <p class="font-semibold">{{ context.user.name }} · #USR-{{ context.user.id }}</p>
+    <div class="my-3 rounded-lg border bg-muted p-3">
+      <p class="break-words font-semibold">{{ context.user.name }} · #USR-{{ context.user.id }}</p>
       <p class="text-sm break-all">{{ context.user.email }}</p>
     </div>
     <p class="text-sm">¿Confirmas la eliminación de este usuario?</p>
@@ -35,7 +35,7 @@ export interface DeleteUserContext {
         <p hlmAlertDescription>{{ error() }}</p>
       </div>
     }
-    <hlm-dialog-footer class="mt-4">
+    <hlm-dialog-footer class="mt-4 border-t pt-3">
       <button
         id="cancel-delete-user"
         hlmBtn
