@@ -15,6 +15,8 @@ import { ROLE_REPOSITORY } from "../../../domain/repositories/role.repository"
 import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
 import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memory.source"
 import { UsersPage } from "./users-page"
+import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
+import { UserSessionRepositoryImpl } from "../../../infrastructure/repositories/user-session.repository-impl"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import {
@@ -24,11 +26,12 @@ import {
 
 const providers = [
   { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-  { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
+  { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+  { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
 ]
 
 async function flush<T>(pending: Promise<T>): Promise<T> {
-  await vi.runAllTimersAsync()
+  await vi.advanceTimersByTimeAsync(250)
   return pending
 }
 
@@ -65,6 +68,108 @@ describe("UsersPage", () => {
     }
   }
 
+  it("opts Users controls into the shared catalog filter contract without local dimensions", async () => {
+    const { element } = await setup()
+    const row = element.querySelector(".catalog-filter-row")!
+    expect(row).not.toBeNull()
+    expect(
+      row.querySelector(".catalog-filter-search > [data-slot='input-group'] #user-search")
+    ).not.toBeNull()
+    expect(row.querySelectorAll("[data-slot='native-select']")).toHaveLength(2)
+    expect(row.querySelector("[data-slot='button']#new-user")).not.toBeNull()
+    expect(row.querySelector(".h-9, .sm\\:w-60, .xl\\:w-100")).toBeNull()
+  })
+
+  it("enables Sessions with all catalog groups, zero/multiple filters and live counts while preserving Users", async () => {
+    const { element, fixture, page } = await setup()
+    const sessions = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
+    expect(sessions).not.toBeNull()
+    expect(sessions.disabled).toBe(false)
+    expect(sessions.textContent).toContain("6")
+    sessions.click()
+    fixture.detectChanges()
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
+    expect(element.querySelector('details[data-session-user="1"]')?.textContent).toContain(
+      "2 sesiones"
+    )
+    expect(element.querySelector('details[data-session-user="5"]')?.textContent).toContain(
+      "Sin sesiones activas"
+    )
+    expect(element.querySelector("#user-search")).toBeNull()
+    const filter = element.querySelector<HTMLSelectElement>("#session-filter")!
+    filter.value = "with"
+    filter.dispatchEvent(new Event("change"))
+    fixture.detectChanges()
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(4)
+    filter.value = "without"
+    filter.dispatchEvent(new Event("change"))
+    fixture.detectChanges()
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
+    expect(element.textContent).toContain("Mostrando 1–5 de 44 usuarios")
+    filter.value = "all"
+    filter.dispatchEvent(new Event("change"))
+    fixture.detectChanges()
+    const reached: number[] = []
+    const next = () =>
+      element.querySelector<HTMLButtonElement>(
+        'app-user-sessions button[aria-label="Página siguiente"]'
+      )!
+    do {
+      reached.push(
+        ...Array.from(element.querySelectorAll("details[data-session-user]")).map(row =>
+          Number(row.getAttribute("data-session-user"))
+        )
+      )
+      if (next().disabled) break
+      next().click()
+      fixture.detectChanges()
+    } while (true)
+    expect(reached).toEqual(page.users.users().map(user => user.id))
+    expect(element.textContent).toContain("Mostrando 46–48 de 48 usuarios")
+    // Local page/search/filter must not change navigation or the global session metric.
+    const search = element.querySelector<HTMLInputElement>("#session-search")!
+    search.value = "USR-48"
+    search.dispatchEvent(new Event("input"))
+    filter.value = "without"
+    filter.dispatchEvent(new Event("change"))
+    fixture.detectChanges()
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
+    expect(element.textContent).toContain("Mostrando 1–1 de 1 usuarios")
+    expect(page.sessionCount()).toBe(6)
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("6")
+    expect(sessions.textContent).toContain("6")
+    filter.value = "with"
+    filter.dispatchEvent(new Event("change"))
+    fixture.detectChanges()
+    expect(element.textContent).toContain("Sin resultados")
+    expect(page.sessionCount()).toBe(6)
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("6")
+    expect(sessions.textContent).toContain("6")
+    element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
+    fixture.detectChanges()
+    expect(element.querySelector("#user-search")).not.toBeNull()
+    expect(page.filteredUsers()).toHaveLength(48)
+  })
+
+  it("keeps navigation, session metric and rows synchronized after revoke, expiry and destruction", async () => {
+    const { page, fixture, element } = await setup()
+    expect(page.sessionCount()).toBe(6)
+    await flush(firstValueFrom(page.sessions.revokeSession(1, 2)))
+    fixture.detectChanges()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("5")
+    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("5")
+    vi.setSystemTime(
+      Math.max(...page.sessions.sessions().map(session => session.expiryDate.getTime()))
+    )
+    await vi.advanceTimersByTimeAsync(1000)
+    fixture.detectChanges()
+    expect(page.sessionCount()).toBe(0)
+    const clock = vi.spyOn(page.sessions, "refreshClock")
+    fixture.destroy()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(clock).not.toHaveBeenCalled()
+  })
+
   it("starts concurrent catalog queries and cancels both on destruction without mutations", async () => {
     const roles = TestBed.inject(RolesStore),
       users = TestBed.inject(UserStore)
@@ -75,14 +180,17 @@ describe("UsersPage", () => {
     const page = fixture.componentInstance
     expect(roles.loading()).toBe(true)
     expect(users.loading()).toBe(true)
+    expect(page.sessions.loading()).toBe(true)
     expect(loadUsers).toHaveBeenCalledOnce()
     fixture.destroy()
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(250)
     expect(roles.loading()).toBe(false)
     expect(users.loading()).toBe(false)
     expect(createRole).not.toHaveBeenCalled()
     expect(roles.roles()).toEqual([])
     expect(users.users()).toEqual([])
+    expect(page.sessions.sessions()).toEqual([])
+    expect(page.sessions.loading()).toBe(false)
     expect(page.loadError()).toBe(false)
   })
 
@@ -243,7 +351,7 @@ describe("UsersPage", () => {
     expect(element.querySelector('ng-icon[name="lucideKeyRound"]')).toBeNull()
     expect(element.textContent).not.toContain("Super Administrador")
     const tabs = element.querySelectorAll<HTMLButtonElement>("[data-future-tab]")
-    expect(tabs).toHaveLength(3)
+    expect(tabs).toHaveLength(2)
     expect(
       Array.from(tabs).every(
         tab => tab.disabled && tab.getAttribute("aria-describedby") === "future-tabs-help"

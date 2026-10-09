@@ -1,20 +1,32 @@
 <div class="bg-background text-foreground">
   <nav class="border-b bg-card px-4 sm:px-6 lg:px-6" aria-label="Secciones de administración">
     <div class="mx-auto flex w-full flex-wrap items-center gap-x-4">
-      <span
-        class="active-section flex items-center gap-2 py-3 text-sm font-semibold"
-        aria-current="page"
-        >Administración de Usuarios
-        <span hlmBadge variant="secondary">{{ users.users().length }}</span></span
-      >
       <button
-        data-future-tab
+        data-users-tab
         type="button"
-        disabled
-        aria-describedby="future-tabs-help"
-        class="future-tab"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'users'"
+        [attr.aria-current]="section() === 'users' ? 'page' : null"
+        (click)="section.set('users')"
+      >
+        Administración de Usuarios
+        <span hlmBadge variant="secondary">{{ users.users().length }}</span>
+      </button>
+      <button
+        data-sessions-tab
+        type="button"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'sessions'"
+        [attr.aria-current]="section() === 'sessions' ? 'page' : null"
+        (click)="section.set('sessions')"
       >
         Sesiones activas
+        <span
+          hlmBadge
+          variant="secondary"
+          class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
+          >{{ sessionCount() }} en línea</span
+        >
       </button>
       <button
         data-future-tab
@@ -59,8 +71,8 @@
           <span hlmCardAction class="kpi-tile" data-kpi-tone="amber"
             ><ng-icon name="lucideSmartphone" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value">{{ metrics.sessions }}</p>
-          <p hlmCardDescription>{{ metrics.mobileSessions }} móviles</p>
+          <p class="kpi-value" data-session-metric>{{ sessionCount() }}</p>
+          <p hlmCardDescription>Conexiones activas</p>
         </div>
       </article>
       <article hlmCard>
@@ -84,163 +96,245 @@
         </div>
       </article>
     </section>
-    <section
-      class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
-      aria-labelledby="users-title"
-      [attr.aria-busy]="initializing()"
-    >
-      <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
-        <div class="xl:self-start">
-          <h1 id="users-title" class="text-lg font-bold tracking-tight text-primary">
-            Catálogo de Usuarios del Sistema
-          </h1>
-          <p class="mt-1 max-w-prose text-xs text-muted-foreground">
-            Gestiona estados, roles y perfiles de usuario.
-          </p>
-        </div>
-        <div class="catalog-filters flex min-w-0 flex-wrap items-end gap-2">
-          <div class="flex flex-col gap-1">
-            <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
-            <hlm-input-group class="w-full sm:w-60 xl:w-100">
-              <input
-                #searchInput
-                hlmInputGroupInput
-                id="user-search"
-                type="search"
-                placeholder="Buscar nombre o email…"
-                [value]="search()"
-                (input)="setSearch(searchInput.value)"
-              />
-              <hlm-input-group-addon>
-                <ng-icon name="lucideSearch" aria-hidden="true" />
-              </hlm-input-group-addon>
-            </hlm-input-group>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label for="role-filter" class="text-xs font-medium">Rol</label>
-            <hlm-native-select
-              selectId="role-filter"
-              [value]="roleFilter()"
-              selectClass="h-9"
-              (valueChange)="setRoleFilter($event)"
-            >
-              <option value="">Todos los roles</option>
-              @for (role of roles.roles(); track role.id) {
-                <option [value]="role.id">
-                  {{ role.name }}{{ role.isActive ? "" : " (inactivo)" }}
-                </option>
-              }
-            </hlm-native-select>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label for="status-filter" class="text-xs font-medium">Estado</label>
-            <hlm-native-select
-              selectId="status-filter"
-              selectClass="h-9"
-              [value]="statusFilter()"
-              (valueChange)="setStatusFilter($event)"
-            >
-              <option value="all">Todos</option>
-              <option value="active">Activo</option>
-              <option value="inactive">Inactivo</option>
-            </hlm-native-select>
-          </div>
-          <button
-            id="new-user"
-            hlmBtn
-            size="sm"
-            class="h-9"
-            type="button"
-            [disabled]="initializing() || loadError()"
-            (click)="editUser()"
-          >
-            <ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario
-          </button>
-        </div>
-      </div>
-      @if (initializing()) {
-        <div class="flex min-h-64 items-center justify-center gap-3" role="status">
-          <hlm-spinner />Cargando catálogo…
-        </div>
-      } @else if (loadError()) {
-        <div class="p-5">
-          <div hlmAlert variant="destructive" role="alert">
-            <p hlmAlertTitle>No pudimos cargar el catálogo</p>
-            <p hlmAlertDescription>Los datos existentes se conservan. Reintenta para continuar.</p>
-          </div>
-          <button data-retry hlmBtn variant="outline" class="mt-4" type="button" (click)="retry()">
-            Reintentar
-          </button>
-        </div>
-      } @else if (filteredUsers().length === 0) {
-        <div hlmEmpty class="min-h-64">
-          <div hlmEmptyHeader>
-            <div hlmEmptyMedia variant="icon">
-              <ng-icon name="lucideUsers" aria-hidden="true" />
-            </div>
-            <h2 hlmEmptyTitle>
-              {{ users.users().length ? "Sin resultados" : "Aún no hay usuarios" }}
-            </h2>
-            <p hlmEmptyDescription>
-              {{
-                users.users().length
-                  ? "Prueba otra búsqueda o restablece los filtros."
-                  : "Crea un rol activo y registra un usuario."
-              }}
+    @if (section() === "sessions" && !initializing() && !loadError()) {
+      <app-user-sessions (retry)="retrySessions()" />
+    } @else {
+      <section
+        class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
+        aria-labelledby="users-title"
+        [attr.aria-busy]="initializing()"
+      >
+        <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
+          <div class="xl:self-start">
+            <h1 id="users-title" class="text-lg font-bold tracking-tight text-primary">
+              Catálogo de Usuarios del Sistema
+            </h1>
+            <p class="mt-1 max-w-prose text-xs text-muted-foreground">
+              Gestiona estados, roles y perfiles de usuario.
             </p>
           </div>
-          <div hlmEmptyContent>
+          <div class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+            <div class="catalog-filter-search flex flex-col gap-1">
+              <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
+              <hlm-input-group>
+                <input
+                  #searchInput
+                  hlmInputGroupInput
+                  id="user-search"
+                  type="search"
+                  placeholder="Buscar nombre o email…"
+                  [value]="search()"
+                  (input)="setSearch(searchInput.value)"
+                />
+                <hlm-input-group-addon>
+                  <ng-icon name="lucideSearch" aria-hidden="true" />
+                </hlm-input-group-addon>
+              </hlm-input-group>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="role-filter" class="text-xs font-medium">Rol</label>
+              <hlm-native-select
+                selectId="role-filter"
+                [value]="roleFilter()"
+                (valueChange)="setRoleFilter($event)"
+              >
+                <option value="">Todos los roles</option>
+                @for (role of roles.roles(); track role.id) {
+                  <option [value]="role.id">
+                    {{ role.name }}{{ role.isActive ? "" : " (inactivo)" }}
+                  </option>
+                }
+              </hlm-native-select>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="status-filter" class="text-xs font-medium">Estado</label>
+              <hlm-native-select
+                selectId="status-filter"
+                [value]="statusFilter()"
+                (valueChange)="setStatusFilter($event)"
+              >
+                <option value="all">Todos</option>
+                <option value="active">Activo</option>
+                <option value="inactive">Inactivo</option>
+              </hlm-native-select>
+            </div>
             <button
-              data-reset-filters
+              id="new-user"
               hlmBtn
-              variant="outline"
+              size="sm"
               type="button"
-              (click)="clearFilters()"
+              [disabled]="initializing() || loadError()"
+              (click)="editUser()"
             >
-              Restablecer filtros
+              <ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario
             </button>
-            <button hlmBtn type="button" (click)="editUser()">Nuevo usuario</button>
           </div>
         </div>
-      } @else {
-        <div hlmTableContainer class="hidden lg:block">
-          <table hlmTable>
-            <caption class="sr-only">
-              Catálogo de usuarios: perfiles, roles, vínculos, estado y último acceso en UTC.
-            </caption>
-            <thead hlmTHead class="bg-background">
-              <tr hlmTr>
-                <th hlmTh scope="col">ID / Usuario</th>
-                <th hlmTh scope="col">Correo electrónico</th>
-                <th hlmTh scope="col">Rol asignado</th>
-                <th hlmTh scope="col">Idioma</th>
-                <!-- <th hlmTh scope="col">Vínculo entidad</th> -->
-                <th hlmTh scope="col">Último acceso · UTC</th>
-                <th hlmTh scope="col">Estado</th>
-                <th hlmTh scope="col">Acciones</th>
-              </tr>
-            </thead>
-            <tbody hlmTBody>
-              @for (user of visibleUsers(); track user.id) {
-                <tr hlmTr [class.text-muted-foreground]="!user.isActive">
-                  <td hlmTd>
-                    <div class="flex items-center gap-3">
-                      <hlm-avatar
-                        ><span
-                          hlmAvatarFallback
-                          class="user-avatar"
-                          [attr.data-avatar-tone]="avatarTone(user)"
-                          >{{ initials(user.name) }}</span
-                        ></hlm-avatar
-                      >
-                      <div>
-                        <p class="font-semibold">{{ user.name }}</p>
-                        <p class="text-xs text-muted-foreground">#USR-{{ user.id }}</p>
+        @if (initializing()) {
+          <div class="flex min-h-64 items-center justify-center gap-3" role="status">
+            <hlm-spinner />Cargando catálogo…
+          </div>
+        } @else if (loadError()) {
+          <div class="p-5">
+            <div hlmAlert variant="destructive" role="alert">
+              <p hlmAlertTitle>No pudimos cargar el catálogo</p>
+              <p hlmAlertDescription>
+                Los datos existentes se conservan. Reintenta para continuar.
+              </p>
+            </div>
+            <button
+              data-retry
+              hlmBtn
+              variant="outline"
+              class="mt-4"
+              type="button"
+              (click)="retry()"
+            >
+              Reintentar
+            </button>
+          </div>
+        } @else if (filteredUsers().length === 0) {
+          <div hlmEmpty class="min-h-64">
+            <div hlmEmptyHeader>
+              <div hlmEmptyMedia variant="icon">
+                <ng-icon name="lucideUsers" aria-hidden="true" />
+              </div>
+              <h2 hlmEmptyTitle>
+                {{ users.users().length ? "Sin resultados" : "Aún no hay usuarios" }}
+              </h2>
+              <p hlmEmptyDescription>
+                {{
+                  users.users().length
+                    ? "Prueba otra búsqueda o restablece los filtros."
+                    : "Crea un rol activo y registra un usuario."
+                }}
+              </p>
+            </div>
+            <div hlmEmptyContent>
+              <button
+                data-reset-filters
+                hlmBtn
+                variant="outline"
+                type="button"
+                (click)="clearFilters()"
+              >
+                Restablecer filtros
+              </button>
+              <button hlmBtn type="button" (click)="editUser()">Nuevo usuario</button>
+            </div>
+          </div>
+        } @else {
+          <div hlmTableContainer class="hidden lg:block">
+            <table hlmTable>
+              <caption class="sr-only">
+                Catálogo de usuarios: perfiles, roles, vínculos, estado y último acceso en UTC.
+              </caption>
+              <thead hlmTHead class="bg-background">
+                <tr hlmTr>
+                  <th hlmTh scope="col">ID / Usuario</th>
+                  <th hlmTh scope="col">Correo electrónico</th>
+                  <th hlmTh scope="col">Rol asignado</th>
+                  <th hlmTh scope="col">Idioma</th>
+                  <!-- <th hlmTh scope="col">Vínculo entidad</th> -->
+                  <th hlmTh scope="col">Último acceso · UTC</th>
+                  <th hlmTh scope="col">Estado</th>
+                  <th hlmTh scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (user of visibleUsers(); track user.id) {
+                  <tr hlmTr [class.text-muted-foreground]="!user.isActive">
+                    <td hlmTd>
+                      <div class="flex items-center gap-3">
+                        <hlm-avatar
+                          ><span
+                            hlmAvatarFallback
+                            class="user-avatar"
+                            [attr.data-avatar-tone]="avatarTone(user)"
+                            >{{ initials(user.name) }}</span
+                          ></hlm-avatar
+                        >
+                        <div>
+                          <p class="font-semibold">{{ user.name }}</p>
+                          <p class="text-xs text-muted-foreground">#USR-{{ user.id }}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td hlmTd>{{ user.email }}</td>
-                  <td hlmTd>
+                    </td>
+                    <td hlmTd>{{ user.email }}</td>
+                    <td hlmTd>
+                      <span
+                        hlmBadge
+                        variant="outline"
+                        class="role-chip"
+                        [attr.data-role-tone]="roleTone(user)"
+                        >{{ roleName(user) }}</span
+                      >
+                    </td>
+                    <td hlmTd>{{ user.lang === "es" ? "ES · Español" : "EN · English" }}</td>
+                    <!-- <td hlmTd>
+                    <p class="text-xs">{{ decoration(user).entity }}</p>
+                  </td> -->
+                    <td hlmTd>
+                      <p class="text-xs tabular-nums">
+                        {{
+                          user.lastAccess
+                            ? (user.lastAccess | date: "dd/MM/yyyy HH:mm" : "UTC")
+                            : "Nunca accedió"
+                        }}
+                      </p>
+                      @if (decoration(user).ip; as ip) {
+                        <p class="text-xs text-muted-foreground">IP: {{ ip }}</p>
+                      }
+                    </td>
+                    <td hlmTd>
+                      <span
+                        hlmBadge
+                        variant="outline"
+                        class="status-chip"
+                        [attr.data-status]="user.isActive ? 'active' : 'inactive'"
+                        >{{ user.isActive ? "Activo" : "Inactivo" }}</span
+                      >
+                    </td>
+                    <td hlmTd>
+                      <ng-container
+                        [ngTemplateOutlet]="userActions"
+                        [ngTemplateOutletContext]="{ $implicit: user }"
+                      />
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <ul class="flex flex-col gap-4 p-4 lg:hidden" aria-label="Usuarios">
+            @for (user of visibleUsers(); track user.id) {
+              <li class="rounded-xl border p-4" [class.text-muted-foreground]="!user.isActive">
+                <div class="flex items-center gap-3">
+                  <hlm-avatar
+                    ><span
+                      hlmAvatarFallback
+                      class="user-avatar"
+                      [attr.data-avatar-tone]="avatarTone(user)"
+                      >{{ initials(user.name) }}</span
+                    ></hlm-avatar
+                  >
+                  <div class="min-w-0 flex-1">
+                    <p class="font-semibold">{{ user.name }}</p>
+                    <p class="text-xs">#USR-{{ user.id }}</p>
+                  </div>
+                  <span
+                    hlmBadge
+                    variant="outline"
+                    class="status-chip"
+                    [attr.data-status]="user.isActive ? 'active' : 'inactive'"
+                    >{{ user.isActive ? "Activo" : "Inactivo" }}</span
+                  >
+                </div>
+                <dl class="my-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                  <dt class="text-muted-foreground">Correo</dt>
+                  <dd class="break-all">{{ user.email }}</dd>
+                  <dt class="text-muted-foreground">Rol</dt>
+                  <dd>
                     <span
                       hlmBadge
                       variant="outline"
@@ -248,123 +342,52 @@
                       [attr.data-role-tone]="roleTone(user)"
                       >{{ roleName(user) }}</span
                     >
-                  </td>
-                  <td hlmTd>{{ user.lang === "es" ? "ES · Español" : "EN · English" }}</td>
-                  <!-- <td hlmTd>
-                    <p class="text-xs">{{ decoration(user).entity }}</p>
-                  </td> -->
-                  <td hlmTd>
-                    <p class="text-xs tabular-nums">
-                      {{
-                        user.lastAccess
-                          ? (user.lastAccess | date: "dd/MM/yyyy HH:mm" : "UTC")
-                          : "Nunca accedió"
-                      }}
-                    </p>
-                    @if (decoration(user).ip; as ip) {
-                      <p class="text-xs text-muted-foreground">IP: {{ ip }}</p>
-                    }
-                  </td>
-                  <td hlmTd>
-                    <span
-                      hlmBadge
-                      variant="outline"
-                      class="status-chip"
-                      [attr.data-status]="user.isActive ? 'active' : 'inactive'"
-                      >{{ user.isActive ? "Activo" : "Inactivo" }}</span
-                    >
-                  </td>
-                  <td hlmTd>
-                    <ng-container
-                      [ngTemplateOutlet]="userActions"
-                      [ngTemplateOutletContext]="{ $implicit: user }"
-                    />
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        <ul class="flex flex-col gap-4 p-4 lg:hidden" aria-label="Usuarios">
-          @for (user of visibleUsers(); track user.id) {
-            <li class="rounded-xl border p-4" [class.text-muted-foreground]="!user.isActive">
-              <div class="flex items-center gap-3">
-                <hlm-avatar
-                  ><span
-                    hlmAvatarFallback
-                    class="user-avatar"
-                    [attr.data-avatar-tone]="avatarTone(user)"
-                    >{{ initials(user.name) }}</span
-                  ></hlm-avatar
-                >
-                <div class="min-w-0 flex-1">
-                  <p class="font-semibold">{{ user.name }}</p>
-                  <p class="text-xs">#USR-{{ user.id }}</p>
-                </div>
-                <span
-                  hlmBadge
-                  variant="outline"
-                  class="status-chip"
-                  [attr.data-status]="user.isActive ? 'active' : 'inactive'"
-                  >{{ user.isActive ? "Activo" : "Inactivo" }}</span
-                >
-              </div>
-              <dl class="my-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-                <dt class="text-muted-foreground">Correo</dt>
-                <dd class="break-all">{{ user.email }}</dd>
-                <dt class="text-muted-foreground">Rol</dt>
-                <dd>
-                  <span
-                    hlmBadge
-                    variant="outline"
-                    class="role-chip"
-                    [attr.data-role-tone]="roleTone(user)"
-                    >{{ roleName(user) }}</span
-                  >
-                </dd>
-                <dt class="text-muted-foreground">Idioma</dt>
-                <dd>{{ user.lang === "es" ? "Español" : "English" }}</dd>
-                <!-- <dt class="text-muted-foreground">Vínculo</dt>
+                  </dd>
+                  <dt class="text-muted-foreground">Idioma</dt>
+                  <dd>{{ user.lang === "es" ? "Español" : "English" }}</dd>
+                  <!-- <dt class="text-muted-foreground">Vínculo</dt>
                 <dd>{{ decoration(user).entity }}</dd> -->
-                <dt class="text-muted-foreground">Acceso UTC</dt>
-                <dd>
-                  {{
-                    user.lastAccess
-                      ? (user.lastAccess | date: "dd/MM/yyyy HH:mm" : "UTC")
-                      : "Nunca accedió"
-                  }}
-                </dd>
-                @if (decoration(user).ip; as ip) {
-                  <dt class="text-muted-foreground">IP</dt>
-                  <dd>{{ ip }}</dd>
-                }
-              </dl>
-              <ng-container
-                [ngTemplateOutlet]="userActions"
-                [ngTemplateOutletContext]="{ $implicit: user }"
-              />
-            </li>
-          }
-        </ul>
-      }
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
-      >
-        <p class="text-xs text-muted-foreground" role="status">
-          Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios{{
-            filteredUsers().length === users.users().length ? "" : " filtrados"
-          }}
-          · Total: {{ users.users().length }}
-        </p>
-        <app-table-pagination
-          label="Paginación de usuarios"
-          [currentPage]="currentPage()"
-          [pageCount]="pageCount()"
-          [disabled]="initializing()"
-          (pageSelected)="goToPage($event)"
-        />
-      </div>
-    </section>
+                  <dt class="text-muted-foreground">Acceso UTC</dt>
+                  <dd>
+                    {{
+                      user.lastAccess
+                        ? (user.lastAccess | date: "dd/MM/yyyy HH:mm" : "UTC")
+                        : "Nunca accedió"
+                    }}
+                  </dd>
+                  @if (decoration(user).ip; as ip) {
+                    <dt class="text-muted-foreground">IP</dt>
+                    <dd>{{ ip }}</dd>
+                  }
+                </dl>
+                <ng-container
+                  [ngTemplateOutlet]="userActions"
+                  [ngTemplateOutletContext]="{ $implicit: user }"
+                />
+              </li>
+            }
+          </ul>
+        }
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
+        >
+          <p class="text-xs text-muted-foreground" role="status">
+            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de
+            {{ filteredUsers().length }} usuarios{{
+              filteredUsers().length === users.users().length ? "" : " filtrados"
+            }}
+            · Total: {{ users.users().length }}
+          </p>
+          <app-table-pagination
+            label="Paginación de usuarios"
+            [currentPage]="currentPage()"
+            [pageCount]="pageCount()"
+            [disabled]="initializing()"
+            (pageSelected)="goToPage($event)"
+          />
+        </div>
+      </section>
+    }
   </main>
 </div>
 <ng-template #userActions let-user>

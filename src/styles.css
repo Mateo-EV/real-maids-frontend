@@ -223,6 +223,44 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   --color-gold: var(--gold);
 }
 
+/* Opt-in catalog filters: preserve Helm borders/rings and local labels/bindings.
+   Unlayered dimensions/surface intentionally beat Helm utilities only in these rows. */
+.catalog-filter-row > * {
+  min-width: 0;
+}
+
+.catalog-filter-row > div > [data-slot="input-group"],
+.catalog-filter-row > div > [data-slot="native-select-wrapper"] > [data-slot="native-select"],
+.catalog-filter-row > [data-slot="button"] {
+  height: 2.25rem;
+}
+
+.catalog-filter-row > div > [data-slot="input-group"] {
+  background: var(--background);
+}
+
+.catalog-filter-row > .catalog-filter-search > [data-slot="input-group"] {
+  width: 100%;
+}
+
+@media (width < 40rem) {
+  .catalog-filter-row > .catalog-filter-search {
+    width: 100%;
+  }
+}
+
+@media (width >= 40rem) {
+  .catalog-filter-row > .catalog-filter-search > [data-slot="input-group"] {
+    width: 15rem;
+  }
+}
+
+@media (width >= 80rem) {
+  .catalog-filter-row > .catalog-filter-search > [data-slot="input-group"] {
+    width: 25rem;
+  }
+}
+
 /* Shared Helm modal contract. Unlayered rules intentionally beat Helm utilities.
    Keep the header first, directly in content or an unpadded dynamic component host.
    One token controls actual overlay padding AND full-bleed margins; no clipping. */

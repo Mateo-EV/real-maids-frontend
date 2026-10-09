@@ -10,6 +10,8 @@ import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.r
 import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
 import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
 import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
+import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositories/user-session.repository"
+import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
 import { ADMIN_ROUTES } from "./admin.routes"
 
 @Component({ template: "Login destination" })
@@ -27,7 +29,8 @@ function setup(authenticated: boolean) {
       provideRouter([...ADMIN_ROUTES, { path: "login", component: LoginDestination }]),
       { provide: AuthStore, useValue: auth },
       { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-      { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
+      { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+      { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
     ]
   })
   return auth

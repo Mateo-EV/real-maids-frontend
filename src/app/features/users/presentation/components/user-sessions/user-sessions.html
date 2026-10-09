@@ -1,0 +1,148 @@
+<section
+  class="rounded-xl border bg-card shadow-sm"
+  aria-labelledby="sessions-title"
+  [attr.aria-busy]="sessions.loading()"
+>
+  <div class="flex flex-wrap items-end justify-between gap-4 border-b p-4">
+    <div class="xl:self-start">
+      <h1 id="sessions-title" class="text-lg font-bold text-primary">Sesiones activas</h1>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Consulta las conexiones por usuario y cierra una sesión individual.
+      </p>
+    </div>
+    <div class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+      <div class="catalog-filter-search flex flex-col gap-1">
+        <label for="session-search" class="text-xs font-medium">Buscar nombre o ID</label>
+        <hlm-input-group>
+          <input
+            #searchInput
+            hlmInputGroupInput
+            id="session-search"
+            type="search"
+            placeholder="Buscar nombre o USR-…"
+            [value]="search()"
+            (input)="search.set(searchInput.value)"
+          />
+          <hlm-input-group-addon
+            ><ng-icon name="lucideSearch" aria-hidden="true"
+          /></hlm-input-group-addon>
+        </hlm-input-group>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="session-filter" class="text-xs font-medium">Usuarios</label>
+        <hlm-native-select
+          selectId="session-filter"
+          [value]="filter()"
+          (valueChange)="filter.set($event ?? 'all')"
+        >
+          <option value="all">Todos</option>
+          <option value="with">Con sesiones</option>
+          <option value="without">Sin sesiones</option>
+        </hlm-native-select>
+      </div>
+    </div>
+  </div>
+  @if (sessions.loading()) {
+    <div class="flex min-h-48 items-center justify-center gap-3" role="status">
+      <hlm-spinner />Cargando sesiones…
+    </div>
+  } @else if (sessions.error()) {
+    <div class="p-4">
+      <div hlmAlert variant="destructive">
+        <h2 hlmAlertTitle>No pudimos cargar las sesiones</h2>
+        <p hlmAlertDescription>Reintenta para consultar las conexiones.</p>
+      </div>
+      <button hlmBtn variant="outline" class="mt-3" type="button" (click)="retry.emit()">
+        Reintentar
+      </button>
+    </div>
+  } @else if (visibleRows().length === 0) {
+    <div hlmEmpty>
+      <div hlmEmptyHeader>
+        <h2 hlmEmptyTitle>Sin resultados</h2>
+        <p hlmEmptyDescription>No hay usuarios que coincidan con la búsqueda y el filtro.</p>
+      </div>
+      <div hlmEmptyContent>
+        <button hlmBtn variant="outline" type="button" (click)="clearFilters()">
+          Mostrar todos
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="flex flex-col gap-3 p-4">
+      @for (row of pagedRows(); track row.user.id) {
+        <details class="rounded-xl border" [attr.data-session-user]="row.user.id">
+          <summary>
+            <span class="ml-2 inline-flex max-w-full flex-wrap items-center gap-3 align-middle">
+              <span class="font-semibold break-words">{{ row.user.name }}</span>
+              <span class="text-xs text-muted-foreground">#USR-{{ row.user.id }}</span>
+              <span hlmBadge [variant]="row.sessions.length ? 'secondary' : 'outline'"
+                >{{ row.sessions.length }}
+                {{ row.sessions.length === 1 ? "sesión" : "sesiones" }}</span
+              >
+            </span>
+          </summary>
+          <div class="flex flex-col gap-3 bg-muted/20 p-4">
+            @for (session of row.sessions; track session.id) {
+              <article class="rounded-lg border bg-card p-4" [attr.aria-label]="session.device">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <h2 class="text-sm font-semibold">{{ session.device }}</h2>
+                  @if (session.isCurrent) {
+                    <span hlmBadge>Sesión actual</span>
+                  } @else {
+                    <button
+                      hlmBtn
+                      variant="destructive"
+                      size="sm"
+                      type="button"
+                      [attr.aria-label]="
+                        'Cerrar sesión de ' + row.user.name + ' en ' + session.device
+                      "
+                      (click)="revoke(row.user, session)"
+                    >
+                      Cerrar sesión
+                    </button>
+                  }
+                </div>
+                <dl class="mt-3 grid gap-3 text-xs sm:grid-cols-3">
+                  <div>
+                    <dt class="text-muted-foreground">Dirección IP</dt>
+                    <dd class="mt-1 break-all">{{ session.ip }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-muted-foreground">Inicio · UTC</dt>
+                    <dd class="mt-1 tabular-nums">
+                      {{ session.startDate | date: "dd/MM/yyyy HH:mm" : "UTC" }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-muted-foreground">Expira · UTC</dt>
+                    <dd class="mt-1 tabular-nums">
+                      {{ session.expiryDate | date: "dd/MM/yyyy HH:mm" : "UTC" }}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            } @empty {
+              <p class="text-sm text-muted-foreground">Sin sesiones activas</p>
+            }
+          </div>
+        </details>
+      }
+    </div>
+  }
+  @if (!sessions.loading() && !sessions.error()) {
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t p-4">
+      <p class="text-xs text-muted-foreground" role="status">
+        Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ visibleRows().length }} usuarios
+      </p>
+      <app-table-pagination
+        label="Paginación de usuarios en sesiones"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="visibleRows().length === 0"
+        (pageSelected)="goToPage($event)"
+      />
+    </div>
+  }
+</section>

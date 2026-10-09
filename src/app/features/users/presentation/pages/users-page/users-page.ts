@@ -1,4 +1,4 @@
-import { DatePipe, NgTemplateOutlet } from "@angular/common"
+import { DatePipe, isPlatformBrowser, NgTemplateOutlet } from "@angular/common"
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,6 +6,7 @@ import {
   DestroyRef,
   inject,
   OnInit,
+  PLATFORM_ID,
   signal
 } from "@angular/core"
 import { NgIcon, provideIcons } from "@ng-icons/core"
@@ -35,7 +36,7 @@ import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { finalize, forkJoin } from "rxjs"
+import { finalize, forkJoin, interval } from "rxjs"
 import { DEMO_METRICS, demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
 import {
@@ -49,6 +50,9 @@ import {
   UserStatusContext,
   UserStatusDialog
 } from "../../components/user-status-dialog/user-status-dialog"
+
+import { UserSessionsStore } from "../../state/user-sessions.store"
+import { UserSessions } from "../../components/user-sessions/user-sessions"
 
 @Component({
   selector: "app-users-page",
@@ -68,7 +72,8 @@ import {
     HlmEmptyImports,
     HlmAlertImports,
     HlmSpinnerImports,
-    TablePagination
+    TablePagination,
+    UserSessions
   ],
   providers: [
     provideIcons({
@@ -89,6 +94,13 @@ import {
 export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
   readonly roles = inject(RolesStore)
+  readonly sessions = inject(UserSessionsStore)
+  private readonly platformId = inject(PLATFORM_ID)
+  readonly section = signal<"users" | "sessions">("users")
+  readonly sessionCount = computed(() => {
+    const ids = new Set(this.users.users().map(user => user.id))
+    return this.sessions.activeSessions().filter(session => ids.has(session.userId)).length
+  })
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
@@ -135,6 +147,17 @@ export class UsersPage implements OnInit {
 
   ngOnInit(): void {
     this.retry()
+    this.retrySessions()
+    if (isPlatformBrowser(this.platformId)) {
+      interval(1000)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.sessions.refreshClock())
+    }
+  }
+
+  retrySessions(): void {
+    if (this.destroyRef.destroyed || this.sessions.loading()) return
+    this.sessions.loadSessions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retry(): void {

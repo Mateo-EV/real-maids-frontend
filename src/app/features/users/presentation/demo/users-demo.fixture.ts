@@ -3,9 +3,10 @@ import { User } from "../../domain/entities/user.entity"
 // FICTITIOUS DEMO DATA — unused by the in-memory source, never a real credential.
 export const DEMO_PASSWORD_PLACEHOLDER = "DEMO-UNUSED-NOT-A-CREDENTIAL"
 
-// FICTITIOUS DEMO DATA — sessions and audit are decorative numbers, not monitored activity.
-// TODO integration: remove these metrics until confirmed sessions/audit endpoints are connected.
-export const DEMO_METRICS = { sessions: 12, mobileSessions: 3, auditEvents: 324 } as const
+// FICTITIOUS DEMO DATA — audit is decorative, not monitored activity.
+// Session counts instead derive from the source-owned simulated registry and expiry.
+// TODO integration: replace audit decoration only with confirmed internal contracts.
+export const DEMO_METRICS = { auditEvents: 324 } as const
 
 // FICTITIOUS DEMO DATA — entity bindings, documentation-only IPs and profile decoration.
 // TODO integration: replace with confirmed entity relationships and authorized session metadata.

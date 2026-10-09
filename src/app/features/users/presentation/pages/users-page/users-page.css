@@ -153,15 +153,6 @@
   line-height: 1.5;
 }
 
-.catalog-filters > div {
-  min-width: 0;
-}
-
-.catalog-filters hlm-input-group {
-  height: 2.25rem;
-  background: var(--background);
-}
-
 .users-catalog [hlmTable] {
   font-size: 0.75rem;
 }
@@ -198,11 +189,5 @@
   }
   .users-catalog ul[aria-label="Usuarios"] {
     display: flex;
-  }
-}
-
-@media (width < 40rem) {
-  .catalog-filters > div:first-child {
-    width: 100%;
   }
 }
