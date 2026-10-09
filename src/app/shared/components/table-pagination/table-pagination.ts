@@ -22,25 +22,47 @@ import { pageTokens } from "@/app/shared/pagination/page-tokens"
     <nav hlmPagination [aria-label]="label()">
       <ul hlmPaginationContent class="flex-wrap justify-center">
         <li hlmPaginationItem>
-          <button hlmPaginationLink size="sm" type="button" aria-label="Página anterior"
+          <button
+            hlmPaginationLink
+            size="sm"
+            type="button"
+            aria-label="Página anterior"
             [disabled]="disabled() || currentPage() <= 1"
-            (click)="selectPage(currentPage() - 1)">Anterior</button>
+            (click)="selectPage(currentPage() - 1)"
+          >
+            Anterior
+          </button>
         </li>
         @for (token of tokens(); track token) {
           <li hlmPaginationItem>
             @if (isPage(token)) {
-              <button hlmPaginationLink size="sm" type="button"
-                [isActive]="token === currentPage()" [attr.aria-label]="'Página ' + token"
-                [disabled]="disabled()" (click)="selectPage(token)">{{ token }}</button>
+              <button
+                hlmPaginationLink
+                size="sm"
+                type="button"
+                [isActive]="token === currentPage()"
+                [attr.aria-label]="'Página ' + token"
+                [disabled]="disabled()"
+                (click)="selectPage(token)"
+              >
+                {{ token }}
+              </button>
             } @else {
               <hlm-pagination-ellipsis srOnlyText="Más páginas" />
             }
           </li>
         }
         <li hlmPaginationItem>
-          <button hlmPaginationLink size="sm" type="button" aria-label="Página siguiente"
+          <button
+            hlmPaginationLink
+            size="sm"
+            type="button"
+            aria-label="Página siguiente"
             [disabled]="disabled() || currentPage() >= pageCount()"
-            (click)="selectPage(currentPage() + 1)">Siguiente</button>
+            (click)="selectPage(currentPage() + 1)"
+          >
+            Siguiente
+          </button>
         </li>
       </ul>
     </nav>

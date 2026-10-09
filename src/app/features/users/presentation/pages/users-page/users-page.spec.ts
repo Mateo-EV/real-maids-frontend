@@ -17,7 +17,10 @@ import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memor
 import { UsersPage } from "./users-page"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
-import { UserStatusContext, UserStatusDialog } from "../../components/user-status-dialog/user-status-dialog"
+import {
+  UserStatusContext,
+  UserStatusDialog
+} from "../../components/user-status-dialog/user-status-dialog"
 
 const providers = [
   { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
@@ -115,7 +118,11 @@ describe("UsersPage", () => {
       element.querySelector('ul[aria-label="Usuarios"]')!
     ]) {
       for (const user of page.visibleUsers()) {
-        for (const action of ["Editar usuario", "Eliminar usuario", user.isActive ? "Desactivar usuario" : "Activar usuario"]) {
+        for (const action of [
+          "Editar usuario",
+          "Eliminar usuario",
+          user.isActive ? "Desactivar usuario" : "Activar usuario"
+        ]) {
           const button = surface.querySelector<HTMLButtonElement>(
             `button[aria-label="${action} ${user.name}"]`
           )!
@@ -141,7 +148,7 @@ describe("UsersPage", () => {
       expect(element.querySelector(`label[for="${id}"]`)?.textContent?.trim()).toBeTruthy()
       expect(element.querySelector(`#${id}`)).not.toBeNull()
     }
-    expect(element.querySelector('main h1#users-title')).not.toBeNull()
+    expect(element.querySelector("main h1#users-title")).not.toBeNull()
   })
 
   it("ignores dialog callbacks after the owning page is destroyed", async () => {
@@ -168,11 +175,18 @@ describe("UsersPage", () => {
     const { page, users, element } = await setup()
     const update = vi.spyOn(users, "updateUserById")
     const success = vi.spyOn(TestBed.inject(HotToastService), "success")
-    const open = vi.spyOn(TestBed.inject(HlmDialogService), "open").mockReturnValue(undefined as never)
-    for (const surface of [element.querySelector("tbody")!, element.querySelector('ul[aria-label="Usuarios"]')!]) {
+    const open = vi
+      .spyOn(TestBed.inject(HlmDialogService), "open")
+      .mockReturnValue(undefined as never)
+    for (const surface of [
+      element.querySelector("tbody")!,
+      element.querySelector('ul[aria-label="Usuarios"]')!
+    ]) {
       for (const user of [page.visibleUsers()[0], page.visibleUsers()[4]]) {
         const verb = user.isActive ? "Desactivar" : "Activar"
-        const button = surface.querySelector<HTMLButtonElement>(`button[aria-label="${verb} usuario ${user.name}"]`)!
+        const button = surface.querySelector<HTMLButtonElement>(
+          `button[aria-label="${verb} usuario ${user.name}"]`
+        )!
         expect(button.querySelector('ng-icon[name="lucidePower"]')).not.toBeNull()
         button.click()
         expect(open.mock.calls.at(-1)![0]).toBe(UserStatusDialog)
@@ -192,7 +206,9 @@ describe("UsersPage", () => {
     const filters = [page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]
     context.onChanged()
     expect(success).toHaveBeenCalledExactlyOnceWith(`Usuario ${context.user.name} activado`)
-    expect([page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]).toEqual(filters)
+    expect([page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]).toEqual(
+      filters
+    )
     page.changeUserStatus(users.users()[0])
     ;(open.mock.calls.at(-1)![1]!.context as UserStatusContext).onChanged()
     expect(success).toHaveBeenLastCalledWith(`Usuario ${users.users()[0].name} desactivado`)
@@ -377,13 +393,18 @@ describe("UsersPage", () => {
 
   it("connects bounded shared navigation to users slicing and filter resets", async () => {
     const { page, fixture, element } = await setup()
-    const nav = () => element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
+    const nav = () =>
+      element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
     const select = (number: number) => {
       nav().querySelector<HTMLButtonElement>(`button[aria-label="Página ${number}"]`)!.click()
       fixture.detectChanges()
     }
     expect(nav()).not.toBeNull()
-    expect(nav().querySelectorAll('button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])')).toHaveLength(4)
+    expect(
+      nav().querySelectorAll(
+        'button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])'
+      )
+    ).toHaveLength(4)
     select(10)
     expect(page.currentPage()).toBe(10)
     expect(page.visibleUsers()).toHaveLength(3)
@@ -398,8 +419,14 @@ describe("UsersPage", () => {
     page.setSearch("persona.48@")
     fixture.detectChanges()
     expect(page.currentPage()).toBe(1)
-    expect(nav().querySelectorAll('button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])')).toHaveLength(1)
-    expect(nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled).toBe(true)
+    expect(
+      nav().querySelectorAll(
+        'button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])'
+      )
+    ).toHaveLength(1)
+    expect(
+      nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled
+    ).toBe(true)
   })
 
   it("clamps the current page when last-page users are deleted", async () => {
@@ -413,7 +440,9 @@ describe("UsersPage", () => {
     fixture.detectChanges()
     const nav = element.querySelector('nav[aria-label="Paginación de usuarios"]')!
     expect(nav.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("9")
-    expect(nav.querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled).toBe(true)
+    expect(
+      nav.querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled
+    ).toBe(true)
   })
 
   it("shows empty filtered results and offers a reset action", async () => {

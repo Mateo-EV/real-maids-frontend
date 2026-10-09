@@ -1,13 +1,29 @@
 import { Component } from "@angular/core"
 import { RouterLink, RouterLinkActive } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucideHouse, lucideContactRound, lucideUsersRound, lucideFileText, lucideCalendarDays, lucideShieldCheck } from "@ng-icons/lucide"
+import {
+  lucideHouse,
+  lucideContactRound,
+  lucideUsersRound,
+  lucideFileText,
+  lucideCalendarDays,
+  lucideShieldCheck
+} from "@ng-icons/lucide"
 import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
 
 @Component({
   selector: "app-admin-sidebar",
   imports: [RouterLink, RouterLinkActive, NgIcon, HlmSidebarImports],
-  providers: [provideIcons({ lucideHouse, lucideContactRound, lucideUsersRound, lucideFileText, lucideCalendarDays, lucideShieldCheck })],
+  providers: [
+    provideIcons({
+      lucideHouse,
+      lucideContactRound,
+      lucideUsersRound,
+      lucideFileText,
+      lucideCalendarDays,
+      lucideShieldCheck
+    })
+  ],
   host: { class: "contents" },
   styleUrl: "./admin-sidebar.css",
   template: `
@@ -34,13 +50,25 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
               }
             </ul>
           </div>
-          <div hlmSidebarGroup class="module-group administration-group" role="group" aria-label="Administración">
+          <div
+            hlmSidebarGroup
+            class="module-group administration-group"
+            role="group"
+            aria-label="Administración"
+          >
             <div hlmSidebarGroupLabel class="module-label">Administración</div>
             <ul hlmSidebarMenu class="module-menu">
               <li hlmSidebarMenuItem>
-                <a hlmSidebarMenuButton class="module-button" routerLink="/admin/users" routerLinkActive
-                  #iam="routerLinkActive" [isActive]="iam.isActive"
-                  ariaCurrentWhenActive="page" [closeMobileSidebarOnClick]="true">
+                <a
+                  hlmSidebarMenuButton
+                  class="module-button"
+                  routerLink="/admin/users"
+                  routerLinkActive
+                  #iam="routerLinkActive"
+                  [isActive]="iam.isActive"
+                  ariaCurrentWhenActive="page"
+                  [closeMobileSidebarOnClick]="true"
+                >
                   <ng-icon name="lucideShieldCheck" size="18" aria-hidden="true" />
                   <span>IAM</span>
                   <span class="active-dot" aria-hidden="true"></span>

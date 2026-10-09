@@ -85,21 +85,26 @@ describe("UserInMemorySource", () => {
     expect(result.data.lastAccess).toEqual(original.lastAccess)
     mutate(result.data)
     expect(await data(source.getUserById(1))).toEqual({
-      ...latest.data, isActive: true, updatedAt: expectedTime
+      ...latest.data,
+      isActive: true,
+      updatedAt: expectedTime
     })
   })
 
-  it.each([true, false])("sets desired status=%s idempotently, preserving all other fields", async desired => {
-    const original = await data(source.getUserById(5))
-    const stream = status(5, desired)
-    expect(await data(source.getUserById(5))).toEqual(original)
-    for (let repeat = 0; repeat < 2; repeat++) {
-      const updated = await data(stream)
-      expect(updated).toEqual({ ...original, isActive: desired, updatedAt: new Date() })
-      expect(updated.createdAt).not.toBe(updated.updatedAt)
-      expect(updated.lastAccess).toBeNull()
+  it.each([true, false])(
+    "sets desired status=%s idempotently, preserving all other fields",
+    async desired => {
+      const original = await data(source.getUserById(5))
+      const stream = status(5, desired)
+      expect(await data(source.getUserById(5))).toEqual(original)
+      for (let repeat = 0; repeat < 2; repeat++) {
+        const updated = await data(stream)
+        expect(updated).toEqual({ ...original, isActive: desired, updatedAt: new Date() })
+        expect(updated.createdAt).not.toBe(updated.updatedAt)
+        expect(updated.lastAccess).toBeNull()
+      }
     }
-  })
+  )
 
   it("rechecks missing status records at execution without mutation", async () => {
     const deletion = firstValueFrom(source.deleteUserById(1))
@@ -109,7 +114,10 @@ describe("UserInMemorySource", () => {
     expect((await deletion).success).toBe(true)
     expect(await pending).toMatchObject({ success: false, error: { code: "USER_NOT_FOUND" } })
     const before = await data(source.getUsers())
-    expect(await settle(status(99, true))).toMatchObject({ success: false, error: { code: "USER_NOT_FOUND" } })
+    expect(await settle(status(99, true))).toMatchObject({
+      success: false,
+      error: { code: "USER_NOT_FOUND" }
+    })
     expect(await data(source.getUsers())).toEqual(before)
   })
 

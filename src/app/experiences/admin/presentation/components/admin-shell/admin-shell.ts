@@ -37,7 +37,7 @@ export class AdminShell {
   readonly Lang = Lang
   // Visual preference only: translation and persistence remain outside this shell.
   readonly language = signal<Lang>(Lang.ES)
-  readonly languageLabel = (value: unknown): string => value === Lang.EN ? "Inglés" : "Español"
+  readonly languageLabel = (value: unknown): string => (value === Lang.EN ? "Inglés" : "Español")
 
   setLanguage(value: unknown): void {
     if (value === Lang.ES || value === Lang.EN) this.language.set(value)

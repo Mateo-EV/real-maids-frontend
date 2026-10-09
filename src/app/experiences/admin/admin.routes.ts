@@ -6,7 +6,9 @@ export const ADMIN_ROUTES: Routes = [
     path: "admin",
     canActivate: [authGuard],
     loadComponent: () =>
-      import("./presentation/components/admin-shell/admin-shell").then(component => component.AdminShell),
+      import("./presentation/components/admin-shell/admin-shell").then(
+        component => component.AdminShell
+      ),
     children: [
       // Temporary entry destination until the approved dashboard scope is implemented.
       { path: "", pathMatch: "full", redirectTo: "users" },

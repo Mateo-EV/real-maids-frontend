@@ -42,7 +42,17 @@ describe("UserStore", () => {
     store = TestBed.inject(UserStore)
   })
   it("replaces only the status row, revises the catalog and tracks concurrent loading", () => {
-    const other = User.create(2, "Other", 31, "other@example.test", Lang.ES, true, new Date(), new Date(), 2)
+    const other = User.create(
+      2,
+      "Other",
+      31,
+      "other@example.test",
+      Lang.ES,
+      true,
+      new Date(),
+      new Date(),
+      2
+    )
     list.execute.mockReturnValue(of(Result.success([user, other])))
     store.loadUsers().subscribe()
     const stale = new Subject<Result<User[], UserError>>()
@@ -55,7 +65,17 @@ describe("UserStore", () => {
     request.subscribe()
     expect(status.execute).toHaveBeenCalledExactlyOnceWith(1, false)
     expect(store.loading()).toBe(true)
-    const changed = User.create(1, user.name, user.age, user.email, user.lang, false, user.createdAt, new Date(), user.roleId)
+    const changed = User.create(
+      1,
+      user.name,
+      user.age,
+      user.email,
+      user.lang,
+      false,
+      user.createdAt,
+      new Date(),
+      user.roleId
+    )
     response.next(Result.success(changed))
     response.complete()
     expect(store.users()).toEqual([changed, other])
@@ -81,7 +101,9 @@ describe("UserStore", () => {
     status.execute.mockReturnValue(throwError(() => new Error("offline")))
     store.updateUserStatusById(1, false).subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
-    status.execute.mockImplementation(() => { throw error })
+    status.execute.mockImplementation(() => {
+      throw error
+    })
     store.updateUserStatusById(1, false).subscribe()
     expect(store.error()).toBe(error)
     const pending = new Subject<Result<User, UserError>>()

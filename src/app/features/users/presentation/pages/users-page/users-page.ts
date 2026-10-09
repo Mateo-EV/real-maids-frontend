@@ -45,7 +45,10 @@ import {
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
-import { UserStatusContext, UserStatusDialog } from "../../components/user-status-dialog/user-status-dialog"
+import {
+  UserStatusContext,
+  UserStatusDialog
+} from "../../components/user-status-dialog/user-status-dialog"
 
 @Component({
   selector: "app-users-page",
@@ -270,5 +273,4 @@ export class UsersPage implements OnInit {
       restoreFocus: "#new-user"
     })
   }
-
 }

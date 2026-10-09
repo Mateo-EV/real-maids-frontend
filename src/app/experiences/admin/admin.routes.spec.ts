@@ -35,11 +35,16 @@ function setup(authenticated: boolean) {
 
 describe("Admin users navigation", () => {
   // jsdom lacks layout observation; these tests assert semantics, not rendered geometry.
-  beforeEach(() => vi.stubGlobal("ResizeObserver", class {
-    observe(): void {}
-    unobserve(): void {}
-    disconnect(): void {}
-  }))
+  beforeEach(() =>
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
+  )
   afterEach(() => vi.unstubAllGlobals())
   it("protects deep links using session restoration and the original returnUrl contract", async () => {
     const auth = setup(false)
@@ -60,8 +65,9 @@ describe("Admin users navigation", () => {
     const auth = setup(true)
     auth.logout.mockImplementation(() => auth.session.set(null))
     const harness = await RouterTestingHarness.create("/admin/users")
-    const button = Array.from(harness.routeNativeElement!.querySelectorAll<HTMLButtonElement>("button"))
-      .find(item => item.textContent?.includes("Salir"))!
+    const button = Array.from(
+      harness.routeNativeElement!.querySelectorAll<HTMLButtonElement>("button")
+    ).find(item => item.textContent?.includes("Salir"))!
     button.click()
     await harness.fixture.whenStable()
     expect(auth.logout).toHaveBeenCalledOnce()
@@ -98,8 +104,9 @@ describe("Admin users navigation", () => {
     const administration = nav.querySelector('[role="group"][aria-label="Administración"]')!
     expect(general).not.toBeNull()
     expect(administration).not.toBeNull()
-    expect(Array.from(general.querySelectorAll("button"), button => button.textContent?.trim()))
-      .toEqual(["Landing", "CRM", "RRHH", "Cotizaciones", "Programaciones"])
+    expect(
+      Array.from(general.querySelectorAll("button"), button => button.textContent?.trim())
+    ).toEqual(["Landing", "CRM", "RRHH", "Cotizaciones", "Programaciones"])
     expect(general.querySelectorAll("a")).toHaveLength(0)
     expect(administration.querySelectorAll("button")).toHaveLength(0)
     expect(nav.querySelectorAll("a")).toHaveLength(1)
@@ -128,14 +135,18 @@ describe("Admin users navigation", () => {
   it("defaults the custom language choice to Spanish", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
-    expect(harness.routeNativeElement?.querySelector("hlm-select-value")?.textContent).toContain("Español")
+    expect(harness.routeNativeElement?.querySelector("hlm-select-value")?.textContent).toContain(
+      "Español"
+    )
   })
 
   it("shows the public development environment and Spanish visual language default", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
     expect(harness.routeNativeElement?.textContent).toContain("Entorno: Desarrollo")
-    expect(harness.routeNativeElement?.querySelector("hlm-select-value")?.textContent).toContain("Español")
+    expect(harness.routeNativeElement?.querySelector("hlm-select-value")?.textContent).toContain(
+      "Español"
+    )
   })
 
   it("renders disabled non-routing destinations and build-time environment with Spanish language default", async () => {
@@ -147,7 +158,9 @@ describe("Admin users navigation", () => {
     const nav = element.querySelector('nav[aria-label="Navegación administrativa"]')!
     expect(nav).not.toBeNull()
     for (const label of ["Landing", "CRM", "RRHH", "Cotizaciones", "Programaciones"]) {
-      const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find(item => item.textContent?.trim() === label)!
+      const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find(
+        item => item.textContent?.trim() === label
+      )!
       expect(button).toBeDefined()
       expect(button.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
       expect(button.disabled).toBe(true)
@@ -160,6 +173,6 @@ describe("Admin users navigation", () => {
     expect(element.querySelector(".status-header select")).toBeNull()
     expect(element.querySelector('label[for="admin-language"]')?.textContent).toContain("Idioma")
     expect(element.querySelector("hlm-select-value")?.textContent).toContain("Español")
-    expect(element.querySelector('button[hlmSidebarTrigger]')).not.toBeNull()
+    expect(element.querySelector("button[hlmSidebarTrigger]")).not.toBeNull()
   })
 })

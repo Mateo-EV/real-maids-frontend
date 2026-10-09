@@ -71,7 +71,9 @@ describe("Shared Helm modal header contract", () => {
       expect(dialog.getAttribute("aria-labelledby")).toBe(heading.id)
       expect(dialog.getAttribute("aria-describedby")).toBe(subtitle.id)
       expect(host.querySelector('[data-slot="dialog-footer"]')).not.toBeNull()
-      expect(content.querySelector('[data-slot="dialog-close"]') !== null).toBe(mode === "projected")
+      expect(content.querySelector('[data-slot="dialog-close"]') !== null).toBe(
+        mode === "projected"
+      )
     }
   )
 })

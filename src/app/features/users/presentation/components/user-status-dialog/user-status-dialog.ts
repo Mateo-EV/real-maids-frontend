@@ -36,14 +36,33 @@ export interface UserStatusContext {
       </div>
     }
     <hlm-dialog-footer class="mt-4 border-t pt-3">
-      <button id="cancel-status-user" hlmBtn variant="outline" type="button"
-        [disabled]="submitting()" (click)="cancel()">Cancelar</button>
-      <button hlmBtn type="button" [disabled]="submitting()"
-        [attr.aria-busy]="submitting()" (click)="confirm()">
+      <button
+        id="cancel-status-user"
+        hlmBtn
+        variant="outline"
+        type="button"
+        [disabled]="submitting()"
+        (click)="cancel()"
+      >
+        Cancelar
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        [disabled]="submitting()"
+        [attr.aria-busy]="submitting()"
+        (click)="confirm()"
+      >
         @if (submitting()) {
           <hlm-spinner aria-label="Cambiando estado" />
         }
-        {{ submitting() ? "Cambiando estado…" : error() ? "Reintentar " + action.toLowerCase() : "Confirmar " + action.toLowerCase() }}
+        {{
+          submitting()
+            ? "Cambiando estado…"
+            : error()
+              ? "Reintentar " + action.toLowerCase()
+              : "Confirmar " + action.toLowerCase()
+        }}
       </button>
     </hlm-dialog-footer>
   `
@@ -69,7 +88,8 @@ export class UserStatusDialog {
     this.error.set("")
     try {
       const result = await firstValueFrom(
-        this.users.updateUserStatusById(this.context.user.id, this.nextActive)
+        this.users
+          .updateUserStatusById(this.context.user.id, this.nextActive)
           .pipe(takeUntilDestroyed(this.destroyRef)),
         { defaultValue: undefined }
       )

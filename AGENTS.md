@@ -69,6 +69,8 @@ Reuse installed Helm components; generate missing available components with `npx
 
 ## Quality and completion
 
+After each change, run the workspace-local Prettier on the files you touched before final verification or commit preparation: `npx --no-install prettier --write <paths>`, followed by `npx --no-install prettier --check <paths>`. Respect `.prettierrc` and `.prettierignore`; do not format unrelated files unless explicitly requested. Run formatting before staging and snapshot approval, and never alter an approved snapshot silently.
+
 Use the official Angular `test` target with Vitest, not Jasmine/Karma. Component schematics have `skipTests: true`; create required tests explicitly. Missing tests are not a successful empty suite; do not disable or weaken tests for a green result.
 
 For code changes, compile and run relevant tests through available Angular MCP operations or local CLI. Cover domain edge cases, use-case success/failure, adapter mapping/errors, guard permissions and component validation/loading/error/actions as applicable. Validate SSR/hydration safety and responsive/keyboard behavior for UI changes, including recent Chrome, Edge and Firefox where relevant. Report exact commands and observed outcomes, not inherited test counts.

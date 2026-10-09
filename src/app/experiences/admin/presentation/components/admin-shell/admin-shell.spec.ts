@@ -12,22 +12,35 @@ const identity = { name: "Actual Identity", email: "identity@example.test" }
 
 describe("AdminShell", () => {
   const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-  const mediaQuery = (matches: boolean) => ({ matches, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  const mediaQuery = (matches: boolean) => ({
+    matches,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn()
+  })
   beforeEach(() => {
     // jsdom cannot measure layout; ResizeObserver is a browser-only test shim.
-    vi.stubGlobal("ResizeObserver", class {
-      observe(): void {}
-      unobserve(): void {}
-      disconnect(): void {}
-    })
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
     HTMLElement.prototype.scrollIntoView = vi.fn()
-    vi.stubGlobal("matchMedia", vi.fn(() => mediaQuery(false)))
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => mediaQuery(false))
+    )
     TestBed.configureTestingModule({
       imports: [AdminShell],
-      providers: [provideRouter([]), {
-        provide: AuthStore,
-        useValue: { session: signal(identity), logout: vi.fn() }
-      }]
+      providers: [
+        provideRouter([]),
+        {
+          provide: AuthStore,
+          useValue: { session: signal(identity), logout: vi.fn() }
+        }
+      ]
     })
   })
   afterEach(() => {
@@ -40,7 +53,11 @@ describe("AdminShell", () => {
     fixture.detectChanges()
     await fixture.whenStable()
     fixture.detectChanges()
-    return { fixture, shell: fixture.componentInstance, element: fixture.nativeElement as HTMLElement }
+    return {
+      fixture,
+      shell: fixture.componentInstance,
+      element: fixture.nativeElement as HTMLElement
+    }
   }
 
   it("uses enum-backed Spanish default and permits only visual Spanish/English changes", async () => {
@@ -74,7 +91,9 @@ describe("AdminShell", () => {
     expect(element.textContent).toContain(`Entorno: ${environment.label}`)
     expect(element.textContent).toContain(identity.email)
     const navigate = vi.spyOn(TestBed.inject(Router), "navigateByUrl").mockResolvedValue(true)
-    const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(item => item.textContent?.includes("Salir"))!
+    const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(item =>
+      item.textContent?.includes("Salir")
+    )!
     button.click()
     expect(TestBed.inject(AuthStore).logout).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith("/login")
@@ -114,7 +133,10 @@ describe("AdminShell", () => {
 
   it("routes the accessible mobile toggle and IAM dismissal through the generated service", async () => {
     // Simulate the browser breakpoint response, not a rendered viewport.
-    vi.stubGlobal("matchMedia", vi.fn(() => mediaQuery(true)))
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => mediaQuery(true))
+    )
     const { fixture, shell, element } = await setup()
     expect(shell.sidebar.isMobile()).toBe(true)
     const trigger = element.querySelector<HTMLButtonElement>("button[hlmSidebarTrigger]")!
@@ -128,7 +150,9 @@ describe("AdminShell", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true")
     const nav = document.querySelector('nav[aria-label="Navegación administrativa"]')!
     expect(nav).not.toBeNull()
-    expect(document.querySelector("[hlmSheetTitle]")?.textContent).toContain("Navegación administrativa")
+    expect(document.querySelector("[hlmSheetTitle]")?.textContent).toContain(
+      "Navegación administrativa"
+    )
     const link = nav.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')!
     // Keep this service test independent of route loading, covered by the route harness.
     vi.spyOn(TestBed.inject(Router), "navigateByUrl").mockResolvedValue(true)

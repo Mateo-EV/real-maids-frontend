@@ -26,13 +26,29 @@ describe("pageTokens", () => {
   it("keeps huge counts bounded without allocating the full list", () => {
     const count = Number.MAX_SAFE_INTEGER
     expect(pageTokens(1000000, count)).toEqual([
-      1, "ellipsis-start", 999999, 1000000, 1000001, "ellipsis-end", count
+      1,
+      "ellipsis-start",
+      999999,
+      1000000,
+      1000001,
+      "ellipsis-end",
+      count
     ])
   })
 
   it.each([
-    [1, 0], [1, -1], [1, 2.5], [1, NaN], [1, Infinity], [1, Number.MAX_SAFE_INTEGER + 1],
-    [0, 50], [-1, 50], [51, 50], [2.5, 50], [NaN, 50], [Infinity, 50]
+    [1, 0],
+    [1, -1],
+    [1, 2.5],
+    [1, NaN],
+    [1, Infinity],
+    [1, Number.MAX_SAFE_INTEGER + 1],
+    [0, 50],
+    [-1, 50],
+    [51, 50],
+    [2.5, 50],
+    [NaN, 50],
+    [Infinity, 50]
   ])("returns no tokens for invalid one-based page inputs %s / %s", (page, count) => {
     expect(pageTokens(page, count)).toEqual([])
   })
@@ -48,7 +64,9 @@ describe("pageTokens", () => {
         expect(pages[0]).toBe(1)
         expect(pages.at(-1)).toBe(count)
         expect(pages).toContain(current)
-        expect(pages.every(page => Number.isSafeInteger(page) && page >= 1 && page <= count)).toBe(true)
+        expect(pages.every(page => Number.isSafeInteger(page) && page >= 1 && page <= count)).toBe(
+          true
+        )
         for (let i = 1; i < tokens.length - 1; i++) {
           if (typeof tokens[i] === "string")
             expect((tokens[i + 1] as number) - (tokens[i - 1] as number)).toBeGreaterThan(2)

@@ -13,7 +13,8 @@ function setup(page = 25, count = 50) {
   const element = fixture.nativeElement as HTMLElement
   const emitted = vi.fn()
   fixture.componentInstance.pageSelected.subscribe(emitted)
-  const button = (name: string) => element.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!
+  const button = (name: string) =>
+    element.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!
   return { fixture, element, emitted, button }
 }
 
@@ -21,8 +22,13 @@ describe("TablePagination", () => {
   it("renders named native navigation, selected page and noninteractive ellipses", () => {
     const { element, button, emitted } = setup()
     expect(element.querySelector('nav[aria-label="Paginación de usuarios"]')).not.toBeNull()
-    expect(Array.from(element.querySelectorAll('button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])')).map(node => node.textContent?.trim()))
-      .toEqual(["1", "24", "25", "26", "50"])
+    expect(
+      Array.from(
+        element.querySelectorAll(
+          'button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])'
+        )
+      ).map(node => node.textContent?.trim())
+    ).toEqual(["1", "24", "25", "26", "50"])
     expect(button("Página 25").getAttribute("aria-current")).toBe("page")
     expect(element.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
     expect(element.querySelectorAll("a")).toHaveLength(0)
@@ -45,7 +51,11 @@ describe("TablePagination", () => {
     expect(emitted.mock.calls).toEqual([[24], [26]])
   })
 
-  it.each([[1, 50], [50, 50], [1, 1]])("disables boundary navigation on page %s of %s", (page, count) => {
+  it.each([
+    [1, 50],
+    [50, 50],
+    [1, 1]
+  ])("disables boundary navigation on page %s of %s", (page, count) => {
     const { button, emitted } = setup(page, count)
     expect(button("Página anterior").disabled).toBe(page === 1)
     expect(button("Página siguiente").disabled).toBe(page === count)

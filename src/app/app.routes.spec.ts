@@ -32,10 +32,7 @@ describe("Application route composition", () => {
     expect(lazyRoutes.every(route => route.providers === undefined)).toBe(true)
     expect(routeSets[0]).toBe(AUTH_ROUTES)
     expect(routeSets[1]).toBe(ADMIN_ROUTES)
-    expect(routeSets.map(set => set.map(route => route.path))).toEqual([
-      ["login"],
-      ["admin"]
-    ])
+    expect(routeSets.map(set => set.map(route => route.path))).toEqual([["login"], ["admin"]])
   })
 
   it("preserves page lazy loading, titles and guards", async () => {

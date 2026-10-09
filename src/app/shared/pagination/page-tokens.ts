@@ -10,10 +10,10 @@ export function pageTokens(currentPage: number, pageCount: number): PageToken[] 
     pageCount < 1 ||
     currentPage < 1 ||
     currentPage > pageCount
-  ) return []
+  )
+    return []
 
-  if (pageCount <= 7)
-    return Array.from({ length: pageCount }, (_, index) => index + 1)
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1)
 
   const start = Math.max(1, Math.min(currentPage - 1, pageCount - 2))
   const pages = [...new Set([1, start, start + 1, start + 2, pageCount])]
