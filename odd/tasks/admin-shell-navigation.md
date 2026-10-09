@@ -21,6 +21,9 @@ User reported header mismatch with reference, poorly visible language select and
 
 - [ ] T4 Header/sidebar/select refinement implemented and verified; source commit and browser validation pending. Delegated writer plus independent verifier. Compact inline strip, navy RM mark, constrained brand/session row, inner select button/value/chevron colors, scoped navy sidebar surfaces, registered decorative icons and gold/coral IAM marker. Pure styling has no meaningful behavioral RED; two missing-icon semantic assertions observed RED before focused GREEN.
 
+## Screenshot-based sidebar refinement
+- [ ] T5 Modern minimalist sidebar matching supplied screenshot hierarchy: compact RM gold mark/brand, General and Administración groups, consistent line icons and vertical spacing, IAM with subtle lighter navy surface/white text and small gold marker rather than full yellow background. In progress, delegated writer for sidebar TS/CSS and semantic route regressions. Preserve five disabled modules, IAM only destination and mobile dismissal. Do not add configuration/help destinations or functionality from screenshot. Reference: supplied screenshot `Captura de pantalla 2026-10-09 000138.png`. Pure styling requires structural/regression checks, not invented pixel evidence.
+
 ## Evidence
 - User reports previous visual work validated, committed and pushed. Current observed HEAD `4c1e851`, clean git state.
 - Scout confirmed login and guest guard navigate to `/admin`, both preserved through redirect.
