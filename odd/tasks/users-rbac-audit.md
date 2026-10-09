@@ -8,10 +8,14 @@ This is not backend authorization, security monitoring, durable persistence, or 
 ## Architecture and constraints
 Preserve domain tokens, stateless execute use cases, root repository implementations using useExisting, root in-memory sources, SignalStore presentation state, local Signal Forms, cancellable latency before effects and DestroyRef component cancellation. Use installed Spartan Helm, semantic theme tokens, shared catalog filters/dialog headers, mobile-friendly layouts, accessible actions, and Spanish existing UI conventions.
 
+## Visual refinement accepted
+User supplied screenshots `Captura de pantalla 2026-10-09 155940.png` and `160013.png` and explicitly requested consistent section styling using the refactored shared styles. Follow compact white bordered cards, navy hierarchy, warm compact table headers, aligned controls and labeled action badges; reuse existing catalog filters and Helm theme/dialog contracts. Preserve approved navy primary and UTC rather than screenshot coral save/UTC-5. Source inspection does not certify rendered fidelity.
+
 ## Work units
 - [ ] T1 — RBAC domain/query/save boundary, in-memory source and matrix presentation integrated with Users navigation. Status: implemented and independently verified; human-approved commit pending. Route: delegated worker; multi-file behavior.
 - [ ] T2 — Audit filter/detail/export contracts and use cases, in-memory data, state and responsive viewer integrated with Users navigation. Status: in progress. Route: delegated worker; multi-file behavior.
 - [ ] T3 — Documentation, independent verification and final integration checks. Status: pending. Route: delegated verification and bounded documentation writer.
+- [ ] T4 — Harmonize RBAC/audit visual styling with supplied screenshots and existing shared styles without duplicating feature overrides. Status: mapping in progress; writes follow T2 to preserve single-writer execution. Route: read-only scout then bounded writer.
 
 ## Acceptance and checks
 Use test-first RED/GREEN for applicable deterministic behaviors. Verify query/save cloning, invalid role/action/module input, cancellation before mutations, unconfigured roles, confirmation/pending/error flows, audit UTC filtering before pagination, distinct log details, stable ordering, all-filtered CSV export and formula/quote/newline safety, SSR-safe browser downloads, and regressions in Users/Sessions. Run workspace-local Prettier write/check on exact touched paths, Angular focused tests, full tests and production build. Browser visual/keyboard/responsive checks must be reported separately and never inferred from unit tests.
