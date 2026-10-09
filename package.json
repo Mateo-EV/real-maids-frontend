@@ -39,6 +39,7 @@
     "@angular/build": "^22.1.8",
     "@angular/cli": "^22.1.8",
     "@angular/compiler-cli": "^22.1.0",
+    "@playwright/test": "^1.64.0",
     "@spartan-ng/cli": "^1.4.1",
     "@tailwindcss/postcss": "^4.1.12",
     "@types/express": "^5.0.1",
