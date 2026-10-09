@@ -9,7 +9,7 @@ This is not backend authorization, security monitoring, durable persistence, or 
 Preserve domain tokens, stateless execute use cases, root repository implementations using useExisting, root in-memory sources, SignalStore presentation state, local Signal Forms, cancellable latency before effects and DestroyRef component cancellation. Use installed Spartan Helm, semantic theme tokens, shared catalog filters/dialog headers, mobile-friendly layouts, accessible actions, and Spanish existing UI conventions.
 
 ## Work units
-- [ ] T1 — RBAC domain/query/save boundary, in-memory source and matrix presentation integrated with Users navigation. Status: in progress. Route: delegated worker; multi-file behavior.
+- [ ] T1 — RBAC domain/query/save boundary, in-memory source and matrix presentation integrated with Users navigation. Status: implemented; independent verification and human-approved commit pending. Route: delegated worker; multi-file behavior.
 - [ ] T2 — Audit filter/detail/export contracts and use cases, in-memory data, state and responsive viewer integrated with Users navigation. Status: pending. Route: delegated worker; multi-file behavior.
 - [ ] T3 — Documentation, independent verification and final integration checks. Status: pending. Route: delegated verification and bounded documentation writer.
 
@@ -19,5 +19,10 @@ Use test-first RED/GREEN for applicable deterministic behaviors. Verify query/sa
 ## Delivery and evidence
 Initial repository clean on main at db23f28. Implementation authorized; no staging, commit, push or PR authorized. Tasks remain unchecked until verification and explicitly approved commits exist. Native review pending for the integrated candidate under the user-owned switch. Forecast: substantial multi-layer change likely exceeds 400 authored changed lines; keep RBAC and audit as separate coherent work units rather than compressing tests or code. Delivery strategy: ask-on-risk before commit/PR preparation.
 
+## T1 observed evidence
+Worker completed 20 scoped source/test files: typed RBAC query/save boundary, source with 19 Operations role-2 grants across seven reference rows, other roles unconfigured, root state, responsive matrix, confirmation and UsersPage wiring. Audit remains disabled. RED observed for missing implementations and navigation; GREEN focused40 and boundary10 tests. Users-feature suite230 tests across27files passed. Production browser/server build passed with one prerendered route and initial515.45kB/500kB budget warning. Exact touched-file Prettier write/check passed after a second formatting pass. git diff --check passed. Browser visual/responsive/keyboard acceptance and full repository suite unrun.
+
+Native assessment failed closed because new untracked implementation paths were not declared; candidate treated as high for independent verification. A read-only verifier is running the users-feature test target and examining RBAC races/cancellation. The completed documentation-only native review concerned target a4f0bd957c116ba855a7989e6470ffafebd1cf9222ce125b254a8bac9b40a086, not this source candidate.
+
 ## Next step
-Implement T1 only; then reconcile evidence before T2. No checks have been run for this feature yet.
+Reconcile T1 independent verification before launching T2 writer. No code staging or commit authorized. Keep T1 unchecked until verified and committed.
