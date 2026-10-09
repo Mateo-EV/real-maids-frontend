@@ -25,6 +25,9 @@ User reported header mismatch with reference, poorly visible language select and
 - [ ] T5 Screenshot-based minimalist sidebar implemented and verified; source commit/browser validation pending. Compact gold RM mark/brand, General and Administración groups, consistent 18px decorative line icons and spacing, lighter navy IAM surface/cream text with small gold shield/dot instead of full yellow. Five modules remain native-disabled; IAM retains current-page and mobile dismissal. No extra configuration/help destinations. Reference: supplied screenshot `Captura de pantalla 2026-10-09 000138.png`.
 - T5 evidence: grouping assertion observed RED (General absent), focused GREEN 11 tests / 2 files; full `npm test -- --watch=false` passed 338 tests / 38 files. `npm run build` passed browser/server/prerender with unchanged 508.83 kB initial warning vs 500 kB; `git diff --check` passed with CRLF warnings. Parent source readback confirmed scoped navy active surface and semantic grouped navigation. No browser rendering, contrast or keyboard-fidelity evidence.
 
+## Header status and spacing correction
+- [ ] T6 Move existing Helm sidebar trigger into upper navy status strip, add green static-status badge/decorative green dot like reference, remove only desktop sidebar container right border through its actual override API, and modestly reduce users nav/main large-screen horizontal inset. In progress, delegated writer. Preserve mobile trigger semantics, environment/language/session/logout, IAM-only routing and users behavior. Read-only mapping identified Helm `sidebarContainerClass` override and users `lg:px-8`; sidebar width spacer is necessary, not excess gap. Source checks cannot certify rendered geometry.
+
 ## Evidence
 - User reports previous visual work validated, committed and pushed. Current observed HEAD `4c1e851`, clean git state.
 - Scout confirmed login and guest guard navigate to `/admin`, both preserved through redirect.
