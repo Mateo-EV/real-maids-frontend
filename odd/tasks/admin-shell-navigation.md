@@ -19,7 +19,7 @@ Replace the admin landing page with a reusable responsive admin shell. Preserve 
 ## Requested visual correction
 User reported header mismatch with reference, poorly visible language select and pale sidebar. Read-only comparison confirms reference compact inline status/environment/language strip, navy RM mark and constrained white brand/session row. Refine scoped shell/side navigation styling; add registered module icons, stronger IAM active marker and legible but truly disabled placeholders. Preserve public environment, Lang visual-only state, auth/session/logout and responsive navigation. No global theme or unrelated dialog changes. Source-only inspection cannot certify rendered contrast.
 
-- [ ] T4 Refine header/sidebar/select in narrow admin component surfaces, run regressions/full tests/build. In progress; delegated writer (multiple nontrivial files). Pure styling has no meaningful behavioral RED; maintain deterministic semantics tests and no screenshot-fidelity claims without browser execution.
+- [ ] T4 Header/sidebar/select refinement implemented and verified; source commit and browser validation pending. Delegated writer plus independent verifier. Compact inline strip, navy RM mark, constrained brand/session row, inner select button/value/chevron colors, scoped navy sidebar surfaces, registered decorative icons and gold/coral IAM marker. Pure styling has no meaningful behavioral RED; two missing-icon semantic assertions observed RED before focused GREEN.
 
 ## Evidence
 - User reports previous visual work validated, committed and pushed. Current observed HEAD `4c1e851`, clean git state.
@@ -41,6 +41,15 @@ Use test-first for redirect, disabled navigation and environment/select semantic
 - No live AdminHomePage references or severe introduced issue found. Shared session/logout, guards, users catalog and disabled navigation preserved.
 - Real-browser geometry, hydration and keyboard/focus checks remain unperformed; source/jsdom evidence is not rendered verification.
 - Additional necessary test migration: src/app/core/config/app.config.spec.ts. Generator dependency paths authorized narrowly by parent.
+
+## T4 verification and disposition
+- Writer full `npm test -- --watch=false`: 337 tests / 38 files passed; focused admin tests 10/10 passed.
+- Independent Angular MCP focused admin route/shell test target: 10 tests / 2 files passed.
+- Writer and independent `npm run build`: passed browser/server/prerender. Latest initial bundle 508.83 kB exceeds unchanged 500 kB warning budget by 8.83 kB; causality of this warning not established.
+- Writer and independent `git diff --check`: passed with CRLF conversion warnings only.
+- Source review confirms explicit inner Helm select styling and sidebar surface overrides, real disabled modules, current IAM, session/logout and mobile toggle. No rendered contrast or browser geometry/focus evidence available.
+- Exact source candidate `sha256:6d570f82d14e73aec0704c9dfa8ddc8b1cc178753c072b40a4522b7433b13d82` native review declined in eligible host; no new lineage created. Do not re-request review for that exact target.
+- Native assessment unassessable (untracked declaration), independent high-risk fallback completed. No native approval claimed; subsequent tracking-only edits do not alter source behavior.
 
 ## Delivery
 Tracking-only commit `070058d96696acc6c6cc1012ecb59df69a2a55e3` reviewed/acknowledged as low-risk non-executable content, lineage `review-15a6eff70666539f`; this is not code review approval.
