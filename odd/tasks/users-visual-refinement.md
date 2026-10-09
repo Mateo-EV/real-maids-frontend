@@ -7,10 +7,10 @@ Match the Auth/IAM reference in typography, width, header, metrics, filters/tabl
 User reported inset navy header, low-contrast subtitle and missing orange title dot. Make navy edge-to-edge across the dialog header, readable subtitle and decorative orange dot the shared default for all modal headers, not a users-named style. Preserve body/footer padding, overlay corners, scrolling and dismissal. Root evidence: Helm dialog content has `p-4`/`rounded-xl`; existing `.user-dialog-heading` is inset and its components-layer subtitle color can lose to utilities. Inspect actual cascade before fixing.
 
 ## Tasks
-- [ ] T1 — Six visual refinements and local font implemented/verified; approved commit pending. Delegated writer, multi-file trigger.
-- [ ] T2 — Initial technical verification passed; browser checks not performed; approved commit pending. Independent verifier.
-- [ ] T3 — Human staging and snapshot/message approval pending. Prior exact source candidate RDD declined; no lineage or source commit.
-- [ ] T4 — Correct shared modal headers, contrast and decorative dot. In progress. Delegated writer: global styles, three consumers and regression checks. New source candidate requires its own review disposition.
+- [x] T1 — Six visual refinements and local font verified and committed in `0d6e122`. Delegated writer, multi-file trigger.
+- [ ] T2 — Independent technical checks passed (330 tests / 38 files, build and diff check); browser visual/mobile/keyboard checks remain pending.
+- [x] T3 — Human approved exact staged snapshot and message; committed in `0d6e122`. Native review declined for source candidate, no lineage.
+- [x] T4 — Shared modal headers, contrast and decorative dot corrected, independently verified and committed in `0d6e122`.
 
 ## Checks and acceptance
 Pure styling has no meaningful behavioral RED; preserve behavior tests and add meaningful structural/style checks. Run focused dialogs, full tests, production build and diff check. Use browser computed/layout checks if available; never claim pixel/keyboard/WCAG verification without execution. All checkboxes stay open until approved commit exists. No agent staging/commit.
@@ -23,7 +23,10 @@ Pure styling has no meaningful behavioral RED; preserve behavior tests and add m
 - Audit exit 1 reported high router advisory GHSA-ff3f-86qr-9cv3; router 22.1.7 unchanged from HEAD, advisory metadata not independently verified; remediation not authorized.
 - Native assessment unassessable due untracked declaration; independent high-risk fallback verification performed. Source candidate `sha256:18895c4d6d4e004faaeec7f5639fa6bf0efed996d1af7e2c8505b04b13931e5b` medium, host consent declined, no lineage.
 - Previous writer 391 additions/39 deletions including 93 copied license lines, excluding task doc. Advisory size forecast not a hard cap.
-- Current resume: human staged all previous changed paths, HEAD still edac7d0. New corrections will be unstaged atop that staged snapshot; no staging or commit approval given.
+- Delivery: user approved all 17 staged paths and message `feat(ui): refine users layout and standardize modal headers`. HEAD/index rechecked against approved HEAD edac7d0 and raw staged diff SHA-256 `5b5974b2695d8e76a30c5e68237343d70eb03d4fca0cb9315933f5a4f9ce6eef` immediately before commit.
+- Commit `0d6e1222a9a7238d3ba7ee0adbcb970d80abd0c1`: 17 files, 574 additions/67 deletions. No push. Working tree clean immediately after commit, before this tracking update.
+- Final independent checks: 330 tests/38 files, build SSR/prerender and diff check passed. Human later removed only the informational last-access paragraph; tests not rerun after that passive text deletion.
+- Exact corrected source candidate `sha256:1e9c4e19f727b8066d34c106541a5f5fd892daa58557af12a8c2e599b2df328d` native review declined in host, no lineage; no review approval claimed.
 
 ## Next step
-Finish T4 with narrow shared CSS/consumer/test changes, verify and review new candidate; human inspects rendered result and stages corrections before exact snapshot/message approval.
+Validate rendered browser geometry/contrast/mobile/keyboard when available. This post-commit tracking update requires separate documentation staging/commit; no automatic retry of previously blocked documentation delivery. Publishing and audit remediation remain separate user decisions.
