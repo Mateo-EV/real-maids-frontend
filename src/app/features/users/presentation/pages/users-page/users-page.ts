@@ -8,7 +8,6 @@ import {
   OnInit,
   signal
 } from "@angular/core"
-import { Router, RouterLink } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import {
   lucideUsers,
@@ -19,7 +18,6 @@ import {
   lucidePencil,
   lucidePower,
   lucideTrash2,
-  lucideLogOut,
   lucideSearch
 } from "@ng-icons/lucide"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -33,7 +31,6 @@ import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
-import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
@@ -56,7 +53,6 @@ import { UserStatusContext, UserStatusDialog } from "../../components/user-statu
   imports: [
     DatePipe,
     NgTemplateOutlet,
-    RouterLink,
     NgIcon,
     HlmButtonImports,
     HlmCardImports,
@@ -81,7 +77,6 @@ import { UserStatusContext, UserStatusDialog } from "../../components/user-statu
       lucidePencil,
       lucidePower,
       lucideTrash2,
-      lucideLogOut,
       lucideSearch
     })
   ],
@@ -91,12 +86,9 @@ import { UserStatusContext, UserStatusDialog } from "../../components/user-statu
 export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
   readonly roles = inject(RolesStore)
-  private readonly auth = inject(AuthStore)
-  private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
-  readonly session = this.auth.session
   readonly metrics = DEMO_METRICS
   readonly initials = initials
   readonly decoration = demoDecoration
@@ -279,8 +271,4 @@ export class UsersPage implements OnInit {
     })
   }
 
-  logout(): void {
-    this.auth.logout()
-    void this.router.navigateByUrl("/login")
-  }
 }

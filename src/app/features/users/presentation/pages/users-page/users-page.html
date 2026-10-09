@@ -1,44 +1,6 @@
-<div class="min-h-dvh bg-background text-foreground">
-  <div class="bg-sidebar px-4 py-2 text-xs text-sidebar-foreground sm:px-8">
-    <div class="mx-auto flex max-w-7xl flex-wrap justify-between gap-2">
-      <p><strong>Administración del sistema</strong></p>
-      <p>Idioma de la interfaz: Español</p>
-    </div>
-  </div>
-  <header class="border-b bg-card px-4 py-3 sm:px-6 lg:px-8">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <span
-          class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-gold/30 bg-secondary text-lg font-extrabold text-secondary-foreground shadow-sm"
-          aria-hidden="true"
-          >RM</span
-        >
-        <div>
-          <p class="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-primary">
-            The Real Maids <span hlmBadge variant="outline">CORE BACKOFFICE</span>
-          </p>
-          <p class="text-xs text-muted-foreground">Usuarios y catálogo de roles</p>
-        </div>
-      </div>
-      <div class="session-controls flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-        <div class="min-w-0 text-right">
-          <p class="text-sm font-semibold">{{ session()?.name }}</p>
-          <p class="break-all text-xs text-muted-foreground">{{ session()?.email }}</p>
-        </div>
-        <hlm-avatar
-          ><span hlmAvatarFallback class="user-avatar" data-avatar-tone="coral">{{
-            initials(session()?.name ?? "")
-          }}</span></hlm-avatar
-        >
-        <a hlmBtn variant="outline" size="sm" routerLink="/admin">Inicio</a>
-        <button hlmBtn variant="ghost" size="sm" type="button" (click)="logout()">
-          <ng-icon name="lucideLogOut" aria-hidden="true" />Salir
-        </button>
-      </div>
-    </div>
-  </header>
-  <nav class="border-b bg-card px-4 sm:px-6 lg:px-8" aria-label="Secciones de administración">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4">
+<div class="bg-background text-foreground">
+  <nav class="border-b bg-card px-4 sm:px-6 lg:px-6" aria-label="Secciones de administración">
+    <div class="mx-auto flex w-full flex-wrap items-center gap-x-4">
       <span
         class="active-section flex items-center gap-2 py-3 text-sm font-semibold"
         aria-current="page"
@@ -74,7 +36,7 @@
       </button>
     </div>
   </nav>
-  <main class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+  <main class="mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6">
     <section
       class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
       aria-label="Resumen del catálogo"
@@ -128,7 +90,7 @@
       [attr.aria-busy]="initializing()"
     >
       <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
+        <div class="xl:self-start">
           <h1 id="users-title" class="text-lg font-bold tracking-tight text-primary">
             Catálogo de Usuarios del Sistema
           </h1>
@@ -139,7 +101,7 @@
         <div class="catalog-filters flex min-w-0 flex-wrap items-end gap-2">
           <div class="flex flex-col gap-1">
             <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
-            <hlm-input-group class="w-full sm:w-60">
+            <hlm-input-group class="w-full sm:w-60 xl:w-100">
               <input
                 #searchInput
                 hlmInputGroupInput
@@ -385,7 +347,9 @@
           }
         </ul>
       }
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
+      >
         <p class="text-xs text-muted-foreground" role="status">
           Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios{{
             filteredUsers().length === users.users().length ? "" : " filtrados"

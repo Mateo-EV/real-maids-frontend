@@ -198,13 +198,15 @@ describe("UsersPage", () => {
     expect(success).toHaveBeenLastCalledWith(`Usuario ${users.users()[0].name} desactivado`)
   })
 
-  it("renders product copy, actual identity, dynamic counts and disabled future navigation", async () => {
+  it("renders catalog copy and counts without duplicating shell identity or navigation", async () => {
     const { element } = await setup()
-    expect(element.textContent).toContain("Actual identity")
+    expect(element.textContent).not.toContain("Actual identity")
+    expect(element.querySelector("header")).toBeNull()
+    expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
     expect(element.textContent).toContain("42 activos")
     expect(element.textContent).toContain("6 inactivos")
-    expect(element.textContent).toContain("CORE BACKOFFICE")
+    expect(element.textContent).not.toContain("CORE BACKOFFICE")
     expect(element.textContent).toContain("Gestiona estados, roles")
     const accessibleCopy = Array.from(
       element.querySelectorAll("[aria-label], [title], caption, [id$='-help']")

@@ -5,7 +5,7 @@ import { AUTH_ROUTES } from "./features/auth/auth.routes"
 import { ADMIN_ROUTES } from "./experiences/admin/admin.routes"
 import { authGuard, guestGuard } from "./features/auth/presentation/guards/auth.guard"
 import { LoginPage } from "./features/auth/presentation/pages/login-page/login-page"
-import { AdminHomePage } from "./experiences/admin/presentation/pages/admin-home-page/admin-home-page"
+import { AdminShell } from "./experiences/admin/presentation/components/admin-shell/admin-shell"
 
 const loadRouteSets = async (): Promise<Routes[]> =>
   Promise.all(
@@ -34,7 +34,7 @@ describe("Application route composition", () => {
     expect(routeSets[1]).toBe(ADMIN_ROUTES)
     expect(routeSets.map(set => set.map(route => route.path))).toEqual([
       ["login"],
-      ["admin/users", "admin"]
+      ["admin"]
     ])
   })
 
@@ -46,9 +46,10 @@ describe("Application route composition", () => {
     expect(login.title).toBe("Iniciar sesión | The Real Maids")
     expect(login.canActivate).toEqual([guestGuard])
     expect(await login.loadComponent!()).toBe(LoginPage)
-    expect(admin.title).toBe("Inicio | The Real Maids")
+    expect(admin.children?.[0]).toEqual({ path: "", pathMatch: "full", redirectTo: "users" })
+    expect(admin.children?.[1].path).toBe("users")
     expect(admin.canActivate).toEqual([authGuard])
-    expect(await admin.loadComponent!()).toBe(AdminHomePage)
+    expect(await admin.loadComponent!()).toBe(AdminShell)
     expect(composed.every(route => route.providers === undefined)).toBe(true)
   })
 })

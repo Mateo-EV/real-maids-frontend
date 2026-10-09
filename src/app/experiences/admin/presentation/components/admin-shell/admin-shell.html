@@ -1,0 +1,75 @@
+<div hlmSidebarWrapper>
+  <app-admin-sidebar />
+  <div class="shell-body min-w-0 flex-1">
+    <div
+      class="status-header flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-2 text-xs"
+    >
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          hlmSidebarTrigger
+          type="button"
+          srOnlyText="Alternar navegación"
+          class="status-trigger bg-transparent"
+          [attr.aria-expanded]="sidebar.isMobile() ? sidebar.openMobile() : sidebar.open()"
+        ></button>
+        <span hlmBadge variant="outline" class="system-status gap-1.5">
+          <span class="status-dot" aria-hidden="true"></span>
+          Sistema seguro y activo
+        </span>
+        <span class="status-divider" aria-hidden="true">|</span>
+        <span>Entorno: {{ environmentLabel }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <label for="admin-language" class="text-xs font-medium">Idioma:</label>
+        <hlm-select
+          [value]="language()"
+          [itemToString]="languageLabel"
+          (valueChange)="setLanguage($event)"
+        >
+          <hlm-select-trigger
+            buttonId="admin-language"
+            size="sm"
+            class="min-w-28 bg-primary text-primary-foreground border-primary-foreground/40 text-xs [&_ng-icon]:text-primary-foreground focus-visible:border-accent focus-visible:ring-accent"
+          >
+            <hlm-select-value class="text-primary-foreground" />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            <hlm-select-item [value]="Lang.ES">Español</hlm-select-item>
+            <hlm-select-item [value]="Lang.EN">Inglés</hlm-select-item>
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+    </div>
+    <header class="border-b bg-card px-4 py-3 shadow-sm sm:px-6 lg:px-8">
+      <div class="mx-auto flex w-full flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="brand-mark" aria-hidden="true">RM</span>
+          <div>
+            <p
+              class="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-primary"
+            >
+              The Real Maids
+              <span hlmBadge variant="outline" class="brand-accent">CORE BACKOFFICE</span>
+            </p>
+            <p class="text-xs text-muted-foreground">Seguridad, Control de Acceso y Auditoría</p>
+          </div>
+        </div>
+        <div class="session-controls flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+          <div class="min-w-0 text-right">
+            <p class="text-sm font-semibold">{{ session()?.name }}</p>
+            <p class="break-all text-xs text-muted-foreground">{{ session()?.email }}</p>
+          </div>
+          <hlm-avatar
+            ><span hlmAvatarFallback class="session-avatar">{{
+              sessionInitials()
+            }}</span></hlm-avatar
+          >
+          <button hlmBtn variant="ghost" size="sm" type="button" (click)="logout()">
+            <ng-icon name="lucideLogOut" aria-hidden="true" />Salir
+          </button>
+        </div>
+      </div>
+    </header>
+    <router-outlet />
+  </div>
+</div>

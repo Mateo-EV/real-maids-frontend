@@ -13,7 +13,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
-import { AdminHomePage } from "@/app/experiences/admin/presentation/pages/admin-home-page/admin-home-page"
+import { AdminShell } from "@/app/experiences/admin/presentation/components/admin-shell/admin-shell"
 
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
 import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
@@ -146,7 +146,7 @@ describe("Application repository composition", () => {
     expect((await session).success).toBe(true)
 
     const navigate = vi.spyOn(TestBed.inject(Router), "navigateByUrl").mockResolvedValue(true)
-    const page = TestBed.runInInjectionContext(() => new AdminHomePage())
+    const page = TestBed.runInInjectionContext(() => new AdminShell())
     page.logout()
 
     expect(store.isAuthenticated()).toBe(false)
