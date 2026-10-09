@@ -16,6 +16,11 @@ Replace the admin landing page with a reusable responsive admin shell. Preserve 
 - [x] T2 Configured public development/production labels and enum-backed local visual language select. Same single writer.
 - [x] T3 Independently verified final tests, production/development SSR builds and diff check; updated project/product/agent documentation. Browser validation and source delivery remain pending.
 
+## Requested visual correction
+User reported header mismatch with reference, poorly visible language select and pale sidebar. Read-only comparison confirms reference compact inline status/environment/language strip, navy RM mark and constrained white brand/session row. Refine scoped shell/side navigation styling; add registered module icons, stronger IAM active marker and legible but truly disabled placeholders. Preserve public environment, Lang visual-only state, auth/session/logout and responsive navigation. No global theme or unrelated dialog changes. Source-only inspection cannot certify rendered contrast.
+
+- [ ] T4 Refine header/sidebar/select in narrow admin component surfaces, run regressions/full tests/build. In progress; delegated writer (multiple nontrivial files). Pure styling has no meaningful behavioral RED; maintain deterministic semantics tests and no screenshot-fidelity claims without browser execution.
+
 ## Evidence
 - User reports previous visual work validated, committed and pushed. Current observed HEAD `4c1e851`, clean git state.
 - Scout confirmed login and guest guard navigate to `/admin`, both preserved through redirect.
@@ -39,4 +44,5 @@ Use test-first for redirect, disabled navigation and environment/select semantic
 
 ## Delivery
 Tracking-only commit `070058d96696acc6c6cc1012ecb59df69a2a55e3` reviewed/acknowledged as low-risk non-executable content, lineage `review-15a6eff70666539f`; this is not code review approval.
-Source changes are unstaged/uncommitted. No code staging, commit or push authorized by this implementation request. Native candidate preflight follows separately; documentation updates do not authorize code delivery.
+Tracking update committed as `cb1727dfa6eb92333995de38e9fe85960a0f9e19` by runtime; not a code commit.
+Source changes are unstaged/uncommitted. No code staging, commit or push authorized. Prior source native lineage `review-465dfc05dc11b322` is reviewing but capture failed because `review-reliability` has no configured model; no native approval. T4 edits will differ from its frozen target; do not submit new bytes as that old candidate or silently reset/recover authority. Final native inspect must determine the offered continuation.
