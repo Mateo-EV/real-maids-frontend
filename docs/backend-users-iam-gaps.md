@@ -65,16 +65,22 @@ Verificar que la sesión pertenece al usuario indicado y que quien la revoca tie
 
 Generar eventos reales desde las operaciones del sistema; no basta con un listado de registros de prueba. No incluir contraseñas, tokens ni valores sensibles en los cambios registrados.
 
-## 5. Completar el contrato de autenticación
+## 5. Autenticación con JWT, sesiones y refresh token
 
-El login actual funciona con JWT solo en memoria: al recargar se pierde la sesión y el cierre actual solo borra datos locales.
+El login actual guarda el JWT solo en memoria y lo pierde al recargar. Implementar un **JWT de acceso de corta duración y un refresh token de mayor duración vinculado a una sesión revocable en el backend**. El refresh token es una credencial de la sesión, no la sesión en sí.
 
 | Ruta sugerida | Qué falta |
 | --- | --- |
-| `GET /api/auth/me` | Consultar la identidad autenticada, su rol estable y permisos efectivos o una forma documentada de obtenerlos. No sustituye una política de persistencia de credenciales. |
-| `POST /api/auth/logout` | Revocar la sesión/credencial actual en el servidor, no solo borrar el JWT del navegador. |
+| `POST /api/auth/login` — ampliar la existente | Crear la sesión y entregar el JWT de acceso y el refresh token mediante el transporte acordado, con sus vencimientos. |
+| `POST /api/auth/refresh` | Validar el refresh token y la sesión activa, emitir un nuevo JWT de acceso y rotar el refresh token. Rechazar tokens vencidos, revocados o reutilizados. |
+| `GET /api/auth/me` | Consultar la identidad autenticada, su rol estable y permisos efectivos o una forma documentada de obtenerlos. |
+| `POST /api/auth/logout` | Revocar la sesión y su refresh token; eliminar las cookies de autenticación si se utilizan. |
 
-Documentar expiración y revocación. Renovación y persistencia quedan por definir; no se exige un endpoint de refresh sin acordar primero esa política.
+- Guardar solo un hash del refresh token en el backend, asociado al usuario, sesión y expiración. Revocar la familia de renovación ante reutilización de un token rotado.
+- Hacer que la revocación desde IAM y la desactivación de usuarios impidan renovar. Definir si los JWT de acceso ya emitidos dejan de funcionar inmediatamente mediante validación de sesión o al vencer; no prometer revocación inmediata con JWT puramente stateless.
+- Documentar transporte, duración, rotación y errores de ambos tokens. El transporte/persistencia definitivo del frontend se acordará antes de conectarlo; este pedido no cambia la implementación actual.
+
+**Opcional:** entregar el JWT mediante una cookie creada por el backend con `Set-Cookie`, `HttpOnly`, `Secure` en producción y `SameSite` acorde al despliegue. Si se elige este transporte, configurar protección CSRF, CORS con origen explícito y credenciales cuando corresponda, expiración y limpieza al salir. El refresh token también puede entregarse mediante una cookie `HttpOnly`; no debe quedar expuesto a JavaScript si se usa esa opción.
 
 ## Requisitos comunes para entregar las operaciones
 
