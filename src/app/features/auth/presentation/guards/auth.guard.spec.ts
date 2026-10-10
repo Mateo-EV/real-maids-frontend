@@ -4,7 +4,10 @@ import { UserSession } from "@/app/features/auth/domain/entities/user-session.en
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
-import { AuthInMemorySource } from "../../infrastructure/source/auth-in-memory.source"
+import { AuthRepositoryImpl } from "../../infrastructure/repositories/auth.repository-impl"
+import { provideHttpClient } from "@angular/common/http"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
+import { API_URL } from "@/app/core/tokens/api-url.token"
 import {
   ActivatedRouteSnapshot,
   provideRouter,
@@ -71,46 +74,66 @@ describe("auth guards", () => {
     expect(store.isAuthenticated()).toBe(false)
   })
 
-  it("restores the browser demo flag into a fresh root store for both guards", async () => {
-    TestBed.overrideProvider(AUTH_REPOSITORY, {
-      useFactory: () => TestBed.inject(AuthInMemorySource)
+  function connectHttp() {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" }
+      ]
     })
+    TestBed.overrideProvider(AUTH_REPOSITORY, {
+      useFactory: () => TestBed.inject(AuthRepositoryImpl)
+    })
+    return TestBed.inject(HttpTestingController)
+  }
+
+  it("never restores a browser demo flag into a fresh connected store", async () => {
+    const http = connectHttp()
     localStorage.setItem("authenticated", "true")
-    vi.useFakeTimers()
     try {
+      const protectedDecision = await firstValueFrom(
+        check(authGuard) as Observable<boolean | UrlTree>
+      )
+      expect(TestBed.inject(Router).serializeUrl(protectedDecision as UrlTree)).toBe(
+        "/login?returnUrl=%2Fadmin%2Forders%3Fstatus%3Dopen"
+      )
+      expect(await firstValueFrom(check(guestGuard) as Observable<boolean | UrlTree>)).toBe(true)
       expect(TestBed.inject(AuthStore).session()).toBeNull()
-      const protectedDecision = firstValueFrom(check(authGuard) as Observable<boolean | UrlTree>)
-      await vi.runAllTimersAsync()
-      expect(await protectedDecision).toBe(true)
-      const guestDecision = await firstValueFrom(check(guestGuard) as Observable<boolean | UrlTree>)
-      expect(TestBed.inject(Router).serializeUrl(guestDecision as UrlTree)).toBe("/admin")
+      http.expectNone(() => true)
     } finally {
-      localStorage.clear()
-      vi.useRealTimers()
+      localStorage.removeItem("authenticated")
     }
   })
 
-  it("rejects the source's captured delayed session after logout", async () => {
-    TestBed.overrideProvider(AUTH_REPOSITORY, {
-      useFactory: () => TestBed.inject(AuthInMemorySource)
-    })
-    localStorage.setItem("authenticated", "true")
+  it("both guards reject an expired real-login local session without remote identity requests", async () => {
+    const http = connectHttp()
     vi.useFakeTimers()
     try {
-      const decision = firstValueFrom(check(authGuard) as Observable<boolean | UrlTree>)
       const store = TestBed.inject(AuthStore)
-      store.logout()
-      expect(localStorage.getItem("authenticated")).toBe("false")
-      await vi.runAllTimersAsync()
-      const result = await decision
-      expect(result).toBeInstanceOf(UrlTree)
-      expect(TestBed.inject(Router).serializeUrl(result as UrlTree)).toBe(
+      const login = firstValueFrom(
+        store.login({ email: "fake@example.test", password: "FakePassword1" })
+      )
+      http.expectOne("http://localhost:8080/api/auth/login").flush({
+        token: "fake-token",
+        tipo: "Bearer",
+        expiraEnSegundos: 1,
+        correo: "fake@example.test",
+        rol: "Operaciones"
+      })
+      expect((await login).success).toBe(true)
+      expect(await firstValueFrom(check(authGuard) as Observable<boolean | UrlTree>)).toBe(true)
+      // Simulate a suspended tab: the deadline passed before scheduled callbacks ran.
+      vi.setSystemTime(Date.now() + 1000)
+      const decision = await firstValueFrom(check(authGuard) as Observable<boolean | UrlTree>)
+      expect(TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe(
         "/login?returnUrl=%2Fadmin%2Forders%3Fstatus%3Dopen"
       )
+      expect(await firstValueFrom(check(guestGuard) as Observable<boolean | UrlTree>)).toBe(true)
       expect(store.session()).toBeNull()
       expect(store.isAuthenticated()).toBe(false)
+      http.verify()
     } finally {
-      localStorage.clear()
       vi.useRealTimers()
     }
   })

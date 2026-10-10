@@ -1,11 +1,12 @@
 import { TestBed } from "@angular/core/testing"
+import { provideHttpClientTesting } from "@angular/common/http/testing"
 import { of } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { appConfig } from "@/app/core/config/app.config"
 import { Result } from "@/app/shared/utils/result"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { AuthRepositoryImpl } from "@/app/features/auth/infrastructure/repositories/auth.repository-impl"
-import { AuthInMemorySource } from "@/app/features/auth/infrastructure/source/auth-in-memory.source"
+import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { CustomerError } from "@/app/features/customers/domain/errors/customer.error"
 import { Customer } from "@/app/features/customers/domain/entities/customer.entity"
 import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
@@ -51,8 +52,11 @@ describe("Infrastructure repository delegation", () => {
 
   afterEach(() => vi.restoreAllMocks())
 
-  it("delegates auth login, restoration and synchronous logout to the shared source", () => {
-    const source = TestBed.inject(AuthInMemorySource)
+  it("delegates auth login, local current session and synchronous logout to the shared HTTP source", () => {
+    TestBed.configureTestingModule({
+      providers: [...appConfig.providers, provideHttpClientTesting()]
+    })
+    const source = TestBed.inject(AuthHttpSource)
     const repository = TestBed.inject(AuthRepositoryImpl)
     const response = of(Result.failure(new AuthError("UNEXPECTED")))
     const login = vi.spyOn(source, "login").mockReturnValue(response)

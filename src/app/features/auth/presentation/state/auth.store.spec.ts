@@ -111,6 +111,37 @@ describe("AuthStore", () => {
     expect(me).toHaveBeenCalledOnce()
   })
 
+  it("does not accept a late login completion after logout", async () => {
+    const response = new Subject<Result<UserSession, AuthError>>()
+    login.mockReturnValue(response)
+    const pending = firstValueFrom(
+      store.login({ email: "fake@example.test", password: "FakePassword1" })
+    )
+    store.logout()
+    response.next(Result.success(UserSession.create("Old", "fake@example.test")))
+    expect((await pending).success).toBe(false)
+    expect(store.session()).toBeNull()
+  })
+
+  it("clears loaded identity at expiry without keeping a stale guard snapshot", async () => {
+    vi.useFakeTimers()
+    try {
+      const session = Object.assign(UserSession.create("Demo", "fake@example.test"), {
+        expiresAt: Date.now() + 1000
+      })
+      login.mockReturnValue(of(Result.success(session)))
+      me.mockReturnValue(of(Result.failure(new AuthError("UNEXPECTED"))))
+      store.login({ email: session.email, password: "FakePassword1" }).subscribe()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(store.session()).toBeNull()
+      expect(store.isAuthenticated()).toBe(false)
+      expect(await firstValueFrom(store.restoreSession())).toBeNull()
+      expect(logout).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("starts without an authenticated session", () => {
     expect(store.session()).toBeNull()
     expect(store.isAuthenticated()).toBe(false)

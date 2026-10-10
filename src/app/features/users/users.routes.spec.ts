@@ -7,6 +7,7 @@ import {
 } from "@angular/core"
 import { DOCUMENT } from "@angular/common"
 import { TestBed } from "@angular/core/testing"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { RouterTestingHarness } from "@angular/router/testing"
 import { firstValueFrom } from "rxjs"
 import { HotToastService, ToastConfig } from "@ngxpert/hot-toast"
@@ -30,7 +31,6 @@ afterEach(() => {
   })
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  localStorage.removeItem("authenticated")
 })
 
 describe("USERS_ROUTES", () => {
@@ -68,14 +68,38 @@ describe("USERS_ROUTES", () => {
   })
 
   it("uses the same real configured service for dialog callbacks, inline consumers and reentry", async () => {
-    TestBed.configureTestingModule({ providers: appConfig.providers })
-    expect(
-      (
-        await firstValueFrom(
-          TestBed.inject(AuthStore).login({ email: "riojamatthew@gmail.com", password: "demo2026" })
-        )
-      ).success
-    ).toBe(true)
+    TestBed.configureTestingModule({
+      providers: [...appConfig.providers, provideHttpClientTesting()]
+    })
+    const http = TestBed.inject(HttpTestingController)
+    const auth = TestBed.inject(AuthStore)
+    const establishSession = async () => {
+      const pending = firstValueFrom(
+        auth.login({ email: "fake@example.test", password: "FakePassword1" })
+      )
+      const request = http.expectOne("http://localhost:8080/api/auth/login")
+      expect(request.request.method).toBe("POST")
+      expect(request.request.body).toEqual({
+        correo: "fake@example.test",
+        password: "FakePassword1"
+      })
+      expect(request.request.headers.has("Authorization")).toBe(false)
+      request.flush({
+        token: "fake-token",
+        tipo: "Bearer",
+        expiraEnSegundos: 3600,
+        correo: "returned@example.test",
+        rol: "Operaciones"
+      })
+      expect((await pending).success).toBe(true)
+      expect(auth.session()).toMatchObject({
+        name: null,
+        email: "returned@example.test",
+        role: "Operaciones"
+      })
+      http.verify()
+    }
+    await establishSession()
     const harness = await RouterTestingHarness.create()
     await harness.navigateByUrl("/admin/users")
     harness.detectChanges()
@@ -114,11 +138,12 @@ describe("USERS_ROUTES", () => {
     expect(sessions).not.toBeNull()
     expect(sessions.injector.get(HotToastService)).toBe(toast)
 
-    TestBed.inject(AuthStore).logout()
+    auth.logout()
+    expect(auth.session()).toBeNull()
+    expect(auth.isAuthenticated()).toBe(false)
+    http.expectNone(() => true)
     await harness.navigateByUrl("/login")
-    await firstValueFrom(
-      TestBed.inject(AuthStore).login({ email: "riojamatthew@gmail.com", password: "demo2026" })
-    )
+    await establishSession()
     await harness.navigateByUrl("/admin/users")
     harness.detectChanges()
     const revisited = harness.routeDebugElement!.query(
@@ -129,6 +154,7 @@ describe("USERS_ROUTES", () => {
     toast.success("Notificación al volver")
     expect(document.querySelectorAll("hot-toast-container")).toHaveLength(1)
     expect(document.querySelector("hot-toast-container")).toBe(container)
+    http.verify()
   })
 
   it("creates and initializes the route service on the server without reading document.body", () => {

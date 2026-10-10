@@ -1,10 +1,11 @@
 import { TestBed } from "@angular/core/testing"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { firstValueFrom, Observable } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { appConfig } from "@/app/core/config/app.config"
 import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.repository"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
-import { AuthInMemorySource } from "@/app/features/auth/infrastructure/source/auth-in-memory.source"
+import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
 import { Customer } from "@/app/features/customers/domain/entities/customer.entity"
 import { USER_REPOSITORY } from "../../domain/repositories/user.repository"
@@ -46,9 +47,14 @@ describe("Cancellable in-memory execution boundaries", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     localStorage.clear()
-    TestBed.configureTestingModule({ providers: appConfig.providers })
+    TestBed.configureTestingModule({
+      providers: [...appConfig.providers, provideHttpClientTesting()]
+    })
   })
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify()
+    vi.useRealTimers()
+  })
 
   it.each([1, 0])("cancels audit limit=%s without results or errors before 250ms", async limit => {
     const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
@@ -86,27 +92,36 @@ describe("Cancellable in-memory execution boundaries", () => {
   })
 
   it("binds every domain repository to an implementation distinct from its shared source", () => {
-    expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthInMemorySource))
+    expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthHttpSource))
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).not.toBe(TestBed.inject(CustomerInMemorySource))
     expect(TestBed.inject(USER_REPOSITORY)).not.toBe(TestBed.inject(UserInMemorySource))
     expect(TestBed.inject(ROLE_REPOSITORY)).not.toBe(TestBed.inject(RoleInMemorySource))
   })
 
   for (const valid of [true, false]) {
-    it(`cancels ${valid ? "valid" : "invalid"} login without storage effects`, async () => {
-      localStorage.setItem("authenticated", "true")
+    it(`cancels pending login with ${valid ? "valid-shaped" : "invalid-shaped"} password without session or storage effects`, async () => {
+      const auth = TestBed.inject(AUTH_REPOSITORY)
+      const http = TestBed.inject(HttpTestingController)
+      const read = vi.spyOn(Storage.prototype, "getItem")
       const write = vi.spyOn(Storage.prototype, "setItem")
+      const next = vi.fn()
       try {
-        await cancelBeforeBoundary(
-          TestBed.inject(AUTH_REPOSITORY).login({
-            email: "riojamatthew@gmail.com",
-            password: valid ? "demo2026" : "wrong"
-          }),
-          650
-        )
+        const password = valid ? "FakePassword1" : "wrong"
+        const subscription = auth.login({ email: "fake@example.test", password }).subscribe(next)
+        const request = http.expectOne("http://localhost:8080/api/auth/login")
+        expect(request.request.body).toEqual({ correo: "fake@example.test", password })
+        expect(next).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(649)
+        expect(next).not.toHaveBeenCalled()
+        subscription.unsubscribe()
+        expect(request.cancelled).toBe(true)
+        await vi.runAllTimersAsync()
+        expect(next).not.toHaveBeenCalled()
+        expect(await firstValueFrom(auth.me())).toMatchObject({ success: false })
+        expect(read).not.toHaveBeenCalled()
         expect(write).not.toHaveBeenCalled()
-        expect(localStorage.getItem("authenticated")).toBe("true")
       } finally {
+        read.mockRestore()
         write.mockRestore()
       }
     })
@@ -193,17 +208,42 @@ describe("Cancellable in-memory execution boundaries", () => {
     expect(next).not.toHaveBeenCalled()
   })
 
-  it("does not read auth storage until restoration executes, and cancellation prevents reads", async () => {
+  it("reads only the established local session at subscription, without storage restoration or remote me/logout", async () => {
     const auth = TestBed.inject(AUTH_REPOSITORY)
+    const http = TestBed.inject(HttpTestingController)
+    localStorage.setItem("authenticated", "true")
     const read = vi.spyOn(Storage.prototype, "getItem")
+    const write = vi.spyOn(Storage.prototype, "setItem")
     try {
-      await cancelBeforeBoundary(auth.me(), 250)
+      const current = auth.me()
+      expect(await firstValueFrom(current)).toMatchObject({ success: false })
+      const pending = firstValueFrom(
+        auth.login({ email: "fake@example.test", password: "FakePassword1" })
+      )
+      const request = http.expectOne("http://localhost:8080/api/auth/login")
+      expect(await firstValueFrom(current)).toMatchObject({ success: false })
+      request.flush({
+        token: "fake-token",
+        tipo: "Bearer",
+        expiraEnSegundos: 60,
+        correo: "returned@example.test",
+        rol: "Operaciones"
+      })
+      expect((await pending).success).toBe(true)
+      expect(await firstValueFrom(current)).toMatchObject({
+        success: true,
+        data: { name: null, email: "returned@example.test", role: "Operaciones" }
+      })
+      auth.logout()
+      expect(await firstValueFrom(current)).toMatchObject({ success: false })
+      http.expectNone(() => true)
       expect(read).not.toHaveBeenCalled()
-      const restoration = auth.me()
-      localStorage.setItem("authenticated", "true")
-      expect(await settle(restoration)).toMatchObject({ success: true })
+      expect(write).not.toHaveBeenCalled()
     } finally {
+      auth.logout()
       read.mockRestore()
+      write.mockRestore()
+      localStorage.removeItem("authenticated")
     }
   })
 

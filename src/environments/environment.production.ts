@@ -1,2 +1,6 @@
-// Public build-time display configuration, not a backend or security status.
-export const environment = { label: "Producción" } as const
+// Fail closed until an explicitly approved HTTPS API origin is configured.
+export const environment = {
+  label: "Producción",
+  production: true,
+  apiUrl: null as string | null
+} as const

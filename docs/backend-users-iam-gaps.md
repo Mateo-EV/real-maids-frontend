@@ -1,126 +1,86 @@
-# Backend contracts needed for Users / IAM
+# Pendientes del backend para completar Usuarios / IAM
 
-The current API supports login, listing users and registering accounts, but cannot yet replace the complete IAM demo. This document separates observed OpenAPI contracts from proposed capabilities. Proposed paths are discussion inputs, not approved endpoints or evidence of backend implementation.
+El login ya está conectado y el usuario confirmó que funciona; la verificación independiente utilizó HTTP simulado, no el backend real. Falta conectar la gestión de usuarios, roles/permisos, sesiones y auditoría, que todavía utilizan datos de demostración.
 
-## Evidence and scope
+**Los nombres de rutas y campos son orientativos.** La capa de infraestructura puede mapear otros nombres y formatos acordados. Lo importante es que existan las operaciones y los datos necesarios, no que el backend copie los nombres del frontend.
 
-- Swagger UI: <http://localhost:8080/swagger-ui/index.html#/>
-- Retrieved specification: `GET http://localhost:8080/v3/api-docs` (OpenAPI 3.1.0, `API ERP + CRM The Real Maids`, version `0.1`). Swagger configuration also responded with HTTP 200.
-- Frontend scope: [product guide](README.md), [project overview](../README.md) and [agent constraints](../AGENTS.md).
-- Traceability: M01/RF01/HU01/P01 for authentication; M02/RF02/HU02/P03 for users, roles and permissions; RNF01/RNF03/RNF06/RNF08/RNF09/RNF10/RNF12 for relevant cross-cutting concerns. Audit-specific RF/HU remains unresolved.
-- Analysis inspected documentation and source contracts only. It did not authenticate, mutate backend records, verify CORS/authorization/persistence, or inspect backend source.
-- “Missing” below means absent from the retrieved OpenAPI, not proven absent from the backend.
+Base del análisis: [OpenAPI local](http://localhost:8080/v3/api-docs), versión `0.1`. Los pendientes indican capacidades no documentadas en esa especificación; si ya existen, basta con documentarlas. Alcance: M01/RF01/HU01 y M02/RF02/HU02; auditoría aún no tiene un RF/HU específico en la [guía de producto](README.md).
 
-## What can be used now
+## 1. Usuarios y catálogo de roles — primera prioridad
 
-| Documented operation | Request | Response | Integration readiness |
-| --- | --- | --- | --- |
-| `POST /api/auth/login` | Required `correo`, `password` | `token`, `tipo`, `expiraEnSegundos`, `correo`, `rol` | Can support token acquisition after transport/session decisions; does not satisfy current-user restoration by itself. |
-| `GET /api/usuarios` | No parameters documented | Array of `UsuarioResponse` | Can support a partial account list; missing profile fields prevent a faithful mapping to the current `User` entity. |
-| `POST /api/usuarios` | Required `correo`, `password`, `idRol`; optional `idioma` | `UsuarioResponse` | Can register accounts after role IDs and defaults are confirmed; cannot persist the full current editor model. |
+### Completar los datos del usuario
 
-All three operations document only `200`, use `*/*` for response content and inherit global Bearer JWT security. Login has no explicit public-security override: confirm runtime behavior and correct the specification if login is public. None of the response properties are marked required.
+La respuesta actual incluye ID, correo, nombre del rol, idioma, estado y fecha de creación. Para representar el usuario completo faltan:
 
-The specification also contains `GET /api/clientes` and `POST /api/clientes`; these belong to Customers and do not close IAM gaps.
+| Dato | Para qué se necesita |
+| --- | --- |
+| Nombre del usuario | Listado, búsqueda, editor e identidad visible. |
+| ID estable del rol asignado | Seleccionar, filtrar y cambiar el rol sin deducir IDs a partir de nombres. |
+| Fecha de actualización | Conservar los metadatos del perfil. |
+| Último acceso, nullable | Mostrar el último ingreso; `null` cuando no exista. Debe generarlo el backend, no el editor. |
+| Edad | El formulario actual la utiliza. Confirmar si se guardará o si se retirará del formulario; la regla demo de ≥18 no es una regla de negocio confirmada. |
 
-### Registration validation
+El alta actual solo recibe correo, contraseña, ID de rol e idioma. Ampliarla para guardar los datos editables del perfil acordado y definir el estado inicial. Devolver el mismo perfil completo al listar, consultar, crear y editar. No devolver contraseñas ni inventar fechas para rellenar campos.
 
-- `correo`: email format, maximum 120 characters; required, but the schema does not guarantee nonblank content.
-- `password`: 8–64 characters, with lowercase, uppercase and a digit. Align frontend validation; do not log credentials or silently change password whitespace semantics.
-- `idRol`: int32, minimum 0. Confirm valid IDs, role existence/active-state rules and authorization for assignment; do not assume 0 is a valid role.
-- `idioma`: optional, pattern `es|en`. Confirm exact allowed values and the default; an enum would remove regex ambiguity.
+### Operaciones pendientes
 
-## User DTO incompatibilities
+| Ruta sugerida | Qué debe permitir |
+| --- | --- |
+| `GET /api/roles` | Consultar el catálogo con ID estable, nombre, descripción, estado y fecha de creación. Es necesario para crear/editar usuarios y seleccionar roles en RBAC. |
+| `GET /api/usuarios/{id}` | Consultar un usuario con su perfil completo. |
+| `PUT /api/usuarios/{id}` o `PATCH` | Editar los campos del perfil y cambiar el rol asignado. Definir cómo se cambia la contraseña opcional del editor: aquí o mediante otra operación. |
+| `PATCH /api/usuarios/{id}/estado` | Establecer activo/inactivo sin sobrescribir otros campos. Recibir el estado deseado, no una orden de alternar. |
+| `DELETE /api/usuarios/{id}` | Eliminar el usuario. Definir baja lógica/física y restricciones; no confundir esta acción con desactivarlo. |
 
-| Frontend field | Documented backend field | Required resolution |
-| --- | --- | --- |
-| `id` | `idUsuario` | Explicit DTO mapping; confirm guaranteed presence. |
-| `email` | `correo` | Explicit DTO mapping. |
-| `lang` | `idioma` | Confirm `es` / `en`, default and nullable behavior. |
-| `isActive` | `activo` | Confirm guaranteed presence and initial-state policy. |
-| `createdAt` | `fechaCreacion` | Confirm timezone/offset and parse valid dates. |
-| `roleId` | Only `rol` text | Return stable role identity and expose its catalog; never infer IDs from demo names. |
-| `name`, `age` | Not declared | Confirm profile ownership and product need; extend the API or explicitly revise the frontend contract. Age ≥18 is demo validation, not an established backend rule. |
-| `updatedAt`, `lastAccess` | Not declared | Confirm semantics and nullable access history; do not manufacture timestamps. |
+Validar roles existentes, correo duplicado y campos del perfil. Definir restricciones para actuar sobre la propia cuenta y el último administrador, y el efecto de eliminar/desactivar sobre sus sesiones.
 
-Registration does not accept `name`, `age` or initial active state. Profile editing currently accepts an optional password, but no backend update/credential operation is documented. Decide whether credentials use a separate operation rather than assuming generic profile updates change passwords.
+`GET /api/usuarios` y `POST /api/usuarios` ya existen: necesitan completar sus contratos, no duplicarse. La pantalla pagina y filtra usuarios localmente; paginación en servidor no es un bloqueo inmediato.
 
-## Proposed missing operations
+## 2. Permisos por rol — matriz RBAC
 
-The following methods and paths are **proposals to agree with the backend**, preserving its current Spanish resource naming. Equivalent existing operations would satisfy the capability if their contracts are documented. No frontend adapter should call these paths before approval and implementation.
+| Ruta sugerida | Qué debe permitir |
+| --- | --- |
+| `GET /api/permisos` | Obtener el catálogo real de módulos/acciones disponibles y sus identificadores. También puede venir dentro de la respuesta de la matriz. |
+| `GET /api/roles/{id}/permisos` | Consultar los permisos asignados a un rol. |
+| `PUT /api/roles/{id}/permisos` | Guardar el conjunto completo de permisos del rol de forma atómica. |
 
-### Priority 1 — Authentication and usable user management
+El backend debe definir la matriz real y **hacer cumplir los permisos en cada operación protegida**. Los módulos y concesiones del demo no son una ACL aprobada. Impedir que una cuenta se otorgue permisos que no puede administrar.
 
-| Proposed operation | Capability / consumer | Contract to agree |
-| --- | --- | --- |
-| `GET /api/auth/me` | `AuthRepository.me()`; login completion, restoration and guards | Authenticated stable user identity, profile and role identity; effective permissions or a documented way to retrieve them. Define unauthenticated/expired behavior. |
-| `POST /api/auth/logout` | Invalidate the current session/credential when supported | Revocation semantics and client clearing behavior. Current frontend `logout(): void` must be adapted if server completion becomes asynchronous. Stateless JWT clearing alone is not server revocation. |
-| `GET /api/roles` | User role selector/filter and RBAC role selector | Stable `id`, name, description, active state and creation date, or an approved revised role DTO; clarify whether inactive assigned roles remain visible. |
-| `GET /api/usuarios/{id}` | `getUserById()` | Complete agreed user DTO and not-found behavior. |
-| `PUT /api/usuarios/{id}` | Profile editing | Agree full-replacement versus partial-update semantics (use PATCH instead if partial); writable fields, validation, duplicate-email behavior and response DTO. |
-| `PATCH /api/usuarios/{id}/estado` | Dedicated activate/deactivate action | Desired boolean state, not toggle; preserve other profile/access fields. Agree self-deactivation, last-administrator and session consequences. |
-| `DELETE /api/usuarios/{id}` | Confirmed deletion action | Decide hard delete versus logical removal, dependency constraints, self-deletion rules and effects on sessions/audit. Do not equate this with deactivation silently. |
+## 3. Sesiones activas
 
-**Existing operations also need extension:** agree complete DTOs for listing/registration and expose confirmed error contracts. The current users UI filters and paginates a full array locally; backend pagination is a scalability option requiring frontend contract changes, not a missing endpoint required by today's repository.
+| Ruta sugerida | Qué debe permitir |
+| --- | --- |
+| `GET /api/sesiones` | Listar sesiones activas con ID, ID de usuario, dispositivo, IP/origen, inicio, expiración e identificación de la sesión actual. |
+| `DELETE /api/usuarios/{userId}/sesiones/{sessionId}` | Revocar una sesión concreta y hacer que su credencial deje de ser válida. |
 
-### Priority 2 — RBAC backed by real permissions
+Verificar que la sesión pertenece al usuario indicado y que quien la revoca tiene permiso. Definir el comportamiento ante sesiones expiradas, ya revocadas o la sesión propia. La sesión actual debe identificarse con datos reales, no con el marcador del demo.
 
-| Proposed operation | Capability / consumer | Contract to agree |
-| --- | --- | --- |
-| `GET /api/permisos` | Authoritative permission catalog for the matrix | Stable permission/module/action identifiers, available combinations and any scope model. Catalog delivery could instead be included in a documented matrix response. |
-| `GET /api/roles/{id}/permisos` | `getRolePermissions(roleId)` | Current grants and whether empty/unconfigured differ. |
-| `PUT /api/roles/{id}/permisos` | `saveRolePermissions(roleId, grants)` | Atomic complete-set replacement or an explicitly different model; validation, privilege-escalation protection and concurrent-edit handling. |
+## 4. Auditoría
 
-The frontend's seven illustrated module IDs and actions are demo data, not an approved ACL. Backend authorization must enforce actual permissions on protected operations; saving a matrix or hiding a button does not enforce access. Textual scope notes are not executable policy.
+| Ruta sugerida | Qué debe permitir |
+| --- | --- |
+| `GET /api/auditoria` | Consultar eventos con filtros por fecha, entidad y acción, orden estable y paginación con total filtrado. Proveer también el total global para la métrica, mediante metadatos o consulta equivalente. |
+| `GET /api/auditoria/{id}` | Consultar un evento: ID, usuario/actor, fecha, acción, entidad, ID del registro afectado, detalle, IP/origen y cambios antes/después cuando existan. |
+| `GET /api/auditoria/exportacion` | Obtener todos los resultados filtrados para CSV, no solo la página visible. Puede devolver un archivo o datos para generar el CSV en frontend. Definir límites. |
 
-### Priority 3 — Active sessions
+Generar eventos reales desde las operaciones del sistema; no basta con un listado de registros de prueba. No incluir contraseñas, tokens ni valores sensibles en los cambios registrados.
 
-| Proposed operation | Capability / consumer | Contract to agree |
-| --- | --- | --- |
-| `GET /api/sesiones` | `getUserSessions()` and global active-session metric | Session ID, user ID, device, IP/origin, start/expiry dates and authentic current-session designation. Define visibility and what counts as active. |
-| `DELETE /api/usuarios/{userId}/sesiones/{sessionId}` | Confirmed individual session revocation | Verify ownership and authorization, expire/revoke credentials, define not-found/already-expired/current-session behavior. |
+## 5. Completar el contrato de autenticación
 
-The UI groups sessions by user, including users with zero sessions, then paginates users locally. It needs access to the user catalog as well as sessions. Its current-session marker and protection are simulated; whether administrators may revoke their own current session is a backend/product decision. JWT issuance alone does not provide a revocable session registry; agree the server-side mechanism.
+El login actual funciona con JWT solo en memoria: al recargar se pierde la sesión y el cierre actual solo borra datos locales.
 
-### Priority 4 — Audit viewer and export
+| Ruta sugerida | Qué falta |
+| --- | --- |
+| `GET /api/auth/me` | Consultar la identidad autenticada, su rol estable y permisos efectivos o una forma documentada de obtenerlos. No sustituye una política de persistencia de credenciales. |
+| `POST /api/auth/logout` | Revocar la sesión/credencial actual en el servidor, no solo borrar el JWT del navegador. |
 
-| Proposed operation | Capability / consumer | Contract to agree |
-| --- | --- | --- |
-| `GET /api/auditoria` | `getAuditLogs(params)` | Filters by UTC day, entity and action; deterministic order; pagination metadata and an independent global total. Current frontend shape is `{ items, total, offset, limit }`, default 0/20, max 100; these are frontend conventions to negotiate. |
-| `GET /api/auditoria/{id}` | `getAuditLogById(id)` | Actor, user ID, action, entity, record ID, timestamp, origin/IP, details and optional before/after field changes. |
-| `GET /api/auditoria/exportacion` | All filtered records for CSV export | Either authorized structured records for frontend CSV generation or a server-generated download; agree format, limits and large-export handling. Unbounded arrays are not a mandatory backend design. |
+Documentar expiración y revocación. Renovación y persistencia quedan por definir; no se exige un endpoint de refresh sin acordar primero esa política.
 
-Filtered page totals must not silently replace the global audit metric. A global count can be metadata or a separate agreed query; no dedicated endpoint is inherently required. Audit currently uses synthetic records: backend operations must generate authorized, redacted events if the viewer is to represent real activity. Never expose passwords, tokens or other sensitive values in before/after changes. Retention, access policy and integrity guarantees need explicit agreement; the UI does not prove immutability.
+## Requisitos comunes para entregar las operaciones
 
-### Optional scope — Role administration and credentials
+- Documentar cuerpos, campos obligatorios/nullables, formatos de fechas con zona horaria y valores permitidos de idioma, roles y acciones.
+- Documentar errores: validación, credenciales inválidas, falta de permisos, recurso inexistente y conflictos como correo duplicado. Distinguir `401` de `403` y devolver mensajes seguros.
+- Especificar quién puede ejecutar cada operación y qué ocurre al cambiar permisos o desactivar usuarios con sesiones abiertas.
+- Mantener el login público correctamente descrito en OpenAPI; la especificación analizada le aplica Bearer global sin excepción explícita.
 
-Role CRUD contracts exist but no role-management UI is exposed. Only the role catalog is immediately necessary for the visible page. If role administration is approved, discuss `POST /api/roles`, `GET /api/roles/{id}`, `PUT /api/roles/{id}` and `DELETE /api/roles/{id}`. Confirm assigned-role deletion rules rather than importing demo `ROLE_IN_USE` behavior as backend policy.
-
-There is no standalone credential-management screen. Confirm whether editing an optional password is supported, removed or routed through a dedicated credential operation. Password reset, MFA, bulk session revocation and refresh endpoints are not automatically required by the existing UI. Add a refresh operation only after agreeing session lifetime/renewal policy.
-
-## Cross-cutting agreements before HTTP adapters
-
-- Define actual permission requirements and `401` versus `403` behavior for every protected operation; do not derive authorization from role names.
-- Document validation, duplicate/conflict, not-found and internal-error responses with stable machine codes and safe field errors. A consistent error envelope is a proposal, not an existing contract.
-- Mark guaranteed response fields, nullable values, enums, IDs and date/time semantics in OpenAPI; distinguish absent values from null.
-- Confirm production HTTPS, API base/versioning and browser CORS for the actual frontend origin. Swagger availability does not validate these.
-- Decide token/session storage, restoration, expiration and any refresh/revocation strategy explicitly. Do not promote the demo localStorage flag into permanent authentication.
-- Confirm transaction boundaries and any concurrency control for profile/RBAC edits; retries and idempotency must follow server semantics.
-- Keep error mappings explicit: existing frontend codes such as `EMAIL_ALREADY_EXISTS`, `ROLE_IN_USE`, `CURRENT_SESSION` and `INVALID_GRANTS` are not established wire codes.
-
-## Infrastructure implementation implications
-
-Repository contracts live in [`src/app/features/users/domain/repositories`](../src/app/features/users/domain/repositories); DTO expectations are defined in its sibling `entities`, `models`, `params` and `errors` directories. Authentication uses [`AuthRepository`](../src/app/features/auth/domain/repositories/auth.repository.ts).
-
-The composition root already aliases root repository implementations with `useExisting`, but they inject demo sources. Keep repository implementations and source/transport adapters separate; preserve use-case/store boundaries and shared lifetimes while introducing confirmed HTTP DTO mappings.
-
-[`app.config.ts`](../src/app/core/config/app.config.ts) does not currently configure HTTP integration, and [`API_URL`](../src/app/core/tokens/api-url.token.ts) has no provider. Adding HTTP provisioning, API configuration, credential transport, error mapping and session handling is separate frontend work, not proof that the backend lacks routes. Preserve cancellation and review SSR/browser boundaries when connecting real sessions.
-
-## Recommended integration order
-
-1. Agree identity/session handling, user DTOs, role IDs and error responses.
-2. Connect authentication/restoration, roles and user queries; then registration, editing, desired-state changes and deletion.
-3. Agree the authoritative ACL and connect RBAC, with backend enforcement.
-4. Connect revocable sessions and real audit queries/export after their server semantics are established.
-
-Before claiming completion, test adapter mapping and success/error cases, guards and authorization-related UX, expiration/revocation, date handling and relevant component states. This document does not certify any backend behavior or frontend integration as complete.
+**No requerido para completar la pantalla actual:** CRUD administrativo de roles, recuperación de contraseña, MFA y cierre masivo de sesiones. El catálogo de roles sí es necesario. Esas ampliaciones se pueden abordar por separado.

@@ -1,4 +1,8 @@
 import { TestBed } from "@angular/core/testing"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
+import { API_URL } from "../tokens/api-url.token"
+import { environment } from "@/environments/environment"
+import { environment as production } from "@/environments/environment.production"
 import { ToastConfig } from "@ngxpert/hot-toast"
 import { Router } from "@angular/router"
 import { firstValueFrom, Observable } from "rxjs"
@@ -9,7 +13,7 @@ import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/reposito
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { appConfig } from "./app.config"
 import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.repository"
-import { AuthInMemorySource } from "@/app/features/auth/infrastructure/source/auth-in-memory.source"
+import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
@@ -40,7 +44,9 @@ async function settle<T>(stream: Observable<T>): Promise<T> {
 
 describe("Application repository composition", () => {
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: appConfig.providers })
+    TestBed.configureTestingModule({
+      providers: [...appConfig.providers, provideHttpClientTesting()]
+    })
     vi.useFakeTimers()
   })
 
@@ -62,7 +68,7 @@ describe("Application repository composition", () => {
 
   it("aliases the auth token to the root implementation instance", () => {
     expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthRepositoryImpl))
-    expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthInMemorySource))
+    expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthHttpSource))
   })
 
   it("aliases the customer token to the root implementation instance", () => {
@@ -136,19 +142,28 @@ describe("Application repository composition", () => {
     expect(TestBed.inject(CreateUserUseCase)).toBe(TestBed.inject(CreateUserUseCase))
   })
 
-  it("connects root auth state, its source and admin logout", async () => {
+  it("connects root HTTP auth state, its source and admin logout", async () => {
     const store = TestBed.inject(AuthStore)
-    const source = TestBed.inject(AuthInMemorySource)
+    const source = TestBed.inject(AuthHttpSource)
+    expect(TestBed.inject(API_URL)).toBe(environment.apiUrl)
+    expect(production.apiUrl).toBeNull()
     const login = firstValueFrom(
-      store.login({ email: "riojamatthew@gmail.com", password: "demo2026" })
+      store.login({ email: "fake@example.test", password: "FakePassword1" })
     )
-    await vi.runAllTimersAsync()
+    const http = TestBed.inject(HttpTestingController)
+    http.expectOne("http://localhost:8080/api/auth/login").flush({
+      token: "fake-token",
+      tipo: "Bearer",
+      expiraEnSegundos: 60,
+      correo: "returned@example.test",
+      rol: "Operaciones"
+    })
     expect((await login).success).toBe(true)
     expect(store.isAuthenticated()).toBe(true)
-
-    const session = firstValueFrom(source.me())
-    await vi.runAllTimersAsync()
-    expect((await session).success).toBe(true)
+    expect(store.session()?.name).toBeNull()
+    expect(store.session()?.email).toBe("returned@example.test")
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.verify()
 
     const navigate = vi.spyOn(TestBed.inject(Router), "navigateByUrl").mockResolvedValue(true)
     const page = TestBed.runInInjectionContext(() => new AdminShell())

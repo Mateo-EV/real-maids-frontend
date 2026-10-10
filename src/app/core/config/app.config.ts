@@ -1,4 +1,7 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from "@angular/core"
+import { provideHttpClient } from "@angular/common/http"
+import { API_URL } from "../tokens/api-url.token"
+import { environment } from "@/environments/environment"
 import { provideRouter } from "@angular/router"
 import { routes } from "../../app.routes"
 import { provideClientHydration } from "@angular/platform-browser"
@@ -23,6 +26,8 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideClientHydration(),
+    provideHttpClient(),
+    { provide: API_URL, useValue: environment.apiUrl },
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },

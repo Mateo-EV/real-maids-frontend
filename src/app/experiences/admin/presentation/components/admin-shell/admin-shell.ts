@@ -3,6 +3,7 @@ import { Router, RouterOutlet } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideLogOut, lucideShieldCheck } from "@ng-icons/lucide"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmAvatarImports } from "@spartan-ng/helm/avatar"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmSelectImports } from "@spartan-ng/helm/select"
@@ -19,6 +20,7 @@ import { AdminSidebar } from "../admin-sidebar/admin-sidebar"
     AdminSidebar,
     NgIcon,
     HlmButtonImports,
+    HlmAlertImports,
     HlmAvatarImports,
     HlmBadgeImports,
     HlmSelectImports,
@@ -44,7 +46,7 @@ export class AdminShell {
   }
 
   sessionInitials(): string {
-    return (this.session()?.name ?? "")
+    return (this.session()?.name ?? this.session()?.email?.[0] ?? "")
       .split(" ")
       .filter(Boolean)
       .slice(0, 2)
