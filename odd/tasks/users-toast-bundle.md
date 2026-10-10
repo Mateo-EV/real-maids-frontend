@@ -18,9 +18,9 @@ First move both HotToastService and its configuration to the lazy Users route. T
 
 ## Tasks
 
-- [ ] T1 — Implement scoped toast composition with regression tests and narrow docs updates. Implementation verified; awaiting commit. Route: gentle-ai-worker; multiple nontrivial files and preparation require delegation. Route-local HotToastService, ViewService and configuration keep consumers and the body container in the same injector.
-- [ ] T2 — Verify formatting, focused/full tests and production stats, confirming initial <500 kB with unchanged budgets. Writer checks and independent spot check passed; awaiting commit. Route: writer self-check then gentle-ai-verify as required.
-- [ ] T3 — Review the stable candidate and obtain human staging/snapshot/message approval for its separate commit. Native review blocked: no model configured for review-reliability. Open lineage review-e6cb091169e67162 remains reviewing, without a verdict or receipt. Independent checks do not replace native review. Commit pending. Route: parent native facade and human decision. Leave implementation tasks open until commit exists.
+- [x] T1 — Implement scoped toast composition with regression tests and narrow docs updates. Verified and committed in `d0f1db9d4f96edab7b6bca457b52ccc505bc2f22`. Route: gentle-ai-worker; multiple nontrivial files and preparation require delegation. Route-local HotToastService, ViewService and configuration keep consumers and the body container in the same injector.
+- [x] T2 — Verify formatting, focused/full tests and production stats, confirming initial <500 kB with unchanged budgets. Writer checks and independent spot check passed; committed in `d0f1db9d4f96edab7b6bca457b52ccc505bc2f22`. Route: writer self-check then gentle-ai-verify as required.
+- [ ] T3 — Review the stable candidate and obtain human staging/snapshot/message approval for its separate commit. Native review blocked: no model configured for review-reliability. Open lineage review-e6cb091169e67162 remains reviewing, without a verdict or receipt. Independent checks do not replace native review. User explicitly approved committing with the disclosed review blocker; commit `d0f1db9d4f96edab7b6bca457b52ccc505bc2f22` exists, but RDD remains open. Route: parent native facade and human decision. Leave implementation tasks open until commit exists.
 
 ## Acceptance and evidence
 
@@ -37,8 +37,8 @@ First move both HotToastService and its configuration to the lazy Users route. T
 - Independent verifier: 13 composition tests across 2 files passed; touched-file and task-document Prettier check passed; `git diff HEAD --check` passed. Existing stats independently confirm 341,910 B main JS + 136,885 B CSS = 478,795 B initial and lazy Hot Toast reachability. No build/full-suite/browser rerun claimed.
 - Native reviewer failed with reviewer-config-invalid before execution. Fresh bound STATUS retained the same collect slot. ASSESS with unavailable outcome failed on untracked declaration and required independent verification, now passed. No review acknowledgement, receipt or authority recovery performed.
 
-Forecast: approximately 120–250 authored diff lines, one coherent work unit. Observed implementation diff: 157 additions / 5 deletions, excluding this task document. Delivery strategy: ask-on-risk. Commit: pending. RDD: blocked for the stable candidate; human configuration decision pending.
+Forecast: approximately 120–250 authored diff lines, one coherent work unit. Observed implementation diff: 157 additions / 5 deletions, excluding this task document. Delivery strategy: ask-on-risk. Commit: `d0f1db9d4f96edab7b6bca457b52ccc505bc2f22` (`perf(users): defer hot toast to the lazy users route`). RDD: blocked for the stable candidate; human configuration decision pending.
 
 ## Next step
 
-Configure a model for review-reliability before resuming the open native review through fresh bound STATUS. Do not substitute the independent verification as a native verdict. Once the human chooses the review continuation, ask them to stage the full work unit and approve its exact snapshot/message before any optimization commit. Browser visual/keyboard smoke remains pending.
+Configure a model for review-reliability before resuming the open native review through fresh bound STATUS. Do not substitute the independent verification as a native verdict. The human approved the exact staged snapshot and message, including the disclosed blocker, and requested ending the session. Implementation commit is complete; do not start a new review or alter the open authority. Browser visual/keyboard smoke and native review remain pending.
