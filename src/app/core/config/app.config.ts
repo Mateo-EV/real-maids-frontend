@@ -17,14 +17,12 @@ import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositorie
 import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
 import { RBAC_REPOSITORY } from "@/app/features/users/domain/repositories/rbac.repository"
 import { RbacRepositoryImpl } from "@/app/features/users/infrastructure/repositories/rbac.repository-impl"
-import { provideHotToastConfig } from "@ngxpert/hot-toast"
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideClientHydration(),
-    provideHotToastConfig(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },

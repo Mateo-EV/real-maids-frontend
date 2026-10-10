@@ -1,4 +1,5 @@
 import { TestBed } from "@angular/core/testing"
+import { ToastConfig } from "@ngxpert/hot-toast"
 import { Router } from "@angular/router"
 import { firstValueFrom, Observable } from "rxjs"
 import { AuthRepositoryImpl } from "@/app/features/auth/infrastructure/repositories/auth.repository-impl"
@@ -44,6 +45,10 @@ describe("Application repository composition", () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it("leaves toast configuration to the lazy Users route", () => {
+    expect(TestBed.inject(ToastConfig, null)).toBeNull()
+  })
 
   it("aliases the distinct audit token to the root implementation and connects its query", async () => {
     const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
