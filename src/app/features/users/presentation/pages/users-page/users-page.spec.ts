@@ -1,7 +1,12 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs"
 import { signal } from "@angular/core"
-import { TestBed } from "@angular/core/testing"
+import { DeferBlockBehavior, TestBed } from "@angular/core/testing"
+import { By } from "@angular/platform-browser"
+import { RbacMatrix } from "../../components/rbac-matrix/rbac-matrix"
+import { AuditViewer } from "../../components/audit-viewer/audit-viewer"
+import { RbacError } from "../../../domain/errors/rbac.error"
+import { AuditLogError } from "../../../domain/errors/audit-log.error"
 import { provideRouter } from "@angular/router"
 import { firstValueFrom, of, Subject } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
@@ -47,6 +52,7 @@ describe("UsersPage", () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [UsersPage],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
       providers: [
         ...providers,
         provideRouter([]),
@@ -79,8 +85,7 @@ describe("UsersPage", () => {
     const audit = element.querySelector<HTMLButtonElement>("[data-audit-tab]")!
     expect(audit).not.toBeNull()
     expect(audit.disabled).toBe(false)
-    audit.click()
-    fixture.detectChanges()
+    await visit(fixture, "audit")
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.querySelector("app-audit-viewer")).not.toBeNull()
@@ -95,8 +100,198 @@ describe("UsersPage", () => {
     page.section.set("users")
     fixture.detectChanges()
     expect(element.querySelector("#user-search")).not.toBeNull()
-    expect(element.querySelector("app-audit-viewer")).toBeNull()
+    expect(element.querySelector("app-audit-viewer")?.parentElement?.hidden).toBe(true)
   })
+
+  async function visit(
+    fixture: ReturnType<typeof TestBed.createComponent<UsersPage>>,
+    section: "users" | "rbac" | "audit"
+  ) {
+    const element = fixture.nativeElement as HTMLElement
+    element.querySelector<HTMLButtonElement>(`[data-${section}-tab]`)!.click()
+    fixture.detectChanges()
+    // Let deferred dependencies resolve naturally; never force a block's rendered state.
+    await vi.advanceTimersByTimeAsync(0)
+    fixture.detectChanges()
+    if (
+      section !== "users" &&
+      !(
+        section === "rbac" &&
+        (fixture.componentInstance.initializing() || fixture.componentInstance.loadError())
+      )
+    ) {
+      await vi.waitFor(
+        () => {
+          fixture.detectChanges()
+          expect(
+            element.querySelector(section === "rbac" ? "app-rbac-matrix" : "app-audit-viewer")
+          ).not.toBeNull()
+        },
+        { interval: 1 }
+      )
+    }
+  }
+
+  it("loads RBAC only on first visit and retains the role and unsaved draft without reloading", async () => {
+    const query = vi.spyOn(TestBed.inject(RbacRepositoryImpl), "getRolePermissions")
+    const { fixture, element } = await setup()
+    expect(query).not.toHaveBeenCalled()
+    expect(element.querySelector("app-rbac-matrix")).toBeNull()
+    await visit(fixture, "audit")
+    expect(query).not.toHaveBeenCalled()
+    await visit(fixture, "rbac")
+    const matrix = fixture.debugElement.query(By.directive(RbacMatrix))
+      .componentInstance as RbacMatrix
+    expect(matrix.loading()).toBe(true)
+    await vi.advanceTimersByTimeAsync(500)
+    matrix.selectRole("1")
+    await vi.advanceTimersByTimeAsync(500)
+    matrix.toggle("crm", "create", true)
+    fixture.detectChanges()
+    expect(matrix.dirty()).toBe(true)
+    const draft = matrix.grants()
+    await visit(fixture, "users")
+    const wrapper = element.querySelector("app-rbac-matrix")?.parentElement
+    expect(wrapper?.hidden).toBe(true)
+    expect(wrapper?.style.display).toBe("none")
+    expect(wrapper?.hasAttribute("inert")).toBe(true)
+    await visit(fixture, "rbac")
+    expect(fixture.debugElement.query(By.directive(RbacMatrix)).componentInstance).toBe(matrix)
+    expect(matrix.selectedRoleId()).toBe(1)
+    expect(matrix.grants()).toEqual(draft)
+    expect(matrix.canSave()).toBe(true)
+    expect(matrix.loading()).toBe(false)
+    expect(query).toHaveBeenCalledTimes(2) // first visit and explicit role change only
+    expect(wrapper?.hidden).toBe(false)
+    expect(wrapper?.style.display).toBe("")
+    expect(wrapper?.hasAttribute("inert")).toBe(false)
+  })
+
+  it("loads Audit only on first visit and retains filters, page and rows without another query", async () => {
+    const query = vi.spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
+    const { fixture, element } = await setup()
+    const globalCalls = query.mock.calls.length // the independent global metric query is allowed
+    expect(element.querySelector("app-audit-viewer")).toBeNull()
+    await visit(fixture, "rbac")
+    expect(query).toHaveBeenCalledTimes(globalCalls)
+    await visit(fixture, "audit")
+    await flush(fixture.whenStable())
+    const viewer = fixture.debugElement.query(By.directive(AuditViewer))
+      .componentInstance as AuditViewer
+    const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
+    entity.value = "sesion"
+    entity.dispatchEvent(new Event("change"))
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    element
+      .querySelector<HTMLButtonElement>('app-audit-viewer button[aria-label="Página siguiente"]')!
+      .click()
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    const rows = element.querySelector("app-audit-viewer tbody")!.textContent
+    const calls = query.mock.calls.length
+    expect(viewer.page()).toBe(2)
+    await visit(fixture, "users")
+    const wrapper = element.querySelector("app-audit-viewer")?.parentElement
+    expect(wrapper?.hidden).toBe(true)
+    expect(wrapper?.style.display).toBe("none")
+    expect(wrapper?.hasAttribute("inert")).toBe(true)
+    await visit(fixture, "audit")
+    expect(fixture.debugElement.query(By.directive(AuditViewer)).componentInstance).toBe(viewer)
+    expect(viewer.filters()).toEqual({ entity: "sesion" })
+    expect(viewer.page()).toBe(2)
+    expect(element.querySelector("app-audit-viewer tbody")!.textContent).toBe(rows)
+    expect(query).toHaveBeenCalledTimes(calls)
+    expect(wrapper?.hidden).toBe(false)
+    expect(wrapper?.style.display).toBe("")
+    expect(wrapper?.hasAttribute("inert")).toBe(false)
+    expect(element.querySelector("app-audit-viewer")?.textContent).not.toContain("Cargando")
+  })
+
+  it("keeps RBAC gated until catalog retry succeeds", async () => {
+    vi.spyOn(TestBed.inject(UserStore), "loadUsers").mockReturnValueOnce(
+      of(Result.failure(new UserError("UNEXPECTED")))
+    )
+    const query = vi.spyOn(TestBed.inject(RbacRepositoryImpl), "getRolePermissions")
+    const fixture = TestBed.createComponent(UsersPage)
+    fixture.detectChanges()
+    await visit(fixture, "rbac")
+    expect(query).not.toHaveBeenCalled()
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(fixture.nativeElement.textContent).toContain("No pudimos cargar el catálogo")
+    expect(query).not.toHaveBeenCalled()
+    fixture.nativeElement.querySelector("[data-retry]").click()
+    fixture.detectChanges()
+    expect(query).not.toHaveBeenCalled()
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    await vi.advanceTimersByTimeAsync(0)
+    fixture.detectChanges()
+    expect(query).toHaveBeenCalledOnce()
+  })
+
+  it.each(["rbac", "audit"] as const)(
+    "lets hidden %s requests finish, preserves errors/retry and cancels on page destruction",
+    async section => {
+      const { fixture, element } = await setup()
+      const rbacPending = new Subject<Result<never, RbacError>>()
+      const auditPending = new Subject<Result<never, AuditLogError>>()
+      const pending = section === "rbac" ? rbacPending : auditPending
+      const repository =
+        section === "rbac"
+          ? TestBed.inject(RbacRepositoryImpl)
+          : TestBed.inject(AuditLogRepositoryImpl)
+      const query =
+        section === "rbac"
+          ? vi.spyOn(repository as RbacRepositoryImpl, "getRolePermissions")
+          : vi.spyOn(repository as AuditLogRepositoryImpl, "getAuditLogs")
+      if (section === "rbac")
+        vi.mocked(TestBed.inject(RbacRepositoryImpl).getRolePermissions).mockReturnValueOnce(
+          rbacPending
+        )
+      else
+        vi.mocked(TestBed.inject(AuditLogRepositoryImpl).getAuditLogs).mockReturnValueOnce(
+          auditPending
+        )
+      await visit(fixture, section)
+      expect(pending.observed).toBe(true)
+      await visit(fixture, "users")
+      expect(pending.observed).toBe(true)
+      // A hidden initial request can complete with an error; revisit must not silently retry it.
+      if (section === "rbac") rbacPending.next(Result.failure(new RbacError("UNEXPECTED")))
+      else auditPending.next(Result.failure(new AuditLogError("UNEXPECTED")))
+      pending.complete()
+      await visit(fixture, section)
+      expect(query).toHaveBeenCalledOnce()
+      expect(
+        element.querySelector(
+          `app-${section === "rbac" ? "rbac-matrix" : "audit-viewer"} [role="alert"]`
+        )
+      ).not.toBeNull()
+      const component =
+        section === "rbac"
+          ? (fixture.debugElement.query(By.directive(RbacMatrix)).componentInstance as RbacMatrix)
+          : (fixture.debugElement.query(By.directive(AuditViewer)).componentInstance as AuditViewer)
+      component.retry()
+      await visit(fixture, "users")
+      await vi.advanceTimersByTimeAsync(500)
+      await visit(fixture, section)
+      expect(
+        element.querySelector(
+          `app-${section === "rbac" ? "rbac-matrix" : "audit-viewer"} [role="alert"]`
+        )
+      ).toBeNull()
+      expect(query).toHaveBeenCalledTimes(2)
+      const cancelled = new Subject<never>()
+      query.mockReturnValueOnce(cancelled)
+      component.retry()
+      await visit(fixture, "users")
+      expect(cancelled.observed).toBe(true)
+      fixture.destroy()
+      expect(cancelled.observed).toBe(false)
+    }
+  )
 
   it("opts Users controls into the shared catalog filter contract without local dimensions", async () => {
     const { element } = await setup()

@@ -100,11 +100,9 @@
     </section>
     @if (section() === "sessions" && !initializing() && !loadError()) {
       <app-user-sessions (retry)="retrySessions()" />
-    } @else if (section() === "rbac" && !initializing() && !loadError()) {
-      <app-rbac-matrix />
-    } @else if (section() === "audit") {
-      <app-audit-viewer />
-    } @else {
+    } @else if (
+      section() === "users" || (section() !== "audit" && (initializing() || loadError()))
+    ) {
       <section
         class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
         aria-labelledby="users-title"
@@ -394,6 +392,25 @@
         </div>
       </section>
     }
+    <!-- Retain visited views until page destruction. Hide the wrapper, not the styled host. -->
+    <div
+      [hidden]="section() !== 'rbac' || initializing() || loadError()"
+      [style.display]="section() !== 'rbac' || initializing() || loadError() ? 'none' : null"
+      [attr.inert]="section() !== 'rbac' || initializing() || loadError() ? '' : null"
+    >
+      @defer (when section() === "rbac" && !initializing() && !loadError()) {
+        <app-rbac-matrix />
+      }
+    </div>
+    <div
+      [hidden]="section() !== 'audit'"
+      [style.display]="section() !== 'audit' ? 'none' : null"
+      [attr.inert]="section() !== 'audit' ? '' : null"
+    >
+      @defer (when section() === "audit") {
+        <app-audit-viewer />
+      }
+    </div>
   </main>
 </div>
 <ng-template #userActions let-user>
