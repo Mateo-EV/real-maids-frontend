@@ -20,8 +20,8 @@ Traceability: M01/RF01/HU01/P01; M02 demo boundary; RNF01/RNF03/RNF09/RNF10/RNF1
 
 ## Tasks
 
-- [ ] T1 — Implement connected HTTP login, honest session model, local memory/expiry/logout, composition and shell demo boundary with regression tests. Route: one delegated writer (multiple nontrivial files). Status: in progress, not committed.
-- [ ] T2 — Verify formatting, focused/full tests, build and documentation; independently assess candidate risk and follow verification plan. Status: pending.
+- [ ] T1 — Implement connected HTTP login, honest session model, local memory/expiry/logout, composition and shell demo boundary with regression tests. Route: one delegated writer (multiple nontrivial files). Status: implemented with passing writer checks, pending independent verification and work-unit commit.
+- [ ] T2 — Verify formatting, focused/full tests, build and documentation; independently assess candidate risk and follow verification plan. Status: independent verification in progress.
 - [ ] T3 — Present staged/unstaged/untracked snapshot; await human staging and exact commit approval; review the work-unit candidate under native RDD. Status: pending.
 
 ## Acceptance and verification
@@ -38,7 +38,7 @@ Traceability: M01/RF01/HU01/P01; M02 demo boundary; RNF01/RNF03/RNF09/RNF10/RNF1
 
 Route: delegated direct. Forecast: approximately 400–700 authored diff lines including tests and docs, advisory only; keep one coherent login unit rather than omitting tests or compressing code. Delivery strategy: ask-on-risk; no PR delivery or chain decision yet. No source writes at document creation. HEAD baseline: b0ed449. No work-unit commit or native review yet.
 
-Verification evidence: writer observed RED (28 behavioral failures), then GREEN (114/114 focused tests). Production build passed, initial bundle 496.17 kB; formatter check, diff whitespace and 21 relative documentation links passed. Full suite failed with 481 passed / 3 failed in legacy cross-feature auth tests. The human explicitly approved auth-only updates to users.routes.spec.ts, repository-delegation.spec.ts and request-cancellation.spec.ts; correction and full re-verification are running. Native risk assessment was unassessable due to undeclared new source files; independent verification is required. Live authenticated login/CORS and rendered browser checks remain pending. No implementation commit exists; the task-document-only commit does not complete tasks.
+Verification evidence: writer observed RED (28 behavioral failures), then GREEN (114/114 focused tests). Production build passed, initial bundle 496.17 kB; formatter check, diff whitespace and 21 relative documentation links passed. Full suite failed with 481 passed / 3 failed in legacy cross-feature auth tests. The human explicitly approved auth-only updates to users.routes.spec.ts, repository-delegation.spec.ts and request-cancellation.spec.ts. Those corrections observed safe mocked RED (3 failures), then GREEN (22/22); combined focused checks passed 390/390, full suite passed 484/484 and build passed again (496.17 kB). Entire implementation candidate: 23 files, 828 authored changed lines including three new untracked source/test files. Independent verification is running. Native risk assessment was unassessable due to undeclared new source files; independent verification is required. Live authenticated login/CORS and rendered browser checks remain pending. No implementation commit exists; the task-document-only commit does not complete tasks.
 
 Rollback boundary: HTTP login/source and local credential handling, auth composition/config changes, honest shell session display/demo indicator and their accompanying tests/docs; leave independent users/IAM sources unchanged.
 
