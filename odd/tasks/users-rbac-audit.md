@@ -33,5 +33,8 @@ Worker implemented26 audit source/test files: typed UTC-day/entity/action filter
 
 User explicitly approved the one additional test edit: src/app/experiences/admin/admin.routes.spec.ts may add AUDIT_LOG_REPOSITORY useExisting AuditLogRepositoryImpl and imports, followed by formatting/focused/full verification. Bounded continuation completed only the approved test provider binding/imports. Exact Prettier write/check passed, all9 admin-route tests passed, and full suite432 tests across55files passed with no failures. git diff --check passed (LF/CRLF warnings only). T2 no longer has the test blocker; independent final verification and browser acceptance remain pending.
 
+## Interruption recovery
+The first T4 worker failed without a usable result after the user-reported usage limit. User explicitly authorized continuing. Reconciled memory, task file and Git state: HEAD b13956e, no staged changes, RBAC/audit implementation remains uncommitted and README/product guide still clean. Prior432-test/build evidence belongs to the pre-harmonization checkpoint, not resumed edits. One resumed bounded writer will inspect existing allowed files before continuing; no parallel writers.
+
 ## Next step
-Apply T4 screenshot harmonization with one bounded writer and reconcile product documentation, followed by T3 independent final verification. No code staging or commit authorized. Keep tasks unchecked until verified and committed.
+Resume T4 screenshot harmonization and reconcile product documentation, followed by T3 independent final verification. No code staging or commit authorized. Keep tasks unchecked until verified and committed.
