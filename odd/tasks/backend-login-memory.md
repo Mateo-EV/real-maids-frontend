@@ -38,10 +38,10 @@ Traceability: M01/RF01/HU01/P01; M02 demo boundary; RNF01/RNF03/RNF09/RNF10/RNF1
 
 Route: delegated direct. Forecast: approximately 400–700 authored diff lines including tests and docs, advisory only; keep one coherent login unit rather than omitting tests or compressing code. Delivery strategy: ask-on-risk; no PR delivery or chain decision yet. No source writes at document creation. HEAD baseline: b0ed449. No work-unit commit or native review yet.
 
-Verification evidence: exploration completed; no implementation checks run yet. No automatic task completion from documentation commits.
+Verification evidence: writer observed RED (28 behavioral failures), then GREEN (114/114 focused tests). Production build passed, initial bundle 496.17 kB; formatter check, diff whitespace and 21 relative documentation links passed. Full suite failed with 481 passed / 3 failed in legacy cross-feature auth tests. The human explicitly approved auth-only updates to users.routes.spec.ts, repository-delegation.spec.ts and request-cancellation.spec.ts; correction and full re-verification are running. Native risk assessment was unassessable due to undeclared new source files; independent verification is required. Live authenticated login/CORS and rendered browser checks remain pending. No implementation commit exists; the task-document-only commit does not complete tasks.
 
 Rollback boundary: HTTP login/source and local credential handling, auth composition/config changes, honest shell session display/demo indicator and their accompanying tests/docs; leave independent users/IAM sources unchanged.
 
 ## Next step
 
-Delegate T1 under bounded edit surfaces, run observed test-first checks, record exact results and remaining live-browser limitations, then reconcile this document and its memory mirror before T2.
+Finish the authorized legacy-test updates, repeat focused/full verification and build, then run independent verification over the final candidate. Keep T1 open until its outcome, checks and work-unit commit exist. No code staging or commit has been authorized.
