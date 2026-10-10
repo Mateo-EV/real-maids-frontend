@@ -36,6 +36,19 @@ describe("Infrastructure repository delegation", () => {
     expect(query).toHaveBeenCalledExactlyOnceWith(undefined)
   })
 
+  it("delegates complete filtered audit and per-ID detail preserving observables", () => {
+    const source = TestBed.inject(AuditLogInMemorySource)
+    const repository = TestBed.inject(AuditLogRepositoryImpl)
+    const response = of(Result.failure(new AuditLogError("INVALID_FILTER")))
+    const all = vi.spyOn(source, "getAllAuditLogs").mockReturnValue(response)
+    const detail = vi.spyOn(source, "getAuditLogById").mockReturnValue(response)
+    const filters = { dayUTC: "2026-09-01", entity: "usuario" as const, action: "UPDATE" as const }
+    expect(repository.getAllAuditLogs(filters)).toBe(response)
+    expect(all).toHaveBeenCalledExactlyOnceWith(filters)
+    expect(repository.getAuditLogById(42)).toBe(response)
+    expect(detail).toHaveBeenCalledExactlyOnceWith(42)
+  })
+
   afterEach(() => vi.restoreAllMocks())
 
   it("delegates auth login, restoration and synchronous logout to the shared source", () => {

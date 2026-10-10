@@ -29,20 +29,22 @@
         >
       </button>
       <button
-        data-future-tab
+        data-rbac-tab
         type="button"
-        disabled
-        aria-describedby="future-tabs-help"
-        class="future-tab"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'rbac'"
+        [attr.aria-current]="section() === 'rbac' ? 'page' : null"
+        (click)="section.set('rbac')"
       >
         Roles y Matriz RBAC
       </button>
       <button
-        data-future-tab
+        data-audit-tab
         type="button"
-        disabled
-        aria-describedby="future-tabs-help"
-        class="future-tab"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'audit'"
+        [attr.aria-current]="section() === 'audit' ? 'page' : null"
+        (click)="section.set('audit')"
       >
         Visor de Auditoría
       </button>
@@ -87,17 +89,21 @@
       </article>
       <article hlmCard>
         <div hlmCardHeader>
-          <p class="kpi-label">Eventos auditados</p>
+          <p class="kpi-label">Registros de auditoría</p>
           <span hlmCardAction class="kpi-tile" data-kpi-tone="green"
             ><ng-icon name="lucideClipboardList" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value">{{ metrics.auditEvents }}</p>
-          <p hlmCardDescription>Actividad del sistema</p>
+          <p class="kpi-value" data-audit-metric>{{ audit.globalTotal() ?? "—" }}</p>
+          <p hlmCardDescription>Total de registros disponibles</p>
         </div>
       </article>
     </section>
     @if (section() === "sessions" && !initializing() && !loadError()) {
       <app-user-sessions (retry)="retrySessions()" />
+    } @else if (section() === "rbac" && !initializing() && !loadError()) {
+      <app-rbac-matrix />
+    } @else if (section() === "audit") {
+      <app-audit-viewer />
     } @else {
       <section
         class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"

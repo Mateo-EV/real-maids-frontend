@@ -1,6 +1,7 @@
 import { TestBed } from "@angular/core/testing"
 import { firstValueFrom, Observable } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { Result } from "@/app/shared/utils/result"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { AuditLog } from "../../domain/entities/audit-log.entity"
 import { AuditLogError } from "../../domain/errors/audit-log.error"
@@ -88,6 +89,110 @@ describe("Read-only audit source", () => {
     expect(second.data.items[0]).toEqual(original)
     expect(second.data.items[0]).not.toBe(first.data.items[0])
     expect(second.data.items[0].date).not.toBe(first.data.items[0].date)
+  })
+
+  it("filters UTC day, entity and action before totals/pagination and exports every match", async () => {
+    const all = await settle(source.getAllAuditLogs({ dayUTC: "2026-09-01", entity: "usuario" }))
+    if (!all.success) throw all.error
+    expect(all.data.length).toBeGreaterThan(5)
+    expect(
+      all.data.every(
+        log => log.entity === "usuario" && log.date.toISOString().startsWith("2026-09-01")
+      )
+    ).toBe(true)
+    const page = await settle(
+      source.getAuditLogs({ dayUTC: "2026-09-01", entity: "usuario", limit: 5 })
+    )
+    expect(page).toMatchObject({
+      success: true,
+      data: { items: all.data.slice(0, 5), total: all.data.length }
+    })
+    const detail = await settle(source.getAuditLogById(all.data[0].id))
+    expect(detail).toEqual(Result.success(all.data[0]))
+  })
+
+  it("rejects invalid filters and unknown IDs with typed errors", async () => {
+    for (const filters of [
+      { dayUTC: "2026-02-30" },
+      { dayUTC: "2026-9-1" },
+      { dayUTC: null },
+      { entity: "bad" },
+      { action: "bad" }
+    ]) {
+      expect(await settle(source.getAllAuditLogs(filters as never))).toMatchObject({
+        success: false,
+        error: { code: "INVALID_FILTER" }
+      })
+    }
+    expect(await settle(source.getAuditLogById(999))).toMatchObject({
+      success: false,
+      error: { code: "AUDIT_LOG_NOT_FOUND" }
+    })
+  })
+
+  it("uses UTC boundaries and combines all optional filters with stable ordering", async () => {
+    const all = await settle(source.getAllAuditLogs())
+    if (!all.success) throw all.error
+    for (const dayUTC of ["2026-09-01", "2026-09-02", "2026-09-03"]) {
+      const day = await settle(source.getAllAuditLogs({ dayUTC }))
+      if (!day.success) throw day.error
+      expect(day.data).toEqual(
+        all.data.filter(log => log.date.toISOString().slice(0, 10) === dayUTC)
+      )
+    }
+    const combined = await settle(
+      source.getAuditLogs({
+        dayUTC: "2026-09-01",
+        entity: "usuario",
+        action: "UPDATE",
+        offset: 1,
+        limit: 1
+      })
+    )
+    const matches = all.data.filter(
+      log =>
+        log.date.toISOString().startsWith("2026-09-01") &&
+        log.entity === "usuario" &&
+        log.action === "UPDATE"
+    )
+    expect(combined).toMatchObject({
+      success: true,
+      data: { items: matches.slice(1, 2), total: matches.length }
+    })
+    expect(all.data.find(log => log.id === 30)?.date.toISOString()).toBe("2026-09-01T23:59:59.000Z")
+    expect(all.data.find(log => log.id === 31)?.date.toISOString()).toBe("2026-09-02T00:00:00.000Z")
+  })
+
+  it("captures filters, clones nested changes across all/detail/page queries, and cancels new reads", async () => {
+    const filters = { entity: "asignacion" as const }
+    const request = source.getAllAuditLogs(filters)
+    Object.assign(filters, { entity: "usuario" })
+    const all = await settle(request)
+    if (!all.success) throw all.error
+    expect(all.data.every(log => log.entity === "asignacion")).toBe(true)
+    const log = all.data[0]
+    const original = log.changes![0].before
+    Object.assign(log.changes![0], { before: "tampered" })
+    log.date.setTime(0)
+    const detail = await settle(source.getAuditLogById(log.id))
+    if (!detail.success) throw detail.error
+    expect(detail.data.changes![0].before).toBe(original)
+    expect(detail.data.date.getTime()).not.toBe(0)
+    const page = await settle(source.getAuditLogs({ entity: "asignacion" }))
+    if (!page.success) throw page.error
+    expect(page.data.items[0].changes![0].before).toBe(original)
+    for (const stream of [
+      source.getAllAuditLogs(),
+      source.getAuditLogById(9),
+      source.getAllAuditLogs({ dayUTC: "invalid" })
+    ]) {
+      const next = vi.fn()
+      const sub = (stream as Observable<unknown>).subscribe(next)
+      await vi.advanceTimersByTimeAsync(249)
+      sub.unsubscribe()
+      await vi.runAllTimersAsync()
+      expect(next).not.toHaveBeenCalled()
+    }
   })
 
   for (const field of ["offset", "limit"] as const) {

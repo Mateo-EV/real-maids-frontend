@@ -1,0 +1,138 @@
+<section
+  hlmCard
+  class="border shadow-sm ring-0"
+  aria-labelledby="rbac-title"
+  [attr.aria-busy]="loading()"
+>
+  <header
+    hlmCardHeader
+    class="flex flex-col gap-4 border-b xl:flex-row xl:items-end xl:justify-between"
+  >
+    <div class="xl:self-start">
+      <h1 id="rbac-title" class="text-lg font-bold tracking-tight text-primary">
+        Matriz de Roles y Permisos (RBAC)
+      </h1>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Configura las acciones por rol en los módulos de la matriz.
+      </p>
+    </div>
+    <div class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-medium" for="rbac-role">Editar permisos para</label>
+        <hlm-native-select
+          selectId="rbac-role"
+          [value]="'' + selectedRoleId()"
+          [disabled]="confirmationOpen()"
+          (valueChange)="selectRole($event)"
+        >
+          @for (role of roles.roles(); track role.id) {
+            <option [value]="role.id">
+              {{ role.name }}{{ role.isActive ? "" : " (inactivo)" }}
+            </option>
+          }
+        </hlm-native-select>
+      </div>
+      <button hlmBtn type="button" [disabled]="!canSave()" (click)="confirmSave()">
+        Guardar Matriz
+      </button>
+    </div>
+  </header>
+  <div hlmCardContent class="flex flex-col gap-4">
+    <p class="text-xs text-muted-foreground">
+      Al cargar otro rol se descartan los cambios sin guardar. Las reglas de alcance son referencias
+      textuales, no cambian al marcar acciones.
+    </p>
+    @if (loading()) {
+      <div class="flex items-center gap-2" role="status"><hlm-spinner />Cargando permisos…</div>
+    }
+    @if (error()) {
+      <div hlmAlert variant="destructive" role="alert">
+        <p hlmAlertTitle>No se cargaron los permisos</p>
+        <p hlmAlertDescription>{{ error() }}</p>
+      </div>
+      <button hlmBtn variant="outline" type="button" [disabled]="loading()" (click)="retry()">
+        Reintentar
+      </button>
+    }
+    @if (loaded()) {
+      <p class="text-sm font-semibold text-primary" aria-live="polite">
+        Permisos de {{ displayedRole()?.name ?? "Rol no disponible"
+        }}{{ dirty() ? " · Cambios sin guardar" : "" }}
+      </p>
+      @if (!loaded()?.configured) {
+        <div hlmEmpty>
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>Rol sin configurar</h2>
+            <p hlmEmptyDescription>
+              Sin permisos concedidos. Selecciona las acciones y guarda la matriz para configurar
+              este rol.
+            </p>
+          </div>
+        </div>
+      }
+      <form [formRoot]="matrixForm" (submit)="$event.preventDefault()">
+        <div class="hidden overflow-x-auto lg:block">
+          <table hlmTable class="w-full text-xs">
+            <caption class="sr-only">
+              Acciones por módulo para
+              {{
+                displayedRole()?.name
+              }}
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col" class="text-xs uppercase text-primary">Módulo Funcional</th>
+                @for (action of actions; track action.id) {
+                  <th hlmTh scope="col" class="text-center text-xs uppercase text-primary">
+                    {{ action.label }}
+                  </th>
+                }
+                <th hlmTh scope="col" class="text-xs uppercase text-primary">Alcance / Reglas</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (module of modules; track module.id) {
+                <tr hlmTr [attr.data-module]="module.id">
+                  <th hlmTh scope="row" class="font-semibold text-primary">{{ module.label }}</th>
+                  @for (action of actions; track action.id) {
+                    <td hlmTd>
+                      <div class="flex justify-center">
+                        <hlm-checkbox
+                          [formField]="matrixForm[module.id][action.id]"
+                          [aria-label]="module.label + ' · ' + action.label"
+                        />
+                      </div>
+                    </td>
+                  }
+                  <td hlmTd class="text-xs text-muted-foreground">{{ rule(module.id) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="flex flex-col gap-4 lg:hidden">
+          @for (module of modules; track module.id) {
+            <fieldset hlmFieldSet class="rounded-lg border p-4" [attr.data-module]="module.id">
+              <legend hlmFieldLegend>{{ module.label }}</legend>
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                @for (action of actions; track action.id) {
+                  <div hlmField orientation="horizontal">
+                    <hlm-checkbox
+                      [inputId]="'mobile-' + module.id + '-' + action.id"
+                      [formField]="matrixForm[module.id][action.id]"
+                      [aria-label]="module.label + ' · ' + action.label"
+                    />
+                    <label hlmFieldLabel [for]="'mobile-' + module.id + '-' + action.id">{{
+                      action.label
+                    }}</label>
+                  </div>
+                }
+              </div>
+              <p class="text-xs text-muted-foreground">Alcance / Reglas: {{ rule(module.id) }}</p>
+            </fieldset>
+          }
+        </div>
+      </form>
+    }
+  </div>
+</section>

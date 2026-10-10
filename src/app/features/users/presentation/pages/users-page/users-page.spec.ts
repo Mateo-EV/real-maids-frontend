@@ -17,6 +17,10 @@ import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memor
 import { UsersPage } from "./users-page"
 import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "../../../infrastructure/repositories/user-session.repository-impl"
+import { AUDIT_LOG_REPOSITORY } from "../../../domain/repositories/audit-log.repository"
+import { AuditLogRepositoryImpl } from "../../../infrastructure/repositories/audit-log.repository-impl"
+import { RBAC_REPOSITORY } from "../../../domain/repositories/rbac.repository"
+import { RbacRepositoryImpl } from "../../../infrastructure/repositories/rbac.repository-impl"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import {
@@ -27,7 +31,9 @@ import {
 const providers = [
   { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
   { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
-  { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
+  { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
+  { provide: RBAC_REPOSITORY, useExisting: RbacRepositoryImpl },
+  { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
 ]
 
 async function flush<T>(pending: Promise<T>): Promise<T> {
@@ -67,6 +73,30 @@ describe("UsersPage", () => {
       element: fixture.nativeElement as HTMLElement
     }
   }
+
+  it("enables Audit and keeps its filtered count separate from the global source metric", async () => {
+    const { fixture, element, page } = await setup()
+    const audit = element.querySelector<HTMLButtonElement>("[data-audit-tab]")!
+    expect(audit).not.toBeNull()
+    expect(audit.disabled).toBe(false)
+    audit.click()
+    fixture.detectChanges()
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(element.querySelector("app-audit-viewer")).not.toBeNull()
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("48")
+    const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
+    entity.value = "sesion"
+    entity.dispatchEvent(new Event("change"))
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(element.textContent).toContain("de 9 registros")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("48")
+    page.section.set("users")
+    fixture.detectChanges()
+    expect(element.querySelector("#user-search")).not.toBeNull()
+    expect(element.querySelector("app-audit-viewer")).toBeNull()
+  })
 
   it("opts Users controls into the shared catalog filter contract without local dimensions", async () => {
     const { element } = await setup()
@@ -168,6 +198,25 @@ describe("UsersPage", () => {
     fixture.destroy()
     await vi.advanceTimersByTimeAsync(1000)
     expect(clock).not.toHaveBeenCalled()
+  })
+
+  it("enables RBAC and preserves Users filters after returning", async () => {
+    const { element, fixture, page } = await setup()
+    page.setSearch("Laura")
+    const tab = element.querySelector<HTMLButtonElement>("[data-rbac-tab]")!
+    expect(tab).not.toBeNull()
+    expect(tab.disabled).toBe(false)
+    tab.click()
+    fixture.detectChanges()
+    await vi.advanceTimersByTimeAsync(500)
+    fixture.detectChanges()
+    expect(element.querySelector("app-rbac-matrix")).not.toBeNull()
+    expect(element.querySelectorAll("tr[data-module]")).toHaveLength(7)
+    expect(element.querySelector("app-user-sessions")).toBeNull()
+    element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
+    fixture.detectChanges()
+    expect(page.search()).toBe("Laura")
+    expect(element.querySelector("#user-search")).not.toBeNull()
   })
 
   it("starts concurrent catalog queries and cancels both on destruction without mutations", async () => {
@@ -351,12 +400,8 @@ describe("UsersPage", () => {
     expect(element.querySelector('ng-icon[name="lucideKeyRound"]')).toBeNull()
     expect(element.textContent).not.toContain("Super Administrador")
     const tabs = element.querySelectorAll<HTMLButtonElement>("[data-future-tab]")
-    expect(tabs).toHaveLength(2)
-    expect(
-      Array.from(tabs).every(
-        tab => tab.disabled && tab.getAttribute("aria-describedby") === "future-tabs-help"
-      )
-    ).toBe(true)
+    expect(tabs).toHaveLength(0)
+    expect(element.querySelector<HTMLButtonElement>("[data-audit-tab]")?.disabled).toBe(false)
     expect(element.querySelector("#future-tabs-help")).toBeNull()
     expect(element.textContent).toContain("Nunca accedió")
   })

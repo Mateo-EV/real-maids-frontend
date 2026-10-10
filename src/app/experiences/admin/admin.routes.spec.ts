@@ -12,6 +12,8 @@ import { UserInMemorySource } from "@/app/features/users/infrastructure/source/u
 import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
 import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
+import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
+import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
 import { ADMIN_ROUTES } from "./admin.routes"
 
 @Component({ template: "Login destination" })
@@ -30,7 +32,8 @@ function setup(authenticated: boolean) {
       { provide: AuthStore, useValue: auth },
       { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
       { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
-      { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
+      { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
+      { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
     ]
   })
   return auth

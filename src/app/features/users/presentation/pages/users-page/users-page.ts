@@ -37,7 +37,7 @@ import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { finalize, forkJoin, interval } from "rxjs"
-import { DEMO_METRICS, demoDecoration, initials } from "../../demo/users-demo.fixture"
+import { demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
 import {
   DeleteUserContext,
@@ -53,6 +53,9 @@ import {
 
 import { UserSessionsStore } from "../../state/user-sessions.store"
 import { UserSessions } from "../../components/user-sessions/user-sessions"
+import { RbacMatrix } from "../../components/rbac-matrix/rbac-matrix"
+import { AuditViewer } from "../../components/audit-viewer/audit-viewer"
+import { AuditLogsStore } from "../../state/audit-logs.store"
 
 @Component({
   selector: "app-users-page",
@@ -73,7 +76,9 @@ import { UserSessions } from "../../components/user-sessions/user-sessions"
     HlmAlertImports,
     HlmSpinnerImports,
     TablePagination,
-    UserSessions
+    UserSessions,
+    RbacMatrix,
+    AuditViewer
   ],
   providers: [
     provideIcons({
@@ -96,7 +101,7 @@ export class UsersPage implements OnInit {
   readonly roles = inject(RolesStore)
   readonly sessions = inject(UserSessionsStore)
   private readonly platformId = inject(PLATFORM_ID)
-  readonly section = signal<"users" | "sessions">("users")
+  readonly section = signal<"users" | "sessions" | "rbac" | "audit">("users")
   readonly sessionCount = computed(() => {
     const ids = new Set(this.users.users().map(user => user.id))
     return this.sessions.activeSessions().filter(session => ids.has(session.userId)).length
@@ -104,7 +109,7 @@ export class UsersPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
-  readonly metrics = DEMO_METRICS
+  readonly audit = inject(AuditLogsStore)
   readonly initials = initials
   readonly decoration = demoDecoration
   readonly initializing = signal(false)
@@ -148,6 +153,7 @@ export class UsersPage implements OnInit {
   ngOnInit(): void {
     this.retry()
     this.retrySessions()
+    this.audit.loadGlobalTotal().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
     if (isPlatformBrowser(this.platformId)) {
       interval(1000)
         .pipe(takeUntilDestroyed(this.destroyRef))
