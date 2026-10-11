@@ -10,7 +10,7 @@
         (click)="section.set('users')"
       >
         Administración de Usuarios
-        <span hlmBadge variant="secondary">{{ users.total() }}</span>
+        <span hlmBadge variant="secondary">{{ users.users().length }} cargados</span>
       </button>
       <button
         data-sessions-tab
@@ -25,7 +25,7 @@
           hlmBadge
           variant="secondary"
           class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
-          >{{ sessionCount() }} en la consulta</span
+          >{{ sessions.loaded() ? sessionCount() : "—" }} globales</span
         >
       </button>
       <button
@@ -57,13 +57,13 @@
     >
       <article hlmCard>
         <div hlmCardHeader>
-          <p class="kpi-label">Usuarios del filtro</p>
+          <p class="kpi-label">Usuarios cargados</p>
           <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
             ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value">{{ users.total() }}</p>
+          <p class="kpi-value">{{ users.users().length }}</p>
           <p hlmCardDescription>
-            En esta página: {{ activeCount() }} activos ·
+            En el catálogo cargado: {{ activeCount() }} activos ·
             {{ users.users().length - activeCount() }} inactivos
           </p>
         </div>
@@ -74,8 +74,15 @@
           <span hlmCardAction class="kpi-tile" data-kpi-tone="amber"
             ><ng-icon name="lucideSmartphone" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value" data-session-metric>{{ sessionCount() }}</p>
-          <p hlmCardDescription>Total de la consulta de sesiones, incluidos filtros</p>
+          <p class="kpi-value" data-session-metric>
+            {{ sessions.loaded() ? sessionCount() : "—" }}
+          </p>
+          <p hlmCardDescription>
+            Total global del servidor, independiente de filtros locales.
+            @if (!sessions.collectionComplete() || sessions.loading() || sessions.error()) {
+              Pendiente de verificación o último total confirmado.
+            }
+          </p>
         </div>
       </article>
       <article hlmCard>
@@ -99,8 +106,8 @@
         </div>
       </article>
     </section>
-    @if (section() === "sessions" && !initializing() && !loadError()) {
-      <app-user-sessions (retry)="retrySessions()" />
+    @if (section() === "sessions") {
+      <app-user-sessions (retry)="retry()" />
     } @else if (
       section() === "users" || (section() !== "audit" && (initializing() || loadError()))
     ) {
@@ -175,6 +182,24 @@
             </button>
           </div>
         </div>
+        @if (
+          incompleteCatalog() &&
+          !initializing() &&
+          !users.loading() &&
+          !loadError() &&
+          !users.error()
+        ) {
+          <div class="p-4" data-incomplete-catalog>
+            <div hlmAlert role="alert">
+              <p hlmAlertTitle>Catálogo incompleto</p>
+              <p hlmAlertDescription>
+                Se cargaron {{ users.users().length }} de {{ users.total() }} usuarios informados
+                por el servidor. La búsqueda, los filtros y las páginas solo incluyen los usuarios
+                cargados; puede haber más coincidencias en el backend.
+              </p>
+            </div>
+          </div>
+        }
         @if (initializing() || users.loading()) {
           <div class="flex min-h-64 items-center justify-center gap-3" role="status">
             <hlm-spinner />Cargando catálogo…
@@ -206,16 +231,20 @@
               </div>
               <h2 hlmEmptyTitle>
                 {{
-                  search() || roleFilter() || statusFilter() !== "all"
-                    ? "Sin resultados"
-                    : "Aún no hay usuarios"
+                  incompleteCatalog()
+                    ? "Sin resultados entre los usuarios cargados"
+                    : search() || roleFilter() || statusFilter() !== "all"
+                      ? "Sin resultados"
+                      : "Aún no hay usuarios"
                 }}
               </h2>
               <p hlmEmptyDescription>
                 {{
-                  search() || roleFilter() || statusFilter() !== "all"
-                    ? "Prueba otra búsqueda o restablece los filtros."
-                    : "Selecciona un rol activo del catálogo y registra un usuario."
+                  incompleteCatalog()
+                    ? "El catálogo está incompleto; no se puede descartar que existan más usuarios o coincidencias en el backend."
+                    : search() || roleFilter() || statusFilter() !== "all"
+                      ? "Prueba otra búsqueda o restablece los filtros."
+                      : "Selecciona un rol activo del catálogo y registra un usuario."
                 }}
               </p>
             </div>
@@ -374,8 +403,9 @@
           class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
         >
           <p class="text-xs text-muted-foreground" role="status">
-            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ users.total() }} usuarios del
-            filtro
+            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios
+            del filtro · {{ users.users().length }} cargados de {{ users.total() }} informados por
+            el servidor
           </p>
           <app-table-pagination
             label="Paginación de usuarios"

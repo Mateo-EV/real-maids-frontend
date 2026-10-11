@@ -25,6 +25,7 @@ import {
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { ExportAuditLogsUseCase } from "../../../application/use-cases/export-audit-logs.use-case"
 import { AuditCsvDownload } from "../../../infrastructure/export/audit-csv-download"
+import { UserStore } from "../../state/user.store"
 import { AuditLogsStore } from "../../state/audit-logs.store"
 import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
 
@@ -68,7 +69,40 @@ export class AuditViewer implements OnInit {
   readonly rangeEnd = computed(() => Math.min(this.page() * this.pageSize, this.store.total()))
   readonly exporting = signal(false)
   readonly exportError = signal("")
-  readonly filterModel = signal({ fromUTC: "", toUTC: "", userId: "" })
+  readonly users = inject(UserStore)
+  readonly selectedActor = signal<{ id: number; name: string; email: string } | undefined>(
+    undefined
+  )
+  readonly catalogReady = computed(
+    () => this.users.loaded() && !this.users.loading() && !this.users.error()
+  )
+  readonly incompleteCatalog = computed(
+    () =>
+      this.users.loaded() &&
+      (this.users.total() > this.users.users().length ||
+        this.users.page() !== 0 ||
+        this.users.totalPages() > 1)
+  )
+  readonly actorOutsideCatalog = computed(
+    () =>
+      !!this.selectedActor() &&
+      !this.users.users().some(user => user.id === this.selectedActor()!.id)
+  )
+  readonly actorOptions = computed(() => {
+    const text = this.filterModel().actorSearch.trim().toLocaleLowerCase("es")
+    const selected = this.selectedActor()
+    const users = this.users
+      .users()
+      .filter(
+        user =>
+          user.id !== selected?.id &&
+          (!text || `${user.name} ${user.email}`.toLocaleLowerCase("es").includes(text))
+      )
+    return selected
+      ? [this.users.users().find(user => user.id === selected.id) ?? selected, ...users]
+      : users
+  })
+  readonly filterModel = signal({ fromUTC: "", toUTC: "", actorSearch: "" })
   readonly filterForm = form(this.filterModel, path => {
     for (const field of [path.fromUTC, path.toUTC]) {
       disabled(field, () => this.exporting())
@@ -78,13 +112,7 @@ export class AuditViewer implements OnInit {
           : { kind: "date", message: "Usa una fecha válida AAAA-MM-DD." }
       )
     }
-    disabled(path.userId, () => this.exporting())
-    validate(path.userId, ({ value }) =>
-      !value() ||
-      (/^-?\d+$/.test(value()) && Number(value()) >= -2147483648 && Number(value()) <= 2147483647)
-        ? undefined
-        : { kind: "actor", message: "Usa el ID numérico del actor." }
-    )
+    disabled(path.actorSearch, () => this.exporting() || !this.catalogReady())
   })
 
   ngOnInit(): void {
@@ -133,11 +161,19 @@ export class AuditViewer implements OnInit {
   setTo(value: string): void {
     this.updateFilters({ ...this.filters(), dayUTC: undefined, toUTC: value || undefined })
   }
-  setUserId(value: string): void {
-    this.updateFilters({
-      ...this.filters(),
-      userId: value === "" ? undefined : /^-?\d+$/.test(value) ? Number(value) : NaN
-    })
+  selectActor(value: string | null | undefined): void {
+    if (this.destroyRef.destroyed || this.exporting()) return
+    if (!value) {
+      this.selectedActor.set(undefined)
+      this.updateFilters({ ...this.filters(), userId: undefined })
+      return
+    }
+    if (!this.catalogReady()) return
+    // Only a loaded option supplies identity; search text is never an ID.
+    const actor = this.users.users().find(user => String(user.id) === value)
+    if (!actor) return
+    this.selectedActor.set({ id: actor.id, name: actor.name, email: actor.email })
+    this.updateFilters({ ...this.filters(), userId: actor.id })
   }
   setEntity(value: string | null | undefined): void {
     // Controls supply catalog values; unrecognized inputs remain invalid, never silently widen a query.
@@ -154,7 +190,8 @@ export class AuditViewer implements OnInit {
   }
   clearFilters(): void {
     if (this.destroyRef.destroyed || this.exporting()) return
-    this.filterModel.set({ fromUTC: "", toUTC: "", userId: "" })
+    this.selectedActor.set(undefined)
+    this.filterModel.set({ fromUTC: "", toUTC: "", actorSearch: "" })
     this.updateFilters({})
   }
   goToPage(page: number): void {

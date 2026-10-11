@@ -172,8 +172,7 @@ export class UserHttpSource {
           totalPages !== Math.ceil(total / size) ||
           p["contenido"].length > size ||
           p["contenido"].length > total ||
-          page !== (input.page ?? 0) ||
-          size !== (input.size ?? 20)
+          page !== (input.page ?? 0)
         )
           throw new UserError("INVALID_RESPONSE")
         const items = p["contenido"].map(userDto)

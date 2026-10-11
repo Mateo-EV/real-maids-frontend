@@ -57,6 +57,28 @@ describe("wired users backend contract", () => {
       data: { page: 0, size: 20, total: 101, totalPages: 6 }
     })
   })
+  it("requests the approved large unfiltered catalog and preserves incomplete totals", async () => {
+    const pending = firstValueFrom(repository.getUsers({ page: 0, size: 10000 }))
+    const request = http.expectOne(req => req.url === endpoint)
+    expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    expect(request.request.params.get("pagina")).toBe("0")
+    expect(request.request.params.get("tamanio")).toBe("10000")
+    request.flush({ ...page, tamanio: 10000, totalElementos: 10001, totalPaginas: 2 })
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { size: 10000, total: 10001, totalPages: 2, items: [{ id: 41 }] }
+    })
+  })
+  it("accepts a backend-capped size with fewer rows and preserves actual page metadata", async () => {
+    const pending = firstValueFrom(repository.getUsers({ page: 0, size: 10000 }))
+    const request = http.expectOne(req => req.url === endpoint)
+    expect(request.request.params.get("tamanio")).toBe("10000")
+    request.flush({ ...page, tamanio: 100, totalElementos: 101, totalPaginas: 2 })
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { page: 0, size: 100, total: 101, totalPages: 2, items: [{ id: 41 }] }
+    })
+  })
   it("maps zero-based page and every documented filter without filtering one page locally", async () => {
     const pending = firstValueFrom(
       repository.getUsers({
@@ -102,6 +124,13 @@ describe("wired users backend contract", () => {
     { ...page, totalElementos: "101" },
     { ...page, pagina: 1 },
     { ...page, tamanio: 0 },
+    { ...page, tamanio: -1 },
+    { ...page, tamanio: 0.5 },
+    { ...page, tamanio: "20" },
+    { ...page, tamanio: Number.MAX_SAFE_INTEGER + 1 },
+    { ...page, tamanio: 100, totalPaginas: 6 },
+    { ...page, tamanio: 1, contenido: [dto, { ...dto, idUsuario: 42 }], totalPaginas: 101 },
+    { ...page, totalElementos: 0, totalPaginas: 0 },
     { ...page, totalPaginas: 0 },
     { ...page, contenido: [dto, dto] },
     { ...page, contenido: [{ ...dto, idRol: "19" }] },

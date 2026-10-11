@@ -154,6 +154,32 @@ describe("UserStore server catalog", () => {
     expect(store.total()).toBe(0)
     expect(store.error()).toBeUndefined()
   })
+  it("remembers the large catalog query for every confirmed write and partial update", () => {
+    const query = { page: 0, size: 10000 }
+    list.execute.mockReturnValue(
+      of(Result.success({ ...page([user]), size: 10000, totalPages: 1 }))
+    )
+    store.loadUsers(query).subscribe()
+    create.execute.mockReturnValue(of(Result.success(user)))
+    update.execute.mockReturnValue(of(Result.success(user)))
+    status.execute.mockReturnValue(of(Result.success(user)))
+    remove.execute.mockReturnValue(of(Result.success(undefined)))
+    store.createUser(params).subscribe()
+    store.updateUserById(1, params).subscribe()
+    store.updateUserStatusById(1, false).subscribe()
+    store.deleteUserById(1).subscribe()
+    update.execute.mockReturnValue(of(Result.failure(new UserError("PARTIAL_UPDATE"))))
+    store.updateUserById(1, params).subscribe()
+    expect(list.execute).toHaveBeenCalledTimes(6)
+    expect(
+      list.execute.mock.calls.every(([input]) => JSON.stringify(input) === JSON.stringify(query))
+    ).toBe(true)
+    expect(create.execute).toHaveBeenCalledTimes(1)
+    expect(update.execute).toHaveBeenCalledTimes(2)
+    expect(status.execute).toHaveBeenCalledTimes(1)
+    expect(remove.execute).toHaveBeenCalledTimes(1)
+  })
+
   it("reports successful mutation even when the follow-up read fails, retaining the read error", () => {
     create.execute.mockReturnValue(of(Result.success(user)))
     list.execute.mockReturnValue(of(Result.failure(new UserError("NETWORK"))))

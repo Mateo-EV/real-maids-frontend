@@ -1,3 +1,6 @@
+import { signal } from "@angular/core"
+import { UserStore } from "../../state/user.store"
+import { UserError } from "../../../domain/errors/user.error"
 import { provideRouter } from "@angular/router"
 import { TestBed } from "@angular/core/testing"
 import { of, Subject } from "rxjs"
@@ -36,6 +39,16 @@ const page = (total = 17, current = 0): AuditPage => ({
   totalPages: Math.ceil(total / 5),
   globalTotal: 90
 })
+function selectActor(fixture: ReturnType<typeof TestBed.createComponent<AuditViewer>>, id: string) {
+  fixture.detectChanges()
+  const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+    "select#audit-actor"
+  )!
+  expect(select).not.toBeNull()
+  select.value = id
+  select.dispatchEvent(new Event("change"))
+  fixture.detectChanges()
+}
 describe("Audit viewer server queries and CSV", () => {
   function setup() {
     const reads = new Subject<Result<AuditPage, AuditLogError>>()
@@ -44,10 +57,23 @@ describe("Audit viewer server queries and CSV", () => {
     const exportAuditLogs = vi.fn((_filters?: AuditFilters) => exports)
     const download = vi.fn((_blob: Blob) => Result.success(undefined)),
       success = vi.fn()
+    const catalog = {
+      users: signal([
+        { id: 2, name: "Ana", email: "ana@example.test" },
+        { id: 7, name: "Ana", email: "otra@example.test" }
+      ]),
+      loaded: signal(true),
+      loading: signal(false),
+      error: signal<UserError | undefined>(undefined),
+      total: signal(2),
+      page: signal(0),
+      totalPages: signal(1)
+    }
     TestBed.configureTestingModule({
       imports: [AuditViewer],
       providers: [
         provideRouter([]),
+        { provide: UserStore, useValue: catalog },
         { provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogs, exportAuditLogs } },
         { provide: AuditCsvDownload, useValue: { download } },
         { provide: HotToastService, useValue: { success } }
@@ -56,6 +82,7 @@ describe("Audit viewer server queries and CSV", () => {
     const fixture = TestBed.createComponent(AuditViewer)
     fixture.detectChanges()
     return {
+      catalog,
       fixture,
       viewer: fixture.componentInstance,
       element: fixture.nativeElement as HTMLElement,
@@ -67,6 +94,47 @@ describe("Audit viewer server queries and CSV", () => {
       success
     }
   }
+  it("searches loaded names/emails without querying and retains the selected stable ID across catalog gaps", () => {
+    const { fixture, viewer, element, catalog, getAuditLogs } = setup()
+    const search = element.querySelector<HTMLInputElement>("#audit-actor-search")!
+    expect(search).not.toBeNull()
+    const type = (text: string) => {
+      search.value = text
+      search.dispatchEvent(new Event("input"))
+      fixture.detectChanges()
+    }
+    expect(element.querySelector("select#audit-actor")?.textContent).toContain("otra@example.test")
+    type("ana")
+    expect(element.querySelectorAll("select#audit-actor option")).toHaveLength(3)
+    type(" OTRA@ ")
+    expect(element.querySelector("select#audit-actor")?.textContent).not.toContain(
+      "ana@example.test"
+    )
+    expect(getAuditLogs).toHaveBeenCalledOnce()
+    selectActor(fixture, "7")
+    expect(viewer.filters().userId).toBe(7)
+    type("2")
+    expect(viewer.filters().userId).toBe(7)
+    catalog.loading.set(true)
+    fixture.detectChanges()
+    expect(element.textContent).toContain("Cargando catálogo")
+    catalog.loading.set(false)
+    catalog.error.set(new UserError("UNEXPECTED"))
+    fixture.detectChanges()
+    expect(element.textContent).toContain("No pudimos cargar el catálogo de actores")
+    catalog.error.set(undefined)
+    catalog.users.set([])
+    catalog.total.set(10)
+    fixture.detectChanges()
+    expect(element.textContent).toContain("Catálogo incompleto")
+    expect(element.textContent).toContain("Fuera del catálogo cargado")
+    expect(viewer.filters().userId).toBe(7)
+    selectActor(fixture, "")
+    expect(viewer.filters().userId).toBeUndefined()
+    viewer.clearFilters()
+    fixture.detectChanges()
+    expect(search.value).toBe("")
+  })
   it("shows loading, server totals, responsive metadata and inclusive UTC help", () => {
     const { fixture, viewer, element, reads, getAuditLogs } = setup()
     expect(element.textContent).toContain("Cargando")
@@ -94,7 +162,7 @@ describe("Audit viewer server queries and CSV", () => {
     viewer.setFrom("2026-09-01")
     expect(reads.observed).toBe(false)
     viewer.setTo("2026-09-02")
-    viewer.setUserId("2")
+    selectActor(fixture, "2")
     viewer.setEntity("usuario")
     viewer.setAction("ACTUALIZAR")
     expect(getAuditLogs).toHaveBeenLastCalledWith({
@@ -110,7 +178,7 @@ describe("Audit viewer server queries and CSV", () => {
     next.next(Result.success(page()))
     next.complete()
     viewer.goToPage(2)
-    expect(getAuditLogs.mock.calls.at(-1)?.[0]).toMatchObject({ page: 1, size: 5 })
+    expect(getAuditLogs.mock.calls.at(-1)?.[0]).toMatchObject({ page: 1, size: 5, userId: 2 })
     fixture.destroy()
     expect(next.observed).toBe(false)
   })
@@ -158,12 +226,14 @@ describe("Audit viewer server queries and CSV", () => {
     const { fixture, viewer, reads, exports, exportAuditLogs, download, success } = setup()
     viewer.setFrom("2026-09-01")
     viewer.setTo("2026-09-02")
-    viewer.setUserId("2")
+    selectActor(fixture, "2")
     viewer.setEntity("usuario")
     reads.next(Result.success(page()))
     reads.complete()
     viewer.exportCsv()
     viewer.exportCsv()
+    viewer.selectActor("7")
+    expect(viewer.selectedActor()?.id).toBe(2)
     viewer.clearFilters()
     expect(viewer.filters().entity).toBe("usuario")
     expect(exportAuditLogs).toHaveBeenCalledOnce()

@@ -1,7 +1,15 @@
 import { DatePipe } from "@angular/common"
-import { Component, computed, DestroyRef, inject, output, signal } from "@angular/core"
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  linkedSignal,
+  output,
+  signal
+} from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { form, FormField, FormRoot, validate } from "@angular/forms/signals"
+import { form, FormField, FormRoot } from "@angular/forms/signals"
 import { Subject, switchMap } from "rxjs"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -15,7 +23,9 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { UserSessionsStore } from "../../state/user-sessions.store"
 import { UserSession } from "../../../domain/entities/user-session.entity"
-import { UserSessionQuery } from "../../../domain/models/user-session-query"
+import { UserStore } from "../../state/user.store"
+import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
+import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import {
   RevokeSessionContext,
   RevokeSessionDialog
@@ -28,6 +38,8 @@ import {
     FormField,
     FormRoot,
     HlmInputImports,
+    HlmNativeSelectImports,
+    HlmInputGroupImports,
     HlmFieldImports,
     TablePagination,
     HlmButtonImports,
@@ -44,53 +56,107 @@ export class UserSessions {
   private readonly toast = inject(HotToastService)
   private readonly destroyRef = inject(DestroyRef)
   readonly retry = output<void>()
-  readonly model = signal({ userId: "" })
-  readonly filters = form(this.model, path => {
-    validate(path.userId, ({ value }) => {
-      const v = value()
-      return v === "" || (/^-?\d+$/.test(v) && Number(v) >= -2147483648 && Number(v) <= 2147483647)
-        ? undefined
-        : { kind: "id", message: "Introduce un ID de usuario válido." }
-    })
+  readonly users = inject(UserStore)
+  readonly model = signal({ search: "" })
+  readonly filters = form(this.model)
+  readonly presence = signal("all")
+  readonly verified = computed(
+    () => this.sessions.collectionComplete() && !this.sessions.loading() && !this.sessions.error()
+  )
+  readonly catalogReady = computed(
+    () => this.users.loaded() && !this.users.loading() && !this.users.error()
+  )
+  readonly incompleteCatalog = computed(
+    () =>
+      this.users.loaded() &&
+      (this.users.total() > this.users.users().length ||
+        this.users.page() !== 0 ||
+        this.users.totalPages() > 1)
+  )
+  readonly groups = computed(() => {
+    const byOwner = new Map<number, UserSession[]>()
+    if (this.verified())
+      for (const session of this.sessions.sessions()) {
+        const list = byOwner.get(session.userId) ?? []
+        list.push(session)
+        byOwner.set(session.userId, list)
+      }
+    const groups = this.users.users().map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      outsideCatalog: false,
+      sessions: byOwner.get(user.id) ?? []
+    }))
+    const catalogIds = new Set(groups.map(group => group.id))
+    for (const [id, sessions] of byOwner)
+      if (!catalogIds.has(id))
+        groups.push({
+          id,
+          name: sessions[0].userName!,
+          email: sessions[0].userEmail!,
+          outsideCatalog: true,
+          sessions
+        })
+    return groups
   })
-  readonly currentPage = computed(() => this.sessions.page() + 1)
-  readonly pageCount = computed(() => Math.max(1, this.sessions.totalPages()))
+  readonly filteredUsers = computed(() => {
+    const text = this.model().search.trim().toLocaleLowerCase("es")
+    return this.groups().filter(
+      user =>
+        (!text ||
+          `${user.name} ${user.email} USR-${user.id}`.toLocaleLowerCase("es").includes(text)) &&
+        (!this.verified() ||
+          this.presence() === "all" ||
+          user.sessions.length > 0 === (this.presence() === "with"))
+    )
+  })
+  readonly pageCount = computed(() => Math.max(1, Math.ceil(this.filteredUsers().length / 5)))
+  readonly currentPage = linkedSignal<{ count: number; search: string; presence: string }, number>({
+    source: () => ({
+      count: this.pageCount(),
+      search: this.model().search,
+      presence: this.presence()
+    }),
+    computation: (source, previous) =>
+      previous &&
+      source.search === previous.source.search &&
+      source.presence === previous.source.presence
+        ? Math.min(previous.value, source.count)
+        : 1
+  })
+  readonly visibleUsers = computed(() =>
+    this.filteredUsers().slice((this.currentPage() - 1) * 5, this.currentPage() * 5)
+  )
   readonly rangeStart = computed(() =>
-    this.sessions.sessions().length ? this.sessions.page() * this.sessions.size() + 1 : 0
+    this.visibleUsers().length ? (this.currentPage() - 1) * 5 + 1 : 0
   )
   readonly rangeEnd = computed(() =>
-    this.sessions.sessions().length ? this.rangeStart() + this.sessions.sessions().length - 1 : 0
+    this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
-  private readonly queries = new Subject<UserSessionQuery>()
+  private readonly queries = new Subject<void>()
   constructor() {
     this.queries
       .pipe(
-        switchMap(q => this.sessions.loadSessions(q)),
+        switchMap(() => this.sessions.loadAllSessions()),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
   }
-  applyFilters(): void {
-    if (this.filters().invalid()) return
-    this.queries.next({
-      page: 0,
-      size: 20,
-      ...(this.model().userId === "" ? {} : { userId: Number(this.model().userId) })
-    })
-  }
   clearFilters(): void {
-    this.model.set({ userId: "" })
-    this.applyFilters()
+    this.model.set({ search: "" })
+    this.presence.set("all")
   }
   goToPage(page: number): void {
     if (!Number.isSafeInteger(page) || page < 1 || page > this.pageCount()) return
-    this.queries.next({ ...this.sessions.query(), page: page - 1 })
+    this.currentPage.set(page)
   }
   reload(): void {
-    this.queries.next(this.sessions.query())
+    if (!this.destroyRef.destroyed) this.queries.next()
   }
   revoke(session: UserSession): void {
-    if (this.destroyRef.destroyed || session.isCurrent || !session.userName) return
+    if (this.destroyRef.destroyed || !this.verified() || session.isCurrent || !session.userName)
+      return
     this.dialogs.open<void, RevokeSessionContext>(RevokeSessionDialog, {
       context: {
         user: { id: session.userId, name: session.userName },

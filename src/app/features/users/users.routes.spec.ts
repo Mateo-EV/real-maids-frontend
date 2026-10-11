@@ -139,7 +139,7 @@ describe("USERS_ROUTES", () => {
         ])
       const users = http.expectOne(request => request.url === "http://localhost:8080/api/usuarios")
       expect(users.request.params.get("pagina")).toBe("0")
-      expect(users.request.params.get("tamanio")).toBe("5")
+      expect(users.request.params.get("tamanio")).toBe("10000")
       expect(users.request.headers.get("Authorization")).toBe("Bearer fake-token")
       users.flush({
         contenido: [
@@ -157,7 +157,7 @@ describe("USERS_ROUTES", () => {
           }
         ],
         pagina: 0,
-        tamanio: 5,
+        tamanio: 10000,
         totalElementos: 1,
         totalPaginas: 1
       })

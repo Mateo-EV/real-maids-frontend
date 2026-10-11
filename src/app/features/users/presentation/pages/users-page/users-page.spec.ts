@@ -1,6 +1,10 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs"
 import { signal } from "@angular/core"
+import { provideHttpClient } from "@angular/common/http"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
+import { API_URL } from "@/app/core/tokens/api-url.token"
+import { UserRepositoryImpl } from "../../../infrastructure/repositories/user.repository-impl"
 import { DeferBlockBehavior, TestBed } from "@angular/core/testing"
 import { By } from "@angular/platform-browser"
 import { RbacMatrix } from "../../components/rbac-matrix/rbac-matrix"
@@ -85,8 +89,8 @@ describe("UsersPage", () => {
                     query.userId ?? 90,
                     "192.0.2.1",
                     "Chrome",
-                    new Date(Date.now() - 1000),
-                    new Date(Date.now() + 60000),
+                    new Date("2026-01-01T00:00:00Z"),
+                    new Date("2027-01-01T00:00:00Z"),
                     page === 0 && index === 0,
                     "Server user",
                     "server@example.test"
@@ -287,6 +291,13 @@ describe("UsersPage", () => {
       .click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
+    const actor = element.querySelector<HTMLSelectElement>("#audit-actor")!
+    actor.value = "1"
+    actor.dispatchEvent(new Event("change"))
+    await flush(fixture.whenStable())
+    viewer.goToPage(2)
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
     const rows = element.querySelector("app-audit-viewer tbody")!.textContent
     const calls = query.mock.calls.length
     expect(viewer.page()).toBe(2)
@@ -297,7 +308,8 @@ describe("UsersPage", () => {
     expect(wrapper?.hasAttribute("inert")).toBe(true)
     await visit(fixture, "audit")
     expect(fixture.debugElement.query(By.directive(AuditViewer)).componentInstance).toBe(viewer)
-    expect(viewer.filters()).toEqual({ entity: "sesion" })
+    expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
+    expect(element.querySelector<HTMLSelectElement>("#audit-actor")!.value).toBe("1")
     expect(viewer.page()).toBe(2)
     expect(element.querySelector("app-audit-viewer tbody")!.textContent).toBe(rows)
     expect(query).toHaveBeenCalledTimes(calls)
@@ -406,46 +418,39 @@ describe("UsersPage", () => {
     expect(row.querySelector(".h-9, .sm\\:w-60, .xl\\:w-100")).toBeNull()
   })
 
-  it("uses server session totals across pages and user filters independently of the user catalog", async () => {
+  it("collects global sessions, groups loaded users and filters locally without altering global metrics", async () => {
     const { element, fixture, page } = await setup()
+    const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getUserSessions")
     const tab = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
     expect(tab.disabled).toBe(false)
-    expect(page.sessions.sessions()).toHaveLength(20)
+    expect(page.sessions.sessions()).toHaveLength(26)
+    expect(page.sessions.collectionComplete()).toBe(true)
     expect(page.sessionCount()).toBe(26)
-    expect(tab.textContent).toContain("26")
     tab.click()
     fixture.detectChanges()
-    expect(element.textContent).toContain("Server user")
-    expect(element.textContent).toContain("Tu sesión actual")
-    expect(element.textContent).toContain("Para cerrarla usa Salir")
-    expect(element.textContent).toContain("Mostrando 1–20 de 26 sesiones")
-    expect(element.textContent).not.toMatch(/demostración|simulad/i)
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
     element
       .querySelector<HTMLButtonElement>('app-user-sessions button[aria-label="Página siguiente"]')!
       .click()
-    await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.sessions.sessions()).toHaveLength(6)
-    expect(page.sessionCount()).toBe(26)
-    expect(element.textContent).toContain("Mostrando 21–26 de 26 sesiones")
-    const input = element.querySelector<HTMLInputElement>("#session-user-id")!
-    input.value = "90"
+    expect(element.textContent).toContain("Mostrando 6–10 de 49 usuarios")
+    const input = element.querySelector<HTMLInputElement>("#session-search")!
+    input.value = "server@example.test"
     input.dispatchEvent(new Event("input"))
     fixture.detectChanges()
-    element
-      .querySelector<HTMLFormElement>("app-user-sessions form")!
-      .dispatchEvent(new Event("submit", { cancelable: true }))
-    await flush(fixture.whenStable())
-    fixture.detectChanges()
-    expect(page.sessions.query()).toEqual({ page: 0, size: 20, userId: 90 })
-    expect(page.sessionCount()).toBe(1)
-    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("1")
-    expect(tab.textContent).toContain("1")
-    expect(element.textContent).toContain("Mostrando 1–1 de 1 sesiones")
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
+    expect(element.textContent).toContain("Fuera del catálogo cargado")
+    expect(element.textContent).toContain("Tu sesión actual")
+    expect(element.textContent).toContain("Para cerrarla usa Salir")
+    expect(element.textContent).toContain("Mostrando 1–1 de 1 usuarios")
+    expect(element.querySelector("#session-user-id")).toBeNull()
+    expect(query).not.toHaveBeenCalled()
+    expect(page.sessionCount()).toBe(26)
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
     expect(page.users.users().every(user => user.id !== 90)).toBe(true)
     element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
     fixture.detectChanges()
-    expect(page.filteredUsers()).toHaveLength(5)
+    expect(page.filteredUsers()).toHaveLength(48)
     expect(page.users.total()).toBe(48)
   })
 
@@ -455,7 +460,10 @@ describe("UsersPage", () => {
     expect(page.sessionCount()).toBe(26)
     await flush(firstValueFrom(page.sessions.revokeSession(90, 2)))
     fixture.detectChanges()
-    expect(query).toHaveBeenCalledExactlyOnceWith({})
+    expect(query.mock.calls.map(call => call[0])).toEqual([
+      { page: 0, size: 20 },
+      { page: 1, size: 20 }
+    ])
     expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
     expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("26")
     vi.setSystemTime(
@@ -474,7 +482,7 @@ describe("UsersPage", () => {
   it("enables RBAC and preserves Users filters after returning", async () => {
     const { element, fixture, page } = await setup()
     page.setSearch("Laura")
-    // Finish the server query before mounting the independently loading demo matrix.
+    // Stabilize the view before mounting the independently loading matrix.
     await flush(fixture.whenStable())
     fixture.detectChanges()
     const tab = element.querySelector<HTMLButtonElement>("[data-rbac-tab]")!
@@ -653,12 +661,12 @@ describe("UsersPage", () => {
     expect(element.querySelector("header")).toBeNull()
     expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
-    expect(element.textContent).toContain("En esta página: 4 activos")
-    expect(element.textContent).toContain("1 inactivos")
+    expect(element.textContent).toContain("En el catálogo cargado:")
+    expect(element.textContent).toContain("cargados de 48 informados por el servidor")
     expect(element.textContent).not.toContain("CORE BACKOFFICE")
     expect(element.textContent).toContain("Gestiona estados, roles")
     expect(element.textContent).toContain("Total global del servidor")
-    expect(element.textContent).toContain("Total de la consulta de sesiones")
+    expect(element.textContent).toContain("independiente de filtros locales")
     expect(element.textContent).not.toMatch(/demostración|simulad/i)
     const catalog = element.querySelector(".users-catalog")!
     const accessibleCopy = Array.from(
@@ -805,36 +813,142 @@ describe("UsersPage", () => {
     )
   })
 
-  it("queries names/emails and role/status on the server and resets pagination", async () => {
-    const { page, roles, fixture } = await setup()
+  it.each([12, 101])(
+    "accepts capped HTTP catalogs with total %s while local controls make no HTTP requests",
+    async total => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: API_URL, useValue: "http://localhost:8080" }
+        ]
+      })
+      TestBed.overrideProvider(USER_REPOSITORY, {
+        useFactory: () => TestBed.inject(UserRepositoryImpl)
+      })
+      const http = TestBed.inject(HttpTestingController)
+      const fixture = TestBed.createComponent(UsersPage)
+      fixture.detectChanges()
+      const request = http.expectOne(req => req.url === "http://localhost:8080/api/usuarios")
+      expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+      expect(request.request.params.get("tamanio")).toBe("10000")
+      request.flush({
+        contenido: Array.from({ length: 12 }, (_, index) => ({
+          idUsuario: index + 1,
+          nombre: `Server user ${index + 1}`,
+          correo: `server${index + 1}@example.test`,
+          idRol: (index % 2) + 1,
+          idioma: "es",
+          activo: index % 2 === 0,
+          ultimoAcceso: null,
+          fechaCreacion: "2026-01-01T00:00:00Z",
+          fechaActualizacion: "2026-01-01T00:00:00Z"
+        })),
+        pagina: 0,
+        tamanio: 100,
+        totalElementos: total,
+        totalPaginas: Math.ceil(total / 100)
+      })
+      await flush(fixture.whenStable())
+      fixture.detectChanges()
+      const page = fixture.componentInstance
+      const element = fixture.nativeElement as HTMLElement
+      expect(page.loadError()).toBe(false)
+      expect(page.users.total()).toBe(total)
+      expect(page.visibleUsers()).toHaveLength(5)
+      expect(element.querySelectorAll("tbody tr")).toHaveLength(5)
+      if (total > 12)
+        expect(element.querySelector("[data-incomplete-catalog]")?.textContent).toContain(
+          "Catálogo incompleto"
+        )
+      else expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
+      page.goToPage(3)
+      expect(page.visibleUsers()).toHaveLength(2)
+      expect(page.rangeStart()).toBe(11)
+      expect(page.rangeEnd()).toBe(12)
+      page.setSearch("SERVER12@")
+      expect(page.filteredUsers().map(user => user.id)).toEqual([12])
+      page.clearFilters()
+      page.setRoleFilter("2")
+      page.setStatusFilter("inactive")
+      expect(page.filteredUsers()).toHaveLength(6)
+      expect(page.currentPage()).toBe(1)
+      page.goToPage(2)
+      expect(page.visibleUsers()).toHaveLength(1)
+      http.expectNone(() => true)
+      http.verify()
+      fixture.destroy()
+    }
+  )
+
+  it("loads a temporary large catalog once and filters/pages without further requests", async () => {
     const query = vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers")
+    const { page, roles, fixture } = await setup()
+    expect(query).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 10000 })
+    expect(page.visibleUsers()).toHaveLength(5)
     page.goToPage(8)
-    page.setSearch("carlos")
+    expect(page.rangeStart()).toBe(36)
+    page.setSearch(" CARLOS ")
     expect(page.currentPage()).toBe(1)
-    await flush(fixture.whenStable())
     expect(page.filteredUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
-    expect(query).toHaveBeenLastCalledWith({ page: 0, size: 5, search: "carlos" })
     page.setSearch("persona.48@")
-    await flush(fixture.whenStable())
     expect(page.filteredUsers()).toHaveLength(1)
-    page.setSearch("")
+    page.clearFilters()
     page.goToPage(8)
     page.setRoleFilter(String(roles.roles()[2].id))
-    await flush(fixture.whenStable())
     expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => user.roleId === roles.roles()[2].id)).toBe(true)
     page.goToPage(2)
     page.setStatusFilter("inactive")
-    await flush(fixture.whenStable())
     expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => !user.isActive)).toBe(true)
     page.clearFilters()
     await flush(fixture.whenStable())
-    expect(page.filteredUsers()).toHaveLength(5)
-    expect(page.users.total()).toBe(48)
+    expect(page.filteredUsers()).toHaveLength(48)
+    expect(query).toHaveBeenCalledTimes(1)
   })
 
-  it("connects bounded shared navigation to server pages and filter resets", async () => {
+  it.each([
+    { total: 60, totalPages: 1, page: 0 },
+    { total: 48, totalPages: 2, page: 0 },
+    { total: 48, totalPages: 2, page: 1 }
+  ])("warns when catalog metadata implies incompleteness %j", async metadata => {
+    const { page, fixture, element } = await setup()
+    const source = TestBed.inject(UserInMemorySource)
+    vi.spyOn(source, "getUsers").mockReturnValue(
+      of(
+        Result.success({
+          items: page.users.users(),
+          size: 10000,
+          ...metadata
+        })
+      )
+    )
+    page.retry()
+    await flush(fixture.whenStable())
+    page.setSearch("no-such-user")
+    fixture.detectChanges()
+    expect(element.querySelector("[data-incomplete-catalog]")?.textContent).toContain(
+      "Catálogo incompleto"
+    )
+    expect(element.textContent).toContain("Sin resultados entre los usuarios cargados")
+    expect(element.textContent).not.toContain("Aún no hay usuarios")
+  })
+
+  it("counts every loaded user independently of local filters and hides the warning for a complete catalog", async () => {
+    const { page, fixture, element } = await setup()
+    const active = page.users.users().filter(user => user.isActive).length
+    expect(page.activeCount()).toBe(active)
+    page.setStatusFilter("inactive")
+    fixture.detectChanges()
+    expect(page.activeCount()).toBe(active)
+    expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
+    expect(element.textContent).toContain(`${active} activos`)
+    expect(element.textContent).toContain(`${48 - active} inactivos`)
+    expect(page.rangeEnd()).toBe(Math.min(5, page.filteredUsers().length))
+  })
+
+  it("connects bounded shared navigation to local pages and filter resets", async () => {
     const { page, fixture, element } = await setup()
     const nav = () =>
       element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
@@ -885,12 +999,26 @@ describe("UsersPage", () => {
       await flush(firstValueFrom(users.deleteUserById(user.id)))
     expect(page.currentPage()).toBe(9)
     expect(page.visibleUsers()).toHaveLength(5)
+    // A later catalog growth must not resurrect the previously invalid page 10.
+    await flush(
+      firstValueFrom(
+        users.createUser({
+          name: "New user",
+          email: "new@example.test",
+          password: "Password1",
+          lang: page.users.users()[0].lang,
+          roleId: 1,
+          isActive: true
+        })
+      )
+    )
+    expect(page.currentPage()).toBe(9)
     fixture.detectChanges()
     const nav = element.querySelector('nav[aria-label="Paginación de usuarios"]')!
     expect(nav.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("9")
     expect(
       nav.querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it("shows empty filtered results and offers a reset action", async () => {
@@ -903,7 +1031,7 @@ describe("UsersPage", () => {
     reset.click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.filteredUsers()).toHaveLength(5)
+    expect(page.filteredUsers()).toHaveLength(48)
     expect(page.users.total()).toBe(48)
   })
 

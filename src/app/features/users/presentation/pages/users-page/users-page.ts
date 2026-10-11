@@ -5,6 +5,7 @@ import {
   computed,
   DestroyRef,
   inject,
+  linkedSignal,
   OnInit,
   PLATFORM_ID,
   signal
@@ -36,7 +37,7 @@ import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { defer, finalize, forkJoin, interval, of, Subject, switchMap, timer } from "rxjs"
+import { defer, finalize, forkJoin, interval, of, Subject, switchMap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserQuery } from "../../../domain/models/user-query"
 import { demoDecoration, initials } from "../../demo/users-demo.fixture"
@@ -58,6 +59,9 @@ import { UserSessions } from "../../components/user-sessions/user-sessions"
 import { RbacMatrix } from "../../components/rbac-matrix/rbac-matrix"
 import { AuditViewer } from "../../components/audit-viewer/audit-viewer"
 import { AuditLogsStore } from "../../state/audit-logs.store"
+
+// Temporarily approved for the small user catalog; not a shared query default.
+const TEMPORARY_USERS_CATALOG_SIZE = 10000
 
 @Component({
   selector: "app-users-page",
@@ -116,50 +120,67 @@ export class UsersPage implements OnInit {
   readonly search = signal("")
   readonly roleFilter = signal("")
   readonly statusFilter = signal("all")
-  private readonly requestedPage = signal(1)
   readonly pageSize = 5
   readonly activeCount = computed(() => this.users.users().filter(user => user.isActive).length)
-  readonly filteredUsers = computed(() => this.users.users())
-  readonly pageCount = computed(() => Math.max(1, this.users.totalPages()))
-  readonly currentPage = computed(() => Math.min(this.requestedPage(), this.pageCount()))
-  readonly visibleUsers = computed(() => this.users.users())
+  readonly filteredUsers = computed(() => {
+    const text = this.search().trim().toLocaleLowerCase("es")
+    const role = this.roleFilter()
+    const status = this.statusFilter()
+    return this.users
+      .users()
+      .filter(
+        user =>
+          (!text ||
+            user.name.toLocaleLowerCase("es").includes(text) ||
+            user.email.toLocaleLowerCase("es").includes(text)) &&
+          (!role || user.roleId === Number(role)) &&
+          (status === "all" || user.isActive === (status === "active"))
+      )
+  })
+  readonly pageCount = computed(() =>
+    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize))
+  )
+  readonly currentPage = linkedSignal<number, number>({
+    source: this.pageCount,
+    computation: (count, previous) => Math.min(previous?.value ?? 1, count)
+  })
+  readonly incompleteCatalog = computed(
+    () =>
+      this.users.loaded() &&
+      (this.users.total() > this.users.users().length ||
+        this.users.page() !== 0 ||
+        this.users.totalPages() > 1)
+  )
+  readonly visibleUsers = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize
+    return this.filteredUsers().slice(start, start + this.pageSize)
+  })
   readonly rangeStart = computed(() =>
-    this.visibleUsers().length ? this.users.page() * this.pageSize + 1 : 0
+    this.visibleUsers().length ? (this.currentPage() - 1) * this.pageSize + 1 : 0
   )
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
-  private readonly queries = new Subject<{ query: UserQuery; wait: number }>()
+  private readonly queries = new Subject<UserQuery>()
 
-  private catalogQuery(): UserQuery {
-    return {
-      page: this.requestedPage() - 1,
-      size: this.pageSize,
-      ...(this.search().trim() ? { search: this.search().trim() } : {}),
-      ...(this.roleFilter() ? { roleId: Number(this.roleFilter()) } : {}),
-      ...(this.statusFilter() === "all" ? {} : { isActive: this.statusFilter() === "active" })
-    }
-  }
-  private reload(wait = 0): void {
-    if (!this.destroyRef.destroyed) this.queries.next({ query: this.catalogQuery(), wait })
+  private reload(): void {
+    if (!this.destroyRef.destroyed)
+      this.queries.next({ page: 0, size: TEMPORARY_USERS_CATALOG_SIZE })
   }
 
   ngOnInit(): void {
     this.queries
       .pipe(
-        switchMap(({ query, wait }) =>
+        switchMap(query =>
           defer(() => {
             this.initializing.set(true)
             this.loadError.set(false)
-            return (wait ? timer(wait) : of(0)).pipe(
-              switchMap(() =>
-                forkJoin({
-                  roles: this.roles.loaded()
-                    ? of(Result.success(this.roles.roles()))
-                    : this.roles.loadRoles(),
-                  users: this.users.loadUsers(query)
-                })
-              ),
+            return forkJoin({
+              roles: this.roles.loaded()
+                ? of(Result.success(this.roles.roles()))
+                : this.roles.loadRoles(),
+              users: this.users.loadUsers(query)
+            }).pipe(
               finalize(() => {
                 if (!this.destroyRef.destroyed) this.initializing.set(false)
               })
@@ -171,13 +192,6 @@ export class UsersPage implements OnInit {
       .subscribe(result => {
         if (this.destroyRef.destroyed) return
         this.loadError.set(!result.roles.success || !result.users.success)
-        if (
-          result.users.success &&
-          result.users.data.page > Math.max(0, result.users.data.totalPages - 1)
-        ) {
-          this.requestedPage.set(Math.max(1, result.users.data.totalPages))
-          this.reload()
-        }
       })
     this.retry()
     this.retrySessions()
@@ -191,7 +205,7 @@ export class UsersPage implements OnInit {
 
   retrySessions(): void {
     if (this.destroyRef.destroyed || this.sessions.loading()) return
-    this.sessions.loadSessions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+    this.sessions.loadAllSessions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retry(): void {
@@ -201,29 +215,24 @@ export class UsersPage implements OnInit {
 
   setSearch(value: string): void {
     this.search.set(value)
-    this.requestedPage.set(1)
-    this.reload(200)
+    this.currentPage.set(1)
   }
   setRoleFilter(value: string | null | undefined): void {
     this.roleFilter.set(value ?? "")
-    this.requestedPage.set(1)
-    this.reload()
+    this.currentPage.set(1)
   }
   setStatusFilter(value: string | null | undefined): void {
     this.statusFilter.set(value ?? "all")
-    this.requestedPage.set(1)
-    this.reload()
+    this.currentPage.set(1)
   }
   clearFilters(): void {
     this.search.set("")
     this.roleFilter.set("")
     this.statusFilter.set("all")
-    this.requestedPage.set(1)
-    this.reload()
+    this.currentPage.set(1)
   }
   goToPage(page: number): void {
-    this.requestedPage.set(Math.max(1, Math.min(page, this.pageCount())))
-    this.reload()
+    this.currentPage.set(Math.max(1, Math.min(page, this.pageCount())))
   }
   roleName(user: User): string {
     const role = this.roles.roles().find(item => item.id === user.roleId)
@@ -290,8 +299,6 @@ export class UsersPage implements OnInit {
         user,
         onDeleted: () => {
           if (this.destroyRef.destroyed) return
-          this.requestedPage.set(this.currentPage())
-          if (this.users.page() !== this.requestedPage() - 1) this.reload()
           this.toast.success(`Usuario ${user.name} eliminado`)
         }
       },
@@ -310,8 +317,6 @@ export class UsersPage implements OnInit {
         user,
         onChanged: () => {
           if (this.destroyRef.destroyed) return
-          this.requestedPage.set(this.currentPage())
-          if (this.users.page() !== this.requestedPage() - 1) this.reload()
           this.toast.success(`Usuario ${user.name} ${status}`)
         }
       },

@@ -1,6 +1,7 @@
 import { computed, inject } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import { catchError, defer, finalize, map, Observable, of, switchMap } from "rxjs"
+import { GetAllUserSessionsUseCase } from "../../application/use-cases/get-all-user-sessions.use-case"
 import { GetUserSessionsUseCase } from "../../application/use-cases/get-user-sessions.use-case"
 import { RevokeUserSessionUseCase } from "../../application/use-cases/revoke-user-session.use-case"
 import { RevokeUserSessionsUseCase } from "../../application/use-cases/revoke-user-sessions.use-case"
@@ -17,6 +18,7 @@ export const UserSessionsStore = signalStore(
     now: Date.now(),
     loading: false,
     loaded: false,
+    collectionComplete: false,
     page: 0,
     size: 20,
     total: 0,
@@ -35,11 +37,13 @@ export const UserSessionsStore = signalStore(
     (
       store,
       query = inject(GetUserSessionsUseCase),
+      all = inject(GetAllUserSessionsUseCase),
       revoke = inject(RevokeUserSessionUseCase),
       bulk = inject(RevokeUserSessionsUseCase)
     ) => {
       let pending = 0,
         latestLoad = 0
+      let collectionMode = false
       const failure = (e: unknown) =>
         Result.failure(e instanceof UserSessionError ? e : new UserSessionError("UNEXPECTED"))
       function loadSessions(
@@ -50,7 +54,14 @@ export const UserSessionsStore = signalStore(
         return defer(() => {
           const load = ++latestLoad
           pending++
-          patchState(store, { loading: true, error: undefined, query: snapshot, now: Date.now() })
+          collectionMode = false
+          patchState(store, {
+            loading: true,
+            collectionComplete: false,
+            error: undefined,
+            query: snapshot,
+            now: Date.now()
+          })
           return defer(() => query.execute(snapshot)).pipe(
             catchError(e => of(failure(e))),
             switchMap(result => {
@@ -75,6 +86,7 @@ export const UserSessionsStore = signalStore(
                   total: result.data.total,
                   totalPages: result.data.totalPages,
                   loaded: true,
+                  collectionComplete: false,
                   error: undefined,
                   now: Date.now()
                 })
@@ -92,9 +104,46 @@ export const UserSessionsStore = signalStore(
         if (!result.success) return of(result)
         latestLoad++
         // Never discard records optimistically: bulk on the caller retains actual=true.
-        return loadSessions().pipe(map(() => result))
+        return collectionMode
+          ? loadAllSessions().pipe(map(() => result))
+          : loadSessions().pipe(map(() => result))
+      }
+      function loadAllSessions() {
+        return defer(() => {
+          const load = ++latestLoad
+          pending++
+          collectionMode = true
+          patchState(store, {
+            loading: true,
+            collectionComplete: false,
+            error: undefined,
+            now: Date.now()
+          })
+          return defer(() => all.execute()).pipe(
+            catchError(e => of(failure(e))),
+            map(result => {
+              if (load !== latestLoad) return result
+              if (result.success)
+                patchState(store, {
+                  sessions: result.data.items,
+                  total: result.data.total,
+                  loaded: true,
+                  collectionComplete: true,
+                  error: undefined,
+                  now: Date.now()
+                })
+              else patchState(store, { error: result.error })
+              return result
+            }),
+            finalize(() => {
+              pending--
+              patchState(store, { loading: pending > 0 })
+            })
+          )
+        })
       }
       return {
+        loadAllSessions,
         refreshClock() {
           patchState(store, { now: Date.now() })
         },
