@@ -103,7 +103,8 @@ export class LoginFormComponent {
         } else {
           this.submitError.set(result.error)
         }
-      } catch {
+      } catch (error) {
+        console.error(error)
         if (!this.destroyRef.destroyed) this.submitError.set(new AuthError("UNEXPECTED"))
       }
 
