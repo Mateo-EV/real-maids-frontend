@@ -8,7 +8,8 @@ if (!apiUrl) {
 
 const environment = {
   production: true,
-  apiUrl
+  apiUrl,
+  label: "Producción"
 }
 
 writeFileSync(
