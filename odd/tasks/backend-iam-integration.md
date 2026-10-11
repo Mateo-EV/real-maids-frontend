@@ -20,7 +20,8 @@ Traceability: M01/RF01/HU01/P01; M02/RF02/HU02/P03; RNF01/RNF03/RNF09/RNF10/RNF1
 
 ## Tasks and route
 
-- [ ] T1 — Rename auth `UserSession` and its file to `AuthSession` / `auth-session.entity.ts`, update imports/references and verify behavior remains unchanged. Route: delegated writer; multiple source/test files. Status: in progress; no source edits yet.
+- [ ] T0 — Restore Engram write continuity through the supported runtime mapping, then mirror this full document. Route: read-only diagnostic scout; approved removal of obsolete package pin only. Status: pending; reload confirmed but native save still rejects the ended session; reads and core 2.2.1 health work. Do not block safe work with this local recovery copy.
+- [ ] T1 — Rename auth `UserSession` and its file to `AuthSession` / `auth-session.entity.ts`, update imports/references and verify behavior remains unchanged. Route: delegated writer; multiple source/test files. Status: in progress; bounded mechanical rename authorized and delegated before behavioral integration.
 - [ ] T2 — Adapt login/profile, guarded localStorage lifecycle, restoration, logout, serialized refresh/rotation and origin-scoped Bearer transport with regression tests. Route: delegated writer. Status: pending T1 verification.
 - [ ] T3 — Integrate users and role catalog; remove age from domain/forms/fixtures, map pagination/errors and documented password operations where required by existing consumers. Route: delegated writer. Status: pending auth transport.
 - [ ] T4 — Replace demo permission modeling/matrix with real dynamic catalog IDs and atomic assignments; preserve backend authorization and loading/error states. Route: delegated writer. Status: pending auth/catalog.
@@ -41,7 +42,7 @@ Traceability: M01/RF01/HU01/P01; M02/RF02/HU02/P03; RNF01/RNF03/RNF09/RNF10/RNF1
 
 Baseline HEAD: `b1c3b758ce893ad6f8740c5fefa1fb8b0811db73`; initial Git status clean. Chosen route: delegated direct, one writer at a time. Provisional forecast: 800–1,600 authored changed lines including tests/docs across separate units; not a cap and not permission to compress or omit tests. Delivery strategy: ask-on-risk; no PR or chain decision requested yet. T1 will be isolated from behavioral integration.
 
-Engram mirror is pending: both the injected memory save and registration of the actual runtime session returned `session has already ended`. Keep this local document authoritative until the memory lifecycle is repaired; do not invent a new session identity or claim a successful mirror.
+Engram mirror is pending: both native save and registration of the actual runtime session returned `session has already ended`. With approval, only the obsolete `npm:gentle-engram@0.1.16` declaration was removed from global Pi settings; `npm:gentle-engram` and all other settings were retained. The user confirmed reload, but a new native save still failed. Core `/health` reports 2.2.1 and memory reads remain available. Installed adapter 0.2.0 supports a server-selected continuation; the exact failed runtime mapping remains under diagnosis. Session summaries do not close sessions, and package duplication is not proven causal. Do not modify stored rows, invent IDs or claim persistence succeeded. Continue safe implementation with this local recovery copy while the incident is diagnosed separately.
 
 Verification and commits: none for this feature yet. Production HTTPS origin, authenticated live contract behavior and exhaustive browser acceptance remain unverified.
 
