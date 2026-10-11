@@ -1,79 +1,144 @@
 import { TestBed } from "@angular/core/testing"
 import { firstValueFrom, of, Subject, throwError } from "rxjs"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { UserSessionError } from "../../domain/errors/user-session.error"
 import { UserSession } from "../../domain/entities/user-session.entity"
+import { UserSessionPage } from "../../domain/models/user-session-page"
 import { USER_SESSION_REPOSITORY } from "../../domain/repositories/user-session.repository"
-import { UserSessionRepositoryImpl } from "../../infrastructure/repositories/user-session.repository-impl"
-import { GetUserSessionsUseCase } from "../../application/use-cases/get-user-sessions.use-case"
-import { RevokeUserSessionUseCase } from "../../application/use-cases/revoke-user-session.use-case"
 import { UserSessionsStore } from "./user-sessions.store"
 
+const current = () =>
+  UserSession.create(
+    91,
+    42,
+    "192.0.2.1",
+    "Browser",
+    new Date(Date.now() - 1000),
+    new Date(Date.now() + 60000),
+    true,
+    "Real",
+    "real@example.test"
+  )
+const page = (items = [current()], overrides = {}): UserSessionPage => ({
+  items,
+  page: 0,
+  size: 20,
+  total: items.length,
+  totalPages: items.length ? 1 : 0,
+  ...overrides
+})
 describe("UserSessionsStore", () => {
+  let repository: {
+    getUserSessions: ReturnType<typeof vi.fn>
+    revokeUserSession: ReturnType<typeof vi.fn>
+    revokeUserSessions: ReturnType<typeof vi.fn>
+  }
   beforeEach(() => {
-    vi.useFakeTimers()
+    repository = {
+      getUserSessions: vi.fn(() => of(Result.success(page()))),
+      revokeUserSession: vi.fn(() => of(Result.success(undefined))),
+      revokeUserSessions: vi.fn(() => of(Result.success(undefined)))
+    }
     TestBed.configureTestingModule({
-      providers: [{ provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }]
+      providers: [{ provide: USER_SESSION_REPOSITORY, useValue: repository }]
     })
   })
-  afterEach(() => vi.useRealTimers())
-  async function finish<T>(promise: Promise<T>) {
-    await vi.advanceTimersByTimeAsync(250)
-    return promise
-  }
-  it("loads, updates after revoke and consistently excludes expiry", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await finish(firstValueFrom(store.loadSessions()))
-    expect(store.loaded()).toBe(true)
-    expect(store.activeSessions()).toHaveLength(6)
-    await finish(firstValueFrom(store.revokeSession(1, 2)))
-    expect(store.activeSessions()).toHaveLength(5)
-    const expiry = Math.max(...store.sessions().map(session => session.expiryDate.getTime()))
-    vi.setSystemTime(expiry)
-    store.refreshClock()
-    expect(store.activeSessions()).toHaveLength(0)
-  })
-  it("preserves data on typed and unexpected query/revoke errors", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await finish(firstValueFrom(store.loadSessions()))
-    const previous = store.sessions()
-    vi.spyOn(TestBed.inject(GetUserSessionsUseCase), "execute").mockReturnValue(
-      throwError(() => new Error("failure"))
+  it("uses real totals independent of loaded users/rows and passes the query", async () => {
+    repository.getUserSessions.mockReturnValue(
+      of(Result.success(page([current()], { size: 1, total: 25, totalPages: 25 })))
     )
-    const query = await firstValueFrom(store.loadSessions())
-    expect(query.success).toBe(false)
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions({ userId: 42, size: 1 }))
+    expect(repository.getUserSessions).toHaveBeenCalledWith({ userId: 42, size: 1 })
+    expect(store.sessionCount()).toBe(25)
+    expect(store.sessions()).toHaveLength(1)
+    expect(store.loaded()).toBe(true)
+  })
+  it("guards only the real actual flag, never a local auth credential marker", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions())
+    const result = await firstValueFrom(store.revokeSession(42, 91))
+    expect(!result.success && result.error.code).toBe("CURRENT_SESSION")
+    expect(repository.revokeUserSession).not.toHaveBeenCalled()
+    await firstValueFrom(store.revokeSession(42, 92))
+    expect(repository.revokeUserSession).toHaveBeenCalledWith(42, 92)
+  })
+  it("requeries after individual/bulk success and retains the caller's current session", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions())
+    await firstValueFrom(store.revokeSession(42, 92))
+    await firstValueFrom(store.revokeSessions(42))
+    expect(repository.getUserSessions).toHaveBeenCalledTimes(3)
+    expect(repository.revokeUserSessions).toHaveBeenCalledExactlyOnceWith(42)
+    expect(store.sessions()[0].isCurrent).toBe(true)
+  })
+  it("does not optimistically delete records while an authoritative refresh is pending", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions())
+    const response = new Subject<Result<UserSessionPage, UserSessionError>>()
+    repository.getUserSessions.mockReturnValue(response)
+    const subscription = store.revokeSessions(42).subscribe()
+    expect(store.sessions()[0].isCurrent).toBe(true)
+    response.next(Result.success(page()))
+    response.complete()
+    subscription.unsubscribe()
+    expect(store.sessions()[0].isCurrent).toBe(true)
+  })
+  it("ignores stale responses and cancels without binding root lifetime to the caller", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    const old = new Subject<Result<UserSessionPage, UserSessionError>>()
+    repository.getUserSessions.mockReturnValueOnce(old)
+    const subscription = store.loadSessions().subscribe()
+    await firstValueFrom(store.loadSessions({ page: 0, userId: 42 }))
+    old.next(Result.success(page([], { total: 0 })))
+    old.complete()
+    expect(store.sessions()).toHaveLength(1)
+    expect(store.loading()).toBe(false)
+    subscription.unsubscribe()
+    repository.getUserSessions.mockReturnValue(new Subject())
+    store.loadSessions().subscribe().unsubscribe()
+    expect(store.loading()).toBe(false)
+    repository.getUserSessions.mockReturnValue(of(Result.success(page())))
+    await firstValueFrom(store.loadSessions())
+    expect(store.loaded()).toBe(true)
+  })
+  it("invalidates a pre-write query so it cannot resurrect closed sessions", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    const old = new Subject<Result<UserSessionPage, UserSessionError>>()
+    repository.getUserSessions.mockReturnValueOnce(old)
+    store.loadSessions().subscribe()
+    repository.getUserSessions.mockReturnValue(of(Result.success(page([]))))
+    await firstValueFrom(store.revokeSessions(42))
+    old.next(Result.success(page()))
+    old.complete()
+    expect(store.sessions()).toHaveLength(0)
+  })
+  it("corrects an empty out-of-range page with one server requery", async () => {
+    repository.getUserSessions
+      .mockReturnValueOnce(of(Result.success(page([], { page: 3, total: 40, totalPages: 2 }))))
+      .mockReturnValueOnce(
+        of(Result.success(page([current()], { page: 1, total: 21, totalPages: 2 })))
+      )
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions({ page: 3 }))
+    expect(repository.getUserSessions).toHaveBeenLastCalledWith({ page: 1 })
+    expect(store.page()).toBe(1)
+  })
+  it("preserves data on failures and reports a refresh error without replaying the successful write", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    await firstValueFrom(store.loadSessions())
+    const previous = store.sessions()
+    repository.getUserSessions.mockReturnValue(throwError(() => new Error("private")))
+    const result = await firstValueFrom(store.revokeSessions(42))
+    expect(result.success).toBe(true)
     expect(store.error()?.code).toBe("UNEXPECTED")
     expect(store.sessions()).toBe(previous)
-    vi.spyOn(TestBed.inject(RevokeUserSessionUseCase), "execute").mockReturnValue(
-      of(Result.failure(new UserSessionError("CURRENT_SESSION")))
+    expect(repository.revokeUserSessions).toHaveBeenCalledOnce()
+    repository.revokeUserSession.mockReturnValue(
+      of(Result.failure(new UserSessionError("VALIDATION")))
     )
-    const revoke = await firstValueFrom(store.revokeSession(1, 1))
-    expect(revoke.success).toBe(false)
+    expect((await firstValueFrom(store.revokeSession(42, 92))).success).toBe(false)
     expect(store.sessions()).toBe(previous)
-  })
-  it("cancels loads without changing data or coupling root lifetime to callers", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    store.loadSessions().subscribe().unsubscribe()
-    await vi.advanceTimersByTimeAsync(250)
-    expect(store.loading()).toBe(false)
-    expect(store.loaded()).toBe(false)
-    await finish(firstValueFrom(store.loadSessions()))
-    store.revokeSession(1, 2).subscribe().unsubscribe()
-    await vi.advanceTimersByTimeAsync(250)
-    expect(store.activeSessions().some(session => session.id === 2)).toBe(true)
-  })
-  it("does not resurrect a revoked record through a stale query", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await finish(firstValueFrom(store.loadSessions()))
-    const old = store.sessions()
-    const response = new Subject<Result<UserSession[], UserSessionError>>()
-    vi.spyOn(TestBed.inject(GetUserSessionsUseCase), "execute").mockReturnValue(response)
-    store.loadSessions().subscribe()
-    await finish(firstValueFrom(store.revokeSession(1, 2)))
-    response.next(Result.success(old))
-    response.complete()
-    expect(store.sessions().some(session => session.id === 2)).toBe(false)
-    expect(store.loading()).toBe(false)
   })
 })

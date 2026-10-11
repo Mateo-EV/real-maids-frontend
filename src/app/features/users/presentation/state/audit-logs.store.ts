@@ -12,25 +12,41 @@ export const AuditLogsStore = signalStore(
   withState({
     items: [] as AuditLog[],
     total: 0,
+    totalPages: 0,
+    page: 0,
+    size: 20,
     loading: false,
     error: undefined as AuditLogError | undefined,
     globalTotal: null as number | null
   }),
   withMethods((store, query = inject(GetAuditLogsUseCase)) => {
     let latest = 0
+    let sequence = 0
+    let globalSequence = 0
     return {
       load(params: AuditQuery) {
         const input = { ...params }
         return defer(() => {
           const request = ++latest
-          patchState(store, { loading: true, error: undefined, items: [] })
+          const globalRequest = ++sequence
+          patchState(store, { loading: true, error: undefined, items: [], total: 0, totalPages: 0 })
           return defer(() => query.execute(input)).pipe(
             catchError(() => of(Result.failure(new AuditLogError("UNEXPECTED")))),
             tap(result => {
               if (request !== latest) return
-              if (result.success)
-                patchState(store, { items: result.data.items, total: result.data.total })
-              else patchState(store, { error: result.error })
+              if (result.success) {
+                patchState(store, {
+                  items: result.data.items,
+                  total: result.data.total,
+                  totalPages: result.data.totalPages,
+                  page: result.data.page,
+                  size: result.data.size
+                })
+                if (globalRequest >= globalSequence) {
+                  globalSequence = globalRequest
+                  patchState(store, { globalTotal: result.data.globalTotal })
+                }
+              } else patchState(store, { error: result.error })
             }),
             finalize(() => {
               if (request === latest) patchState(store, { loading: false })
@@ -39,12 +55,18 @@ export const AuditLogsStore = signalStore(
         })
       },
       loadGlobalTotal() {
-        return defer(() => query.execute({ limit: 1 })).pipe(
-          catchError(() => of(Result.failure(new AuditLogError("UNEXPECTED")))),
-          tap(result => {
-            if (result.success) patchState(store, { globalTotal: result.data.total })
-          })
-        )
+        return defer(() => {
+          const request = ++sequence
+          return defer(() => query.execute({ page: 0, size: 1 })).pipe(
+            catchError(() => of(Result.failure(new AuditLogError("UNEXPECTED")))),
+            tap(result => {
+              if (result.success && request >= globalSequence) {
+                globalSequence = request
+                patchState(store, { globalTotal: result.data.globalTotal })
+              }
+            })
+          )
+        })
       }
     }
   })

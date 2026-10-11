@@ -12,66 +12,72 @@ import { GetAuditLogsUseCase } from "./get-audit-logs.use-case"
 import { GetAuditLogByIdUseCase } from "./get-audit-log-by-id.use-case"
 import { ExportAuditLogsUseCase } from "./export-audit-logs.use-case"
 
-describe("Audit detail and complete export use cases", () => {
-  it("exports all filtered results without a paginated read or a 100-row ceiling", async () => {
-    const logs = Array.from({ length: 130 }, (_, index) =>
-      AuditLog.create(index + 1, 1, "usuario", "INSERT", "Demo", "192.0.2.1", new Date(0))
-    )
-    const getAuditLogs = vi.fn(),
-      getAllAuditLogs = vi.fn(() => of(Result.success(logs)))
-    TestBed.configureTestingModule({
-      providers: [{ provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogs, getAllAuditLogs } }]
+describe("Audit stateless use cases", () => {
+  for (const success of [true, false]) {
+    it(`delegates query/detail/export without rewriting ${success ? "success" : "failure"}`, async () => {
+      const log = AuditLog.create(
+        1,
+        2,
+        "usuario",
+        "ACTUALIZAR",
+        "Sintético",
+        "192.0.2.1",
+        new Date(0),
+        "Actor",
+        "3"
+      )
+      const error = new AuditLogError("FORBIDDEN")
+      const blob = new Blob(["CSV completo"], { type: "text/csv" })
+      const query = of(
+        success
+          ? Result.success({
+              items: [log],
+              total: 6,
+              offset: 0,
+              limit: 5,
+              page: 0,
+              size: 5,
+              totalPages: 2,
+              globalTotal: 90
+            })
+          : Result.failure(error)
+      )
+      const detail = of(success ? Result.success(log) : Result.failure(error))
+      const csv = of(success ? Result.success(blob) : Result.failure(error))
+      const repository: AuditLogRepository = {
+        getAuditLogs: vi.fn(() => query),
+        getAuditLogById: vi.fn(() => detail),
+        exportAuditLogs: vi.fn(() => csv)
+      }
+      TestBed.configureTestingModule({
+        providers: [{ provide: AUDIT_LOG_REPOSITORY, useValue: repository }]
+      })
+      const filters = {
+        userId: 2,
+        fromUTC: "2026-09-01",
+        toUTC: "2026-09-02",
+        entity: "usuario",
+        action: "ACTUALIZAR"
+      }
+      const params = { ...filters, page: 0, size: 5 }
+      expect(TestBed.inject(GetAuditLogsUseCase).execute(params)).toBe(query)
+      expect(TestBed.inject(GetAuditLogByIdUseCase).execute(1)).toBe(detail)
+      expect(TestBed.inject(ExportAuditLogsUseCase).execute(filters)).toBe(csv)
+      expect(repository.getAuditLogs).toHaveBeenCalledExactlyOnceWith(params)
+      expect(repository.getAuditLogById).toHaveBeenCalledExactlyOnceWith(1)
+      expect(repository.exportAuditLogs).toHaveBeenCalledExactlyOnceWith(filters)
+      const result = await firstValueFrom(csv)
+      if (result.success) expect(result.data).toBe(blob)
+      else expect(result.error).toBe(error)
     })
-    const filters = { entity: "usuario" as const }
-    const result = await firstValueFrom(TestBed.inject(ExportAuditLogsUseCase).execute(filters))
-    expect(getAllAuditLogs).toHaveBeenCalledExactlyOnceWith(filters)
-    expect(getAuditLogs).not.toHaveBeenCalled()
-    if (!result.success) throw result.error
-    expect(result.data.split("\r\n")).toHaveLength(131)
-  })
-  it("preserves typed failures and exact ID for detail and export", async () => {
-    const error = new AuditLogError("AUDIT_LOG_NOT_FOUND")
-    const response = of(Result.failure(error))
-    const getAuditLogById = vi.fn(() => response),
-      getAllAuditLogs = vi.fn(() => response)
+  }
+  it("passes omitted filters without introducing pagination into export", () => {
+    const stream = of(Result.success(new Blob(["CSV"])))
+    const exportAuditLogs = vi.fn(() => stream)
     TestBed.configureTestingModule({
-      providers: [{ provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogById, getAllAuditLogs } }]
+      providers: [{ provide: AUDIT_LOG_REPOSITORY, useValue: { exportAuditLogs } }]
     })
-    expect(TestBed.inject(GetAuditLogByIdUseCase).execute(42)).toBe(response)
-    expect(getAuditLogById).toHaveBeenCalledExactlyOnceWith(42)
-    const result = await firstValueFrom(TestBed.inject(ExportAuditLogsUseCase).execute())
-    expect(result).toMatchObject({ success: false, error })
+    expect(TestBed.inject(ExportAuditLogsUseCase).execute()).toBe(stream)
+    expect(exportAuditLogs).toHaveBeenCalledExactlyOnceWith(undefined)
   })
 })
-
-for (const success of [true, false]) {
-  describe(`Audit query ${success ? "success" : "failure"} delegation`, () => {
-    for (const params of [undefined, { offset: 4, limit: 2 }]) {
-      it(`preserves exact observable and Result with ${params ? "explicit" : "omitted"} params`, async () => {
-        const result = success
-          ? Result.success({
-              items: [
-                AuditLog.create(1, 1, "Demo", "Demo", "Fictitious", "192.0.2.1", new Date(0))
-              ],
-              total: 1,
-              offset: 4,
-              limit: 2
-            })
-          : Result.failure(new AuditLogError("INVALID_PAGINATION"))
-        const stream = of(result)
-        const repository: AuditLogRepository = {
-          getAuditLogs: vi.fn(() => stream),
-          getAllAuditLogs: vi.fn(() => of(Result.success([]))),
-          getAuditLogById: vi.fn(() => of(Result.failure(new AuditLogError("AUDIT_LOG_NOT_FOUND"))))
-        }
-        TestBed.configureTestingModule({
-          providers: [{ provide: AUDIT_LOG_REPOSITORY, useValue: repository }]
-        })
-        const returned = TestBed.inject(GetAuditLogsUseCase).execute(params)
-        expect(returned).toBe(stream)
-        expect(repository.getAuditLogs).toHaveBeenCalledExactlyOnceWith(params)
-        expect(await firstValueFrom(returned)).toBe(result)
-      })
-    }
-  })
-}

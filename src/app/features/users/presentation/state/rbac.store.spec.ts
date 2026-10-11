@@ -3,18 +3,16 @@ import { firstValueFrom, of, Subject } from "rxjs"
 import { describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { RBAC_REPOSITORY } from "../../domain/repositories/rbac.repository"
-import { RbacMatrix } from "../../domain/models/rbac-matrix"
+import { PermissionAssignment } from "../../domain/entities/permission.entity"
 import { RbacError } from "../../domain/errors/rbac.error"
 import { RbacStore } from "./rbac.store"
-
 describe("RbacStore", () => {
   it("keeps loaded data on query failure and ignores stale loads after save", async () => {
-    const initial: RbacMatrix = {
-      roleId: 2,
-      configured: true,
-      grants: [{ module: "crm", action: "read" }]
+    const initial: PermissionAssignment = {
+      roleId: 19,
+      permissions: [{ id: 73, code: "CUSTOM", module: "Custom", description: "Description" }]
     }
-    const delayed = new Subject<Result<RbacMatrix, RbacError>>()
+    const delayed = new Subject<Result<PermissionAssignment, RbacError>>()
     const repository = {
       getRolePermissions: vi
         .fn()
@@ -22,22 +20,50 @@ describe("RbacStore", () => {
         .mockReturnValueOnce(delayed)
         .mockReturnValue(of(Result.failure(new RbacError("UNEXPECTED")))),
       saveRolePermissions: vi.fn((roleId: number) =>
-        of(Result.success({ roleId, configured: true, grants: [] }))
+        of(Result.success({ roleId, permissions: [] }))
       )
     }
     TestBed.configureTestingModule({
       providers: [{ provide: RBAC_REPOSITORY, useValue: repository }]
     })
     const store = TestBed.inject(RbacStore)
-    await firstValueFrom(store.loadPermissions(2))
-    const stale = store.loadPermissions(2).subscribe()
-    await firstValueFrom(store.savePermissions(2, []))
+    await firstValueFrom(store.loadPermissions(19))
+    const stale = store.loadPermissions(19).subscribe()
+    await firstValueFrom(store.savePermissionIds(19, []))
     delayed.next(Result.success(initial))
     delayed.complete()
     stale.unsubscribe()
-    expect(store.matrices()[2].grants).toEqual([])
-    await firstValueFrom(store.loadPermissions(2))
-    expect(store.matrices()[2].configured).toBe(true)
+    expect(store.matrices()[19].permissions).toEqual([])
+    await firstValueFrom(store.loadPermissions(19))
+    expect(store.matrices()[19].permissions).toEqual([])
+    expect(store.loading()).toBe(false)
+  })
+  it("rejects earlier role loads after a newer load completes", () => {
+    const first = new Subject<Result<PermissionAssignment, RbacError>>()
+    const second = new Subject<Result<PermissionAssignment, RbacError>>()
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: RBAC_REPOSITORY,
+          useValue: {
+            getRolePermissions: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+          }
+        }
+      ]
+    })
+    const store = TestBed.inject(RbacStore)
+    store.loadPermissions(19).subscribe()
+    store.loadPermissions(19).subscribe()
+    second.next(Result.success({ roleId: 19, permissions: [] }))
+    second.complete()
+    first.next(
+      Result.success({
+        roleId: 19,
+        permissions: [{ id: 73, code: "STALE", module: "Backend", description: "Stale" }]
+      })
+    )
+    first.complete()
+    expect(store.matrices()[19].permissions).toEqual([])
     expect(store.loading()).toBe(false)
   })
   it("cancels component-owned queries without leaving pending state", () => {
@@ -47,9 +73,53 @@ describe("RbacStore", () => {
       ]
     })
     const store = TestBed.inject(RbacStore)
-    const subscription = store.loadPermissions(2).subscribe()
+    const subscription = store.loadPermissions(19).subscribe()
     expect(store.loading()).toBe(true)
     subscription.unsubscribe()
     expect(store.loading()).toBe(false)
+  })
+  it("rejects inconsistent response identity rather than returning success", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: RBAC_REPOSITORY,
+          useValue: {
+            getRolePermissions: () => of(Result.success({ roleId: 23, permissions: [] })),
+            saveRolePermissions: () => of(Result.success({ roleId: 23, permissions: [] }))
+          }
+        }
+      ]
+    })
+    const store = TestBed.inject(RbacStore)
+    expect(await firstValueFrom(store.loadPermissions(19))).toMatchObject({
+      success: false,
+      error: { code: "INVALID_RESPONSE" }
+    })
+    expect(await firstValueFrom(store.savePermissionIds(19, []))).toMatchObject({
+      success: false,
+      error: { code: "INVALID_RESPONSE" }
+    })
+    expect(store.matrices()[19]).toBeUndefined()
+  })
+  it("blocks duplicate writes and snapshots atomic IDs", async () => {
+    const pending = new Subject<Result<PermissionAssignment, RbacError>>()
+    const save = vi.fn().mockReturnValue(pending)
+    TestBed.configureTestingModule({
+      providers: [{ provide: RBAC_REPOSITORY, useValue: { saveRolePermissions: save } }]
+    })
+    const store = TestBed.inject(RbacStore)
+    const ids = [73]
+    const operation = store.savePermissionIds(19, ids)
+    ids.push(0)
+    const subscription = operation.subscribe()
+    expect(save).toHaveBeenCalledExactlyOnceWith(19, [73])
+    expect(await firstValueFrom(store.savePermissionIds(19, []))).toMatchObject({
+      success: false,
+      error: { code: "BUSY" }
+    })
+    subscription.unsubscribe()
+    expect(store.loading()).toBe(false)
+    store.savePermissionIds(19, []).subscribe().unsubscribe()
+    expect(save).toHaveBeenCalledTimes(2)
   })
 })

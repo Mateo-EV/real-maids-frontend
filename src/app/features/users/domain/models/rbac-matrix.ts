@@ -1,3 +1,5 @@
+// LEGACY ONLY: retained for the unwired in-memory source and legacy confirmation tests.
+// Real repository/store/editor use Permission and PermissionAssignment, never these unions.
 // Reference illustration identifiers, NOT product M01–M12 or a backend ACL.
 export const RBAC_MODULES = [
   { id: "security", label: "01. Auth, Seguridad & Auditoría" },

@@ -1,27 +1,20 @@
-<section
-  hlmCard
-  class="border shadow-sm ring-0"
-  aria-labelledby="rbac-title"
-  [attr.aria-busy]="loading()"
->
+<section hlmCard aria-labelledby="rbac-title" [attr.aria-busy]="loading()">
   <header
     hlmCardHeader
     class="flex flex-col gap-4 border-b xl:flex-row xl:items-end xl:justify-between"
   >
-    <div class="xl:self-start">
-      <h1 id="rbac-title" class="text-lg font-bold tracking-tight text-primary">
-        Matriz de Roles y Permisos (RBAC)
-      </h1>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Configura las acciones por rol en los módulos de la matriz.
+    <div>
+      <h1 id="rbac-title" class="text-lg font-bold">Roles y Permisos (RBAC)</h1>
+      <p class="text-sm text-muted-foreground">
+        Permisos del catálogo real. El backend autoriza cada cambio.
       </p>
     </div>
     <div class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
       <div class="flex flex-col gap-1">
-        <label class="text-xs font-medium" for="rbac-role">Editar permisos para</label>
+        <label for="rbac-role">Editar permisos para</label>
         <hlm-native-select
           selectId="rbac-role"
-          [value]="'' + selectedRoleId()"
+          [value]="selectedRoleId() === undefined ? '' : '' + selectedRoleId()"
           [disabled]="confirmationOpen()"
           (valueChange)="selectRole($event)"
         >
@@ -33,17 +26,17 @@
         </hlm-native-select>
       </div>
       <button hlmBtn type="button" [disabled]="!canSave()" (click)="confirmSave()">
-        Guardar Matriz
+        Guardar permisos
       </button>
     </div>
   </header>
   <div hlmCardContent class="flex flex-col gap-4">
-    <p class="text-xs text-muted-foreground">
-      Al cargar otro rol se descartan los cambios sin guardar. Las reglas de alcance son referencias
-      textuales, no cambian al marcar acciones.
+    <p class="text-sm text-muted-foreground">
+      Guardar reemplaza todos los permisos; una selección vacía deja el rol sin permisos. Se aplica
+      desde la siguiente petición. Cambiar de rol descarta el borrador solo cuando termina la carga.
     </p>
     @if (loading()) {
-      <div class="flex items-center gap-2" role="status"><hlm-spinner />Cargando permisos…</div>
+      <div role="status" class="flex items-center gap-2"><hlm-spinner />Cargando permisos…</div>
     }
     @if (error()) {
       <div hlmAlert variant="destructive" role="alert">
@@ -54,84 +47,63 @@
         Reintentar
       </button>
     }
+    @if (selectedRoleId() === undefined) {
+      <div hlmEmpty>
+        <div hlmEmptyHeader>
+          <h2 hlmEmptyTitle>No hay roles disponibles</h2>
+          <p hlmEmptyDescription>El catálogo de roles está vacío.</p>
+        </div>
+      </div>
+    }
     @if (loaded()) {
-      <p class="text-sm font-semibold text-primary" aria-live="polite">
-        Permisos de {{ displayedRole()?.name ?? "Rol no disponible"
+      <p class="font-semibold" aria-live="polite">
+        Permisos de {{ displayedRole()?.name ?? "Rol no disponible" }} · #{{ loadedRoleId()
         }}{{ dirty() ? " · Cambios sin guardar" : "" }}
       </p>
-      @if (!loaded()?.configured) {
+      @if (!loaded()?.permissions?.length) {
+        <p>Este rol no tiene permisos asignados.</p>
+      }
+      @if (!permissions().length) {
         <div hlmEmpty>
           <div hlmEmptyHeader>
-            <h2 hlmEmptyTitle>Rol sin configurar</h2>
-            <p hlmEmptyDescription>
-              Sin permisos concedidos. Selecciona las acciones y guarda la matriz para configurar
-              este rol.
-            </p>
+            <h2 hlmEmptyTitle>Sin permisos disponibles</h2>
+            <p hlmEmptyDescription>El backend devolvió un catálogo vacío.</p>
           </div>
         </div>
       }
-      <form [formRoot]="matrixForm" (submit)="$event.preventDefault()">
-        <div class="hidden overflow-x-auto lg:block">
-          <table hlmTable class="w-full text-xs">
-            <caption class="sr-only">
-              Acciones por módulo para
-              {{
-                displayedRole()?.name
-              }}
-            </caption>
-            <thead hlmTHead class="bg-background">
-              <tr hlmTr>
-                <th hlmTh scope="col" class="text-xs uppercase text-primary">Módulo Funcional</th>
-                @for (action of actions; track action.id) {
-                  <th hlmTh scope="col" class="text-center text-xs uppercase text-primary">
-                    {{ action.label }}
-                  </th>
-                }
-                <th hlmTh scope="col" class="text-xs uppercase text-primary">Alcance / Reglas</th>
-              </tr>
-            </thead>
-            <tbody hlmTBody>
-              @for (module of modules; track module.id) {
-                <tr hlmTr [attr.data-module]="module.id">
-                  <th hlmTh scope="row" class="font-semibold text-primary">{{ module.label }}</th>
-                  @for (action of actions; track action.id) {
-                    <td hlmTd>
-                      <div class="flex justify-center">
-                        <hlm-checkbox
-                          [formField]="matrixForm[module.id][action.id]"
-                          [aria-label]="module.label + ' · ' + action.label"
-                        />
-                      </div>
-                    </td>
-                  }
-                  <td hlmTd class="text-xs text-muted-foreground">{{ rule(module.id) }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        <div class="flex flex-col gap-4 lg:hidden">
-          @for (module of modules; track module.id) {
-            <fieldset hlmFieldSet class="rounded-lg border p-4" [attr.data-module]="module.id">
-              <legend hlmFieldLegend>{{ module.label }}</legend>
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                @for (action of actions; track action.id) {
-                  <div hlmField orientation="horizontal">
-                    <hlm-checkbox
-                      [inputId]="'mobile-' + module.id + '-' + action.id"
-                      [formField]="matrixForm[module.id][action.id]"
-                      [aria-label]="module.label + ' · ' + action.label"
-                    />
-                    <label hlmFieldLabel [for]="'mobile-' + module.id + '-' + action.id">{{
-                      action.label
+      <form [formRoot]="matrixForm" (submit)="$event.preventDefault()" class="flex flex-col gap-4">
+        @for (module of modules(); track module.name) {
+          <fieldset hlmFieldSet class="rounded-lg border p-4" [attr.data-module]="module.name">
+            <legend hlmFieldLegend>{{ module.name }}</legend>
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              @for (permission of module.permissions; track permission.id) {
+                <div hlmField orientation="horizontal">
+                  <hlm-checkbox
+                    [inputId]="'rbac-' + permission.id"
+                    [formField]="matrixForm[key(permission.id)]"
+                    [aria-label]="
+                      permission.module + ' · ' + permission.code + ' · ' + permission.description
+                    "
+                  />
+                  <div class="min-w-0">
+                    <label hlmFieldLabel [for]="'rbac-' + permission.id">{{
+                      permission.description || permission.code
                     }}</label>
+                    <p hlmFieldDescription class="break-words">
+                      {{ permission.code }} · #{{ permission.id }}
+                    </p>
+                    @if (!inCatalog(permission.id)) {
+                      <p class="text-sm">
+                        Asignado, pero ausente del catálogo actual; se conserva hasta que lo
+                        retires.
+                      </p>
+                    }
                   </div>
-                }
-              </div>
-              <p class="text-xs text-muted-foreground">Alcance / Reglas: {{ rule(module.id) }}</p>
-            </fieldset>
-          }
-        </div>
+                </div>
+              }
+            </div>
+          </fieldset>
+        }
       </form>
     }
   </div>

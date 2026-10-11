@@ -5,6 +5,12 @@ export type AuthErrorCode =
   | "INVALID_RESPONSE"
   | "UNCONFIGURED"
   | "CANCELLED"
+  | "INVALID_ACCESS"
+  | "INVALID_REFRESH"
+  | "INVALID_PROFILE"
+  | "STORAGE"
+  | "COORDINATION"
+  | "FORBIDDEN"
 
 export class AuthError extends Error {
   constructor(public readonly code: AuthErrorCode) {

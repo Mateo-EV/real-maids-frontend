@@ -1,10 +1,9 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { FormField, FormRoot, disabled, form } from "@angular/forms/signals"
-import { Subscription } from "rxjs"
+import { forkJoin, Subscription } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmCardImports } from "@spartan-ng/helm/card"
-import { HlmTableImports } from "@spartan-ng/helm/table"
 import { HlmCheckboxImports } from "@spartan-ng/helm/checkbox"
 import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { HlmFieldImports } from "@spartan-ng/helm/field"
@@ -14,37 +13,13 @@ import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import {
-  copyRbacMatrix,
-  OPERATIONS_RULES,
-  RBAC_ACTIONS,
-  RBAC_MODULES,
-  RbacAction,
-  RbacGrant,
-  RbacMatrix as Matrix,
-  RbacModule
-} from "../../../domain/models/rbac-matrix"
+  Permission,
+  PermissionAssignment,
+  copyAssignment
+} from "../../../domain/entities/permission.entity"
 import { RolesStore } from "../../state/roles.store"
 import { RbacStore } from "../../state/rbac.store"
-import {
-  RolePermissionsConfirmation,
-  RolePermissionsContext
-} from "../role-permissions-confirmation/role-permissions-confirmation"
-
-type Choices = Record<RbacModule, Record<RbacAction, boolean>>
-function choices(grants: readonly RbacGrant[]): Choices {
-  return Object.fromEntries(
-    RBAC_MODULES.map(module => [
-      module.id,
-      Object.fromEntries(
-        RBAC_ACTIONS.map(action => [
-          action.id,
-          grants.some(g => g.module === module.id && g.action === action.id)
-        ])
-      )
-    ])
-  ) as Choices
-}
-
+import { RbacSaveConfirmation, RbacSaveContext } from "./rbac-save-confirmation"
 @Component({
   selector: "app-rbac-matrix",
   imports: [
@@ -52,7 +27,6 @@ function choices(grants: readonly RbacGrant[]): Choices {
     FormField,
     HlmButtonImports,
     HlmCardImports,
-    HlmTableImports,
     HlmCheckboxImports,
     HlmNativeSelectImports,
     HlmFieldImports,
@@ -68,33 +42,39 @@ export class RbacMatrix implements OnInit {
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
-  readonly modules = RBAC_MODULES
-  readonly actions = RBAC_ACTIONS
-  readonly selectedRoleId = signal(2)
-  readonly loaded = signal<Matrix | undefined>(undefined)
+  readonly selectedRoleId = signal<number | undefined>(undefined)
+  readonly loaded = signal<PermissionAssignment | undefined>(undefined)
   readonly loadedRoleId = computed(() => this.loaded()?.roleId)
   readonly displayedRole = computed(() =>
-    this.roles.roles().find(r => r.id === this.loadedRoleId())
+    this.roles.roles().find(role => role.id === this.loadedRoleId())
   )
-  readonly model = signal(choices([]))
+  readonly catalog = signal<Permission[]>([])
+  readonly permissions = computed(() => {
+    const all = new Map(this.catalog().map(permission => [permission.id, permission]))
+    // Preserve and display assigned IDs absent from the current catalog; never silently revoke them.
+    for (const permission of this.loaded()?.permissions ?? [])
+      if (!all.has(permission.id)) all.set(permission.id, permission)
+    return [...all.values()]
+  })
+  readonly modules = computed(() =>
+    [...new Set(this.permissions().map(p => p.module))].map(module => ({
+      name: module,
+      permissions: this.permissions().filter(p => p.module === module)
+    }))
+  )
+  readonly model = signal<Record<string, boolean>>({})
   readonly matrixForm = form(this.model, path => disabled(path, () => !this.editable()))
-  readonly grants = computed(() =>
-    this.modules.flatMap(module =>
-      this.actions
-        .filter(action => this.model()[module.id][action.id])
-        .map(action => ({ module: module.id, action: action.id }))
-    )
+  readonly ids = computed(() =>
+    this.permissions()
+      .filter(p => this.model()[this.key(p.id)])
+      .map(p => p.id)
   )
   readonly loading = signal(false)
   readonly confirmationOpen = signal(false)
   readonly error = signal("")
   readonly dirty = computed(() => {
-    const saved = this.loaded()?.grants ?? []
-    const current = this.grants()
-    return (
-      current.length !== saved.length ||
-      current.some(g => !saved.some(s => s.module === g.module && s.action === g.action))
-    )
+    const saved = this.loaded()?.permissions.map(p => p.id) ?? []
+    return saved.length !== this.ids().length || this.ids().some(id => !saved.includes(id))
   })
   readonly editable = computed(
     () =>
@@ -105,72 +85,99 @@ export class RbacMatrix implements OnInit {
       !this.error() &&
       !this.confirmationOpen()
   )
-  readonly canSave = computed(() => this.editable() && (this.dirty() || !this.loaded()?.configured))
+  readonly canSave = computed(() => this.editable() && this.dirty())
   private request?: Subscription
   private generation = 0
+  key(id: number): string {
+    return `permission${id}`
+  }
+  inCatalog(id: number): boolean {
+    return this.catalog().some(p => p.id === id)
+  }
   ngOnInit(): void {
+    this.selectedRoleId.set(this.roles.roles()[0]?.id)
     this.retry()
   }
   selectRole(value: string | null | undefined): void {
-    if (this.destroyRef.destroyed || this.confirmationOpen()) return
+    if (this.destroyRef.destroyed || this.confirmationOpen() || value == null || value === "")
+      return
     const id = Number(value)
-    if (!this.roles.roles().some(r => r.id === id)) return
+    if (!this.roles.roles().some(role => role.id === id)) return
     this.selectedRoleId.set(id)
     this.retry()
   }
   retry(): void {
     if (this.destroyRef.destroyed || this.confirmationOpen()) return
+    const id = this.selectedRoleId()
+    if (id === undefined) return
     const generation = ++this.generation
     this.request?.unsubscribe()
     this.loading.set(true)
     this.error.set("")
-    const id = this.selectedRoleId()
-    this.request = this.store
-      .loadPermissions(id)
+    this.request = forkJoin({
+      catalog: this.store.loadCatalog(),
+      assignment: this.store.loadPermissions(id)
+    })
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(result => {
-        if (generation !== this.generation || this.destroyRef.destroyed) return
-        this.loading.set(false)
-        if (result.success && result.data.roleId === id) this.apply(result.data)
-        else
-          this.error.set(
-            "No pudimos cargar los permisos. Los cambios visibles se conservan; reintenta para continuar."
-          )
+      .subscribe({
+        next: result => {
+          if (generation !== this.generation || this.destroyRef.destroyed) return
+          this.loading.set(false)
+          if (
+            result.catalog.success &&
+            result.assignment.success &&
+            result.assignment.data.roleId === id
+          ) {
+            this.catalog.set(result.catalog.data.map(p => ({ ...p })))
+            this.apply(result.assignment.data)
+          } else
+            this.error.set(
+              "No pudimos cargar los permisos. Los cambios visibles se conservan; reintenta para continuar."
+            )
+        },
+        error: () => {
+          if (!this.destroyRef.destroyed && generation === this.generation) {
+            this.loading.set(false)
+            this.error.set("No pudimos cargar los permisos. El borrador se conserva.")
+          }
+        }
       })
   }
-  private apply(matrix: Matrix): void {
-    this.loaded.set(copyRbacMatrix(matrix))
-    this.model.set(choices(matrix.grants))
+  private apply(assignment: PermissionAssignment): void {
+    this.loaded.set(copyAssignment(assignment))
+    this.model.set(
+      Object.fromEntries(
+        this.permissions().map(p => [
+          this.key(p.id),
+          assignment.permissions.some(saved => saved.id === p.id)
+        ])
+      )
+    )
   }
-  toggle(module: RbacModule, action: RbacAction, granted: boolean): void {
-    if (!this.editable()) return
-    this.model.update(value => ({ ...value, [module]: { ...value[module], [action]: granted } }))
-  }
-  rule(module: RbacModule): string {
-    return this.loadedRoleId() === 2 ? OPERATIONS_RULES[module] : "Sin reglas configuradas"
+  toggle(id: number, granted: boolean): void {
+    if (!this.editable() || !this.permissions().some(p => p.id === id)) return
+    this.model.update(value => ({ ...value, [this.key(id)]: granted }))
   }
   confirmSave(): void {
     if (this.destroyRef.destroyed || !this.canSave()) return
     const role = this.displayedRole()!
-    const grants = this.grants().map(g => ({ ...g }))
-    const saved = this.loaded()!.grants
-    const changes = this.modules.flatMap(module =>
-      this.actions.flatMap(action => {
-        const before = saved.some(g => g.module === module.id && g.action === action.id)
-        const after = grants.some(g => g.module === module.id && g.action === action.id)
-        return before === after ? [] : [{ module: module.id, action: action.id, granted: after }]
-      })
+    const ids = [...this.ids()]
+    const saved = this.loaded()!.permissions.map(p => p.id)
+    const changes = this.permissions().flatMap(p =>
+      saved.includes(p.id) === ids.includes(p.id)
+        ? []
+        : [{ code: p.code, module: p.module, granted: ids.includes(p.id) }]
     )
     this.confirmationOpen.set(true)
-    const ref = this.dialogs.open<void, RolePermissionsContext>(RolePermissionsConfirmation, {
+    const ref = this.dialogs.open<void, RbacSaveContext>(RbacSaveConfirmation, {
       context: {
         owner: this.destroyRef,
         role: { id: role.id, name: role.name },
-        grants,
+        ids,
         changes,
-        onSaved: matrix => {
-          if (this.destroyRef.destroyed || this.loadedRoleId() !== matrix.roleId) return
-          this.apply(matrix)
+        onSaved: assignment => {
+          if (this.destroyRef.destroyed || this.loadedRoleId() !== assignment.roleId) return
+          this.apply(assignment)
           this.toast.success("Permisos guardados")
         }
       },
@@ -180,7 +187,6 @@ export class RbacMatrix implements OnInit {
       restoreFocus: true,
       contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
     })
-    // Parent component destruction must cancel an independently mounted pending overlay too.
     this.destroyRef.onDestroy(() => ref.close())
     ref.closed$
       .pipe(takeUntilDestroyed(this.destroyRef))

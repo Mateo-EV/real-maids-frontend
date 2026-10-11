@@ -5,145 +5,145 @@ import { describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { RolesStore } from "../../state/roles.store"
 import { RBAC_REPOSITORY } from "../../../domain/repositories/rbac.repository"
-import { RbacMatrix as Matrix } from "../../../domain/models/rbac-matrix"
+import { PermissionAssignment } from "../../../domain/entities/permission.entity"
 import { RbacError } from "../../../domain/errors/rbac.error"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { RbacMatrix } from "./rbac-matrix"
-
-describe("RbacMatrix", () => {
-  const operations: Matrix = {
-    roleId: 2,
-    configured: true,
-    grants: [{ module: "crm", action: "read" }]
+const permission = {
+  id: 73,
+  code: "BACKEND_CUSTOM",
+  module: "Inventario",
+  description: "Acción documentada"
+}
+function setup(assigned = [permission]) {
+  const query = vi
+    .fn()
+    .mockImplementation((roleId: number) => of(Result.success({ roleId, permissions: assigned })))
+  const catalog = vi
+    .fn()
+    .mockReturnValue(of(Result.success([permission, { ...permission, id: 0, code: "OTHER" }])))
+  const dialogs = { open: vi.fn().mockReturnValue({ closed$: new Subject(), close: vi.fn() }) }
+  const toast = { success: vi.fn() }
+  TestBed.configureTestingModule({
+    imports: [RbacMatrix],
+    providers: [
+      {
+        provide: RolesStore,
+        useValue: {
+          roles: signal([
+            { id: 19, name: "Rol real", isActive: true },
+            { id: 23, name: "Otro", isActive: true }
+          ])
+        }
+      },
+      {
+        provide: RBAC_REPOSITORY,
+        useValue: {
+          getPermissions: catalog,
+          getRolePermissions: query,
+          saveRolePermissions: vi.fn()
+        }
+      },
+      { provide: HlmDialogService, useValue: dialogs },
+      { provide: HotToastService, useValue: toast }
+    ]
+  })
+  const fixture = TestBed.createComponent(RbacMatrix)
+  fixture.detectChanges()
+  return {
+    fixture,
+    component: fixture.componentInstance,
+    query,
+    catalog,
+    dialogs,
+    toast,
+    element: fixture.nativeElement as HTMLElement
   }
-  function setup() {
-    const query = vi.fn().mockReturnValue(of(Result.success(operations)))
-    const toast = { success: vi.fn() }
-    const dialogs = { open: vi.fn().mockReturnValue({ closed$: new Subject(), close: vi.fn() }) }
-    TestBed.configureTestingModule({
-      imports: [RbacMatrix],
-      providers: [
-        {
-          provide: RolesStore,
-          useValue: {
-            roles: signal([
-              { id: 1, name: "Administración", isActive: true },
-              { id: 2, name: "Operaciones", isActive: true }
-            ])
-          }
-        },
-        {
-          provide: RBAC_REPOSITORY,
-          useValue: { getRolePermissions: query, saveRolePermissions: vi.fn() }
-        },
-        { provide: HlmDialogService, useValue: dialogs },
-        { provide: HotToastService, useValue: toast }
-      ]
-    })
-    const fixture = TestBed.createComponent(RbacMatrix)
-    fixture.detectChanges()
-    return {
-      fixture,
-      component: fixture.componentInstance,
-      query,
-      dialogs,
-      toast,
-      element: fixture.nativeElement as HTMLElement
-    }
-  }
-  it("groups title, labeled role selection and save in one responsive header with explicit action headings", () => {
-    const { element } = setup()
-    const header = element.querySelector("header")!
-    expect(header).not.toBeNull()
-    expect(header.querySelector("#rbac-title")).not.toBeNull()
-    expect(header.querySelector(".catalog-filter-row #rbac-role")).not.toBeNull()
-    expect(header.querySelector('label[for="rbac-role"]')?.textContent).toContain(
-      "Editar permisos para"
-    )
-    expect(header.querySelector(".catalog-filter-row > button")?.textContent).toContain(
-      "Guardar Matriz"
-    )
-    expect(Array.from(element.querySelectorAll("thead th"), th => th.textContent?.trim())).toEqual([
-      "Módulo Funcional",
-      "Ver / Lectura (R)",
-      "Crear (C)",
-      "Editar (U)",
-      "Eliminar (D)",
-      "Exportar / Sinc.",
-      "Alcance / Reglas"
+}
+describe("dynamic permission editor", () => {
+  it("renders backend modules, descriptions and codes, not fixed CRUD columns or invented role IDs", () => {
+    const { element, query, catalog } = setup()
+    expect(catalog).toHaveBeenCalledOnce()
+    expect(query).toHaveBeenCalledWith(19)
+    expect(element.textContent).toContain("Inventario")
+    expect(element.textContent).toContain("BACKEND_CUSTOM")
+    expect(element.textContent).toContain("Acción documentada")
+    expect(element.textContent).not.toContain("Alcance / Reglas")
+    expect(element.querySelector('[role="checkbox"][aria-label*="BACKEND_CUSTOM"]')).not.toBeNull()
+  })
+  it("preserves assigned IDs missing from the catalog, including removal to empty", () => {
+    const extra = { ...permission, id: 99, code: "LEGACY_BACKEND", module: "Otro módulo" }
+    const { component, element, dialogs } = setup([extra])
+    expect(element.textContent).toContain("LEGACY_BACKEND")
+    expect(element.textContent).toContain("ausente del catálogo")
+    expect(component.ids()).toEqual([99])
+    component.toggle(99, false)
+    component.confirmSave()
+    expect(dialogs.open.mock.calls[0][1].context.ids).toEqual([])
+    expect(dialogs.open.mock.calls[0][1].context.changes).toEqual([
+      { code: "LEGACY_BACKEND", module: "Otro módulo", granted: false }
     ])
-  })
-  it("renders seven rows, labeled mobile choices and reference rules; saves only through confirmation", () => {
-    const { component, fixture, element, dialogs } = setup()
-    fixture.detectChanges()
-    expect(element.querySelectorAll("tr[data-module]")).toHaveLength(7)
-    expect(element.querySelectorAll("fieldset[data-module]")).toHaveLength(7)
-    expect(element.textContent).toContain("Solo usuarios de su área")
-    component.toggle("crm", "delete", true)
+    component.selectRole("23")
+    component.toggle(73, true)
     component.confirmSave()
-    expect(dialogs.open).toHaveBeenCalledTimes(1)
-    const context = dialogs.open.mock.calls[0][1].context
-    expect(context.role.id).toBe(2)
-    expect(context.changes).toEqual([{ module: "crm", action: "delete", granted: true }])
-    component.selectRole("1")
-    component.confirmSave()
-    expect(component.selectedRoleId()).toBe(2)
-    expect(dialogs.open).toHaveBeenCalledTimes(1)
+    expect(component.selectedRoleId()).toBe(19)
+    expect(component.ids()).toEqual([])
+    expect(dialogs.open).toHaveBeenCalledOnce()
   })
-  it("preserves the displayed role/draft until query success, prevents saving under the requested role and ignores stale responses", () => {
+  it("keeps the draft/identity on failures, cancels superseded loads and ignores stale responses", () => {
     const { component, query, fixture } = setup()
-    component.toggle("crm", "create", true)
-    const first = new Subject<Result<Matrix, RbacError>>()
-    const second = new Subject<Result<Matrix, RbacError>>()
+    component.toggle(0, true)
+    const first = new Subject<Result<PermissionAssignment, RbacError>>()
+    const second = new Subject<Result<PermissionAssignment, RbacError>>()
     query.mockReturnValueOnce(first).mockReturnValueOnce(second)
-    component.selectRole("1")
-    expect(component.loadedRoleId()).toBe(2)
-    expect(component.grants()).toHaveLength(2)
+    component.selectRole("23")
+    expect(component.loadedRoleId()).toBe(19)
+    expect(component.ids()).toEqual([73, 0])
     expect(component.canSave()).toBe(false)
-    component.selectRole("2")
-    first.next(Result.success({ roleId: 1, configured: false, grants: [] }))
-    expect(component.loadedRoleId()).toBe(2)
-    second.next(Result.failure(new RbacError("UNEXPECTED")))
-    expect(component.grants()).toHaveLength(2)
+    component.toggle(73, false)
+    component.selectRole("19")
+    expect(first.observed).toBe(false)
+    first.next(Result.success({ roleId: 23, permissions: [] }))
+    first.complete()
+    second.next(Result.failure(new RbacError("FORBIDDEN")))
+    second.complete()
+    expect(component.loadedRoleId()).toBe(19)
+    expect(component.ids()).toEqual([73, 0])
     expect(component.error()).not.toBe("")
-    query.mockReturnValue(of(Result.success({ roleId: 1, configured: false, grants: [] })))
-    component.selectRole("1")
-    expect(component.loadedRoleId()).toBe(1)
-    expect(component.grants()).toEqual([])
+    component.retry()
+    expect(component.error()).toBe("")
+    expect(component.dirty()).toBe(false)
+    const cancelled = new Subject<never>()
+    query.mockReturnValueOnce(cancelled)
+    component.retry()
     fixture.destroy()
+    expect(cancelled.observed).toBe(false)
   })
-  it("edits unconfigured roles through labeled Signal Forms choices and shows success only from the save callback", () => {
-    const { component, query, fixture, element, dialogs, toast } = setup()
-    query.mockReturnValue(of(Result.success({ roleId: 1, configured: false, grants: [] })))
-    component.selectRole("1")
+  it("edits backend-empty assignments with labeled Signal Forms and toasts only after save", () => {
+    const { component, element, fixture, dialogs, toast } = setup([])
+    expect(element.textContent).toContain("no tiene permisos asignados")
+    expect(component.canSave()).toBe(false)
+    element.querySelector<HTMLElement>('[role="checkbox"][aria-label*="BACKEND_CUSTOM"]')!.click()
     fixture.detectChanges()
-    expect(element.textContent).toContain("Rol sin configurar")
-    expect(element.textContent).toContain("Sin reglas configuradas")
-    expect(element.textContent).not.toContain("Solo usuarios de su área")
-    const checkbox = element.querySelector<HTMLElement>(
-      'fieldset[data-module="crm"] [role="checkbox"][aria-label$="Crear (C)"]'
-    )!
-    expect(checkbox).not.toBeNull()
-    checkbox.click()
-    fixture.detectChanges()
-    expect(component.grants()).toEqual([{ module: "crm", action: "create" }])
+    expect(component.ids()).toEqual([73])
     component.confirmSave()
     expect(toast.success).not.toHaveBeenCalled()
     const context = dialogs.open.mock.calls[0][1].context
-    context.onSaved({ roleId: 1, configured: true, grants: context.grants })
-    expect(toast.success).toHaveBeenCalledExactlyOnceWith("Permisos guardados")
+    expect(context.ids).toEqual([73])
+    context.onSaved({ roleId: 23, permissions: [] })
+    expect(toast.success).not.toHaveBeenCalled()
+    context.onSaved({ roleId: 19, permissions: [permission] })
     expect(component.dirty()).toBe(false)
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith("Permisos guardados")
   })
-
-  it("cancels queries on destruction", () => {
-    const { component, query, fixture } = setup()
-    const pending = new Subject<Result<Matrix, RbacError>>()
-    query.mockReturnValue(pending)
-    component.selectRole("1")
-    fixture.destroy()
-    expect(pending.observed).toBe(false)
-    pending.next(Result.success({ roleId: 1, configured: false, grants: [] }))
-    expect(component.loadedRoleId()).toBe(2)
+  it("preserves the current draft when the catalog fails", () => {
+    const { component, catalog } = setup()
+    component.toggle(0, true)
+    catalog.mockReturnValueOnce(of(Result.failure(new RbacError("NETWORK"))))
+    component.retry()
+    expect(component.ids()).toEqual([73, 0])
+    expect(component.canSave()).toBe(false)
+    expect(component.error()).not.toBe("")
   })
 })

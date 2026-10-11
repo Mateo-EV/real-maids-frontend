@@ -16,7 +16,6 @@ import { DeleteUserByIdUseCase } from "./delete-user-by-id.use-case"
 
 const input: CreateUserParams = {
   name: "Demo user",
-  age: 30,
   email: "demo@example.com",
   password: "demo-only",
   lang: Lang.EN,
@@ -27,7 +26,6 @@ const update: UpdateUserParams = { ...input, name: "Updated user" }
 const user = User.create(
   7,
   input.name,
-  input.age,
   input.email,
   input.lang,
   input.isActive,
@@ -90,9 +88,11 @@ describe("Users use cases", () => {
     it(`delegates list and preserves ${outcome}`, () =>
       check(
         "getUsers",
-        success ? Result.success([user]) : Result.failure(error),
-        () => TestBed.inject(GetUsersUseCase).execute(),
-        []
+        success
+          ? Result.success({ items: [user], page: 0, size: 5, total: 1, totalPages: 1 })
+          : Result.failure(error),
+        () => TestBed.inject(GetUsersUseCase).execute({ page: 0, size: 5, search: "Demo" }),
+        [{ page: 0, size: 5, search: "Demo" }]
       ))
 
     it(`delegates update and preserves ${outcome}`, () =>

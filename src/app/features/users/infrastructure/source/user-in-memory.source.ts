@@ -5,13 +5,14 @@ import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
+import { UserQuery } from "../../domain/models/user-query"
+import { UserPage } from "../../domain/models/user-page"
 
-type UserFields = Pick<User, "name" | "age" | "email" | "lang" | "isActive" | "roleId">
+type UserFields = Pick<User, "name" | "email" | "lang" | "isActive" | "roleId">
 
 // Explicitly select public fields: this demo does not retain credentials or extra input properties.
 const copyFields = (input: UserFields): UserFields => ({
   name: input.name,
-  age: input.age,
   email: input.email,
   lang: input.lang,
   isActive: input.isActive,
@@ -22,7 +23,6 @@ const cloneUser = (user: User): User =>
   User.create(
     user.id,
     user.name,
-    user.age,
     user.email,
     user.lang,
     user.isActive,
@@ -50,7 +50,6 @@ export class UserInMemorySource {
       index + 1,
       referenceNames[index] ??
         `${givenNames[(index - 5) % givenNames.length]} ${familyNames[Math.floor((index - 5) / givenNames.length)]}`,
-      24 + (index % 30),
       `persona.${index + 1}@example.test`,
       index === 3 || index % 7 === 6 ? Lang.EN : Lang.ES,
       index !== 4 && index < 43,
@@ -74,7 +73,6 @@ export class UserInMemorySource {
         const user = User.create(
           this.nextUserId++,
           input.name,
-          input.age,
           input.email,
           input.lang,
           input.isActive,
@@ -100,8 +98,36 @@ export class UserInMemorySource {
     )
   }
 
-  getUsers(): Observable<Result<User[], UserError>> {
-    return timer(250).pipe(switchMap(() => of(Result.success(this.users.map(cloneUser)))))
+  getUsers(): Observable<Result<User[], UserError>>
+  getUsers(query: UserQuery): Observable<Result<UserPage, UserError>>
+  getUsers(query?: UserQuery): Observable<Result<User[] | UserPage, UserError>> {
+    const input = query === undefined ? undefined : { ...query }
+    return timer(250).pipe(
+      switchMap(() => {
+        if (!input) return of(Result.success(this.users.map(cloneUser)))
+        const page = input.page ?? 0,
+          size = input.size ?? 20
+        const matches = this.users.filter(
+          user =>
+            (!input.search ||
+              `${user.name} ${user.email}`
+                .toLocaleLowerCase("es")
+                .includes(input.search.toLocaleLowerCase("es"))) &&
+            (!input.email || user.email.includes(input.email)) &&
+            (input.roleId === undefined || user.roleId === input.roleId) &&
+            (input.isActive === undefined || user.isActive === input.isActive)
+        )
+        return of(
+          Result.success({
+            items: matches.slice(page * size, (page + 1) * size).map(cloneUser),
+            page,
+            size,
+            total: matches.length,
+            totalPages: Math.ceil(matches.length / size)
+          })
+        )
+      })
+    )
   }
 
   deleteUserById(id: number): Observable<Result<void, UserError>> {
@@ -144,7 +170,6 @@ export class UserInMemorySource {
         const updated = User.create(
           id,
           input.name,
-          input.age,
           input.email,
           input.lang,
           input.isActive,

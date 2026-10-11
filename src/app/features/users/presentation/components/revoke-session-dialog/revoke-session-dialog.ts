@@ -12,7 +12,7 @@ import { UserSessionsStore } from "../../state/user-sessions.store"
 import { connectUserDialogDismissal } from "../user-dialog-dismissal"
 
 export interface RevokeSessionContext {
-  user: User
+  user: Pick<User, "id" | "name">
   session: UserSession
   onRevoked: () => void
 }
@@ -86,10 +86,16 @@ export class RevokeSessionDialog {
       } else
         this.error.set(
           result.error.code === "CURRENT_SESSION"
-            ? "La sesión actual no se puede cerrar."
+            ? "Para cerrar tu sesión actual usa Salir en el menú de la cuenta."
             : result.error.code === "SESSION_NOT_FOUND"
               ? "La sesión ya no está activa. Cierra y vuelve al listado."
-              : "No pudimos cerrar la sesión. Inténtalo de nuevo."
+              : result.error.code === "VALIDATION"
+                ? "El servidor rechazó el cierre. La sesión actual solo se cierra desde Salir."
+                : result.error.code === "FORBIDDEN"
+                  ? "No tienes autorización para cerrar esta sesión."
+                  : result.error.code === "UNAUTHENTICATED"
+                    ? "Inicia sesión nuevamente para continuar."
+                    : "No pudimos cerrar la sesión. Inténtalo de nuevo."
         )
     } catch {
       if (!this.destroyRef.destroyed)

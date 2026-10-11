@@ -9,6 +9,8 @@ export interface AuthRepository {
   login(params: LoginParams): Observable<Result<void, AuthError>>
   me(): Observable<Result<AuthSession, AuthError>>
   logout(): void
+  invalidate(): void
+  sessionChanges(): Observable<AuthSession | null>
 }
 
 export const AUTH_REPOSITORY = new InjectionToken<AuthRepository>("auth.repository")

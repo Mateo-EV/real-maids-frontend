@@ -3,6 +3,7 @@ import { EMPTY, of, Subject, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { Lang, User } from "../../domain/entities/user.entity"
+import { UserPage } from "../../domain/models/user-page"
 import { UserError } from "../../domain/errors/user.error"
 import { CreateUserUseCase } from "../../application/use-cases/create-user.use-case"
 import { GetUsersUseCase } from "../../application/use-cases/get-users.use-case"
@@ -12,16 +13,22 @@ import { DeleteUserByIdUseCase } from "../../application/use-cases/delete-user-b
 import { UserStore } from "./user.store"
 
 const params = {
-  name: "Demo",
-  age: 30,
-  email: "demo@example.com",
-  password: "unused",
+  name: "Fake",
+  email: "fake@example.test",
+  password: "FakePassword1",
   lang: Lang.EN,
   isActive: true,
   roleId: 1
 }
-const user = User.create(1, params.name, 30, params.email, Lang.EN, true, new Date(), new Date(), 1)
-describe("UserStore", () => {
+const user = User.create(1, params.name, params.email, Lang.EN, true, new Date(), new Date(), 1)
+const page = (items: User[], total = items.length): UserPage => ({
+  items,
+  page: 0,
+  size: 5,
+  total,
+  totalPages: Math.ceil(total / 5)
+})
+describe("UserStore server catalog", () => {
   let store: InstanceType<typeof UserStore>
   const list = { execute: vi.fn() },
     create = { execute: vi.fn() },
@@ -41,63 +48,50 @@ describe("UserStore", () => {
     })
     store = TestBed.inject(UserStore)
   })
-  it("replaces only the status row, revises the catalog and tracks concurrent loading", () => {
-    const other = User.create(
-      2,
-      "Other",
-      31,
-      "other@example.test",
-      Lang.ES,
-      true,
-      new Date(),
-      new Date(),
-      2
-    )
-    list.execute.mockReturnValue(of(Result.success([user, other])))
-    store.loadUsers().subscribe()
-    const stale = new Subject<Result<User[], UserError>>()
-    list.execute.mockReturnValue(stale)
-    store.loadUsers().subscribe()
-    const response = new Subject<Result<User, UserError>>()
-    status.execute.mockReturnValue(response)
-    const request = store.updateUserStatusById(1, false)
-    expect(status.execute).not.toHaveBeenCalled()
-    request.subscribe()
-    expect(status.execute).toHaveBeenCalledExactlyOnceWith(1, false)
-    expect(store.loading()).toBe(true)
-    const changed = User.create(
-      1,
-      user.name,
-      user.age,
-      user.email,
-      user.lang,
-      false,
-      user.createdAt,
-      new Date(),
-      user.roleId
-    )
-    response.next(Result.success(changed))
-    response.complete()
-    expect(store.users()).toEqual([changed, other])
-    expect(store.users()[1]).toBe(other)
-    expect(store.loading()).toBe(true)
-    stale.next(Result.success([user]))
-    stale.next(Result.failure(new UserError("UNEXPECTED")))
-    stale.complete()
-    expect(store.users()).toEqual([changed, other])
-    expect(store.error()).toBeUndefined()
+  it("stores server totals independently from the current page and forwards filters", () => {
+    list.execute.mockReturnValue(of(Result.success(page([user], 47))))
+    const query = { page: 0, size: 5, search: "Fake", roleId: 1, isActive: true }
+    store.loadUsers(query).subscribe()
+    expect(list.execute).toHaveBeenCalledExactlyOnceWith(query)
+    expect(store.users()).toEqual([user])
+    expect(store.total()).toBe(47)
+    expect(store.totalPages()).toBe(10)
     expect(store.loading()).toBe(false)
   })
-
-  it("preserves rows on status errors, resets errors on retry and finalizes cancellation", () => {
-    list.execute.mockReturnValue(of(Result.success([user])))
+  it("requeries the same server filter after status success and cancels stale list writes", () => {
+    list.execute.mockReturnValue(of(Result.success(page([user], 20))))
+    store.loadUsers({ page: 0, size: 5, isActive: true }).subscribe()
+    const stale = new Subject<Result<UserPage, UserError>>()
+    list.execute.mockReturnValue(stale)
+    store.loadUsers({ page: 0, size: 5, isActive: true }).subscribe()
+    const response = new Subject<Result<User, UserError>>()
+    status.execute.mockReturnValue(response)
+    const subscription = store.updateUserStatusById(1, false).subscribe()
+    expect(store.loading()).toBe(true)
+    const refreshed = new Subject<Result<UserPage, UserError>>()
+    list.execute.mockReturnValue(refreshed)
+    response.next(Result.success(user))
+    response.complete()
+    expect(stale.observed).toBe(false)
+    expect(list.execute).toHaveBeenLastCalledWith({ page: 0, size: 5, isActive: true })
+    stale.next(Result.success(page([user], 99)))
+    refreshed.next(Result.success(page([], 0)))
+    refreshed.complete()
+    expect(store.users()).toEqual([])
+    expect(store.total()).toBe(0)
+    expect(store.error()).toBeUndefined()
+    expect(store.loading()).toBe(false)
+    expect(status.execute).toHaveBeenCalledExactlyOnceWith(1, false)
+    subscription.unsubscribe()
+  })
+  it("preserves rows on mutation errors, normalizes thrown errors and finalizes cancellation", () => {
+    list.execute.mockReturnValue(of(Result.success(page([user]))))
     store.loadUsers().subscribe()
     const error = new UserError("USER_NOT_FOUND")
     status.execute.mockReturnValue(of(Result.failure(error)))
     store.updateUserStatusById(1, false).subscribe()
     expect(store.error()).toBe(error)
     expect(store.users()).toEqual([user])
-    expect(store.loading()).toBe(false)
     status.execute.mockReturnValue(throwError(() => new Error("offline")))
     store.updateUserStatusById(1, false).subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
@@ -110,7 +104,6 @@ describe("UserStore", () => {
     status.execute.mockReturnValue(pending)
     const subscription = store.updateUserStatusById(1, false).subscribe()
     expect(store.error()).toBeUndefined()
-    expect(store.loading()).toBe(true)
     subscription.unsubscribe()
     expect(pending.observed).toBe(false)
     expect(store.loading()).toBe(false)
@@ -119,33 +112,27 @@ describe("UserStore", () => {
     store.updateUserStatusById(1, false).subscribe()
     expect(store.loading()).toBe(false)
   })
-
-  it("retains the load flow and clears loading on cancellation and empty completion", () => {
-    const response = new Subject<Result<User[], UserError>>()
-    list.execute.mockReturnValue(response)
-    const subscription = store.loadUsers().subscribe()
-    expect(store.loading()).toBe(true)
-    response.next(Result.success([user]))
-    response.complete()
-    expect(store.users()).toEqual([user])
-    expect(store.loading()).toBe(false)
-    subscription.unsubscribe()
-    list.execute.mockReturnValue(new Subject())
-    const pending = store.loadUsers().subscribe()
-    pending.unsubscribe()
-    expect(store.loading()).toBe(false)
-    list.execute.mockReturnValue(EMPTY)
+  it("cancels older queries and ignores their success and failure after a newer page", () => {
+    const older = new Subject<Result<UserPage, UserError>>()
+    list.execute.mockReturnValue(older)
     store.loadUsers().subscribe()
+    list.execute.mockReturnValue(of(Result.success(page([user]))))
+    store.loadUsers({ page: 0, size: 5 }).subscribe()
+    expect(older.observed).toBe(false)
+    older.next(Result.failure(new UserError("UNEXPECTED")))
+    older.next(Result.success(page([])))
+    expect(store.users()).toEqual([user])
+    expect(store.error()).toBeUndefined()
     expect(store.loading()).toBe(false)
   })
-  it("applies successful mutations and reports failure without replacing users", () => {
+  it("reloads after create/update/delete instead of guessing sorting or totals", () => {
+    list.execute.mockReturnValue(of(Result.success(page([user]))))
     create.execute.mockReturnValue(of(Result.success(user)))
     store.createUser(params).subscribe()
     expect(store.users()).toEqual([user])
     const changed = User.create(
       1,
       "Changed",
-      30,
       params.email,
       Lang.EN,
       false,
@@ -153,65 +140,65 @@ describe("UserStore", () => {
       new Date(),
       2
     )
+    list.execute.mockReturnValue(of(Result.success(page([changed]))))
     update.execute.mockReturnValue(of(Result.success(changed)))
     store.updateUserById(1, { ...params, roleId: 2 }).subscribe()
     expect(store.users()).toEqual([changed])
-    const error = new UserError("USER_NOT_FOUND")
-    remove.execute.mockReturnValue(of(Result.failure(error)))
+    remove.execute.mockReturnValue(of(Result.failure(new UserError("USER_NOT_FOUND"))))
     store.deleteUserById(1).subscribe()
-    expect(store.error()).toBe(error)
     expect(store.users()).toEqual([changed])
+    list.execute.mockReturnValue(of(Result.success(page([]))))
     remove.execute.mockReturnValue(of(Result.success(undefined)))
     store.deleteUserById(1).subscribe()
     expect(store.users()).toEqual([])
+    expect(store.total()).toBe(0)
     expect(store.error()).toBeUndefined()
   })
-  it("normalizes observable and synchronous errors", () => {
+  it("reports successful mutation even when the follow-up read fails, retaining the read error", () => {
+    create.execute.mockReturnValue(of(Result.success(user)))
+    list.execute.mockReturnValue(of(Result.failure(new UserError("NETWORK"))))
+    const next = vi.fn()
+    store.createUser(params).subscribe(next)
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: user }))
+    expect(store.error()?.code).toBe("NETWORK")
+    expect(store.users()).toEqual([])
+  })
+  it("refreshes confirmed profile changes when a later update step fails", () => {
+    update.execute.mockReturnValue(of(Result.failure(new UserError("PARTIAL_UPDATE"))))
+    list.execute.mockReturnValue(of(Result.success(page([user]))))
+    const next = vi.fn()
+    store.updateUserById(1, params).subscribe(next)
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ code: "PARTIAL_UPDATE" })
+      })
+    )
+    expect(store.users()).toEqual([user])
+  })
+  it("requeries a bounded valid server page when deletion leaves a requested page out of range", () => {
+    list.execute
+      .mockReturnValueOnce(of(Result.success({ ...page([], 45), page: 9 })))
+      .mockReturnValueOnce(of(Result.success({ ...page([user], 45), page: 8 })))
+    store.loadUsers({ page: 9, size: 5, roleId: 1 }).subscribe()
+    expect(list.execute).toHaveBeenCalledTimes(2)
+    expect(list.execute).toHaveBeenLastCalledWith({ page: 8, size: 5, roleId: 1 })
+    expect(store.page()).toBe(8)
+    expect(store.total()).toBe(45)
+    expect(store.users()).toEqual([user])
+  })
+  it("normalizes list exceptions and cleans up empty/cancelled reads", () => {
     list.execute.mockReturnValue(throwError(() => new Error("offline")))
     store.loadUsers().subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
+    const response = new Subject<Result<UserPage, UserError>>()
+    list.execute.mockReturnValue(response)
+    const subscription = store.loadUsers().subscribe()
+    subscription.unsubscribe()
+    expect(response.observed).toBe(false)
     expect(store.loading()).toBe(false)
-    create.execute.mockImplementation(() => {
-      throw new Error("sync")
-    })
-    store.createUser(params).subscribe()
-    expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
-    expect(store.loading()).toBe(false)
-  })
-  it("preserves users on domain failures and ignores superseded list responses", () => {
-    list.execute.mockReturnValue(of(Result.success([user])))
+    list.execute.mockReturnValue(EMPTY)
     store.loadUsers().subscribe()
-    const error = new UserError("UNEXPECTED")
-    list.execute.mockReturnValue(of(Result.failure(error)))
-    store.loadUsers().subscribe()
-    expect(store.error()).toBe(error)
-    create.execute.mockReturnValue(of(Result.failure(error)))
-    store.createUser(params).subscribe()
-    update.execute.mockReturnValue(of(Result.failure(error)))
-    store.updateUserById(1, params).subscribe()
-    expect(store.users()).toEqual([user])
-    const older = new Subject<Result<User[], UserError>>()
-    list.execute.mockReturnValue(older)
-    store.loadUsers().subscribe()
-    list.execute.mockReturnValue(of(Result.success([user])))
-    store.loadUsers().subscribe()
-    older.next(Result.failure(error))
-    older.next(Result.success([]))
-    older.complete()
-    expect(store.users()).toEqual([user])
-    expect(store.error()).toBeUndefined()
-    expect(store.loading()).toBe(false)
-  })
-  it("does not let an older load erase a successful mutation", () => {
-    const stale = new Subject<Result<User[], UserError>>()
-    list.execute.mockReturnValue(stale)
-    store.loadUsers().subscribe()
-    create.execute.mockReturnValue(of(Result.success(user)))
-    store.createUser(params).subscribe()
-    expect(store.loading()).toBe(true)
-    stale.next(Result.success([]))
-    stale.complete()
-    expect(store.users()).toEqual([user])
     expect(store.loading()).toBe(false)
   })
 })

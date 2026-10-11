@@ -132,12 +132,11 @@ export class RoleInMemorySource {
           return of(Result.failure(new RoleError("ROLE_NOT_FOUND")))
         }
         // Repository-level integrity, including inactive users; no reverse dependency/DI cycle.
-        return defer(() => this.users.getUsers()).pipe(
+        return defer(() => this.users.getUsers({ roleId: id, page: 0, size: 1 })).pipe(
           take(1),
           map((result): Result<void, RoleError> => {
             if (!result.success) return Result.failure(new RoleError("UNEXPECTED"))
-            if (result.data.some(user => user.roleId === id))
-              return Result.failure(new RoleError("ROLE_IN_USE"))
+            if (result.data.total > 0) return Result.failure(new RoleError("ROLE_IN_USE"))
             if (!this.roles.some(role => role.id === id))
               return Result.failure(new RoleError("ROLE_NOT_FOUND"))
             this.roles = this.roles.filter(role => role.id !== id)

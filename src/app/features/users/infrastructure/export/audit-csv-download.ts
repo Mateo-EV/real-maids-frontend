@@ -26,13 +26,16 @@ export class AuditCsvDownload {
   private readonly platform = inject(PLATFORM_ID)
   private readonly runtime = inject(AUDIT_DOWNLOAD_RUNTIME)
 
-  download(csv: string): Result<void, AuditLogError> {
+  download(csv: Blob): Result<void, AuditLogError> {
     if (!isPlatformBrowser(this.platform))
       return Result.failure(new AuditLogError("DOWNLOAD_UNAVAILABLE"))
     let url: string | undefined
     let anchor: HTMLAnchorElement | undefined
     try {
-      url = this.runtime.createURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }))
+      // Preserve server bytes. No undocumented filename header or formula-safety claim.
+      if (!(csv instanceof Blob) || !csv.size)
+        return Result.failure(new AuditLogError("EXPORT_EMPTY"))
+      url = this.runtime.createURL(csv)
       anchor = this.document.createElement("a")
       anchor.href = url
       anchor.download = "auditoria.csv"
@@ -43,8 +46,18 @@ export class AuditCsvDownload {
     } catch {
       return Result.failure(new AuditLogError("DOWNLOAD_FAILED"))
     } finally {
-      anchor?.remove()
-      if (url !== undefined) this.runtime.revokeURL(url)
+      try {
+        anchor?.remove()
+      } catch {
+        /* Best-effort DOM cleanup after initiation. */
+      }
+      if (url !== undefined) {
+        try {
+          this.runtime.revokeURL(url)
+        } catch {
+          /* Cleanup must not throw a raw browser error. */
+        }
+      }
     }
   }
 }

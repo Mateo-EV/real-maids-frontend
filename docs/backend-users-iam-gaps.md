@@ -1,8 +1,48 @@
 # Pendientes del backend para completar Usuarios / IAM
 
-El login ya está conectado y el usuario confirmó que funciona; la verificación independiente utilizó HTTP simulado, no el backend real. Falta conectar la gestión de usuarios, roles/permisos, sesiones y auditoría, que todavía utilizan datos de demostración.
+La integración actual de autenticación está implementada y verificada con HTTP simulado; esta versión todavía no fue validada contra el backend real ni entre pestañas en navegadores reales. La confirmación previa del usuario correspondía al login anterior, no al nuevo ciclo de persistencia y renovación. T3 conecta usuarios y catálogo de roles por HTTP; T4 conecta catálogo y asignaciones RBAC. T5 conecta sesiones IAM y T6 conecta auditoría mediante HTTP; los antiguos sources demo quedan unwired, nunca como fallback. La aceptación autenticada del backend real sigue pendiente.
 
-**Los nombres de rutas y campos son orientativos.** La capa de infraestructura puede mapear otros nombres y formatos acordados. Lo importante es que existan las operaciones y los datos necesarios, no que el backend copie los nombres del frontend.
+## Contrato actualizado y límite de integración
+
+El OpenAPI público actualizado (3.1.0, versión 0.1; SHA-256 `7cd6f155d85513215dfaecdbd7beb8dfa335899dc8a6c29f15b7bb92fd28bc28`) ya documenta auth, usuarios/roles/permisos, sesiones y auditoría. T2 se limita a auth; T3 conecta usuarios y catálogo de roles. T4 conecta RBAC, T5 sesiones IAM y T6 auditoría; sus adaptadores no certifican aceptación autenticada. Los apartados históricos siguientes describen el análisis anterior, no ausencia actual de endpoints.
+
+Auth documenta login con `usuario: PerfilResponse`, `token`, `tipo`, `expiraEnSegundos`, `refreshToken` y `refreshExpiraEnSegundos`; `/me` protegido devuelve identidad/rol estable/permisos. Refresh recibe JSON obligatorio `{ refreshToken }`, rota una sola vez y conserva el vencimiento original; reutilizarlo revoca la sesión y no deben existir renovaciones paralelas. La decisión temporal del usuario es localStorage para ambos tokens, no cookies; implica exposición a JavaScript/XSS. El candidato requiere Web Locks para coordinar renovación entre pestañas y falla cerrado cuando no están disponibles.
+
+**Diferencias abiertas:** las respuestas no declaran listas `required` ni nulabilidad: validar campos consumidos sin inventar valores. `ultimoAcceso` no se consume en auth. Logout tiene cuerpo opcional con refresh, y su prosa permite Bearer o refresh cuando el acceso venció y promete 204, pero el esquema declara 200 y `security: []`. El adaptador envía una instantánea Bearer + refresh, acepta 2xx vacío y limita el intento sin afirmar éxito remoto. Confirmar formalmente este transporte y los campos obligatorios/nulos. Producción HTTPS, CORS y comportamiento autenticado real no están verificados.
+
+## T3 — usuarios y catálogo de roles
+
+- `GET /api/usuarios` usa `pagina` base cero y `tamanio`, con filtros `busqueda`, `correo`, `idRol` y `activo`; la respuesta es `contenido`, `pagina`, `tamanio`, `totalElementos`, `totalPaginas`. La pantalla solicita cinco registros, consume los totales reales y cancela consultas obsoletas; no filtra una página fingiendo tener todo el catálogo.
+- Listado, detalle, alta, edición y estado validan los campos consumidos de `UsuarioResponse`, incluido nombre, ID de rol, fechas y último acceso explícitamente nullable. No se inventan fechas, IPs, IDs o permisos. Edad y la regla demo ≥18 fueron retiradas, no añadidas al contrato.
+- Alta envía `nombre`, `correo`, `password`, `idRol`, `idioma`, `activo`. Perfil usa `PUT /api/usuarios/{id}`; estado usa `PATCH /api/usuarios/{id}/estado` con `{ activo }`; contraseña opcional usa `PUT /api/usuarios/{id}/password` con `{ passwordNueva }`; eliminación usa `DELETE /api/usuarios/{id}`. Las contraseñas conservan sus bytes y nunca quedan en la entidad. Editar con contraseña vacía no la cambia.
+- Edición no es transaccional: un fallo posterior al perfil devuelve `PARTIAL_UPDATE` y vuelve a consultar el estado del servidor, sin toast de éxito ni repetición automática. Cancelar una petición enviada no asegura deshacer sus efectos. Una lectura posterior fallida no niega una escritura ya confirmada; requiere reintentar la consulta.
+- `GET /api/roles` y su detalle suministran el catálogo real. No se habilita CRUD administrativo de roles; las mutaciones retenidas devuelven `UNSUPPORTED`. Los repositorios inyectan sources HTTP; los sources demo son solo fixtures/simulaciones, nunca fallbacks. Sesiones y auditoría consumen HTTP T5–T6; una coincidencia con IDs de fixtures nunca otorga semántica backend.
+- El OpenAPI aún no declara `required`/nulabilidad completos. El adaptador rechaza perfiles incompletos en vez de fabricar valores; confirmar esas garantías y errores con el backend. CORS, autorización efectiva, protección de cuenta propia/último administrador y aceptación autenticada en navegadores siguen pendientes de verificación, sin inferir reglas desde el demo.
+
+## T4 — catálogo dinámico y asignación atómica de permisos
+
+- `GET /api/permisos` devuelve `PermisoResponse[]` ordenado por módulo; `GET /api/roles/{id}/permisos` devuelve las asignaciones. Se validan `idPermiso`, `codigo`, `modulo`, `descripcion`, IDs/códigos duplicados y respuestas desconocidas. No hay columnas CRUD inventadas ni respaldo demo.
+- `PUT /api/roles/{id}/permisos` requiere `{ idsPermisos: integer[] }`, IDs no negativos y únicos. Reemplaza el conjunto completo atómicamente; `[]` deja el rol sin permisos. La respuesta es `RolResponse`: se valida el ID de destino y que sus permisos coincidan con los IDs enviados antes de informar éxito. Se aplica desde la siguiente petición.
+- El backend rechaza modificar ADMINISTRADOR, editar el propio rol o conceder permisos no autorizados (403). La UI conserva el borrador en errores, bloquea duplicados/cierre pendiente y no infiere restricciones por nombre o `delSistema`. Cargas obsoletas se cancelan; permisos asignados ausentes del catálogo se conservan y muestran explícitamente hasta retirarlos.
+- SSR no despacha estas peticiones ni usa transfer-cache; se conserva el interceptor T2 y no se repiten mutaciones automáticamente. Aceptación real autenticada/CORS y navegadores siguen pendientes.
+- Evidencia local T4: el archivo OpenAPI tiene SHA-256 `87a9fcd9fa7fecad8b248afc475a0ecd43139cd30306ad1bced8bfc78e507b7c`; una nueva consulta pública a `/v3/api-docs` reproduce `7cd6f155d85513215dfaecdbd7beb8dfa335899dc8a6c29f15b7bb92fd28bc28`. Los JSON parseados, sus 21 paths y sus esquemas son iguales: difiere la representación en bytes, no el contrato observado. Esta comprobación no ejecuta operaciones autenticadas ni verifica CORS.
+
+## T5 — sesiones del backend
+
+- `GET /api/sesiones` usa `pagina`, `tamanio` y `idUsuario` opcional; la UI solicita 20 registros. Su contador es el total de la consulta actual, incluidos filtros, independiente de la página de usuarios y del reloj local.
+- `GET /api/usuarios/{id}/sesiones` y cierre masivo existen en repositorio/caso de uso/store, sin nuevo control UI. El backend conserva la sesión actual al cerrar masivamente las propias sesiones.
+- `actual` es relativo al solicitante y viene del backend, sin correlación con tokens o marcadores de almacenamiento. El cierre individual actual devuelve 400 e indica usar Salir; cerrar una sesión ya cerrada/expirada es idempotente. Se aceptan respuestas exitosas vacías 200/204 pese a la diferencia prosa/esquema.
+- Confirmación y feedback se protegen mientras hay una escritura pendiente; se consulta de nuevo tras éxito, sin repetir mutaciones ni fabricar totales. Cancelar HTTP no deshace efectos ya enviados.
+
+## T6 — auditoría y CSV del servidor
+
+- `GET /api/auditoria` pagina con base cero, filtros por actor, entidad/acción y días UTC `desde`/`hasta` inclusivos. La UI solicita cinco eventos; `totalElementos` es filtrado y `totalGlobal` no depende del filtro. El detalle usa el ID elegido y valida identidad/cambios recibidos.
+- `GET /api/auditoria/exportacion` entrega CSV crudo de los filtros, con límite documentado de 10.000 registros; no se reconstruye desde filas cacheadas. La descarga protegida para SSR informa solo su inicio y libera la URL de objeto.
+- No se certifican fórmulas seguras, headers reales, integridad criptográfica, monitoreo ni inmutabilidad. Las pruebas HTTP simuladas no verifican operaciones autenticadas/CORS, autorización efectiva o aceptación visual/de teclado/descarga en navegadores. Estas verificaciones siguen pendientes para T5 y T6.
+
+## Análisis histórico previo a la actualización
+
+**Los nombres de rutas y campos siguientes eran orientativos.** La capa de infraestructura puede mapear otros nombres y formatos acordados. Lo importante es que existan las operaciones y los datos necesarios, no que el backend copie los nombres del frontend.
 
 Base del análisis: [OpenAPI local](http://localhost:8080/v3/api-docs), versión `0.1`. Los pendientes indican capacidades no documentadas en esa especificación; si ya existen, basta con documentarlas. Alcance: M01/RF01/HU01 y M02/RF02/HU02; auditoría aún no tiene un RF/HU específico en la [guía de producto](README.md).
 
@@ -18,7 +58,7 @@ La respuesta actual incluye ID, correo, nombre del rol, idioma, estado y fecha d
 | ID estable del rol asignado | Seleccionar, filtrar y cambiar el rol sin deducir IDs a partir de nombres. |
 | Fecha de actualización | Conservar los metadatos del perfil. |
 | Último acceso, nullable | Mostrar el último ingreso; `null` cuando no exista. Debe generarlo el backend, no el editor. |
-| Edad | El formulario actual la utiliza. Confirmar si se guardará o si se retirará del formulario; la regla demo de ≥18 no es una regla de negocio confirmada. |
+| Edad (histórico) | El formulario demo anterior la utilizaba. T3 la retiró junto con la regla ≥18; no es un dato pendiente del contrato actual. |
 
 El alta actual solo recibe correo, contraseña, ID de rol e idioma. Ampliarla para guardar los datos editables del perfil acordado y definir el estado inicial. Devolver el mismo perfil completo al listar, consultar, crear y editar. No devolver contraseñas ni inventar fechas para rellenar campos.
 
@@ -34,7 +74,7 @@ El alta actual solo recibe correo, contraseña, ID de rol e idioma. Ampliarla pa
 
 Validar roles existentes, correo duplicado y campos del perfil. Definir restricciones para actuar sobre la propia cuenta y el último administrador, y el efecto de eliminar/desactivar sobre sus sesiones.
 
-`GET /api/usuarios` y `POST /api/usuarios` ya existen: necesitan completar sus contratos, no duplicarse. La pantalla pagina y filtra usuarios localmente; paginación en servidor no es un bloqueo inmediato.
+`GET /api/usuarios` y `POST /api/usuarios` ya existen: necesitan completar sus contratos, no duplicarse. La pantalla anterior paginaba y filtraba localmente. T3 utiliza ahora el contrato de paginación y filtros del servidor descrito arriba.
 
 ## 2. Permisos por rol — matriz RBAC
 
@@ -67,7 +107,7 @@ Generar eventos reales desde las operaciones del sistema; no basta con un listad
 
 ## 5. Autenticación con JWT, sesiones y refresh token
 
-El login actual guarda el JWT solo en memoria y lo pierde al recargar. Implementar un **JWT de acceso de corta duración y un refresh token de mayor duración vinculado a una sesión revocable en el backend**. El refresh token es una credencial de la sesión, no la sesión en sí.
+El login anterior guardaba el JWT solo en memoria y lo perdía al recargar. Este apartado conserva la solicitud histórica; el contrato actualizado y la decisión temporal localStorage constan arriba. Implementar un **JWT de acceso de corta duración y un refresh token de mayor duración vinculado a una sesión revocable en el backend**. El refresh token es una credencial de la sesión, no la sesión en sí.
 
 | Ruta sugerida | Qué falta |
 | --- | --- |
@@ -78,7 +118,7 @@ El login actual guarda el JWT solo en memoria y lo pierde al recargar. Implement
 
 - Guardar solo un hash del refresh token en el backend, asociado al usuario, sesión y expiración. Revocar la familia de renovación ante reutilización de un token rotado.
 - Hacer que la revocación desde IAM y la desactivación de usuarios impidan renovar. Definir si los JWT de acceso ya emitidos dejan de funcionar inmediatamente mediante validación de sesión o al vencer; no prometer revocación inmediata con JWT puramente stateless.
-- Documentar transporte, duración, rotación y errores de ambos tokens. El transporte/persistencia definitivo del frontend se acordará antes de conectarlo; este pedido no cambia la implementación actual.
+- Documentar transporte, duración, rotación y errores de ambos tokens. El transporte/persistencia definitivo sigue abierto; la autorización posterior permite temporalmente localStorage para ambos tokens.
 
 **Opcional:** entregar el JWT mediante una cookie creada por el backend con `Set-Cookie`, `HttpOnly`, `Secure` en producción y `SameSite` acorde al despliegue. Si se elige este transporte, configurar protección CSRF, CORS con origen explícito y credenciales cuando corresponda, expiración y limpieza al salir. El refresh token también puede entregarse mediante una cookie `HttpOnly`; no debe quedar expuesto a JavaScript si se usa esa opción.
 
@@ -87,6 +127,6 @@ El login actual guarda el JWT solo en memoria y lo pierde al recargar. Implement
 - Documentar cuerpos, campos obligatorios/nullables, formatos de fechas con zona horaria y valores permitidos de idioma, roles y acciones.
 - Documentar errores: validación, credenciales inválidas, falta de permisos, recurso inexistente y conflictos como correo duplicado. Distinguir `401` de `403` y devolver mensajes seguros.
 - Especificar quién puede ejecutar cada operación y qué ocurre al cambiar permisos o desactivar usuarios con sesiones abiertas.
-- Mantener el login público correctamente descrito en OpenAPI; la especificación analizada le aplica Bearer global sin excepción explícita.
+- El OpenAPI actualizado declara login/refresh/logout públicos con `security: []`; logout conserva la discrepancia de transporte/respuesta indicada arriba.
 
 **No requerido para completar la pantalla actual:** CRUD administrativo de roles, recuperación de contraseña, MFA y cierre masivo de sesiones. El catálogo de roles sí es necesario. Esas ampliaciones se pueden abordar por separado.

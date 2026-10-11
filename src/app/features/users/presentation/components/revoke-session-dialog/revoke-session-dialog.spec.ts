@@ -2,14 +2,11 @@ import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { Component, getDebugNode } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { firstValueFrom, of, Subject, throwError } from "rxjs"
+import { firstValueFrom, of, Subject, throwError, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserSessionError } from "../../../domain/errors/user-session.error"
-import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
 import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
-import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
-import { UserSessionRepositoryImpl } from "../../../infrastructure/repositories/user-session.repository-impl"
-import { UserStore } from "../../state/user.store"
+import { UserSession } from "../../../domain/entities/user-session.entity"
 import { UserSessionsStore } from "../../state/user-sessions.store"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { RevokeSessionContext, RevokeSessionDialog } from "./revoke-session-dialog"
@@ -22,23 +19,56 @@ async function flush<T>(promise: Promise<T>) {
 }
 
 describe("RevokeSessionDialog", () => {
+  let records: UserSession[]
   beforeEach(() => {
+    records = [true, false].map((current, index) =>
+      UserSession.create(
+        90 + index,
+        42,
+        "192.0.2.1",
+        "Navegador real",
+        new Date(Date.now() - 1000),
+        new Date(Date.now() + 60000),
+        current,
+        "Persona real",
+        "real@example.test"
+      )
+    )
     vi.useFakeTimers()
     TestBed.configureTestingModule({
       imports: [TestHost],
       providers: [
-        { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-        { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
+        {
+          provide: USER_SESSION_REPOSITORY,
+          useValue: {
+            getUserSessions: () =>
+              of(
+                Result.success({
+                  items: records,
+                  page: 0,
+                  size: 20,
+                  total: records.length,
+                  totalPages: 1
+                })
+              ),
+            revokeUserSession: (_userId: number, id: number) =>
+              timer(250).pipe(
+                map(() => {
+                  records = records.filter(s => s.id !== id)
+                  return Result.success(undefined)
+                })
+              ),
+            revokeUserSessions: () => of(Result.success(undefined))
+          }
+        }
       ]
     })
   })
   afterEach(() => vi.useRealTimers())
   async function setup(current = false) {
-    const users = TestBed.inject(UserStore),
-      sessions = TestBed.inject(UserSessionsStore)
-    await flush(firstValueFrom(users.loadUsers()))
+    const sessions = TestBed.inject(UserSessionsStore)
     await flush(firstValueFrom(sessions.loadSessions()))
-    const user = users.users()[0],
+    const user = { id: 42, name: "Persona real", email: "real@example.test" },
       session = sessions
         .sessions()
         .find(item => item.userId === user.id && item.isCurrent === current)!
@@ -132,7 +162,7 @@ describe("RevokeSessionDialog", () => {
       )
       await dialog.confirm()
       expect(dialog.error()).toContain(
-        code === "CURRENT_SESSION" ? "no se puede cerrar" : "ya no está activa"
+        code === "CURRENT_SESSION" ? "usa Salir" : "ya no está activa"
       )
       expect(ref.state()).toBe("open")
       expect(changed).not.toHaveBeenCalled()
@@ -174,7 +204,7 @@ describe("RevokeSessionDialog", () => {
       expect(feedback).not.toHaveBeenCalled()
     }
   )
-  it("cancels real source mutation on destruction", async () => {
+  it("cancels component-owned pending work on destruction", async () => {
     const { dialog, sessions, session, changed, cdk } = await setup()
     const pending = dialog.confirm()
     cdk.close()

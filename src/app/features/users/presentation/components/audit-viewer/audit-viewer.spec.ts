@@ -1,12 +1,12 @@
 import { provideRouter } from "@angular/router"
 import { TestBed } from "@angular/core/testing"
 import { of, Subject } from "rxjs"
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AUDIT_LOG_REPOSITORY } from "../../../domain/repositories/audit-log.repository"
-import { AuditLogRepositoryImpl } from "../../../infrastructure/repositories/audit-log.repository-impl"
-import { GetAuditLogsUseCase } from "../../../application/use-cases/get-audit-logs.use-case"
-import { ExportAuditLogsUseCase } from "../../../application/use-cases/export-audit-logs.use-case"
+import { AuditLog } from "../../../domain/entities/audit-log.entity"
+import { AuditFilters, AuditQuery } from "../../../domain/models/audit-query"
+import { AuditPage } from "../../../domain/models/audit-page"
 import { AuditLogError } from "../../../domain/errors/audit-log.error"
 import { AuditCsvDownload } from "../../../infrastructure/export/audit-csv-download"
 import { AuditLogsStore } from "../../state/audit-logs.store"
@@ -14,17 +14,41 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { AuditViewer } from "./audit-viewer"
 
-describe("Audit viewer", () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+const log = AuditLog.create(
+  9,
+  2,
+  "usuario",
+  "ACTUALIZAR",
+  "Sintético",
+  "192.0.2.1",
+  new Date("2026-09-01T23:59:59Z"),
+  "Actor",
+  "3",
+  []
+)
+const page = (total = 17, current = 0): AuditPage => ({
+  items: total ? [log] : [],
+  total,
+  offset: current * 5,
+  limit: 5,
+  page: current,
+  size: 5,
+  totalPages: Math.ceil(total / 5),
+  globalTotal: 90
+})
+describe("Audit viewer server queries and CSV", () => {
   function setup() {
-    const download = vi.fn((_csv: string) => Result.success(undefined)),
+    const reads = new Subject<Result<AuditPage, AuditLogError>>()
+    const exports = new Subject<Result<Blob, AuditLogError>>()
+    const getAuditLogs = vi.fn((_query?: AuditQuery) => reads)
+    const exportAuditLogs = vi.fn((_filters?: AuditFilters) => exports)
+    const download = vi.fn((_blob: Blob) => Result.success(undefined)),
       success = vi.fn()
     TestBed.configureTestingModule({
       imports: [AuditViewer],
       providers: [
         provideRouter([]),
-        { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl },
+        { provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogs, exportAuditLogs } },
         { provide: AuditCsvDownload, useValue: { download } },
         { provide: HotToastService, useValue: { success } }
       ]
@@ -35,131 +59,151 @@ describe("Audit viewer", () => {
       fixture,
       viewer: fixture.componentInstance,
       element: fixture.nativeElement as HTMLElement,
+      reads,
+      exports,
+      getAuditLogs,
+      exportAuditLogs,
       download,
       success
     }
   }
-  async function settle(fixture: ReturnType<typeof setup>["fixture"]) {
-    await vi.advanceTimersByTimeAsync(250)
-    fixture.detectChanges()
-  }
-  it("loads rows, reuses filter contract, combines filters before pagination and resets page", async () => {
-    const { fixture, viewer, element } = setup()
+  it("shows loading, server totals, responsive metadata and inclusive UTC help", () => {
+    const { fixture, viewer, element, reads, getAuditLogs } = setup()
     expect(element.textContent).toContain("Cargando")
-    await settle(fixture)
-    expect(element.querySelectorAll("tr[data-audit-row]")).toHaveLength(5)
-    expect(element.querySelector(".catalog-filter-row #audit-day")).not.toBeNull()
-    viewer.goToPage(2)
-    await settle(fixture)
-    expect(viewer.page()).toBe(2)
-    const date = element.querySelector<HTMLInputElement>("#audit-day")!
-    date.value = "2026-09-01"
-    date.dispatchEvent(new Event("input"))
-    const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
-    entity.value = "usuario"
-    entity.dispatchEvent(new Event("change"))
-    await settle(fixture)
-    expect(viewer.page()).toBe(1)
-    expect(element.textContent).toContain("de 6 registros")
-    viewer.setAction("LOGIN_SUCCESS")
-    await settle(fixture)
-    expect(element.textContent).toContain("Sin resultados")
-    viewer.clearFilters()
-    await settle(fixture)
-    expect(element.textContent).toContain("de 48 registros")
-  })
-  it("retains labeled header controls, scoped UTC columns and readable desktop/mobile event metadata", async () => {
-    const { fixture, element } = setup()
-    await settle(fixture)
-    const header = element.querySelector("#audit-title")!.parentElement!.parentElement!
-    for (const id of ["audit-day", "audit-entity", "audit-action"]) {
-      expect(header.querySelector(`label[for="${id}"]`)).not.toBeNull()
-      expect(header.querySelector(`.catalog-filter-row #${id}`)).not.toBeNull()
+    expect(getAuditLogs).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 5 })
+    reads.next(Result.success(page()))
+    reads.complete()
+    fixture.detectChanges()
+    expect(element.querySelectorAll("tr[data-audit-row]")).toHaveLength(1)
+    expect(element.querySelectorAll("[data-audit-card]")).toHaveLength(1)
+    expect(element.textContent).toContain("de 17 registros")
+    expect(element.textContent).toContain("ACTUALIZAR")
+    expect(element.textContent).toContain("desde y hasta incluidos")
+    expect(element.textContent).toContain("10000")
+    expect(viewer.pageCount()).toBe(4)
+    for (const id of ["audit-from", "audit-to", "audit-actor", "audit-entity", "audit-action"]) {
+      expect(element.querySelector(`label[for="${id}"]`)).not.toBeNull()
+      expect(element.querySelector(`.catalog-filter-row #${id}`)).not.toBeNull()
     }
-    expect(header.querySelector("[data-audit-export]")).not.toBeNull()
-    const headings = element.querySelectorAll("thead th[scope='col']")
-    expect(headings).toHaveLength(7)
-    expect(headings[0].textContent).toContain("Timestamp (UTC)")
-    const row = element.querySelector("[data-audit-row]")!
-    expect(row.querySelectorAll("td.font-mono")).toHaveLength(4)
-    expect(row.querySelector("[hlmBadge]")?.textContent?.trim()).not.toBe("")
-    expect(element.querySelectorAll("[data-audit-card]")).toHaveLength(5)
+    expect(element.querySelectorAll("thead th[scope='col']")).toHaveLength(7)
   })
-  it("shows retryable filter failures, then clamps a shrinking page and cancels reads on destroy", async () => {
-    const { fixture, viewer, element } = setup()
-    await settle(fixture)
-    viewer.setDay("2026-02-30")
-    await settle(fixture)
-    expect(element.querySelector('[role="alert"]')?.textContent).toContain("Filtros no válidos")
-    viewer.clearFilters()
-    await settle(fixture)
+  it("cancels superseded queries and combines actor/range/entity/action in zero-based pages", () => {
+    const { fixture, viewer, reads, getAuditLogs } = setup()
+    const next = new Subject<Result<AuditPage, AuditLogError>>()
+    getAuditLogs.mockReturnValue(next)
+    viewer.setFrom("2026-09-01")
+    expect(reads.observed).toBe(false)
+    viewer.setTo("2026-09-02")
+    viewer.setUserId("2")
+    viewer.setEntity("usuario")
+    viewer.setAction("ACTUALIZAR")
+    expect(getAuditLogs).toHaveBeenLastCalledWith({
+      fromUTC: "2026-09-01",
+      toUTC: "2026-09-02",
+      dayUTC: undefined,
+      userId: 2,
+      entity: "usuario",
+      action: "ACTUALIZAR",
+      page: 0,
+      size: 5
+    })
+    next.next(Result.success(page()))
+    next.complete()
     viewer.goToPage(2)
-    await settle(fixture)
-    const query = TestBed.inject(GetAuditLogsUseCase)
-    const execute = vi
-      .spyOn(query, "execute")
-      .mockReturnValue(of(Result.success({ items: [], total: 1, offset: 5, limit: 5 })))
-    viewer.retry()
+    expect(getAuditLogs.mock.calls.at(-1)?.[0]).toMatchObject({ page: 1, size: 5 })
+    fixture.destroy()
+    expect(next.observed).toBe(false)
+  })
+  it("renders retryable query errors and disables no-data exports", () => {
+    const { fixture, viewer, element, reads, getAuditLogs, exportAuditLogs } = setup()
+    reads.next(Result.failure(new AuditLogError("FORBIDDEN")))
+    reads.complete()
+    fixture.detectChanges()
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain("autorización")
+    viewer.exportCsv()
+    expect(exportAuditLogs).not.toHaveBeenCalled()
+    getAuditLogs.mockReturnValue(of(Result.success(page(0))) as never)
+    viewer.clearFilters()
+    fixture.detectChanges()
+    expect(element.textContent).toContain("Sin resultados")
+    expect(element.querySelector<HTMLButtonElement>("[data-audit-export]")?.disabled).toBe(true)
+    viewer.exportCsv()
+    expect(exportAuditLogs).not.toHaveBeenCalled()
+  })
+  it("clamps a server page that shrank and cancels component-owned reads on destroy", () => {
+    const { fixture, viewer, reads, getAuditLogs } = setup()
+    reads.next(Result.success(page()))
+    reads.complete()
+    getAuditLogs.mockReturnValue(of(Result.success(page(1))) as never)
+    viewer.goToPage(3)
     expect(viewer.page()).toBe(1)
-    expect(execute).toHaveBeenLastCalledWith({ offset: 0, limit: 5 })
-    const pending = new Subject<Result<never, AuditLogError>>()
-    execute.mockReturnValue(pending)
+    expect(getAuditLogs.mock.calls.at(-1)?.[0]).toEqual({ page: 0, size: 5 })
+    const pending = new Subject<Result<AuditPage, AuditLogError>>()
+    getAuditLogs.mockReturnValue(pending)
     viewer.retry()
-    expect(TestBed.inject(AuditLogsStore).loading()).toBe(true)
     fixture.destroy()
     expect(pending.observed).toBe(false)
     expect(TestBed.inject(AuditLogsStore).loading()).toBe(false)
   })
-
-  it("does not report success when browser initiation fails", async () => {
-    const { fixture, viewer, success } = setup()
-    await settle(fixture)
-    vi.spyOn(TestBed.inject(AuditCsvDownload), "download").mockReturnValue(
-      Result.failure(new AuditLogError("DOWNLOAD_FAILED"))
-    )
-    viewer.exportCsv()
-    await settle(fixture)
-    expect(success).not.toHaveBeenCalled()
-    expect(viewer.exportError()).toContain("No se pudo iniciar")
-    expect(viewer.exporting()).toBe(false)
-  })
-
-  it("opens the selected log, not a static global detail", async () => {
-    const { fixture, element } = setup()
-    await settle(fixture)
+  it("opens the selected backend log", () => {
+    const { fixture, element, reads } = setup()
+    reads.next(Result.success(page()))
+    reads.complete()
+    fixture.detectChanges()
     const open = vi.spyOn(TestBed.inject(HlmDialogService), "open").mockReturnValue({} as never)
     element.querySelector<HTMLButtonElement>("[data-audit-detail]")!.click()
-    expect(open.mock.calls[0][1]?.context).toMatchObject({ logId: 48 })
+    expect(open.mock.calls[0][1]?.context).toMatchObject({ logId: 9 })
   })
-  it("exports all filtered records, blocks duplicates and confirms only after initiation", async () => {
-    const { fixture, viewer, download, success } = setup()
-    await settle(fixture)
+  it("exports exact server bytes for all filters, freezes filters and blocks duplicates", () => {
+    const { fixture, viewer, reads, exports, exportAuditLogs, download, success } = setup()
+    viewer.setFrom("2026-09-01")
+    viewer.setTo("2026-09-02")
+    viewer.setUserId("2")
+    viewer.setEntity("usuario")
+    reads.next(Result.success(page()))
+    reads.complete()
     viewer.exportCsv()
     viewer.exportCsv()
-    expect(viewer.exporting()).toBe(true)
+    viewer.clearFilters()
+    expect(viewer.filters().entity).toBe("usuario")
+    expect(exportAuditLogs).toHaveBeenCalledOnce()
+    expect(exportAuditLogs.mock.calls[0][0]).toEqual({
+      dayUTC: undefined,
+      fromUTC: "2026-09-01",
+      toUTC: "2026-09-02",
+      userId: 2,
+      entity: "usuario"
+    })
     expect(download).not.toHaveBeenCalled()
-    expect(success).not.toHaveBeenCalled()
-    await settle(fixture)
-    expect(download.mock.calls[0][0].split("\r\n")).toHaveLength(49)
-    expect(download).toHaveBeenCalledOnce()
+    const blob = new Blob(["CSV con más filas que la página"])
+    exports.next(Result.success(blob))
+    exports.complete()
+    expect(download).toHaveBeenCalledExactlyOnceWith(blob)
     expect(success).toHaveBeenCalledExactlyOnceWith("Descarga de auditoría iniciada")
+    expect(viewer.exporting()).toBe(false)
+    fixture.destroy()
   })
-  it("keeps retryable query/export errors and suppresses late downloads after destruction", async () => {
-    const { fixture, viewer, download, success } = setup()
-    await settle(fixture)
-    const exporter = TestBed.inject(ExportAuditLogsUseCase)
-    vi.spyOn(exporter, "execute").mockReturnValueOnce(
-      of(Result.failure(new AuditLogError("INVALID_FILTER")))
-    )
+  it("shows server limit feedback, never reports failed browser initiation, cancels late export", () => {
+    const { fixture, viewer, reads, exports, exportAuditLogs, download, success } = setup()
+    reads.next(Result.success(page()))
+    reads.complete()
     viewer.exportCsv()
-    expect(viewer.exportError()).toContain("Filtros")
-    const late = new Subject<Result<string, AuditLogError>>()
-    vi.spyOn(exporter, "execute").mockReturnValue(late)
+    exports.next(Result.failure(new AuditLogError("EXPORT_LIMIT")))
+    exports.complete()
+    expect(viewer.exportError()).toContain("10000")
+    exportAuditLogs.mockReturnValue(of(Result.success(new Blob(["CSV"]))) as never)
+    download.mockReturnValue(Result.failure(new AuditLogError("DOWNLOAD_FAILED")) as never)
+    viewer.exportCsv()
+    expect(viewer.exportError()).toContain("No se pudo iniciar")
+    expect(success).not.toHaveBeenCalled()
+    const late = new Subject<Result<Blob, AuditLogError>>()
+    exportAuditLogs.mockReturnValue(late)
+    download.mockClear()
     viewer.exportCsv()
     fixture.destroy()
-    late.next(Result.success("csv"))
+    expect(late.observed).toBe(false)
+    late.next(Result.success(new Blob(["CSV"])))
     expect(download).not.toHaveBeenCalled()
     expect(success).not.toHaveBeenCalled()
-    expect(TestBed.inject(AuditLogsStore).loading()).toBe(false)
   })
 })

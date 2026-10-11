@@ -12,7 +12,6 @@ const createdAt = new Date("2026-01-01T10:00:00Z")
 const updatedAt = new Date("2026-01-02T11:00:00Z")
 const params: CreateUserParams = {
   name: "Demo user",
-  age: 30,
   email: "demo@example.com",
   password: "demo-only",
   lang: Lang.EN,
@@ -21,7 +20,6 @@ const params: CreateUserParams = {
 }
 const changes: UpdateUserParams = {
   name: "Updated user",
-  age: 42,
   email: "updated@example.com",
   lang: Lang.ES,
   isActive: false,
@@ -45,7 +43,6 @@ async function data<T>(stream: Observable<Result<T, UserError>>): Promise<T> {
 function mutate(user: User) {
   user.id = 999
   user.name = "Leaked"
-  user.age = -1
   user.email = "leaked@example.com"
   user.lang = Lang.ES
   user.isActive = false
@@ -196,7 +193,6 @@ describe("UserInMemorySource", () => {
       User.create(
         49,
         params.name,
-        params.age,
         params.email,
         params.lang,
         params.isActive,
@@ -219,7 +215,6 @@ describe("UserInMemorySource", () => {
       User.create(
         created.id,
         changes.name,
-        changes.age,
         changes.email,
         changes.lang,
         changes.isActive,
@@ -371,11 +366,12 @@ describe("UserInMemorySource", () => {
     expect(JSON.stringify(source)).not.toContain("replacement")
   })
 
-  it("does not invent email uniqueness or age validation policy", async () => {
+  it("does not invent demo email uniqueness or retain removed age input", async () => {
     await data(source.createUser(params))
-    const duplicate = await data(source.createUser({ ...params, age: -1 }))
+    const input = { ...params, age: -1 }
+    const duplicate = await data(source.createUser(input))
     expect(duplicate.email).toBe(params.email)
-    expect(duplicate.age).toBe(-1)
+    expect(duplicate).not.toHaveProperty("age")
     expect(
       (await data(source.updateUserById(duplicate.id, { ...changes, email: params.email }))).email
     ).toBe(params.email)

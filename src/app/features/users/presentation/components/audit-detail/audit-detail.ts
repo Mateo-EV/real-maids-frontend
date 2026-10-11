@@ -38,18 +38,27 @@ export interface AuditDetailContext {
           {{ record.date | date: "yyyy-MM-dd HH:mm:ss" : "UTC" }}
         </dd>
         <dt class="text-muted-foreground">Responsable</dt>
-        <dd class="break-words">{{ record.actor }} · #USR-{{ record.userId }}</dd>
+        <dd class="break-words">
+          {{ record.actor ?? "No disponible" }}
+          @if (record.userId !== null) {
+            · #USR-{{ record.userId }}
+          }
+        </dd>
+        <dt class="text-muted-foreground">Correo del actor</dt>
+        <dd class="break-words">{{ record.actorEmail ?? "No disponible" }}</dd>
         <dt class="text-muted-foreground">Acción</dt>
         <dd class="font-mono break-words">{{ record.action }}</dd>
         <dt class="text-muted-foreground">Entidad</dt>
         <dd class="font-mono break-words">{{ record.entity }}</dd>
         <dt class="text-muted-foreground">Registro</dt>
-        <dd class="font-mono break-words">{{ record.recordId }}</dd>
+        <dd class="font-mono break-words">{{ record.recordId ?? "No disponible" }}</dd>
         <dt class="text-muted-foreground">IP / Origen</dt>
-        <dd class="font-mono break-words">{{ record.ip }}</dd>
+        <dd class="font-mono break-words">{{ record.ip ?? "No disponible" }}</dd>
       </dl>
       <h3 class="text-sm font-semibold">Detalles</h3>
-      <p class="mt-2 text-sm whitespace-pre-wrap break-words">{{ record.details }}</p>
+      <p class="mt-2 text-sm whitespace-pre-wrap break-words">
+        {{ record.details ?? "No disponible" }}
+      </p>
       @if (record.changes?.length) {
         <h3 class="mt-4 text-sm font-semibold">Cambios registrados</h3>
         <div class="mt-2 flex flex-col gap-3">
@@ -59,11 +68,13 @@ export interface AuditDetailContext {
               <dl class="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <dt class="text-muted-foreground">Antes</dt>
-                  <dd class="whitespace-pre-wrap break-words">{{ change.before }}</dd>
+                  <dd class="whitespace-pre-wrap break-words">
+                    {{ change.before ?? "Sin valor" }}
+                  </dd>
                 </div>
                 <div>
                   <dt class="text-muted-foreground">Después</dt>
-                  <dd class="whitespace-pre-wrap break-words">{{ change.after }}</dd>
+                  <dd class="whitespace-pre-wrap break-words">{{ change.after ?? "Sin valor" }}</dd>
                 </div>
               </dl>
             </section>

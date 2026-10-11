@@ -14,22 +14,23 @@ import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/
 import { UserError } from "../../domain/errors/user.error"
 import { RoleError } from "../../domain/errors/role.error"
 import { Lang } from "../../domain/entities/user.entity"
-import { UserInMemorySource } from "../source/user-in-memory.source"
-import { RoleInMemorySource } from "../source/role-in-memory.source"
+import { UserHttpSource } from "../source/user-http.source"
+import { RoleHttpSource } from "../source/role-http.source"
 import { UserRepositoryImpl } from "./user.repository-impl"
 import { RoleRepositoryImpl } from "./role.repository-impl"
 
 import { AuditLogError } from "../../domain/errors/audit-log.error"
-import { AuditLogInMemorySource } from "../source/audit-log-in-memory.source"
+import { AuditLogHttpSource } from "../source/audit-log-http.source"
 import { AuditLogRepositoryImpl } from "./audit-log.repository-impl"
 
 describe("Infrastructure repository delegation", () => {
   it("delegates audit pagination preserving the exact observable", () => {
-    const source = TestBed.inject(AuditLogInMemorySource)
+    TestBed.configureTestingModule({ providers: appConfig.providers })
+    const source = TestBed.inject(AuditLogHttpSource)
     const repository = TestBed.inject(AuditLogRepositoryImpl)
     const response = of(Result.failure(new AuditLogError("INVALID_PAGINATION")))
     const query = vi.spyOn(source, "getAuditLogs").mockReturnValue(response)
-    const params = { offset: 3, limit: 7 }
+    const params = { page: 3, size: 7 }
     expect(repository.getAuditLogs(params)).toBe(response)
     expect(query).toHaveBeenCalledExactlyOnceWith(params)
     query.mockClear()
@@ -38,13 +39,14 @@ describe("Infrastructure repository delegation", () => {
   })
 
   it("delegates complete filtered audit and per-ID detail preserving observables", () => {
-    const source = TestBed.inject(AuditLogInMemorySource)
+    TestBed.configureTestingModule({ providers: appConfig.providers })
+    const source = TestBed.inject(AuditLogHttpSource)
     const repository = TestBed.inject(AuditLogRepositoryImpl)
     const response = of(Result.failure(new AuditLogError("INVALID_FILTER")))
-    const all = vi.spyOn(source, "getAllAuditLogs").mockReturnValue(response)
+    const all = vi.spyOn(source, "exportAuditLogs").mockReturnValue(response)
     const detail = vi.spyOn(source, "getAuditLogById").mockReturnValue(response)
     const filters = { dayUTC: "2026-09-01", entity: "usuario" as const, action: "UPDATE" as const }
-    expect(repository.getAllAuditLogs(filters)).toBe(response)
+    expect(repository.exportAuditLogs(filters)).toBe(response)
     expect(all).toHaveBeenCalledExactlyOnceWith(filters)
     expect(repository.getAuditLogById(42)).toBe(response)
     expect(detail).toHaveBeenCalledExactlyOnceWith(42)
@@ -94,7 +96,8 @@ describe("Infrastructure repository delegation", () => {
   })
 
   it("delegates every user operation preserving fields and the exact observable", () => {
-    const source = TestBed.inject(UserInMemorySource)
+    TestBed.configureTestingModule({ providers: appConfig.providers })
+    const source = TestBed.inject(UserHttpSource)
     const repository = TestBed.inject(UserRepositoryImpl)
     const response = of(Result.failure(new UserError("USER_NOT_FOUND")))
     const create = vi.spyOn(source, "createUser").mockReturnValue(response)
@@ -105,7 +108,6 @@ describe("Infrastructure repository delegation", () => {
     const remove = vi.spyOn(source, "deleteUserById").mockReturnValue(response)
     const params = {
       name: "Demo",
-      age: 30,
       email: "demo@example.com",
       password: "unused",
       lang: Lang.EN,
@@ -122,14 +124,14 @@ describe("Infrastructure repository delegation", () => {
     expect(repository.deleteUserById(1)).toBe(response)
     expect(create).toHaveBeenCalledExactlyOnceWith(params)
     expect(read).toHaveBeenCalledExactlyOnceWith(1)
-    expect(list).toHaveBeenCalledExactlyOnceWith()
+    expect(list).toHaveBeenCalledExactlyOnceWith({})
     expect(update).toHaveBeenCalledExactlyOnceWith(1, params)
     expect(remove).toHaveBeenCalledExactlyOnceWith(1)
   })
 
   it("delegates every role operation using the shared source and preserves failures", () => {
     TestBed.configureTestingModule({ providers: appConfig.providers })
-    const source = TestBed.inject(RoleInMemorySource)
+    const source = TestBed.inject(RoleHttpSource)
     const repository = TestBed.inject(RoleRepositoryImpl)
     const response = of(Result.failure(new RoleError("ROLE_IN_USE")))
     const create = vi.spyOn(source, "createRole").mockReturnValue(response)

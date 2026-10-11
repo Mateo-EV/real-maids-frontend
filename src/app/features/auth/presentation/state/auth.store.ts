@@ -8,6 +8,8 @@ import { AuthError } from "../../domain/errors/auth.error"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import { catchError, defaultIfEmpty, defer, map, of, take, tap } from "rxjs"
 import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case"
+import { ObserveAuthSessionUseCase } from "../../application/use-cases/observe-auth-session.use-case"
+import { InvalidateAuthSessionUseCase } from "../../application/use-cases/invalidate-auth-session.use-case"
 
 interface AuthState {
   readonly session: AuthSession | null
@@ -28,16 +30,19 @@ export const AuthStore = signalStore(
       store,
       loginUseCase = inject(LoginUseCase),
       logoutUseCase = inject(LogoutUseCase),
-      getCurrentUserUseCase = inject(GetCurrentUserUseCase)
+      getCurrentUserUseCase = inject(GetCurrentUserUseCase),
+      observeSessionUseCase = inject(ObserveAuthSessionUseCase),
+      invalidateSessionUseCase = inject(InvalidateAuthSessionUseCase)
     ) => {
       // Login/logout invalidate restoration snapshots without exposing extra store state.
       let sessionRevision = 0
       let expiryTimer: ReturnType<typeof setTimeout> | undefined
-      const clear = () => {
+      const clear = (remote = false) => {
         sessionRevision++
         clearTimeout(expiryTimer)
         expiryTimer = undefined
-        logoutUseCase.execute()
+        if (remote) logoutUseCase.execute()
+        else invalidateSessionUseCase.execute()
         patchState(store, initialState)
       }
       const scheduleExpiry = () => {
@@ -50,7 +55,14 @@ export const AuthStore = signalStore(
         }
         expiryTimer = setTimeout(scheduleExpiry, Math.min(expiry - Date.now(), 2147483647))
       }
-      inject(DestroyRef).onDestroy(() => clearTimeout(expiryTimer))
+      const sessionSubscription = observeSessionUseCase.execute().subscribe(session => {
+        patchState(store, { session })
+        scheduleExpiry()
+      })
+      inject(DestroyRef).onDestroy(() => {
+        clearTimeout(expiryTimer)
+        sessionSubscription.unsubscribe()
+      })
 
       return {
         restoreSession() {
@@ -94,7 +106,7 @@ export const AuthStore = signalStore(
           })
         },
         logout(): void {
-          clear()
+          clear(true)
         }
       }
     }

@@ -1,4 +1,13 @@
-export type RoleErrorCode = "ROLE_NOT_FOUND" | "ROLE_IN_USE" | "UNEXPECTED"
+export type RoleErrorCode =
+  | "ROLE_NOT_FOUND"
+  | "ROLE_IN_USE"
+  | "UNEXPECTED"
+  | "INVALID_RESPONSE"
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
+  | "NETWORK"
+  | "UNCONFIGURED"
+  | "UNSUPPORTED"
 
 export class RoleError extends Error {
   constructor(public readonly code: RoleErrorCode) {

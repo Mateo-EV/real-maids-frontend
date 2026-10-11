@@ -2,6 +2,8 @@ import { DatePipe } from "@angular/common"
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, Subscription } from "rxjs"
+import { disabled, form, FormField, FormRoot, validate } from "@angular/forms/signals"
+import { HlmFieldImports } from "@spartan-ng/helm/field"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
@@ -14,7 +16,12 @@ import { HlmSkeleton } from "@spartan-ng/helm/skeleton"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
-import { AUDIT_ACTIONS, AUDIT_ENTITIES, AuditFilters } from "../../../domain/models/audit-query"
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITIES,
+  AuditFilters,
+  validAuditDay
+} from "../../../domain/models/audit-query"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { ExportAuditLogsUseCase } from "../../../application/use-cases/export-audit-logs.use-case"
 import { AuditCsvDownload } from "../../../infrastructure/export/audit-csv-download"
@@ -25,6 +32,9 @@ import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
   selector: "app-audit-viewer",
   imports: [
     DatePipe,
+    FormField,
+    FormRoot,
+    HlmFieldImports,
     HlmButtonImports,
     HlmNativeSelectImports,
     HlmInputGroupImports,
@@ -51,13 +61,31 @@ export class AuditViewer implements OnInit {
   readonly filters = signal<AuditFilters>({})
   readonly page = signal(1)
   readonly pageSize = 5
-  readonly pageCount = computed(() => Math.max(1, Math.ceil(this.store.total() / this.pageSize)))
+  readonly pageCount = computed(() => Math.max(1, this.store.totalPages()))
   readonly rangeStart = computed(() =>
     this.store.total() ? (this.page() - 1) * this.pageSize + 1 : 0
   )
   readonly rangeEnd = computed(() => Math.min(this.page() * this.pageSize, this.store.total()))
   readonly exporting = signal(false)
   readonly exportError = signal("")
+  readonly filterModel = signal({ fromUTC: "", toUTC: "", userId: "" })
+  readonly filterForm = form(this.filterModel, path => {
+    for (const field of [path.fromUTC, path.toUTC]) {
+      disabled(field, () => this.exporting())
+      validate(field, ({ value }) =>
+        !value() || validAuditDay(value())
+          ? undefined
+          : { kind: "date", message: "Usa una fecha válida AAAA-MM-DD." }
+      )
+    }
+    disabled(path.userId, () => this.exporting())
+    validate(path.userId, ({ value }) =>
+      !value() ||
+      (/^-?\d+$/.test(value()) && Number(value()) >= -2147483648 && Number(value()) <= 2147483647)
+        ? undefined
+        : { kind: "actor", message: "Usa el ID numérico del actor." }
+    )
+  })
 
   ngOnInit(): void {
     this.retry()
@@ -71,8 +99,8 @@ export class AuditViewer implements OnInit {
       this.store
         .load({
           ...this.filters(),
-          offset: (this.page() - 1) * this.pageSize,
-          limit: this.pageSize
+          page: this.page() - 1,
+          size: this.pageSize
         })
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(result => {
@@ -85,12 +113,31 @@ export class AuditViewer implements OnInit {
   }
   private updateFilters(filters: AuditFilters): void {
     if (this.destroyRef.destroyed || this.exporting()) return
+    this.exportError.set("")
     this.filters.set(filters)
     this.page.set(1)
     this.retry()
   }
   setDay(value: string): void {
-    this.updateFilters({ ...this.filters(), dayUTC: value || undefined })
+    this.filterModel.update(model => ({ ...model, fromUTC: value, toUTC: value }))
+    this.updateFilters({
+      ...this.filters(),
+      dayUTC: undefined,
+      fromUTC: value || undefined,
+      toUTC: value || undefined
+    })
+  }
+  setFrom(value: string): void {
+    this.updateFilters({ ...this.filters(), dayUTC: undefined, fromUTC: value || undefined })
+  }
+  setTo(value: string): void {
+    this.updateFilters({ ...this.filters(), dayUTC: undefined, toUTC: value || undefined })
+  }
+  setUserId(value: string): void {
+    this.updateFilters({
+      ...this.filters(),
+      userId: value === "" ? undefined : /^-?\d+$/.test(value) ? Number(value) : NaN
+    })
   }
   setEntity(value: string | null | undefined): void {
     // Controls supply catalog values; unrecognized inputs remain invalid, never silently widen a query.
@@ -106,6 +153,8 @@ export class AuditViewer implements OnInit {
     })
   }
   clearFilters(): void {
+    if (this.destroyRef.destroyed || this.exporting()) return
+    this.filterModel.set({ fromUTC: "", toUTC: "", userId: "" })
     this.updateFilters({})
   }
   goToPage(page: number): void {
@@ -125,7 +174,13 @@ export class AuditViewer implements OnInit {
     })
   }
   exportCsv(): void {
-    if (this.destroyRef.destroyed || this.exporting() || this.store.loading() || this.store.error())
+    if (
+      this.destroyRef.destroyed ||
+      this.exporting() ||
+      this.store.loading() ||
+      this.store.error() ||
+      this.store.total() === 0
+    )
       return
     this.exporting.set(true)
     this.exportError.set("")

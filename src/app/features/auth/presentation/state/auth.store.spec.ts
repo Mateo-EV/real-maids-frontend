@@ -8,21 +8,29 @@ import { firstValueFrom, of, Subject } from "rxjs"
 import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "./auth.store"
+import { ObserveAuthSessionUseCase } from "../../application/use-cases/observe-auth-session.use-case"
+import { InvalidateAuthSessionUseCase } from "../../application/use-cases/invalidate-auth-session.use-case"
 
 describe("AuthStore", () => {
   const login = vi.fn()
   const logout = vi.fn()
   const me = vi.fn()
+  const invalidate = vi.fn()
+  let changes: Subject<AuthSession | null>
   let store: InstanceType<typeof AuthStore>
 
   beforeEach(() => {
     login.mockReset()
     logout.mockReset()
     me.mockReset()
+    invalidate.mockReset()
+    changes = new Subject()
 
     TestBed.configureTestingModule({
       providers: [
         AuthStore,
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => changes } },
+        { provide: InvalidateAuthSessionUseCase, useValue: { execute: invalidate } },
         { provide: LoginUseCase, useValue: { execute: login } },
         { provide: LogoutUseCase, useValue: { execute: logout } },
         { provide: GetCurrentUserUseCase, useValue: { execute: me } }
@@ -136,10 +144,20 @@ describe("AuthStore", () => {
       expect(store.session()).toBeNull()
       expect(store.isAuthenticated()).toBe(false)
       expect(await firstValueFrom(store.restoreSession())).toBeNull()
-      expect(logout).toHaveBeenCalledOnce()
+      expect(invalidate).toHaveBeenCalledOnce()
+      expect(logout).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("mirrors source invalidation and renewal through the application contract", () => {
+    const session = AuthSession.create("Fake", "fake@example.test")
+    changes.next(session)
+    expect(store.session()).toBe(session)
+    changes.next(null)
+    expect(store.isAuthenticated()).toBe(false)
+    expect(logout).not.toHaveBeenCalled()
   })
 
   it("starts without an authenticated session", () => {

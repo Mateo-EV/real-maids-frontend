@@ -15,10 +15,13 @@ import { UserInMemorySource } from "./user-in-memory.source"
 import { RoleInMemorySource } from "./role-in-memory.source"
 
 import { AUDIT_LOG_REPOSITORY } from "../../domain/repositories/audit-log.repository"
+import { AuditLogInMemorySource } from "./audit-log-in-memory.source"
+import { provideHttpClient } from "@angular/common/http"
+import { API_URL } from "@/app/core/tokens/api-url.token"
+import { AuditLogRepositoryImpl } from "../repositories/audit-log.repository-impl"
 
 const userInput = {
   name: "Demo",
-  age: 30,
   email: "demo@example.com",
   password: "unused",
   lang: Lang.EN,
@@ -43,6 +46,35 @@ async function cancelBeforeBoundary<T>(stream: Observable<T>, latency: number) {
   expect(next).not.toHaveBeenCalled()
 }
 
+describe("Real audit HTTP cancellation", () => {
+  it("unsubscribes the dispatched read without feedback or a claim about server rollback", () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" },
+        { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
+      ]
+    })
+    const next = vi.fn(),
+      error = vi.fn(),
+      complete = vi.fn()
+    const subscription = TestBed.inject(AUDIT_LOG_REPOSITORY)
+      .getAuditLogs({ page: 0, size: 5 })
+      .subscribe({ next, error, complete })
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne(r => r.url === "http://localhost:8080/api/auditoria")
+    expect(request.request.method).toBe("GET")
+    expect(request.cancelled).toBe(false)
+    subscription.unsubscribe()
+    expect(request.cancelled).toBe(true)
+    expect(next).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+    expect(complete).not.toHaveBeenCalled()
+    http.verify()
+  })
+})
+
 describe("Cancellable in-memory execution boundaries", () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -56,40 +88,43 @@ describe("Cancellable in-memory execution boundaries", () => {
     vi.useRealTimers()
   })
 
-  it.each([1, 0])("cancels audit limit=%s without results or errors before 250ms", async limit => {
-    const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
-    const next = vi.fn()
-    const error = vi.fn()
-    const complete = vi.fn()
-    const query = repository.getAuditLogs({ limit })
-    const subscription = query.subscribe({ next, error, complete })
-    await vi.advanceTimersByTimeAsync(249)
-    expect(next).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
-    expect(complete).not.toHaveBeenCalled()
-    subscription.unsubscribe()
-    await vi.runAllTimersAsync()
-    expect(next).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
-    expect(complete).not.toHaveBeenCalled()
+  it.each([1, 0])(
+    "cancels legacy audit source limit=%s without results or errors before 250ms",
+    async limit => {
+      const repository = TestBed.inject(AuditLogInMemorySource)
+      const next = vi.fn()
+      const error = vi.fn()
+      const complete = vi.fn()
+      const query = repository.getAuditLogs({ limit })
+      const subscription = query.subscribe({ next, error, complete })
+      await vi.advanceTimersByTimeAsync(249)
+      expect(next).not.toHaveBeenCalled()
+      expect(error).not.toHaveBeenCalled()
+      expect(complete).not.toHaveBeenCalled()
+      subscription.unsubscribe()
+      await vi.runAllTimersAsync()
+      expect(next).not.toHaveBeenCalled()
+      expect(error).not.toHaveBeenCalled()
+      expect(complete).not.toHaveBeenCalled()
 
-    query.subscribe({ next, error, complete })
-    await vi.advanceTimersByTimeAsync(249)
-    expect(next).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
-    expect(complete).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(next).toHaveBeenCalledOnce()
-    expect(error).not.toHaveBeenCalled()
-    expect(complete).toHaveBeenCalledOnce()
-    const result = next.mock.calls[0][0]
-    if (limit === 1) {
-      expect(result).toMatchObject({ success: true, data: { total: 48, offset: 0, limit: 1 } })
-      expect(result.data.items).toHaveLength(1)
-    } else {
-      expect(result).toMatchObject({ success: false, error: { code: "INVALID_PAGINATION" } })
+      query.subscribe({ next, error, complete })
+      await vi.advanceTimersByTimeAsync(249)
+      expect(next).not.toHaveBeenCalled()
+      expect(error).not.toHaveBeenCalled()
+      expect(complete).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(next).toHaveBeenCalledOnce()
+      expect(error).not.toHaveBeenCalled()
+      expect(complete).toHaveBeenCalledOnce()
+      const result = next.mock.calls[0][0]
+      if (limit === 1) {
+        expect(result).toMatchObject({ success: true, data: { total: 48, offset: 0, limit: 1 } })
+        expect(result.data.items).toHaveLength(1)
+      } else {
+        expect(result).toMatchObject({ success: false, error: { code: "INVALID_PAGINATION" } })
+      }
     }
-  })
+  )
 
   it("binds every domain repository to an implementation distinct from its shared source", () => {
     expect(TestBed.inject(AUTH_REPOSITORY)).not.toBe(TestBed.inject(AuthHttpSource))
@@ -99,7 +134,7 @@ describe("Cancellable in-memory execution boundaries", () => {
   })
 
   for (const valid of [true, false]) {
-    it(`cancels pending login with ${valid ? "valid-shaped" : "invalid-shaped"} password without session or storage effects`, async () => {
+    it(`cancels pending login with ${valid ? "valid-shaped" : "invalid-shaped"} password without establishing or persisting credentials`, async () => {
       const auth = TestBed.inject(AUTH_REPOSITORY)
       const http = TestBed.inject(HttpTestingController)
       const read = vi.spyOn(Storage.prototype, "getItem")
@@ -118,8 +153,10 @@ describe("Cancellable in-memory execution boundaries", () => {
         await vi.runAllTimersAsync()
         expect(next).not.toHaveBeenCalled()
         expect(await firstValueFrom(auth.me())).toMatchObject({ success: false })
-        expect(read).not.toHaveBeenCalled()
-        expect(write).not.toHaveBeenCalled()
+        expect(read.mock.calls.some(([key]) => key === "authenticated")).toBe(false)
+        expect(
+          write.mock.calls.every(([, value]) => JSON.parse(String(value)).credentials === null)
+        ).toBe(true)
       } finally {
         read.mockRestore()
         write.mockRestore()
@@ -146,8 +183,8 @@ describe("Cancellable in-memory execution boundaries", () => {
     ).toMatchObject({ success: true, data: { id: "customer-003" } })
   })
 
-  it("cancels user create/update/delete without mutations or ID allocation", async () => {
-    const repository = TestBed.inject(USER_REPOSITORY)
+  it("retains cancellable legacy demo user execution without mutations or ID allocation", async () => {
+    const repository = TestBed.inject(UserInMemorySource)
     const source = TestBed.inject(UserInMemorySource)
     const before = await settle(source.getUsers())
     if (!before.success) throw before.error
@@ -171,8 +208,11 @@ describe("Cancellable in-memory execution boundaries", () => {
     })
   })
 
-  it("cancels role create/update/delete without mutations or ID allocation", async () => {
-    const repository = TestBed.inject(ROLE_REPOSITORY)
+  it("retains cancellable legacy demo role execution without mutations or ID allocation", async () => {
+    TestBed.overrideProvider(USER_REPOSITORY, {
+      useFactory: () => TestBed.inject(UserInMemorySource)
+    })
+    const repository = TestBed.inject(RoleInMemorySource)
     const source = TestBed.inject(RoleInMemorySource)
     const before = await settle(source.getRoles())
     if (!before.success) throw before.error
@@ -195,8 +235,11 @@ describe("Cancellable in-memory execution boundaries", () => {
     })
   })
 
-  it("cancels role deletion during its pending reference query without deleting", async () => {
-    const roles = TestBed.inject(ROLE_REPOSITORY)
+  it("cancels legacy demo role deletion during its reference query without deleting", async () => {
+    TestBed.overrideProvider(USER_REPOSITORY, {
+      useFactory: () => TestBed.inject(UserInMemorySource)
+    })
+    const roles = TestBed.inject(RoleInMemorySource)
     await settle(roles.createRole(roleInput))
     const next = vi.fn()
     const pending = roles.deleteRoleById(1).subscribe(next)
@@ -208,7 +251,7 @@ describe("Cancellable in-memory execution boundaries", () => {
     expect(next).not.toHaveBeenCalled()
   })
 
-  it("reads only the established local session at subscription, without storage restoration or remote me/logout", async () => {
+  it("ignores the demo flag, persists documented credentials and clears before remote logout", async () => {
     const auth = TestBed.inject(AUTH_REPOSITORY)
     const http = TestBed.inject(HttpTestingController)
     localStorage.setItem("authenticated", "true")
@@ -226,19 +269,32 @@ describe("Cancellable in-memory execution boundaries", () => {
         token: "fake-token",
         tipo: "Bearer",
         expiraEnSegundos: 60,
-        correo: "returned@example.test",
-        rol: "Operaciones"
+        refreshToken: "fake-refresh",
+        refreshExpiraEnSegundos: 600,
+        usuario: {
+          idUsuario: 7,
+          nombre: "Fake Name",
+          correo: "returned@example.test",
+          idRol: 3,
+          rol: "Operaciones",
+          idioma: "es",
+          permisos: []
+        }
       })
       expect((await pending).success).toBe(true)
       expect(await firstValueFrom(current)).toMatchObject({
         success: true,
-        data: { name: null, email: "returned@example.test", role: "Operaciones" }
+        data: { name: "Fake Name", email: "returned@example.test", role: "Operaciones" }
       })
       auth.logout()
       expect(await firstValueFrom(current)).toMatchObject({ success: false })
+      http
+        .expectOne("http://localhost:8080/api/auth/logout")
+        .flush(null, { status: 204, statusText: "OK" })
       http.expectNone(() => true)
-      expect(read).not.toHaveBeenCalled()
-      expect(write).not.toHaveBeenCalled()
+      expect(read).toHaveBeenCalled()
+      expect(write).toHaveBeenCalled()
+      expect(read.mock.calls.some(([key]) => key === "authenticated")).toBe(false)
     } finally {
       auth.logout()
       read.mockRestore()
@@ -247,9 +303,9 @@ describe("Cancellable in-memory execution boundaries", () => {
     }
   })
 
-  it("delays missing-record validation and preserves domain failure Results", async () => {
-    const users = TestBed.inject(USER_REPOSITORY)
-    const roles = TestBed.inject(ROLE_REPOSITORY)
+  it("retains delayed legacy demo validation and domain failure Results", async () => {
+    const users = TestBed.inject(UserInMemorySource)
+    const roles = TestBed.inject(RoleInMemorySource)
     const customers = TestBed.inject(CUSTOMER_REPOSITORY)
     await cancelBeforeBoundary(users.updateUserStatusById(99, true), 250)
     await cancelBeforeBoundary(users.updateUserById(99, userInput), 250)
@@ -268,9 +324,12 @@ describe("Cancellable in-memory execution boundaries", () => {
     })
   })
 
-  it("validates role assignments at execution, including inactive users", async () => {
-    const roles = TestBed.inject(ROLE_REPOSITORY)
-    const users = TestBed.inject(USER_REPOSITORY)
+  it("retains legacy demo role assignment validation, including inactive users", async () => {
+    TestBed.overrideProvider(USER_REPOSITORY, {
+      useFactory: () => TestBed.inject(UserInMemorySource)
+    })
+    const roles = TestBed.inject(RoleInMemorySource)
+    const users = TestBed.inject(UserInMemorySource)
     await settle(roles.createRole(roleInput))
     const deletion = roles.deleteRoleById(6)
     await settle(users.createUser({ ...userInput, roleId: 6 }))

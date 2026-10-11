@@ -7,11 +7,13 @@ import {
   signal
 } from "@angular/core"
 import {
+  applyWhen,
   email,
   form,
   FormField,
   FormRoot,
   minLength,
+  maxLength,
   required,
   submit,
   validate
@@ -30,7 +32,6 @@ import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { Lang, User } from "../../../domain/entities/user.entity"
 import { RolesStore } from "../../state/roles.store"
 import { UserStore } from "../../state/user.store"
-import { DEMO_PASSWORD_PLACEHOLDER } from "../../demo/users-demo.fixture"
 
 export interface UserEditorContext {
   user: User | null
@@ -63,7 +64,6 @@ export class UserEditor {
   readonly error = signal("")
   readonly model = signal({
     name: this.context.user?.name ?? "",
-    age: this.context.user?.age ?? 0,
     email: this.context.user?.email ?? "",
     password: "",
     lang: this.context.user?.lang ?? Lang.ES,
@@ -80,17 +80,27 @@ export class UserEditor {
     )
     required(path.email, { message: "Ingresa el correo." })
     email(path.email, { message: "Ingresa un correo válido." })
-    validate(path.password, ({ value }) =>
-      value().trim() || this.context.user
-        ? undefined
-        : { kind: "required", message: "Ingresa la contraseña." }
+    applyWhen(
+      path.password,
+      ({ value }) => value() !== "" || !this.context.user,
+      password => {
+        minLength(password, 8, { message: "La contraseña debe tener al menos 8 caracteres." })
+        maxLength(password, 64, { message: "La contraseña no puede superar 64 caracteres." })
+      }
     )
-    minLength(path.password, 8, { message: "La contraseña debe tener al menos 8 caracteres." })
-    validate(path.age, ({ value }) =>
-      Number.isInteger(value()) && value() >= 18
+    validate(path.password, ({ value }) => {
+      const password = value()
+      if (password === "" && this.context.user) return undefined
+      if (password === "") return { kind: "required", message: "Ingresa la contraseña." }
+      return password.length >= 8 &&
+        password.length <= 64 &&
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/.test(password)
         ? undefined
-        : { kind: "age", message: "Ingresa una edad entera mayor o igual a 18." }
-    )
+        : {
+            kind: "password",
+            message: "Usa de 8 a 64 caracteres, con mayúscula, minúscula y número."
+          }
+    })
     // required(path.roleId, { message: "Selecciona un rol." })
     validate(path.roleId, ({ value }) =>
       this.availableRoles().some(role => String(role.id) === value())
@@ -117,7 +127,7 @@ export class UserEditor {
         ...value,
         name: value.name.trim(),
         email: value.email.trim(),
-        password: value.password.trim(),
+        password: value.password,
         roleId: Number(value.roleId)
       }
       try {
@@ -138,7 +148,13 @@ export class UserEditor {
           this.error.set(
             result.error.code === "USER_NOT_FOUND"
               ? "El usuario ya no existe. Cierra y vuelve al catálogo."
-              : "No pudimos guardar el usuario. Inténtalo de nuevo."
+              : result.error.code === "PARTIAL_UPDATE"
+                ? "El perfil se actualizó, pero no se completó el estado o la contraseña. Revisa el catálogo antes de reintentar."
+                : result.error.code === "FORBIDDEN"
+                  ? "No tienes permiso para guardar estos cambios."
+                  : result.error.code === "EMAIL_ALREADY_EXISTS"
+                    ? "El correo ya está registrado."
+                    : "No pudimos guardar el usuario. Inténtalo de nuevo."
           )
         }
       } catch {

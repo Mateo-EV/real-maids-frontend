@@ -15,7 +15,9 @@ describe("LoginUseCase", () => {
     repository = {
       login: vi.fn(),
       me: vi.fn(),
-      logout: vi.fn()
+      logout: vi.fn(),
+      invalidate: vi.fn(),
+      sessionChanges: vi.fn()
     }
 
     TestBed.configureTestingModule({

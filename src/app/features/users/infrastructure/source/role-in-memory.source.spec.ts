@@ -115,7 +115,6 @@ describe("RoleInMemorySource", () => {
       const result = await firstValueFrom(
         users.createUser({
           name: "Demo",
-          age: 30,
           email: "demo@example.com",
           password: "unused",
           lang: Lang.EN,
@@ -162,7 +161,6 @@ describe("RoleInMemorySource", () => {
     const deletion = source.deleteRoleById(role.id)
     const input = {
       name: "Demo",
-      age: 30,
       email: "demo@example.com",
       password: "unused",
       lang: Lang.EN,

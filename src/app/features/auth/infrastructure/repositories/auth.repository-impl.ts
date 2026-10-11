@@ -15,6 +15,14 @@ export class AuthRepositoryImpl implements AuthRepository {
     return this.source.me()
   }
 
+  invalidate(): void {
+    this.source.invalidate()
+  }
+
+  sessionChanges() {
+    return this.source.sessionChanges()
+  }
+
   logout(): void {
     this.source.logout()
   }

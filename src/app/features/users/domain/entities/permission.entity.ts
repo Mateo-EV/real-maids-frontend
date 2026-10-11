@@ -1,12 +1,15 @@
-export class Permission {
-  private constructor(
-    public id: number,
-    public code: string,
-    public name: string,
-    public module: string
-  ) {}
-
-  static create(id: number, code: string, name: string, module: string): Permission {
-    return new Permission(id, code, name, module)
-  }
+// Backend catalog metadata, never a role-name or CRUD-column inference.
+export interface Permission {
+  id: number
+  code: string
+  module: string
+  description: string
 }
+export interface PermissionAssignment {
+  roleId: number
+  permissions: Permission[]
+}
+export const copyAssignment = (value: PermissionAssignment): PermissionAssignment => ({
+  roleId: value.roleId,
+  permissions: value.permissions.map(permission => ({ ...permission }))
+})

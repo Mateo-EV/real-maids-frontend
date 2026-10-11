@@ -6,8 +6,10 @@ export class UserSession {
     public device: string,
     public startDate: Date,
     public expiryDate: Date,
-    // Simulated registry designation only; never linked to AuthStore or browser credentials.
-    public isCurrent: boolean = false
+    // Caller-relative backend metadata, never an auth credential/session key.
+    public isCurrent: boolean = false,
+    public userName?: string,
+    public userEmail?: string
   ) {}
 
   static create(
@@ -17,8 +19,20 @@ export class UserSession {
     device: string,
     startDate: Date,
     expireDate: Date,
-    isCurrent: boolean = false
+    isCurrent: boolean = false,
+    userName?: string,
+    userEmail?: string
   ): UserSession {
-    return new UserSession(id, userId, ip, device, startDate, expireDate, isCurrent)
+    return new UserSession(
+      id,
+      userId,
+      ip,
+      device,
+      startDate,
+      expireDate,
+      isCurrent,
+      userName,
+      userEmail
+    )
   }
 }

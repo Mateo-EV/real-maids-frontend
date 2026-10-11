@@ -1,25 +1,29 @@
 import { TestBed } from "@angular/core/testing"
-import { of } from "rxjs"
-import { describe, expect, it, vi } from "vitest"
-import { Result } from "@/app/shared/utils/result"
-import { UserSessionError } from "../../domain/errors/user-session.error"
+import { provideHttpClient } from "@angular/common/http"
+import { provideHttpClientTesting, HttpTestingController } from "@angular/common/http/testing"
+import { describe, expect, it } from "vitest"
+import { API_URL } from "@/app/core/tokens/api-url.token"
 import { USER_SESSION_REPOSITORY } from "../../domain/repositories/user-session.repository"
-import { UserSessionInMemorySource } from "../source/user-session-in-memory.source"
 import { UserSessionRepositoryImpl } from "./user-session.repository-impl"
-import { appConfig } from "@/app/core/config/app.config"
 
 describe("UserSessionRepositoryImpl", () => {
-  it("uses the composition-root alias and delegates to the shared source", () => {
-    TestBed.configureTestingModule({ providers: [appConfig.providers] })
+  it("delegates the root repository to real HTTP rather than the demo registry", () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" },
+        { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl }
+      ]
+    })
     const repository = TestBed.inject(USER_SESSION_REPOSITORY)
     expect(repository).toBe(TestBed.inject(UserSessionRepositoryImpl))
-    const source = TestBed.inject(UserSessionInMemorySource)
-    const query = of(Result.success([])),
-      revoke = of(Result.failure(new UserSessionError("SESSION_NOT_FOUND")))
-    vi.spyOn(source, "getUserSessions").mockReturnValue(query)
-    const spy = vi.spyOn(source, "revokeUserSession").mockReturnValue(revoke)
-    expect(repository.getUserSessions()).toBe(query)
-    expect(repository.revokeUserSession(9, 8)).toBe(revoke)
-    expect(spy).toHaveBeenCalledExactlyOnceWith(9, 8)
+    const subscription = repository.getUserSessions().subscribe()
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=20")
+    expect(request.request.method).toBe("GET")
+    request.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    http.verify()
+    subscription.unsubscribe()
   })
 })

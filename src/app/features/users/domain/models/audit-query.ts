@@ -1,43 +1,72 @@
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 
-export const AUDIT_ENTITIES = [
-  "usuario",
-  "cliente",
-  "orden_servicio",
-  "asignacion",
-  "sesion"
-] as const
+export const AUDIT_ENTITIES = ["usuario", "rol", "sesion", "cliente"] as const
 export const AUDIT_ACTIONS = [
-  "INSERT",
-  "UPDATE",
-  "DELETE",
-  "LOGIN_SUCCESS",
-  "REASSIGN_CREW"
+  "LOGIN",
+  "LOGIN_FALLIDO",
+  "LOGOUT",
+  "CREAR",
+  "ACTUALIZAR",
+  "ACTIVAR",
+  "DESACTIVAR",
+  "ELIMINAR",
+  "CAMBIAR_PASSWORD",
+  "RESTABLECER_PASSWORD",
+  "ASIGNAR_PERMISOS",
+  "REVOCAR_SESION",
+  "REVOCAR_SESIONES",
+  "TOKEN_REUTILIZADO"
 ] as const
-export type AuditEntity = (typeof AUDIT_ENTITIES)[number]
-export type AuditAction = (typeof AUDIT_ACTIONS)[number]
+// Catalog suggestions are not an ACL or a closed backend enum.
+export type AuditEntity = string
+export type AuditAction = string
 export interface AuditFilters {
-  /** Exact YYYY-MM-DD calendar day in UTC; omitted means all days. */
+  readonly userId?: number
+  /** YYYY-MM-DD UTC calendar days, both endpoints inclusive. */
+  readonly fromUTC?: string
+  readonly toUTC?: string
+  /** Legacy single UTC day, equivalent to fromUTC = toUTC. */
   readonly dayUTC?: string
-  readonly entity?: AuditEntity
-  readonly action?: AuditAction
+  readonly entity?: string
+  readonly action?: string
 }
-export interface AuditQuery extends PaginationParams, AuditFilters {}
+export interface AuditQuery extends PaginationParams, AuditFilters {
+  readonly page?: number
+  readonly size?: number
+}
 export interface AuditFieldChange {
   readonly field: string
-  readonly before: string
-  readonly after: string
+  readonly before: string | null
+  readonly after: string | null
 }
-
-export function validAuditFilters(filters: AuditFilters): boolean {
-  const day = filters.dayUTC
+export function validAuditDay(day: unknown): day is string {
   return (
-    (day === undefined ||
-      (typeof day === "string" &&
-        /^\d{4}-\d{2}-\d{2}$/.test(day) &&
-        Number.isFinite(Date.parse(`${day}T00:00:00Z`)) &&
-        new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day)) &&
-    (filters.entity === undefined || AUDIT_ENTITIES.includes(filters.entity)) &&
-    (filters.action === undefined || AUDIT_ACTIONS.includes(filters.action))
+    typeof day === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+    Number.isFinite(Date.parse(`${day}T00:00:00Z`)) &&
+    new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day
+  )
+}
+export function validAuditFilters(filters: AuditFilters): boolean {
+  return (
+    (filters.userId === undefined ||
+      (Number.isInteger(filters.userId) &&
+        filters.userId >= -2147483648 &&
+        filters.userId <= 2147483647)) &&
+    (filters.dayUTC === undefined || validAuditDay(filters.dayUTC)) &&
+    (filters.fromUTC === undefined || validAuditDay(filters.fromUTC)) &&
+    (filters.toUTC === undefined || validAuditDay(filters.toUTC)) &&
+    !(
+      filters.dayUTC !== undefined &&
+      (filters.fromUTC !== undefined || filters.toUTC !== undefined)
+    ) &&
+    !(
+      filters.fromUTC !== undefined &&
+      filters.toUTC !== undefined &&
+      filters.fromUTC > filters.toUTC
+    ) &&
+    [filters.entity, filters.action].every(
+      value => value === undefined || (typeof value === "string" && value.trim().length > 0)
+    )
   )
 }

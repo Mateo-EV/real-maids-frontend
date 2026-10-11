@@ -15,7 +15,7 @@ import {
   RouterStateSnapshot,
   UrlTree
 } from "@angular/router"
-import { firstValueFrom, isObservable, Observable, of, Subject, throwError } from "rxjs"
+import { EMPTY, firstValueFrom, isObservable, Observable, of, Subject, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { authGuard, guestGuard } from "./auth.guard"
 
@@ -30,7 +30,16 @@ describe("auth guards", () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: AUTH_REPOSITORY, useValue: { me, login: vi.fn(), logout: vi.fn() } }
+        {
+          provide: AUTH_REPOSITORY,
+          useValue: {
+            me,
+            login: vi.fn(),
+            logout: vi.fn(),
+            invalidate: vi.fn(),
+            sessionChanges: () => EMPTY
+          }
+        }
       ]
     })
   })
@@ -118,8 +127,17 @@ describe("auth guards", () => {
         token: "fake-token",
         tipo: "Bearer",
         expiraEnSegundos: 1,
-        correo: "fake@example.test",
-        rol: "Operaciones"
+        refreshToken: "fake-refresh",
+        refreshExpiraEnSegundos: 1,
+        usuario: {
+          idUsuario: 7,
+          nombre: "Fake Name",
+          correo: "fake@example.test",
+          idRol: 3,
+          rol: "Operaciones",
+          idioma: "es",
+          permisos: []
+        }
       })
       expect((await login).success).toBe(true)
       expect(await firstValueFrom(check(authGuard) as Observable<boolean | UrlTree>)).toBe(true)

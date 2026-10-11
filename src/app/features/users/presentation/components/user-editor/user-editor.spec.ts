@@ -125,9 +125,8 @@ describe("UserEditor Signal Forms", () => {
       const setError = vi.spyOn(editor.error, "set")
       editor.model.set({
         name: "New",
-        age: 20,
         email: "new@example.test",
-        password: "test-password",
+        password: "FakePassword1",
         lang: Lang.ES,
         isActive: true,
         roleId: String(roles.roles()[0].id)
@@ -156,9 +155,8 @@ describe("UserEditor Signal Forms", () => {
     const { editor, element, users, roles, saved } = await setup()
     editor.model.set({
       name: "Cancelled",
-      age: 20,
       email: "cancelled@example.test",
-      password: "test-password",
+      password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)
@@ -200,9 +198,8 @@ describe("UserEditor Signal Forms", () => {
     vi.spyOn(users, "createUser").mockReturnValue(EMPTY)
     editor.model.set({
       name: "New",
-      age: 20,
       email: "new@example.test",
-      password: "test-password",
+      password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)
@@ -234,7 +231,7 @@ describe("UserEditor Signal Forms", () => {
     ref.forceClose()
   })
 
-  it("rejects missing name/email/role, malformed email and invalid numeric age with visible errors", async () => {
+  it("rejects missing name/email/role and malformed email with visible errors", async () => {
     const { editor, users, fixture, element, ref } = await setup()
     const create = vi.spyOn(users, "createUser")
     await flush(editor.save())
@@ -248,7 +245,6 @@ describe("UserEditor Signal Forms", () => {
     expect(describedBy.split(" ")).toContain(roleError?.id)
     editor.model.set({
       name: "   ",
-      age: -1,
       email: "invalid",
       password: "",
       roleId: "",
@@ -256,7 +252,8 @@ describe("UserEditor Signal Forms", () => {
       isActive: true
     })
     expect(editor.userForm().valid()).toBe(false)
-    expect(editor.userForm.age().errors()).not.toHaveLength(0)
+    expect(editor.userForm.email().errors()).not.toHaveLength(0)
+    expect(editor.model()).not.toHaveProperty("age")
     ref.forceClose()
   })
 
@@ -273,14 +270,13 @@ describe("UserEditor Signal Forms", () => {
     expect(element.textContent).not.toMatch(
       /demo|demostración|en memoria|fictici|adaptador|marcador/i
     )
-    expect(element.querySelector("#age-help")?.textContent).toBe("Ingresa la edad en años.")
+    expect(element.querySelector("#user-age")).toBeNull()
     const select = element.querySelector<HTMLSelectElement>("#user-role")!
     select.value = String(roles.roles()[0].id)
     select.dispatchEvent(new Event("change", { bubbles: true }))
     expect(editor.model().roleId).toBe(String(roles.roles()[0].id))
     editor.model.set({
       name: "  Nueva Persona  ",
-      age: 28,
       email: "new@example.test",
       password: "",
       roleId: String(roles.roles()[0].id),
@@ -296,13 +292,13 @@ describe("UserEditor Signal Forms", () => {
     await flush(editor.save())
     expect(create).not.toHaveBeenCalled()
     expect(saved).not.toHaveBeenCalled()
-    password.value = "  test-password  "
+    password.value = "  FakePassword1  "
     password.dispatchEvent(new Event("input", { bubbles: true }))
-    expect(editor.model().password).toBe("  test-password  ")
+    expect(editor.model().password).toBe("  FakePassword1  ")
     expect(editor.userForm().valid()).toBe(true)
     await flush(editor.save())
     expect(create).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ password: "test-password" })
+      expect.objectContaining({ password: "  FakePassword1  " })
     )
     expect(saved).toHaveBeenCalledOnce()
     expect(ref.state()).toBe("closed")
@@ -368,9 +364,8 @@ describe("UserEditor Signal Forms", () => {
     const close = vi.spyOn(ref, "close")
     editor.model.set({
       name: "New",
-      age: 20,
       email: "new@example.test",
-      password: "test-password",
+      password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
       roleId: String(roles.roles()[0].id)

@@ -8,9 +8,13 @@ import { AuditViewer } from "../../components/audit-viewer/audit-viewer"
 import { RbacError } from "../../../domain/errors/rbac.error"
 import { AuditLogError } from "../../../domain/errors/audit-log.error"
 import { provideRouter } from "@angular/router"
-import { firstValueFrom, of, Subject } from "rxjs"
+import { firstValueFrom, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
+import { UserSession } from "../../../domain/entities/user-session.entity"
+import { UserSessionQuery } from "../../../domain/models/user-session-query"
+import { AuditLog } from "../../../domain/entities/audit-log.entity"
+import { AuditQuery } from "../../../domain/models/audit-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { UserStore } from "../../state/user.store"
@@ -42,7 +46,7 @@ const providers = [
 ]
 
 async function flush<T>(pending: Promise<T>): Promise<T> {
-  await vi.advanceTimersByTimeAsync(250)
+  await vi.advanceTimersByTimeAsync(750)
   return pending
 }
 
@@ -64,6 +68,101 @@ describe("UsersPage", () => {
           }
         }
       ]
+    })
+    TestBed.overrideProvider(USER_SESSION_REPOSITORY, {
+      useValue: {
+        getUserSessions: (query: UserSessionQuery = {}) =>
+          timer(250).pipe(
+            map(() => {
+              const page = query.page ?? 0,
+                size = query.size ?? 20
+              const total = query.userId === undefined ? 26 : 1
+              const items = Array.from(
+                { length: Math.min(size, Math.max(0, total - page * size)) },
+                (_, index) =>
+                  UserSession.create(
+                    page * size + index + 1,
+                    query.userId ?? 90,
+                    "192.0.2.1",
+                    "Chrome",
+                    new Date(Date.now() - 1000),
+                    new Date(Date.now() + 60000),
+                    page === 0 && index === 0,
+                    "Server user",
+                    "server@example.test"
+                  )
+              )
+              return Result.success({
+                items,
+                page,
+                size,
+                total,
+                totalPages: Math.ceil(total / size)
+              })
+            })
+          ),
+        revokeUserSession: () => timer(250).pipe(map(() => Result.success<void>(undefined))),
+        revokeUserSessions: vi.fn(),
+        getUserSessionsByUser: vi.fn()
+      }
+    })
+    TestBed.overrideProvider(AUDIT_LOG_REPOSITORY, {
+      useValue: {
+        getAuditLogs: (query: AuditQuery = {}) =>
+          timer(250).pipe(
+            map(() => {
+              const page = query.page ?? 0,
+                size = query.size ?? 20,
+                total = query.entity ? 9 : 48
+              const items = Array.from(
+                { length: Math.min(size, Math.max(0, total - page * size)) },
+                (_, index) =>
+                  AuditLog.create(
+                    page * size + index + 1,
+                    90,
+                    query.entity ?? "usuario",
+                    "ACTUALIZAR",
+                    "Server event",
+                    "192.0.2.1",
+                    new Date("2026-09-01T00:00:00Z"),
+                    "Server actor",
+                    "42"
+                  )
+              )
+              return Result.success({
+                items,
+                page,
+                size,
+                total,
+                totalPages: Math.ceil(total / size),
+                globalTotal: 90
+              })
+            })
+          ),
+        getAuditLogById: vi.fn(),
+        exportAuditLogs: vi.fn()
+      }
+    })
+    TestBed.overrideProvider(AuditLogRepositoryImpl, {
+      useFactory: () => TestBed.inject(AUDIT_LOG_REPOSITORY)
+    })
+    TestBed.overrideProvider(RBAC_REPOSITORY, {
+      useValue: {
+        getPermissions: () =>
+          timer(250).pipe(
+            map(() =>
+              Result.success([
+                { id: 73, code: "CUSTOM", module: "Backend", description: "Custom permission" }
+              ])
+            )
+          ),
+        getRolePermissions: (roleId: number) =>
+          timer(250).pipe(map(() => Result.success({ roleId, permissions: [] }))),
+        saveRolePermissions: vi.fn()
+      }
+    })
+    TestBed.overrideProvider(RbacRepositoryImpl, {
+      useFactory: () => TestBed.inject(RBAC_REPOSITORY)
     })
   })
   async function setup() {
@@ -89,14 +188,14 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.querySelector("app-audit-viewer")).not.toBeNull()
-    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("48")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("90")
     const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
     entity.value = "sesion"
     entity.dispatchEvent(new Event("change"))
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.textContent).toContain("de 9 registros")
-    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("48")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("90")
     page.section.set("users")
     fixture.detectChanges()
     expect(element.querySelector("#user-search")).not.toBeNull()
@@ -146,10 +245,10 @@ describe("UsersPage", () => {
     await vi.advanceTimersByTimeAsync(500)
     matrix.selectRole("1")
     await vi.advanceTimersByTimeAsync(500)
-    matrix.toggle("crm", "create", true)
+    matrix.toggle(73, true)
     fixture.detectChanges()
     expect(matrix.dirty()).toBe(true)
-    const draft = matrix.grants()
+    const draft = matrix.ids()
     await visit(fixture, "users")
     const wrapper = element.querySelector("app-rbac-matrix")?.parentElement
     expect(wrapper?.hidden).toBe(true)
@@ -158,7 +257,7 @@ describe("UsersPage", () => {
     await visit(fixture, "rbac")
     expect(fixture.debugElement.query(By.directive(RbacMatrix)).componentInstance).toBe(matrix)
     expect(matrix.selectedRoleId()).toBe(1)
-    expect(matrix.grants()).toEqual(draft)
+    expect(matrix.ids()).toEqual(draft)
     expect(matrix.canSave()).toBe(true)
     expect(matrix.loading()).toBe(false)
     expect(query).toHaveBeenCalledTimes(2) // first visit and explicit role change only
@@ -262,6 +361,8 @@ describe("UsersPage", () => {
       if (section === "rbac") rbacPending.next(Result.failure(new RbacError("UNEXPECTED")))
       else auditPending.next(Result.failure(new AuditLogError("UNEXPECTED")))
       pending.complete()
+      // RBAC also awaits its independent real permission-catalog query.
+      await vi.advanceTimersByTimeAsync(250)
       await visit(fixture, section)
       expect(query).toHaveBeenCalledOnce()
       expect(
@@ -305,90 +406,65 @@ describe("UsersPage", () => {
     expect(row.querySelector(".h-9, .sm\\:w-60, .xl\\:w-100")).toBeNull()
   })
 
-  it("enables Sessions with all catalog groups, zero/multiple filters and live counts while preserving Users", async () => {
+  it("uses server session totals across pages and user filters independently of the user catalog", async () => {
     const { element, fixture, page } = await setup()
-    const sessions = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
-    expect(sessions).not.toBeNull()
-    expect(sessions.disabled).toBe(false)
-    expect(sessions.textContent).toContain("6")
-    sessions.click()
+    const tab = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
+    expect(tab.disabled).toBe(false)
+    expect(page.sessions.sessions()).toHaveLength(20)
+    expect(page.sessionCount()).toBe(26)
+    expect(tab.textContent).toContain("26")
+    tab.click()
     fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
-    expect(element.querySelector('details[data-session-user="1"]')?.textContent).toContain(
-      "2 sesiones"
-    )
-    expect(element.querySelector('details[data-session-user="5"]')?.textContent).toContain(
-      "Sin sesiones activas"
-    )
-    expect(element.querySelector("#user-search")).toBeNull()
-    const filter = element.querySelector<HTMLSelectElement>("#session-filter")!
-    filter.value = "with"
-    filter.dispatchEvent(new Event("change"))
+    expect(element.textContent).toContain("Server user")
+    expect(element.textContent).toContain("Tu sesión actual")
+    expect(element.textContent).toContain("Para cerrarla usa Salir")
+    expect(element.textContent).toContain("Mostrando 1–20 de 26 sesiones")
+    expect(element.textContent).not.toMatch(/demostración|simulad/i)
+    element
+      .querySelector<HTMLButtonElement>('app-user-sessions button[aria-label="Página siguiente"]')!
+      .click()
+    await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(4)
-    filter.value = "without"
-    filter.dispatchEvent(new Event("change"))
+    expect(page.sessions.sessions()).toHaveLength(6)
+    expect(page.sessionCount()).toBe(26)
+    expect(element.textContent).toContain("Mostrando 21–26 de 26 sesiones")
+    const input = element.querySelector<HTMLInputElement>("#session-user-id")!
+    input.value = "90"
+    input.dispatchEvent(new Event("input"))
     fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
-    expect(element.textContent).toContain("Mostrando 1–5 de 44 usuarios")
-    filter.value = "all"
-    filter.dispatchEvent(new Event("change"))
+    element
+      .querySelector<HTMLFormElement>("app-user-sessions form")!
+      .dispatchEvent(new Event("submit", { cancelable: true }))
+    await flush(fixture.whenStable())
     fixture.detectChanges()
-    const reached: number[] = []
-    const next = () =>
-      element.querySelector<HTMLButtonElement>(
-        'app-user-sessions button[aria-label="Página siguiente"]'
-      )!
-    do {
-      reached.push(
-        ...Array.from(element.querySelectorAll("details[data-session-user]")).map(row =>
-          Number(row.getAttribute("data-session-user"))
-        )
-      )
-      if (next().disabled) break
-      next().click()
-      fixture.detectChanges()
-    } while (true)
-    expect(reached).toEqual(page.users.users().map(user => user.id))
-    expect(element.textContent).toContain("Mostrando 46–48 de 48 usuarios")
-    // Local page/search/filter must not change navigation or the global session metric.
-    const search = element.querySelector<HTMLInputElement>("#session-search")!
-    search.value = "USR-48"
-    search.dispatchEvent(new Event("input"))
-    filter.value = "without"
-    filter.dispatchEvent(new Event("change"))
-    fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
-    expect(element.textContent).toContain("Mostrando 1–1 de 1 usuarios")
-    expect(page.sessionCount()).toBe(6)
-    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("6")
-    expect(sessions.textContent).toContain("6")
-    filter.value = "with"
-    filter.dispatchEvent(new Event("change"))
-    fixture.detectChanges()
-    expect(element.textContent).toContain("Sin resultados")
-    expect(page.sessionCount()).toBe(6)
-    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("6")
-    expect(sessions.textContent).toContain("6")
+    expect(page.sessions.query()).toEqual({ page: 0, size: 20, userId: 90 })
+    expect(page.sessionCount()).toBe(1)
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("1")
+    expect(tab.textContent).toContain("1")
+    expect(element.textContent).toContain("Mostrando 1–1 de 1 sesiones")
+    expect(page.users.users().every(user => user.id !== 90)).toBe(true)
     element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
     fixture.detectChanges()
-    expect(element.querySelector("#user-search")).not.toBeNull()
-    expect(page.filteredUsers()).toHaveLength(48)
+    expect(page.filteredUsers()).toHaveLength(5)
+    expect(page.users.total()).toBe(48)
   })
 
-  it("keeps navigation, session metric and rows synchronized after revoke, expiry and destruction", async () => {
+  it("requeries after revoke and retains server totals rather than inferring them from expiry", async () => {
     const { page, fixture, element } = await setup()
-    expect(page.sessionCount()).toBe(6)
-    await flush(firstValueFrom(page.sessions.revokeSession(1, 2)))
+    const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getUserSessions")
+    expect(page.sessionCount()).toBe(26)
+    await flush(firstValueFrom(page.sessions.revokeSession(90, 2)))
     fixture.detectChanges()
-    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("5")
-    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("5")
+    expect(query).toHaveBeenCalledExactlyOnceWith({})
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("26")
     vi.setSystemTime(
       Math.max(...page.sessions.sessions().map(session => session.expiryDate.getTime()))
     )
     await vi.advanceTimersByTimeAsync(1000)
     fixture.detectChanges()
-    expect(page.sessionCount()).toBe(0)
+    expect(page.sessions.activeSessions()).toHaveLength(0)
+    expect(page.sessionCount()).toBe(26)
     const clock = vi.spyOn(page.sessions, "refreshClock")
     fixture.destroy()
     await vi.advanceTimersByTimeAsync(1000)
@@ -398,6 +474,9 @@ describe("UsersPage", () => {
   it("enables RBAC and preserves Users filters after returning", async () => {
     const { element, fixture, page } = await setup()
     page.setSearch("Laura")
+    // Finish the server query before mounting the independently loading demo matrix.
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
     const tab = element.querySelector<HTMLButtonElement>("[data-rbac-tab]")!
     expect(tab).not.toBeNull()
     expect(tab.disabled).toBe(false)
@@ -406,7 +485,7 @@ describe("UsersPage", () => {
     await vi.advanceTimersByTimeAsync(500)
     fixture.detectChanges()
     expect(element.querySelector("app-rbac-matrix")).not.toBeNull()
-    expect(element.querySelectorAll("tr[data-module]")).toHaveLength(7)
+    expect(element.querySelectorAll('fieldset[data-module="Backend"]')).toHaveLength(1)
     expect(element.querySelector("app-user-sessions")).toBeNull()
     element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
     fixture.detectChanges()
@@ -454,7 +533,9 @@ describe("UsersPage", () => {
   })
 
   it("renders an empty catalog without creating records at page entry", async () => {
-    vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers").mockReturnValue(of(Result.success([])))
+    vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers").mockReturnValue(
+      of(Result.success({ items: [], page: 0, size: 5, total: 0, totalPages: 0 }))
+    )
     const create = vi.spyOn(TestBed.inject(UserStore), "createUser")
     const { element, page } = await setup()
     expect(element.textContent).toContain("Aún no hay usuarios")
@@ -572,19 +653,23 @@ describe("UsersPage", () => {
     expect(element.querySelector("header")).toBeNull()
     expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
-    expect(element.textContent).toContain("42 activos")
-    expect(element.textContent).toContain("6 inactivos")
+    expect(element.textContent).toContain("En esta página: 4 activos")
+    expect(element.textContent).toContain("1 inactivos")
     expect(element.textContent).not.toContain("CORE BACKOFFICE")
     expect(element.textContent).toContain("Gestiona estados, roles")
+    expect(element.textContent).toContain("Total global del servidor")
+    expect(element.textContent).toContain("Total de la consulta de sesiones")
+    expect(element.textContent).not.toMatch(/demostración|simulad/i)
+    const catalog = element.querySelector(".users-catalog")!
     const accessibleCopy = Array.from(
-      element.querySelectorAll("[aria-label], [title], caption, [id$='-help']")
+      catalog.querySelectorAll("[aria-label], [title], caption, [id$='-help']")
     )
       .map(
         node =>
           `${node.textContent} ${node.getAttribute("aria-label") ?? ""} ${node.getAttribute("title") ?? ""}`
       )
       .join(" ")
-    expect(`${element.textContent} ${accessibleCopy}`).not.toMatch(
+    expect(`${catalog.textContent} ${accessibleCopy}`).not.toMatch(
       /demo|demostración|en memoria|fictici|sin backend|no implementad|RF02|HU02|P03|M02/i
     )
     expect(element.querySelector("#credentials-help")).toBeNull()
@@ -620,7 +705,9 @@ describe("UsersPage", () => {
     fixture.detectChanges()
     expect(success).toHaveBeenCalledTimes(2)
     expect(success).toHaveBeenLastCalledWith("Usuario Carlos Mendoza eliminado")
-    expect(element.textContent).not.toMatch(/demo|demostración|en memoria|fictici/i)
+    expect(element.querySelector(".users-catalog")?.textContent).not.toMatch(
+      /demo|demostración|en memoria|fictici/i
+    )
   })
 
   it("pairs decorative reference tones with actual roles and explicit status labels on desktop and mobile", async () => {
@@ -718,33 +805,42 @@ describe("UsersPage", () => {
     )
   })
 
-  it("searches names and emails, filters actual role/status and resets pagination", async () => {
-    const { page, roles } = await setup()
+  it("queries names/emails and role/status on the server and resets pagination", async () => {
+    const { page, roles, fixture } = await setup()
+    const query = vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers")
     page.goToPage(8)
     page.setSearch("carlos")
     expect(page.currentPage()).toBe(1)
+    await flush(fixture.whenStable())
     expect(page.filteredUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
+    expect(query).toHaveBeenLastCalledWith({ page: 0, size: 5, search: "carlos" })
     page.setSearch("persona.48@")
+    await flush(fixture.whenStable())
     expect(page.filteredUsers()).toHaveLength(1)
     page.setSearch("")
     page.goToPage(8)
     page.setRoleFilter(String(roles.roles()[2].id))
+    await flush(fixture.whenStable())
     expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => user.roleId === roles.roles()[2].id)).toBe(true)
     page.goToPage(2)
     page.setStatusFilter("inactive")
+    await flush(fixture.whenStable())
     expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().every(user => !user.isActive)).toBe(true)
     page.clearFilters()
-    expect(page.filteredUsers()).toHaveLength(48)
+    await flush(fixture.whenStable())
+    expect(page.filteredUsers()).toHaveLength(5)
+    expect(page.users.total()).toBe(48)
   })
 
-  it("connects bounded shared navigation to users slicing and filter resets", async () => {
+  it("connects bounded shared navigation to server pages and filter resets", async () => {
     const { page, fixture, element } = await setup()
     const nav = () =>
       element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
-    const select = (number: number) => {
+    const select = async (number: number) => {
       nav().querySelector<HTMLButtonElement>(`button[aria-label="Página ${number}"]`)!.click()
+      await flush(fixture.whenStable())
       fixture.detectChanges()
     }
     expect(nav()).not.toBeNull()
@@ -753,18 +849,21 @@ describe("UsersPage", () => {
         'button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])'
       )
     ).toHaveLength(4)
-    select(10)
+    await select(10)
     expect(page.currentPage()).toBe(10)
     expect(page.visibleUsers()).toHaveLength(3)
     expect(nav().querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("10")
     nav().querySelector<HTMLButtonElement>('button[aria-label="Página anterior"]')!.click()
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.currentPage()).toBe(9)
     expect(page.visibleUsers()).toHaveLength(5)
     nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')!.click()
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.currentPage()).toBe(10)
     page.setSearch("persona.48@")
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.currentPage()).toBe(1)
     expect(
@@ -780,6 +879,7 @@ describe("UsersPage", () => {
   it("clamps the current page when last-page users are deleted", async () => {
     const { page, users, fixture, element } = await setup()
     page.goToPage(10)
+    await flush(fixture.whenStable())
     expect(page.visibleUsers()).toHaveLength(3)
     for (const user of [...page.visibleUsers()])
       await flush(firstValueFrom(users.deleteUserById(user.id)))
@@ -796,12 +896,15 @@ describe("UsersPage", () => {
   it("shows empty filtered results and offers a reset action", async () => {
     const { page, fixture, element } = await setup()
     page.setSearch("no-such-user")
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.textContent).toContain("Sin resultados")
     const reset = element.querySelector<HTMLButtonElement>("[data-reset-filters]")!
     reset.click()
+    await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.filteredUsers()).toHaveLength(48)
+    expect(page.filteredUsers()).toHaveLength(5)
+    expect(page.users.total()).toBe(48)
   })
 
   it("displays query failure with retry and a loading state", async () => {

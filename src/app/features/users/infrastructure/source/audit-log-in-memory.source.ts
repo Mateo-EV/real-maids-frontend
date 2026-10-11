@@ -6,11 +6,18 @@ import { normalizePagination } from "@/app/shared/pagination/normalize-paginatio
 import { AuditLog } from "../../domain/entities/audit-log.entity"
 import { AuditLogError } from "../../domain/errors/audit-log.error"
 import {
-  AUDIT_ENTITIES,
   AuditFilters,
   AuditQuery,
-  validAuditFilters
+  validAuditFilters as validFilters
 } from "../../domain/models/audit-query"
+
+// Legacy fixture catalog stays isolated from the documented backend catalog.
+const AUDIT_ENTITIES = ["usuario", "cliente", "orden_servicio", "asignacion", "sesion"]
+const validAuditFilters = (filters: AuditFilters) =>
+  validFilters(filters) &&
+  (filters.entity === undefined || AUDIT_ENTITIES.includes(filters.entity)) &&
+  (filters.action === undefined ||
+    ["INSERT", "UPDATE", "DELETE", "LOGIN_SUCCESS", "REASSIGN_CREW"].includes(filters.action))
 
 const cloneAuditLog = (log: AuditLog): AuditLog =>
   AuditLog.create(

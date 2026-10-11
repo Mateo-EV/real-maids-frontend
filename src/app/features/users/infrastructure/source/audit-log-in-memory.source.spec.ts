@@ -30,7 +30,7 @@ describe("Read-only audit source", () => {
     if (!result.success) throw result.error
     expect(result.data.items).toHaveLength(20)
     expect(result.data.items[0]).toBeInstanceOf(AuditLog)
-    expect(result.data.items.every(item => item.details.includes("FICTITIOUS DEMO DATA"))).toBe(
+    expect(result.data.items.every(item => item.details?.includes("FICTITIOUS DEMO DATA"))).toBe(
       true
     )
     const secondSource = new AuditLogInMemorySource()

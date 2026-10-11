@@ -10,7 +10,7 @@
         (click)="section.set('users')"
       >
         Administración de Usuarios
-        <span hlmBadge variant="secondary">{{ users.users().length }}</span>
+        <span hlmBadge variant="secondary">{{ users.total() }}</span>
       </button>
       <button
         data-sessions-tab
@@ -25,7 +25,7 @@
           hlmBadge
           variant="secondary"
           class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
-          >{{ sessionCount() }} en línea</span
+          >{{ sessionCount() }} en la consulta</span
         >
       </button>
       <button
@@ -57,13 +57,14 @@
     >
       <article hlmCard>
         <div hlmCardHeader>
-          <p class="kpi-label">Usuarios registrados</p>
+          <p class="kpi-label">Usuarios del filtro</p>
           <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
             ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value">{{ users.users().length }}</p>
+          <p class="kpi-value">{{ users.total() }}</p>
           <p hlmCardDescription>
-            {{ activeCount() }} activos · {{ users.users().length - activeCount() }} inactivos
+            En esta página: {{ activeCount() }} activos ·
+            {{ users.users().length - activeCount() }} inactivos
           </p>
         </div>
       </article>
@@ -74,7 +75,7 @@
             ><ng-icon name="lucideSmartphone" aria-hidden="true" size="24"
           /></span>
           <p class="kpi-value" data-session-metric>{{ sessionCount() }}</p>
-          <p hlmCardDescription>Conexiones activas</p>
+          <p hlmCardDescription>Total de la consulta de sesiones, incluidos filtros</p>
         </div>
       </article>
       <article hlmCard>
@@ -84,7 +85,7 @@
             ><ng-icon name="lucideShield" aria-hidden="true" size="24"
           /></span>
           <p class="kpi-value">{{ roles.roles().length }}</p>
-          <p hlmCardDescription>Administración, Operaciones, Personal Campo…</p>
+          <p hlmCardDescription>Catálogo del backend, no concesiones de permisos</p>
         </div>
       </article>
       <article hlmCard>
@@ -94,7 +95,7 @@
             ><ng-icon name="lucideClipboardList" aria-hidden="true" size="24"
           /></span>
           <p class="kpi-value" data-audit-metric>{{ audit.globalTotal() ?? "—" }}</p>
-          <p hlmCardDescription>Total de registros disponibles</p>
+          <p hlmCardDescription>Total global del servidor, independiente de filtros</p>
         </div>
       </article>
     </section>
@@ -106,7 +107,7 @@
       <section
         class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
         aria-labelledby="users-title"
-        [attr.aria-busy]="initializing()"
+        [attr.aria-busy]="initializing() || users.loading()"
       >
         <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
           <div class="xl:self-start">
@@ -174,11 +175,11 @@
             </button>
           </div>
         </div>
-        @if (initializing()) {
+        @if (initializing() || users.loading()) {
           <div class="flex min-h-64 items-center justify-center gap-3" role="status">
             <hlm-spinner />Cargando catálogo…
           </div>
-        } @else if (loadError()) {
+        } @else if (loadError() || users.error()) {
           <div class="p-5">
             <div hlmAlert variant="destructive" role="alert">
               <p hlmAlertTitle>No pudimos cargar el catálogo</p>
@@ -204,13 +205,17 @@
                 <ng-icon name="lucideUsers" aria-hidden="true" />
               </div>
               <h2 hlmEmptyTitle>
-                {{ users.users().length ? "Sin resultados" : "Aún no hay usuarios" }}
+                {{
+                  search() || roleFilter() || statusFilter() !== "all"
+                    ? "Sin resultados"
+                    : "Aún no hay usuarios"
+                }}
               </h2>
               <p hlmEmptyDescription>
                 {{
-                  users.users().length
+                  search() || roleFilter() || statusFilter() !== "all"
                     ? "Prueba otra búsqueda o restablece los filtros."
-                    : "Crea un rol activo y registra un usuario."
+                    : "Selecciona un rol activo del catálogo y registra un usuario."
                 }}
               </p>
             </div>
@@ -286,9 +291,6 @@
                             : "Nunca accedió"
                         }}
                       </p>
-                      @if (decoration(user).ip; as ip) {
-                        <p class="text-xs text-muted-foreground">IP: {{ ip }}</p>
-                      }
                     </td>
                     <td hlmTd>
                       <span
@@ -359,10 +361,6 @@
                         : "Nunca accedió"
                     }}
                   </dd>
-                  @if (decoration(user).ip; as ip) {
-                    <dt class="text-muted-foreground">IP</dt>
-                    <dd>{{ ip }}</dd>
-                  }
                 </dl>
                 <ng-container
                   [ngTemplateOutlet]="userActions"
@@ -376,17 +374,14 @@
           class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
         >
           <p class="text-xs text-muted-foreground" role="status">
-            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de
-            {{ filteredUsers().length }} usuarios{{
-              filteredUsers().length === users.users().length ? "" : " filtrados"
-            }}
-            · Total: {{ users.users().length }}
+            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ users.total() }} usuarios del
+            filtro
           </p>
           <app-table-pagination
             label="Paginación de usuarios"
             [currentPage]="currentPage()"
             [pageCount]="pageCount()"
-            [disabled]="initializing()"
+            [disabled]="initializing() || users.loading()"
             (pageSelected)="goToPage($event)"
           />
         </div>

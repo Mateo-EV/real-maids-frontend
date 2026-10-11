@@ -45,7 +45,7 @@ describe("USERS_ROUTES", () => {
       }
     )
   )
-  it("lazy loads the standalone demo page behind the existing auth guard", async () => {
+  it("lazy loads the standalone IAM page behind the existing auth guard", async () => {
     const route = USERS_ROUTES[0]
     expect(route.path).toBe("")
     expect(route.canActivate).toEqual([authGuard])
@@ -88,21 +88,85 @@ describe("USERS_ROUTES", () => {
         token: "fake-token",
         tipo: "Bearer",
         expiraEnSegundos: 3600,
-        correo: "returned@example.test",
-        rol: "Operaciones"
+        refreshToken: "fake-refresh",
+        refreshExpiraEnSegundos: 7200,
+        usuario: {
+          idUsuario: 7,
+          nombre: "Fake Name",
+          correo: "returned@example.test",
+          idRol: 3,
+          rol: "Operaciones",
+          idioma: "es",
+          permisos: []
+        }
       })
       expect((await pending).success).toBe(true)
       expect(auth.session()).toMatchObject({
-        name: null,
+        name: "Fake Name",
         email: "returned@example.test",
         role: "Operaciones"
       })
       http.verify()
     }
+    function flushHttpCatalog(includeRoles: boolean) {
+      const sessions = http.expectOne(
+        request => request.url === "http://localhost:8080/api/sesiones"
+      )
+      expect(sessions.request.headers.get("Authorization")).toBe("Bearer fake-token")
+      expect(sessions.request.params.get("pagina")).toBe("0")
+      expect(sessions.request.params.get("tamanio")).toBe("20")
+      sessions.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+      const audit = http.expectOne(request => request.url === "http://localhost:8080/api/auditoria")
+      expect(audit.request.headers.get("Authorization")).toBe("Bearer fake-token")
+      expect(audit.request.params.get("tamanio")).toBe("1")
+      audit.flush({
+        contenido: [],
+        pagina: 0,
+        tamanio: 1,
+        totalElementos: 0,
+        totalPaginas: 0,
+        totalGlobal: 0
+      })
+      if (includeRoles)
+        http.expectOne("http://localhost:8080/api/roles").flush([
+          {
+            idRol: 3,
+            nombre: "Operaciones",
+            descripcion: "Fake role",
+            activo: true,
+            fechaCreacion: "2026-01-01T00:00:00Z"
+          }
+        ])
+      const users = http.expectOne(request => request.url === "http://localhost:8080/api/usuarios")
+      expect(users.request.params.get("pagina")).toBe("0")
+      expect(users.request.params.get("tamanio")).toBe("5")
+      expect(users.request.headers.get("Authorization")).toBe("Bearer fake-token")
+      users.flush({
+        contenido: [
+          {
+            idUsuario: 7,
+            nombre: "Fake Name",
+            correo: "returned@example.test",
+            idRol: 3,
+            rol: "Operaciones",
+            idioma: "es",
+            activo: true,
+            ultimoAcceso: null,
+            fechaCreacion: "2026-01-01T00:00:00Z",
+            fechaActualizacion: "2026-01-01T00:00:00Z"
+          }
+        ],
+        pagina: 0,
+        tamanio: 5,
+        totalElementos: 1,
+        totalPaginas: 1
+      })
+    }
     await establishSession()
     const harness = await RouterTestingHarness.create()
     await harness.navigateByUrl("/admin/users")
     harness.detectChanges()
+    flushHttpCatalog(true)
     const pageElement = harness.routeDebugElement!.query(
       debug => debug.componentInstance instanceof UsersPage
     )
@@ -141,11 +205,15 @@ describe("USERS_ROUTES", () => {
     auth.logout()
     expect(auth.session()).toBeNull()
     expect(auth.isAuthenticated()).toBe(false)
+    http
+      .expectOne("http://localhost:8080/api/auth/logout")
+      .flush(null, { status: 204, statusText: "OK" })
     http.expectNone(() => true)
     await harness.navigateByUrl("/login")
     await establishSession()
     await harness.navigateByUrl("/admin/users")
     harness.detectChanges()
+    flushHttpCatalog(false)
     const revisited = harness.routeDebugElement!.query(
       debug => debug.componentInstance instanceof UsersPage
     )

@@ -6,6 +6,9 @@ import { TestBed } from "@angular/core/testing"
 import { ActivatedRoute, convertToParamMap, Router } from "@angular/router"
 import { describe, expect, it, vi } from "vitest"
 import { LoginPage } from "./login-page"
+import { EMPTY } from "rxjs"
+import { ObserveAuthSessionUseCase } from "../../../application/use-cases/observe-auth-session.use-case"
+import { InvalidateAuthSessionUseCase } from "../../../application/use-cases/invalidate-auth-session.use-case"
 
 describe("LoginPage", () => {
   function createPage(returnUrl?: string) {
@@ -15,6 +18,8 @@ describe("LoginPage", () => {
       imports: [LoginPage],
       providers: [
         AuthStore,
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
+        { provide: InvalidateAuthSessionUseCase, useValue: { execute: vi.fn() } },
         { provide: GetCurrentUserUseCase, useValue: { execute: vi.fn() } },
         { provide: LoginUseCase, useValue: { execute: vi.fn() } },
         { provide: LogoutUseCase, useValue: { execute: vi.fn() } },

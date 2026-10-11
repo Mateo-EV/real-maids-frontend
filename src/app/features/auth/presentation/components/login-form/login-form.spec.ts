@@ -9,6 +9,8 @@ import { TestBed } from "@angular/core/testing"
 import { EMPTY, of, Subject, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { LoginFormComponent } from "./login-form"
+import { ObserveAuthSessionUseCase } from "../../../application/use-cases/observe-auth-session.use-case"
+import { InvalidateAuthSessionUseCase } from "../../../application/use-cases/invalidate-auth-session.use-case"
 
 const demoCredentials = { name: "Mateo", email: "riojamatthew@gmail.com", password: "demo2026" }
 
@@ -22,6 +24,8 @@ describe("LoginFormComponent", () => {
       imports: [LoginFormComponent],
       providers: [
         AuthStore,
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
+        { provide: InvalidateAuthSessionUseCase, useValue: { execute: vi.fn() } },
         { provide: GetCurrentUserUseCase, useValue: { execute: vi.fn() } },
         { provide: LoginUseCase, useValue: { execute: login } },
         { provide: LogoutUseCase, useValue: { execute: vi.fn() } }

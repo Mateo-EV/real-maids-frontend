@@ -5,7 +5,7 @@
 <form class="mt-4 flex flex-col gap-3" [formRoot]="userForm" (submit)="save()">
   @if (error()) {
     <div hlmAlert variant="destructive" role="alert">
-      <p hlmAlertTitle>No se guardaron los cambios</p>
+      <p hlmAlertTitle>No se completó el guardado</p>
       <p hlmAlertDescription>{{ error() }}</p>
     </div>
   }
@@ -46,28 +46,20 @@
         hlmInput
         id="user-password"
         type="password"
-        autocomplete="off"
+        autocomplete="new-password"
+        aria-describedby="password-help"
         [formField]="userForm.password"
       />
+      <p hlmFieldDescription id="password-help">
+        @if (context.user) {
+          Vacío conserva la contraseña. Restablecer aplica a otras cuentas, no a la contraseña
+          propia.
+        } @else {
+          De 8 a 64 caracteres, con mayúscula, minúscula y número.
+        }
+      </p>
       @if (userForm.password().touched()) {
         @for (error of userForm.password().errors(); track error.kind) {
-          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-        }
-      }
-    </div>
-    <div hlmField>
-      <label hlmFieldLabel for="user-age">Edad (años)</label>
-      <input
-        hlmInput
-        id="user-age"
-        type="number"
-        step="1"
-        [formField]="userForm.age"
-        aria-describedby="age-help"
-      />
-      <p hlmFieldDescription id="age-help">Ingresa la edad en años.</p>
-      @if (userForm.age().touched()) {
-        @for (error of userForm.age().errors(); track error.kind) {
           <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
         }
       }

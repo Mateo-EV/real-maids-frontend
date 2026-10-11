@@ -7,7 +7,6 @@ export class User {
   private constructor(
     public id: number,
     public name: string,
-    public age: number,
     public email: string,
     public lang: Lang,
     public isActive: boolean,
@@ -20,7 +19,6 @@ export class User {
   static create(
     id: number,
     name: string,
-    age: number,
     email: string,
     lang: Lang,
     isActive: boolean,
@@ -29,6 +27,6 @@ export class User {
     roleId: number,
     lastAccess: Date | null = null
   ): User {
-    return new User(id, name, age, email, lang, isActive, createdAt, updatedAt, roleId, lastAccess)
+    return new User(id, name, email, lang, isActive, createdAt, updatedAt, roleId, lastAccess)
   }
 }

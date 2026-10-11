@@ -5,7 +5,6 @@ import { of, Subject } from "rxjs"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { Result } from "@/app/shared/utils/result"
 import { AUDIT_LOG_REPOSITORY } from "../../../domain/repositories/audit-log.repository"
-import { AuditLogRepositoryImpl } from "../../../infrastructure/repositories/audit-log.repository-impl"
 import { GetAuditLogByIdUseCase } from "../../../application/use-cases/get-audit-log-by-id.use-case"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditLogError } from "../../../domain/errors/audit-log.error"
@@ -18,7 +17,33 @@ describe("Audit detail", () => {
     vi.useFakeTimers()
     TestBed.configureTestingModule({
       imports: [TestHost],
-      providers: [{ provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }]
+      providers: [
+        {
+          provide: AUDIT_LOG_REPOSITORY,
+          useValue: {
+            getAuditLogById: (id: number) =>
+              of(
+                id === 999
+                  ? Result.failure(new AuditLogError("AUDIT_LOG_NOT_FOUND"))
+                  : Result.success(
+                      AuditLog.create(
+                        id,
+                        2,
+                        "usuario",
+                        "ACTUALIZAR",
+                        "Descripción sintética",
+                        "192.0.2.1",
+                        new Date("2026-09-01T23:59:59Z"),
+                        "Actor de prueba",
+                        String(id),
+                        id === 9 ? [{ field: "nombre", before: null, after: "Nuevo nombre" }] : [],
+                        "actor@example.test"
+                      )
+                    )
+              )
+          }
+        }
+      ]
     })
   })
   afterEach(() => vi.useRealTimers())
@@ -40,7 +65,8 @@ describe("Audit detail", () => {
     const { element, dialog, ref } = await setup(1)
     expect(element.firstElementChild?.getAttribute("data-slot")).toBe("dialog-header")
     expect(element.querySelector('[data-slot="dialog-title"]')?.textContent).toContain("LOG-1")
-    expect(element.textContent).toContain("USUARIO-001")
+    expect(element.textContent).toContain("Actor de prueba")
+    expect(element.textContent).toContain("actor@example.test")
     expect(element.textContent).toContain("Fecha UTC")
     expect(element.querySelector("[data-audit-change]")).toBeNull()
     expect(element.textContent).toContain("no incluye valores antes/después")
@@ -50,10 +76,10 @@ describe("Audit detail", () => {
   })
   it("renders only supplied before/after values for the selected record", async () => {
     const { element } = await setup(9)
-    expect(element.textContent).toContain("ASIGNACION-009")
+    expect(element.textContent).toContain("ACTUALIZAR")
     expect(element.querySelectorAll("[data-audit-change]")).toHaveLength(1)
-    expect(element.textContent).toContain("Equipo 9")
-    expect(element.textContent).toContain("Equipo 10")
+    expect(element.textContent).toContain("Sin valor")
+    expect(element.textContent).toContain("Nuevo nombre")
     expect(element.textContent).not.toMatch(/hash|inmutable|verificad/i)
   })
   it("shows typed unknown ID failure and supports retry", async () => {
