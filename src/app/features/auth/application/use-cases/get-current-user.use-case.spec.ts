@@ -3,7 +3,7 @@ import { firstValueFrom, of, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
-import { UserSession } from "../../domain/entities/user-session.entity"
+import { AuthSession } from "../../domain/entities/auth-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
 import { GetCurrentUserUseCase } from "./get-current-user.use-case"
 
@@ -18,7 +18,7 @@ describe("GetCurrentUserUseCase", () => {
   })
 
   it.each([
-    Result.success(UserSession.create("Demo", "demo@example.com")),
+    Result.success(AuthSession.create("Demo", "demo@example.com")),
     Result.failure(new AuthError("UNEXPECTED"))
   ])("delegates the repository result unchanged", async result => {
     const response = of(result)

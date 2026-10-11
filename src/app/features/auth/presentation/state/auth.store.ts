@@ -1,7 +1,7 @@
 import { LoginUseCase } from "@/app/features/auth/application/use-cases/login.use-case"
 import { LogoutUseCase } from "@/app/features/auth/application/use-cases/logout.use-case"
 import { Result } from "@/app/shared/utils/result"
-import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { LoginParams } from "@/app/features/auth/domain/params/login.params"
 import { computed, DestroyRef, inject } from "@angular/core"
 import { AuthError } from "../../domain/errors/auth.error"
@@ -10,7 +10,7 @@ import { catchError, defaultIfEmpty, defer, map, of, take, tap } from "rxjs"
 import { GetCurrentUserUseCase } from "../../application/use-cases/get-current-user.use-case"
 
 interface AuthState {
-  readonly session: UserSession | null
+  readonly session: AuthSession | null
 }
 
 const initialState: AuthState = {

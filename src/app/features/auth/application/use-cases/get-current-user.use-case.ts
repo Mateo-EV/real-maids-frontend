@@ -1,7 +1,7 @@
 import { inject, Injectable } from "@angular/core"
 import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { UserSession } from "../../domain/entities/user-session.entity"
+import { AuthSession } from "../../domain/entities/auth-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
 import { AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
 
@@ -9,7 +9,7 @@ import { AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
 export class GetCurrentUserUseCase {
   private readonly authRepository = inject(AUTH_REPOSITORY)
 
-  execute(): Observable<Result<UserSession, AuthError>> {
+  execute(): Observable<Result<AuthSession, AuthError>> {
     return this.authRepository.me()
   }
 }

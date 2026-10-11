@@ -1,6 +1,6 @@
 import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.repository"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
-import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
@@ -20,8 +20,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { authGuard, guestGuard } from "./auth.guard"
 
 describe("auth guards", () => {
-  const session = UserSession.create("Demo", "demo@example.com")
-  let currentUser: Subject<Result<UserSession, AuthError>>
+  const session = AuthSession.create("Demo", "demo@example.com")
+  let currentUser: Subject<Result<AuthSession, AuthError>>
   const me = vi.fn()
 
   beforeEach(() => {

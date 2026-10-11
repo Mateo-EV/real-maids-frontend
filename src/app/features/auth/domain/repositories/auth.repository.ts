@@ -1,4 +1,4 @@
-import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { Result } from "@/app/shared/utils/result"
 import { Observable } from "rxjs"
@@ -7,7 +7,7 @@ import { InjectionToken } from "@angular/core"
 
 export interface AuthRepository {
   login(params: LoginParams): Observable<Result<void, AuthError>>
-  me(): Observable<Result<UserSession, AuthError>>
+  me(): Observable<Result<AuthSession, AuthError>>
   logout(): void
 }
 

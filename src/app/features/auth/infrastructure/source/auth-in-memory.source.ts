@@ -3,7 +3,7 @@ import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { LoginParams } from "../../domain/params/login.params"
 import { map, Observable, timer } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { UserSession } from "../../domain/entities/user-session.entity"
+import { AuthSession } from "../../domain/entities/auth-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
 
 const DEMO_AUTH = {
@@ -63,11 +63,11 @@ export class AuthInMemorySource {
     )
   }
 
-  me(): Observable<Result<UserSession, AuthError>> {
+  me(): Observable<Result<AuthSession, AuthError>> {
     return timer(250).pipe(
       map(() =>
         this.authenticated
-          ? Result.success(UserSession.create(DEMO_AUTH.name, DEMO_AUTH.email))
+          ? Result.success(AuthSession.create(DEMO_AUTH.name, DEMO_AUTH.email))
           : Result.failure(new AuthError("UNEXPECTED"))
       )
     )

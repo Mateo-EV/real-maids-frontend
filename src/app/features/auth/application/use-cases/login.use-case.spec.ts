@@ -3,7 +3,7 @@ import { of } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AuthRepository, AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
-import { UserSession } from "../../domain/entities/user-session.entity"
+import { AuthSession } from "../../domain/entities/auth-session.entity"
 import { AuthError } from "../../domain/errors/auth.error"
 import { LoginUseCase } from "./login.use-case"
 
@@ -26,11 +26,11 @@ describe("LoginUseCase", () => {
   })
 
   it("returns the user session after a successful login", () => {
-    const session = UserSession.create("Administrador Demo", "admin@realmaids.com")
+    const session = AuthSession.create("Administrador Demo", "admin@realmaids.com")
     vi.mocked(repository.login).mockReturnValue(of(Result.success<void>(undefined)))
     vi.mocked(repository.me).mockReturnValue(of(Result.success(session)))
 
-    let emittedSession: UserSession | undefined
+    let emittedSession: AuthSession | undefined
     useCase.execute({ email: session.email, password: "demo2026" }).subscribe(result => {
       emittedSession = result.success ? result.data : undefined
     })

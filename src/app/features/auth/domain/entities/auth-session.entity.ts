@@ -1,4 +1,4 @@
-export class UserSession {
+export class AuthSession {
   private constructor(
     public readonly name: string | null,
     public readonly email: string,
@@ -12,7 +12,7 @@ export class UserSession {
     email: string,
     role: string | null = null,
     expiresAt: number | null = null
-  ): UserSession {
-    return new UserSession(name, email, role, expiresAt)
+  ): AuthSession {
+    return new AuthSession(name, email, role, expiresAt)
   }
 }

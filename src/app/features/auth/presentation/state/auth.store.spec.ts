@@ -1,7 +1,7 @@
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { LoginUseCase } from "@/app/features/auth/application/use-cases/login.use-case"
 import { LogoutUseCase } from "@/app/features/auth/application/use-cases/logout.use-case"
-import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
 import { firstValueFrom, of, Subject } from "rxjs"
@@ -33,8 +33,8 @@ describe("AuthStore", () => {
   })
 
   it("restores a delayed session and completes after the first result", async () => {
-    const response = new Subject<Result<UserSession, AuthError>>()
-    const session = UserSession.create("Demo", "demo@example.com")
+    const response = new Subject<Result<AuthSession, AuthError>>()
+    const session = AuthSession.create("Demo", "demo@example.com")
     me.mockReturnValue(response)
     const restored = firstValueFrom(store.restoreSession())
     expect(store.session()).toBeNull()
@@ -47,7 +47,7 @@ describe("AuthStore", () => {
   it.each(["failure", "observable error", "empty"])(
     "remains anonymous on restoration %s",
     async outcome => {
-      const response = new Subject<Result<UserSession, AuthError>>()
+      const response = new Subject<Result<AuthSession, AuthError>>()
       me.mockReturnValue(response)
       const restored = firstValueFrom(store.restoreSession())
       if (outcome === "failure") response.next(Result.failure(new AuthError("UNEXPECTED")))
@@ -59,12 +59,12 @@ describe("AuthStore", () => {
   )
 
   it("does not restore a pending successful session after logout", async () => {
-    const response = new Subject<Result<UserSession, AuthError>>()
+    const response = new Subject<Result<AuthSession, AuthError>>()
     me.mockReturnValue(response)
     const restored = firstValueFrom(store.restoreSession())
     expect(response.observed).toBe(true)
     store.logout()
-    response.next(Result.success(UserSession.create("Old", "old@example.com")))
+    response.next(Result.success(AuthSession.create("Old", "old@example.com")))
     expect(await restored).toBeNull()
     expect(store.session()).toBeNull()
     expect(store.isAuthenticated()).toBe(false)
@@ -74,14 +74,14 @@ describe("AuthStore", () => {
   it.each(["success", "failure", "error", "empty"])(
     "preserves a newer login over a pending restoration %s",
     async outcome => {
-      const response = new Subject<Result<UserSession, AuthError>>()
+      const response = new Subject<Result<AuthSession, AuthError>>()
       me.mockReturnValue(response)
       const restored = firstValueFrom(store.restoreSession())
-      const newer = UserSession.create("New", "new@example.com")
+      const newer = AuthSession.create("New", "new@example.com")
       login.mockReturnValue(of(Result.success(newer)))
       store.login({ email: newer.email, password: "demo2026" }).subscribe()
       if (outcome === "success")
-        response.next(Result.success(UserSession.create("Old", "old@example.com")))
+        response.next(Result.success(AuthSession.create("Old", "old@example.com")))
       else if (outcome === "failure") response.next(Result.failure(new AuthError("UNEXPECTED")))
       else if (outcome === "empty") response.complete()
       else response.error(new Error("offline"))
@@ -100,7 +100,7 @@ describe("AuthStore", () => {
   })
 
   it("preserves an already loaded session without another repository request", async () => {
-    const session = UserSession.create("Demo", "demo@example.com")
+    const session = AuthSession.create("Demo", "demo@example.com")
     login.mockReturnValue(of(Result.success(session)))
     store.login({ email: session.email, password: "demo2026" }).subscribe()
     expect(await firstValueFrom(store.restoreSession())).toBe(session)
@@ -112,13 +112,13 @@ describe("AuthStore", () => {
   })
 
   it("does not accept a late login completion after logout", async () => {
-    const response = new Subject<Result<UserSession, AuthError>>()
+    const response = new Subject<Result<AuthSession, AuthError>>()
     login.mockReturnValue(response)
     const pending = firstValueFrom(
       store.login({ email: "fake@example.test", password: "FakePassword1" })
     )
     store.logout()
-    response.next(Result.success(UserSession.create("Old", "fake@example.test")))
+    response.next(Result.success(AuthSession.create("Old", "fake@example.test")))
     expect((await pending).success).toBe(false)
     expect(store.session()).toBeNull()
   })
@@ -126,7 +126,7 @@ describe("AuthStore", () => {
   it("clears loaded identity at expiry without keeping a stale guard snapshot", async () => {
     vi.useFakeTimers()
     try {
-      const session = Object.assign(UserSession.create("Demo", "fake@example.test"), {
+      const session = Object.assign(AuthSession.create("Demo", "fake@example.test"), {
         expiresAt: Date.now() + 1000
       })
       login.mockReturnValue(of(Result.success(session)))
@@ -148,7 +148,7 @@ describe("AuthStore", () => {
   })
 
   it("stores the session after a successful login", () => {
-    const session = UserSession.create("Administrador Demo", "admin@realmaids.com")
+    const session = AuthSession.create("Administrador Demo", "admin@realmaids.com")
     login.mockReturnValue(of(Result.success(session)))
 
     store.login({ email: session.email, password: "demo2026" }).subscribe()
@@ -168,7 +168,7 @@ describe("AuthStore", () => {
   })
 
   it("delegates logout and clears the session", () => {
-    const session = UserSession.create("Administrador Demo", "admin@realmaids.com")
+    const session = AuthSession.create("Administrador Demo", "admin@realmaids.com")
     login.mockReturnValue(of(Result.success(session)))
     store.login({ email: session.email, password: "demo2026" }).subscribe()
 

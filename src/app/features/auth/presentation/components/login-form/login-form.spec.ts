@@ -2,7 +2,7 @@ import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { GetCurrentUserUseCase } from "@/app/features/auth/application/use-cases/get-current-user.use-case"
 import { LoginUseCase } from "@/app/features/auth/application/use-cases/login.use-case"
 import { LogoutUseCase } from "@/app/features/auth/application/use-cases/logout.use-case"
-import { UserSession } from "@/app/features/auth/domain/entities/user-session.entity"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Result } from "@/app/shared/utils/result"
 import { TestBed } from "@angular/core/testing"
@@ -68,7 +68,7 @@ describe("LoginFormComponent", () => {
   it("emits authenticated after a successful login", async () => {
     const fixture = TestBed.createComponent(LoginFormComponent)
     const authenticated = vi.fn()
-    const session = UserSession.create(demoCredentials.name, demoCredentials.email)
+    const session = AuthSession.create(demoCredentials.name, demoCredentials.email)
     login.mockReturnValue(of(Result.success(session)))
     fixture.componentInstance.authenticated.subscribe(authenticated)
     fixture.componentInstance.loginForm().value.set({
@@ -87,7 +87,7 @@ describe("LoginFormComponent", () => {
       const fixture = TestBed.createComponent(LoginFormComponent)
       const component = fixture.componentInstance
       const store = TestBed.inject(AuthStore)
-      const response = new Subject<Result<UserSession, AuthError>>()
+      const response = new Subject<Result<AuthSession, AuthError>>()
       login.mockReturnValue(response)
       const authenticated = vi.fn()
       component.authenticated.subscribe(authenticated)
@@ -99,7 +99,7 @@ describe("LoginFormComponent", () => {
       expect(response.observed).toBe(false)
       response.next(
         outcome === "success"
-          ? Result.success(UserSession.create("Late", "late@example.test"))
+          ? Result.success(AuthSession.create("Late", "late@example.test"))
           : Result.failure(new AuthError("INVALID_CREDENTIALS"))
       )
       response.complete()

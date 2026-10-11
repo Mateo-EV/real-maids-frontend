@@ -6,7 +6,7 @@ import { API_URL } from "@/app/core/tokens/api-url.token"
 import { environment } from "@/environments/environment"
 import { Result } from "@/app/shared/utils/result"
 import { AuthError } from "../../domain/errors/auth.error"
-import { UserSession } from "../../domain/entities/user-session.entity"
+import { AuthSession } from "../../domain/entities/auth-session.entity"
 import { LoginParams } from "../../domain/params/login.params"
 import { AuthMemorySession } from "../session/auth-memory-session"
 
@@ -61,7 +61,7 @@ export class AuthHttpSource {
           ) {
             return Result.failure(new AuthError("INVALID_RESPONSE"))
           }
-          const session = UserSession.create(null, email, role, expiresAt)
+          const session = AuthSession.create(null, email, role, expiresAt)
           return this.memory.establish(token, session)
             ? Result.success<void>(undefined)
             : Result.failure(new AuthError("INVALID_RESPONSE"))
@@ -86,7 +86,7 @@ export class AuthHttpSource {
   }
 
   // Local established identity only. The API does not document a /me operation.
-  me(): Observable<Result<UserSession, AuthError>> {
+  me(): Observable<Result<AuthSession, AuthError>> {
     return defer(() => {
       const session = this.memory.current()
       return of(
