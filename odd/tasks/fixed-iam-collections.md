@@ -35,8 +35,14 @@ One coordinated array-contract migration, approximately 25–35 files including 
 
 ## Progress and evidence
 
-Read-only mapping completed. Parent inspected initial users-page diff and confirmed human page-size change to 10. No tests/builds run yet. T1 in progress; T2/T3 pending. All tasks stay open until verified outcomes and explicitly approved code commit exist. Native review pending candidate normalization.
+Implementation T1/T2 and documentation migration are applied; tasks remain open pending code commit. User and sessions sources make one page-zero request at sizes 500/1000 and return arrays; stores have no transport pagination/totals. Audit transport is unchanged. Existing human page-size 10 and UI edits, including the hardcoded `3 Móviles` caption, were preserved. Four obsolete query/page model files remain unreferenced and undeleted.
+
+Observed RED: old size-20 source requests failed fixed-size expectations. Writer post-format focused Angular tests passed 468 tests in 41 files; independent verifier repeated the exact users include command and confirmed 468/41. Full `npm test -- --watch=false`: 730 passed, 1 failed in 67 files, on the pre-existing human admin-shell banner removal. Independent isolated shell run confirmed 5 passed, 1 failed on that stale expectation. Shell and shell test were not changed by agents.
+
+`npm run build` passed, one prerendered route; initial bundle 511.47 kB exceeds warning budget 500 kB by 11.47 kB. Exact touched paths formatted/checked with local Prettier; docs/ paths are ignored by existing configuration. `git diff --check` passed with CRLF warnings. Live backend/browser acceptance pending.
+
+Native assessment failed `schema-incompatible` and required independent verification, which was completed. Final native START for target `24241d99580a8cfe57ce2286ef91213d56a901a7661817affd6f78ccab21090b` stopped at `lens_context_budget_exceeded`; no authority/lineage was created or mutated. No retry of that exact scope can succeed. Review requires smaller approved staged/committed candidates. Earlier human host declines were snapshot-specific, not final candidate approval. Current total diff including pre-existing changes: 39 files, 441 additions/975 deletions. No code staged or committed.
 
 ## Next step
 
-Single bounded writer implements T1–T3 sequentially with tests and evidence; parent reconciles output and assessment. Human stages code and approves exact snapshot/message separately if a commit is desired.
+Resolve the unrelated shell/test mismatch only on explicit user authorization. Before code commit/review preparation, choose smaller coherent review candidates and have the human stage them and approve each exact snapshot/message. Do not silently change the preserved mobile KPI caption, shell edits, or delete unused models. Full-suite green, browser acceptance, code commit and native review remain pending.
