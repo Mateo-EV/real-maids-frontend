@@ -100,7 +100,7 @@ describe("AdminShell", () => {
     expect(shell.sessionInitials()).toBe("AI")
   })
 
-  it("uses email when the backend supplies no name and clearly labels IAM demos", async () => {
+  it("uses email when the backend supplies no name without displaying the removed demo notice", async () => {
     TestBed.overrideProvider(AuthStore, {
       useValue: { session: signal({ name: null, email: "fake@example.test" }), logout: vi.fn() }
     })
@@ -109,7 +109,7 @@ describe("AdminShell", () => {
     expect(element.querySelector(".session-controls .font-semibold")?.textContent).toBe(
       "fake@example.test"
     )
-    expect(element.querySelector("[hlmAlert]")?.textContent).toContain(
+    expect(element.textContent).not.toContain(
       "Los datos y acciones de IAM siguen siendo de demostración"
     )
   })

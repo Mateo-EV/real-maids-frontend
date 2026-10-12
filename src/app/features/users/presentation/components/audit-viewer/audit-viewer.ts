@@ -76,13 +76,6 @@ export class AuditViewer implements OnInit {
   readonly catalogReady = computed(
     () => this.users.loaded() && !this.users.loading() && !this.users.error()
   )
-  readonly incompleteCatalog = computed(
-    () =>
-      this.users.loaded() &&
-      (this.users.total() > this.users.users().length ||
-        this.users.page() !== 0 ||
-        this.users.totalPages() > 1)
-  )
   readonly actorOutsideCatalog = computed(
     () =>
       !!this.selectedActor() &&

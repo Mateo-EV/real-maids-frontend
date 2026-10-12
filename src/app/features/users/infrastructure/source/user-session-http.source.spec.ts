@@ -22,7 +22,7 @@ const dto = (overrides = {}) => ({
 const page = (contenido: unknown[] = [dto()], overrides = {}) => ({
   contenido,
   pagina: 0,
-  tamanio: 20,
+  tamanio: 1000,
   totalElementos: contenido.length,
   totalPaginas: contenido.length ? 1 : 0,
   ...overrides
@@ -41,25 +41,33 @@ describe("UserSessionHttpSource", () => {
     http = TestBed.inject(HttpTestingController)
   })
   afterEach(() => http.verify())
-  it("maps backend ownership, caller-relative actual and server totals independent of page length", async () => {
-    const pending = firstValueFrom(source.getUserSessions({ userId: 42, page: 1, size: 1 }))
-    const req = http.expectOne("http://localhost:8080/api/sesiones?pagina=1&tamanio=1&idUsuario=42")
+  it("maps backend ownership and caller-relative actual into a fixed unfiltered array", async () => {
+    const pending = firstValueFrom(source.getUserSessions())
+    const req = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
+    expect(req.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
     expect(req.request.transferCache).toBe(false)
-    req.flush(
-      page([dto({ actual: true })], { pagina: 1, tamanio: 1, totalElementos: 30, totalPaginas: 30 })
-    )
+    req.flush(page([dto({ actual: true })]))
     const result = await pending
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.total).toBe(30)
-      expect(result.data.items[0]).toMatchObject({
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0]).toMatchObject({
         id: 17,
         userId: 42,
         userName: "Usuario real",
         isCurrent: true
       })
-      expect(result.data.items[0].startDate).toEqual(new Date("2026-01-01T10:00:00Z"))
+      expect(result.data[0].startDate).toEqual(new Date("2026-01-01T10:00:00Z"))
     }
+  })
+  it("requests one fixed global array even when server totals exceed the cap", async () => {
+    const pending = firstValueFrom(source.getUserSessions())
+    const req = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
+    const records = Array.from({ length: 1000 }, (_, idSesion) => dto({ idSesion }))
+    req.flush(page(records, { tamanio: 1000, totalElementos: 1001, totalPaginas: 2 }))
+    const result = await pending
+    expect(result.success && Array.isArray(result.data) && result.data.length).toBe(1000)
+    http.expectNone(() => true)
   })
   it("loads a complete per-user list without pagination or inventing current metadata", async () => {
     const pending = firstValueFrom(source.getUserSessionsByUser(42))
@@ -84,13 +92,13 @@ describe("UserSessionHttpSource", () => {
     [dto(), dto({ idSesion: 18, nombreUsuario: "Otro nombre" })]
   ])("rejects malformed, duplicate or inconsistent DTOs %#", async (...records) => {
     const pending = firstValueFrom(source.getUserSessions())
-    http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=20").flush(page(records))
+    http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000").flush(page(records))
     const result = await pending
     expect(!result.success && result.error.code).toBe("INVALID_RESPONSE")
   })
   it.each([
     { totalElementos: -1 },
-    { totalElementos: 21, totalPaginas: 1 },
+    { totalElementos: 1001, totalPaginas: 1 },
     { pagina: 1 },
     { tamanio: 2 },
     { totalElementos: 2 },
@@ -98,7 +106,7 @@ describe("UserSessionHttpSource", () => {
   ])("rejects inconsistent page metadata %j", async overrides => {
     const pending = firstValueFrom(source.getUserSessions())
     http
-      .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=20")
+      .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
       .flush(page([dto()], overrides))
     expect((await pending).success).toBe(false)
   })
@@ -111,20 +119,18 @@ describe("UserSessionHttpSource", () => {
   it("rejects non-newest-first page ordering", async () => {
     const pending = firstValueFrom(source.getUserSessions())
     http
-      .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=20")
+      .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
       .flush(page([dto(), dto({ idSesion: 18, fechaInicio: "2026-01-01T11:00:00Z" })]))
     expect((await pending).success).toBe(false)
   })
-  it.each([
-    { page: -1 },
-    { size: 0 },
-    { userId: Number.NaN },
-    { page: null as unknown as number },
-    { size: null as unknown as number }
-  ])("rejects invalid queries without requests %j", async query => {
-    const result = await firstValueFrom(source.getUserSessions(query))
-    expect(!result.success && result.error.code).toBe("INVALID_QUERY")
-  })
+  it.each([Number.NaN, 1.5, Number.POSITIVE_INFINITY])(
+    "rejects invalid per-user identities without requests %s",
+    async userId => {
+      const result = await firstValueFrom(source.getUserSessionsByUser(userId))
+      expect(!result.success && result.error.code).toBe("INVALID_QUERY")
+      http.expectNone(() => true)
+    }
+  )
   it.each([200, 204])(
     "accepts empty %i individual and bulk revocation without guessing retained sessions",
     async status => {
@@ -161,7 +167,7 @@ describe("UserSessionHttpSource", () => {
   })
   it("cancels dispatched reads when unsubscribed", () => {
     const subscription = source.getUserSessions().subscribe()
-    const req = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=20")
+    const req = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
     subscription.unsubscribe()
     expect(req.cancelled).toBe(true)
   })

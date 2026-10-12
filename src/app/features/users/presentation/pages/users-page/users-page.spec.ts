@@ -16,7 +16,6 @@ import { firstValueFrom, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
 import { UserSession } from "../../../domain/entities/user-session.entity"
-import { UserSessionQuery } from "../../../domain/models/user-session-query"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -75,35 +74,25 @@ describe("UsersPage", () => {
     })
     TestBed.overrideProvider(USER_SESSION_REPOSITORY, {
       useValue: {
-        getUserSessions: (query: UserSessionQuery = {}) =>
+        getUserSessions: () =>
           timer(250).pipe(
-            map(() => {
-              const page = query.page ?? 0,
-                size = query.size ?? 20
-              const total = query.userId === undefined ? 26 : 1
-              const items = Array.from(
-                { length: Math.min(size, Math.max(0, total - page * size)) },
-                (_, index) =>
+            map(() =>
+              Result.success(
+                Array.from({ length: 26 }, (_, index) =>
                   UserSession.create(
-                    page * size + index + 1,
-                    query.userId ?? 90,
+                    index + 1,
+                    90,
                     "192.0.2.1",
                     "Chrome",
                     new Date("2026-01-01T00:00:00Z"),
                     new Date("2027-01-01T00:00:00Z"),
-                    page === 0 && index === 0,
+                    index === 0,
                     "Server user",
                     "server@example.test"
                   )
+                )
               )
-              return Result.success({
-                items,
-                page,
-                size,
-                total,
-                totalPages: Math.ceil(total / size)
-              })
-            })
+            )
           ),
         revokeUserSession: () => timer(250).pipe(map(() => Result.success<void>(undefined))),
         revokeUserSessions: vi.fn(),
@@ -424,7 +413,7 @@ describe("UsersPage", () => {
     const tab = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
     expect(tab.disabled).toBe(false)
     expect(page.sessions.sessions()).toHaveLength(26)
-    expect(page.sessions.collectionComplete()).toBe(true)
+    expect(page.sessions.loaded()).toBe(true)
     expect(page.sessionCount()).toBe(26)
     tab.click()
     fixture.detectChanges()
@@ -439,7 +428,7 @@ describe("UsersPage", () => {
     input.dispatchEvent(new Event("input"))
     fixture.detectChanges()
     expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
-    expect(element.textContent).toContain("Fuera del catálogo cargado")
+    expect(element.textContent).toContain("Usuario de sesión")
     expect(element.textContent).toContain("Tu sesión actual")
     expect(element.textContent).toContain("Para cerrarla usa Salir")
     expect(element.textContent).toContain("Mostrando 1–1 de 1 usuarios")
@@ -451,19 +440,16 @@ describe("UsersPage", () => {
     element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
     fixture.detectChanges()
     expect(page.filteredUsers()).toHaveLength(48)
-    expect(page.users.total()).toBe(48)
+    expect(page.users.users()).toHaveLength(48)
   })
 
-  it("requeries after revoke and retains server totals rather than inferring them from expiry", async () => {
+  it("requeries once after revoke and derives counts from records, not expiry", async () => {
     const { page, fixture, element } = await setup()
     const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getUserSessions")
     expect(page.sessionCount()).toBe(26)
     await flush(firstValueFrom(page.sessions.revokeSession(90, 2)))
     fixture.detectChanges()
-    expect(query.mock.calls.map(call => call[0])).toEqual([
-      { page: 0, size: 20 },
-      { page: 1, size: 20 }
-    ])
+    expect(query).toHaveBeenCalledExactlyOnceWith()
     expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
     expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("26")
     vi.setSystemTime(
@@ -541,9 +527,7 @@ describe("UsersPage", () => {
   })
 
   it("renders an empty catalog without creating records at page entry", async () => {
-    vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers").mockReturnValue(
-      of(Result.success({ items: [], page: 0, size: 5, total: 0, totalPages: 0 }))
-    )
+    vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers").mockReturnValue(of(Result.success([])))
     const create = vi.spyOn(TestBed.inject(UserStore), "createUser")
     const { element, page } = await setup()
     expect(element.textContent).toContain("Aún no hay usuarios")
@@ -661,12 +645,15 @@ describe("UsersPage", () => {
     expect(element.querySelector("header")).toBeNull()
     expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
-    expect(element.textContent).toContain("En el catálogo cargado:")
-    expect(element.textContent).toContain("cargados de 48 informados por el servidor")
+    expect(element.textContent).toContain("42 activos · 6 inactivos")
+    expect(element.querySelector(".users-catalog")?.textContent).not.toContain(
+      "informados por el servidor"
+    )
     expect(element.textContent).not.toContain("CORE BACKOFFICE")
     expect(element.textContent).toContain("Gestiona estados, roles")
     expect(element.textContent).toContain("Total global del servidor")
-    expect(element.textContent).toContain("independiente de filtros locales")
+    expect(element.textContent).toContain("3 Móviles")
+    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("en línea")
     expect(element.textContent).not.toMatch(/demostración|simulad/i)
     const catalog = element.querySelector(".users-catalog")!
     const accessibleCopy = Array.from(
@@ -720,7 +707,7 @@ describe("UsersPage", () => {
 
   it("pairs decorative reference tones with actual roles and explicit status labels on desktop and mobile", async () => {
     const { element } = await setup()
-    const rows = Array.from(element.querySelectorAll("tbody tr"))
+    const rows = Array.from(element.querySelectorAll("tbody tr")).slice(0, 5)
     expect(
       rows.map(row => row.querySelector("[data-avatar-tone]")?.getAttribute("data-avatar-tone"))
     ).toEqual(["navy", "coral", "green", "amber", "neutral"])
@@ -731,10 +718,10 @@ describe("UsersPage", () => {
       element.querySelector("tbody")!,
       element.querySelector('ul[aria-label="Usuarios"]')!
     ]) {
-      expect(surface.querySelectorAll('[data-status="active"]')).toHaveLength(4)
+      expect(surface.querySelectorAll('[data-status="active"]')).toHaveLength(9)
       expect(surface.querySelector('[data-status="active"]')?.textContent).toContain("Activo")
       expect(surface.querySelector('[data-status="inactive"]')?.textContent).toContain("Inactivo")
-      expect(surface.querySelectorAll("[data-role-tone]")).toHaveLength(5)
+      expect(surface.querySelectorAll("[data-role-tone]")).toHaveLength(10)
     }
     expect(element.querySelectorAll(".kpi-tile")).toHaveLength(4)
     expect(element.querySelector("#new-user ng-icon")?.classList.contains("primary-plus")).toBe(
@@ -831,7 +818,7 @@ describe("UsersPage", () => {
       fixture.detectChanges()
       const request = http.expectOne(req => req.url === "http://localhost:8080/api/usuarios")
       expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
-      expect(request.request.params.get("tamanio")).toBe("10000")
+      expect(request.request.params.get("tamanio")).toBe("500")
       request.flush({
         contenido: Array.from({ length: 12 }, (_, index) => ({
           idUsuario: index + 1,
@@ -854,14 +841,13 @@ describe("UsersPage", () => {
       const page = fixture.componentInstance
       const element = fixture.nativeElement as HTMLElement
       expect(page.loadError()).toBe(false)
-      expect(page.users.total()).toBe(total)
-      expect(page.visibleUsers()).toHaveLength(5)
-      expect(element.querySelectorAll("tbody tr")).toHaveLength(5)
-      if (total > 12)
-        expect(element.querySelector("[data-incomplete-catalog]")?.textContent).toContain(
-          "Catálogo incompleto"
-        )
-      else expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
+      expect(page.users.users()).toHaveLength(12)
+      expect(page.visibleUsers()).toHaveLength(10)
+      expect(element.querySelectorAll("tbody tr")).toHaveLength(10)
+      expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
+      expect(element.querySelector(".users-catalog")?.textContent).not.toMatch(
+        /Catálogo incompleto|informados por el servidor|backend/
+      )
       page.goToPage(3)
       expect(page.visibleUsers()).toHaveLength(2)
       expect(page.rangeStart()).toBe(11)
@@ -874,20 +860,21 @@ describe("UsersPage", () => {
       expect(page.filteredUsers()).toHaveLength(6)
       expect(page.currentPage()).toBe(1)
       page.goToPage(2)
-      expect(page.visibleUsers()).toHaveLength(1)
+      expect(page.visibleUsers()).toHaveLength(6)
       http.expectNone(() => true)
       http.verify()
       fixture.destroy()
     }
   )
 
-  it("loads a temporary large catalog once and filters/pages without further requests", async () => {
+  it("loads an argument-free array once and filters/pages of ten without further requests", async () => {
     const query = vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers")
     const { page, roles, fixture } = await setup()
-    expect(query).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 10000 })
-    expect(page.visibleUsers()).toHaveLength(5)
-    page.goToPage(8)
-    expect(page.rangeStart()).toBe(36)
+    expect(query).toHaveBeenCalledExactlyOnceWith()
+    expect(page.pageSize).toBe(10)
+    expect(page.visibleUsers()).toHaveLength(10)
+    page.goToPage(4)
+    expect(page.rangeStart()).toBe(31)
     page.setSearch(" CARLOS ")
     expect(page.currentPage()).toBe(1)
     expect(page.filteredUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
@@ -908,30 +895,17 @@ describe("UsersPage", () => {
     expect(query).toHaveBeenCalledTimes(1)
   })
 
-  it.each([
-    { total: 60, totalPages: 1, page: 0 },
-    { total: 48, totalPages: 2, page: 0 },
-    { total: 48, totalPages: 2, page: 1 }
-  ])("warns when catalog metadata implies incompleteness %j", async metadata => {
+  it("keeps local empty-result copy independent of removed transport metadata", async () => {
     const { page, fixture, element } = await setup()
-    const source = TestBed.inject(UserInMemorySource)
-    vi.spyOn(source, "getUsers").mockReturnValue(
-      of(
-        Result.success({
-          items: page.users.users(),
-          size: 10000,
-          ...metadata
-        })
-      )
-    )
     page.retry()
     await flush(fixture.whenStable())
     page.setSearch("no-such-user")
     fixture.detectChanges()
-    expect(element.querySelector("[data-incomplete-catalog]")?.textContent).toContain(
-      "Catálogo incompleto"
+    expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
+    expect(element.textContent).toContain("Sin resultados")
+    expect(element.textContent).not.toMatch(
+      /Catálogo incompleto|Sin resultados entre los usuarios cargados/
     )
-    expect(element.textContent).toContain("Sin resultados entre los usuarios cargados")
     expect(element.textContent).not.toContain("Aún no hay usuarios")
   })
 
@@ -945,7 +919,7 @@ describe("UsersPage", () => {
     expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
     expect(element.textContent).toContain(`${active} activos`)
     expect(element.textContent).toContain(`${48 - active} inactivos`)
-    expect(page.rangeEnd()).toBe(Math.min(5, page.filteredUsers().length))
+    expect(page.rangeEnd()).toBe(Math.min(10, page.filteredUsers().length))
   })
 
   it("connects bounded shared navigation to local pages and filter resets", async () => {
@@ -962,20 +936,20 @@ describe("UsersPage", () => {
       nav().querySelectorAll(
         'button[aria-label^="Página "]:not([aria-label="Página anterior"]):not([aria-label="Página siguiente"])'
       )
-    ).toHaveLength(4)
-    await select(10)
-    expect(page.currentPage()).toBe(10)
-    expect(page.visibleUsers()).toHaveLength(3)
-    expect(nav().querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("10")
+    ).toHaveLength(5)
+    await select(5)
+    expect(page.currentPage()).toBe(5)
+    expect(page.visibleUsers()).toHaveLength(8)
+    expect(nav().querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("5")
     nav().querySelector<HTMLButtonElement>('button[aria-label="Página anterior"]')!.click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.currentPage()).toBe(9)
-    expect(page.visibleUsers()).toHaveLength(5)
+    expect(page.currentPage()).toBe(4)
+    expect(page.visibleUsers()).toHaveLength(10)
     nav().querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')!.click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.currentPage()).toBe(10)
+    expect(page.currentPage()).toBe(5)
     page.setSearch("persona.48@")
     await flush(fixture.whenStable())
     fixture.detectChanges()
@@ -992,14 +966,14 @@ describe("UsersPage", () => {
 
   it("clamps the current page when last-page users are deleted", async () => {
     const { page, users, fixture, element } = await setup()
-    page.goToPage(10)
+    page.goToPage(5)
     await flush(fixture.whenStable())
-    expect(page.visibleUsers()).toHaveLength(3)
+    expect(page.visibleUsers()).toHaveLength(8)
     for (const user of [...page.visibleUsers()])
       await flush(firstValueFrom(users.deleteUserById(user.id)))
-    expect(page.currentPage()).toBe(9)
-    expect(page.visibleUsers()).toHaveLength(5)
-    // A later catalog growth must not resurrect the previously invalid page 10.
+    expect(page.currentPage()).toBe(4)
+    expect(page.visibleUsers()).toHaveLength(10)
+    // Later growth must not resurrect the previously invalid page 5.
     await flush(
       firstValueFrom(
         users.createUser({
@@ -1012,10 +986,10 @@ describe("UsersPage", () => {
         })
       )
     )
-    expect(page.currentPage()).toBe(9)
+    expect(page.currentPage()).toBe(4)
     fixture.detectChanges()
     const nav = element.querySelector('nav[aria-label="Paginación de usuarios"]')!
-    expect(nav.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("9")
+    expect(nav.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe("4")
     expect(
       nav.querySelector<HTMLButtonElement>('button[aria-label="Página siguiente"]')?.disabled
     ).toBe(false)
@@ -1032,7 +1006,7 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.filteredUsers()).toHaveLength(48)
-    expect(page.users.total()).toBe(48)
+    expect(page.users.users()).toHaveLength(48)
   })
 
   it("displays query failure with retry and a loading state", async () => {

@@ -41,16 +41,7 @@ describe("RevokeSessionDialog", () => {
         {
           provide: USER_SESSION_REPOSITORY,
           useValue: {
-            getUserSessions: () =>
-              of(
-                Result.success({
-                  items: records,
-                  page: 0,
-                  size: 20,
-                  total: records.length,
-                  totalPages: 1
-                })
-              ),
+            getUserSessions: () => of(Result.success(records)),
             revokeUserSession: (_userId: number, id: number) =>
               timer(250).pipe(
                 map(() => {

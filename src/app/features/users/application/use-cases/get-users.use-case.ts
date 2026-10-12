@@ -1,8 +1,7 @@
 import { inject, Injectable } from "@angular/core"
 import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { UserQuery } from "../../domain/models/user-query"
-import { UserPage } from "../../domain/models/user-page"
+import { User } from "../../domain/entities/user.entity"
 import { UserError } from "../../domain/errors/user.error"
 import { USER_REPOSITORY, UserRepository } from "../../domain/repositories/user.repository"
 
@@ -10,7 +9,7 @@ import { USER_REPOSITORY, UserRepository } from "../../domain/repositories/user.
 export class GetUsersUseCase {
   private readonly userRepository = inject<UserRepository>(USER_REPOSITORY)
 
-  execute(query: UserQuery = {}): Observable<Result<UserPage, UserError>> {
-    return this.userRepository.getUsers(query)
+  execute(): Observable<Result<User[], UserError>> {
+    return this.userRepository.getUsers()
   }
 }

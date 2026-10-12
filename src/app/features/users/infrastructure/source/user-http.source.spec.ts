@@ -6,7 +6,6 @@ import { firstValueFrom } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { Lang } from "../../domain/entities/user.entity"
-import { UserQuery } from "../../domain/models/user-query"
 import { UserRepositoryImpl } from "../repositories/user.repository-impl"
 const endpoint = "http://localhost:8080/api/usuarios"
 const dto = {
@@ -21,7 +20,7 @@ const dto = {
   fechaCreacion: "2026-01-01T00:00:00Z",
   fechaActualizacion: "2026-01-02T01:02:03+00:00"
 }
-const page = { contenido: [dto], pagina: 0, tamanio: 20, totalElementos: 101, totalPaginas: 6 }
+const page = { contenido: [dto], pagina: 0, tamanio: 500, totalElementos: 1, totalPaginas: 1 }
 const input = {
   name: dto.nombre,
   email: dto.correo,
@@ -45,76 +44,41 @@ describe("wired users backend contract", () => {
     http = TestBed.inject(HttpTestingController)
   })
   afterEach(() => http.verify())
-  it("requests the documented server-paginated catalog instead of a demo array", async () => {
+  it("requests one fixed unfiltered catalog and returns only the entity array", async () => {
     const pending = firstValueFrom(repository.getUsers())
     const request = http.expectOne(req => req.url === endpoint)
     expect(request.request.params.get("pagina")).toBe("0")
-    expect(request.request.params.get("tamanio")).toBe("20")
+    expect(request.request.params.get("tamanio")).toBe("500")
     expect(request.request.transferCache).toBe(false)
     request.flush(page)
-    expect(await pending).toMatchObject({
-      success: true,
-      data: { page: 0, size: 20, total: 101, totalPages: 6 }
-    })
-  })
-  it("requests the approved large unfiltered catalog and preserves incomplete totals", async () => {
-    const pending = firstValueFrom(repository.getUsers({ page: 0, size: 10000 }))
-    const request = http.expectOne(req => req.url === endpoint)
     expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
-    expect(request.request.params.get("pagina")).toBe("0")
-    expect(request.request.params.get("tamanio")).toBe("10000")
-    request.flush({ ...page, tamanio: 10000, totalElementos: 10001, totalPaginas: 2 })
-    expect(await pending).toMatchObject({
-      success: true,
-      data: { size: 10000, total: 10001, totalPages: 2, items: [{ id: 41 }] }
-    })
+    expect(await pending).toMatchObject({ success: true, data: [{ id: 41 }] })
+    http.expectNone(() => true)
   })
-  it("accepts a backend-capped size with fewer rows and preserves actual page metadata", async () => {
-    const pending = firstValueFrom(repository.getUsers({ page: 0, size: 10000 }))
+  it("never requests another page when totals exceed 500 and never exposes metadata", async () => {
+    const pending = firstValueFrom(repository.getUsers())
     const request = http.expectOne(req => req.url === endpoint)
-    expect(request.request.params.get("tamanio")).toBe("10000")
-    request.flush({ ...page, tamanio: 100, totalElementos: 101, totalPaginas: 2 })
-    expect(await pending).toMatchObject({
-      success: true,
-      data: { page: 0, size: 100, total: 101, totalPages: 2, items: [{ id: 41 }] }
-    })
+    expect(request.request.params.get("tamanio")).toBe("500")
+    const records = Array.from({ length: 500 }, (_, idUsuario) => ({ ...dto, idUsuario }))
+    request.flush({ ...page, contenido: records, totalElementos: 501, totalPaginas: 2 })
+    const result = await pending
+    expect(result.success && Array.isArray(result.data) && result.data.length).toBe(500)
+    http.expectNone(() => true)
   })
-  it("maps zero-based page and every documented filter without filtering one page locally", async () => {
-    const pending = firstValueFrom(
-      repository.getUsers({
-        page: 3,
-        size: 5,
-        search: "Fake & Name",
-        email: "@example.test",
-        roleId: 19,
-        isActive: false
-      })
-    )
-    const request = http.expectOne(req => req.url === endpoint)
-    expect(request.request.params.keys().sort()).toEqual(
-      ["activo", "busqueda", "correo", "idRol", "pagina", "tamanio"].sort()
-    )
-    expect(request.request.params.get("busqueda")).toBe("Fake & Name")
-    expect(request.request.params.get("activo")).toBe("false")
-    request.flush({ ...page, pagina: 3, tamanio: 5, totalPaginas: 21 })
+  it("validates backend-capped metadata internally without exposing it or retrying", async () => {
+    const pending = firstValueFrom(repository.getUsers())
+    http.expectOne(req => req.url === endpoint).flush({ ...page, tamanio: 100 })
+    expect(await pending).toMatchObject({ success: true, data: [{ id: 41 }] })
+    http.expectNone(() => true)
+  })
+  it("maps backend profiles without retaining pagination metadata", async () => {
+    const pending = firstValueFrom(repository.getUsers())
+    http.expectOne(req => req.url === endpoint).flush(page)
     expect(await pending).toMatchObject({
       success: true,
-      data: {
-        page: 3,
-        size: 5,
-        total: 101,
-        totalPages: 21,
-        items: [
-          {
-            id: 41,
-            name: dto.nombre,
-            email: dto.correo,
-            roleId: 19,
-            lang: Lang.ES,
-            lastAccess: null
-          }
-        ]
-      }
+      data: [
+        { id: 41, name: dto.nombre, email: dto.correo, roleId: 19, lang: Lang.ES, lastAccess: null }
+      ]
     })
   })
   it.each([
@@ -145,20 +109,12 @@ describe("wired users backend contract", () => {
     http.expectOne(req => req.url === endpoint).flush(value)
     expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
   })
-  it.each([
-    { page: -1 },
-    { size: 0 },
-    { size: 0.5 },
-    { page: Number.MAX_SAFE_INTEGER },
-    { roleId: "19" },
-    { isActive: "true" },
-    { search: null }
-  ])("rejects invalid query without HTTP %j", async query => {
-    expect(await firstValueFrom(repository.getUsers(query as UserQuery))).toMatchObject({
-      success: false,
-      error: { code: "INVALID_QUERY" }
-    })
-    http.expectNone(() => true)
+  it("accepts a valid empty collection", async () => {
+    const pending = firstValueFrom(repository.getUsers())
+    http
+      .expectOne(req => req.url === endpoint)
+      .flush({ ...page, contenido: [], totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({ success: true, data: [] })
   })
   it("creates using only documented fields, never retains age/password or invents dates", async () => {
     const pending = firstValueFrom(repository.createUser({ ...input, lastAccess: new Date() }))

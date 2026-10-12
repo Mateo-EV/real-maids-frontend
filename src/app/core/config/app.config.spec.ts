@@ -95,14 +95,12 @@ describe("Application repository composition", () => {
     expect(repository).toBe(TestBed.inject(UserSessionRepositoryImpl))
     expect(repository).not.toBe(TestBed.inject(UserSessionHttpSource))
     expect(repository).not.toBe(TestBed.inject(UserSessionInMemorySource))
-    const pending = firstValueFrom(
-      TestBed.inject(GetUserSessionsUseCase).execute({ page: 0, size: 20 })
-    )
+    const pending = firstValueFrom(TestBed.inject(GetUserSessionsUseCase).execute())
     const http = TestBed.inject(HttpTestingController)
     const request = http.expectOne(r => r.url === "http://localhost:8080/api/sesiones")
     expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
-    request.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
-    expect(await pending).toMatchObject({ success: true, data: { items: [], total: 0 } })
+    request.flush({ contenido: [], pagina: 0, tamanio: 1000, totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({ success: true, data: [] })
     http.verify()
   })
 

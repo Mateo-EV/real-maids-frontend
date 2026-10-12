@@ -88,11 +88,9 @@ describe("Users use cases", () => {
     it(`delegates list and preserves ${outcome}`, () =>
       check(
         "getUsers",
-        success
-          ? Result.success({ items: [user], page: 0, size: 5, total: 1, totalPages: 1 })
-          : Result.failure(error),
-        () => TestBed.inject(GetUsersUseCase).execute({ page: 0, size: 5, search: "Demo" }),
-        [{ page: 0, size: 5, search: "Demo" }]
+        success ? Result.success([user]) : Result.failure(error),
+        () => TestBed.inject(GetUsersUseCase).execute(),
+        []
       ))
 
     it(`delegates update and preserves ${outcome}`, () =>

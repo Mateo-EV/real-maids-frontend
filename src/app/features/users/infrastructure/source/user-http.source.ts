@@ -8,8 +8,6 @@ import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { Result } from "@/app/shared/utils/result"
 import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError, UserErrorCode } from "../../domain/errors/user.error"
-import { UserQuery } from "../../domain/models/user-query"
-import { UserPage } from "../../domain/models/user-page"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 
@@ -122,33 +120,13 @@ export class UserHttpSource {
       )
     })
   }
-  getUsers(query: UserQuery = {}): Observable<Result<UserPage, UserError>> {
-    const input = { ...query }
+  getUsers(): Observable<Result<User[], UserError>> {
     return this.request(
-      () => {
-        const page = input.page ?? 0,
-          size = input.size ?? 20
-        if (
-          !dtoId(page) ||
-          page < 0 ||
-          !dtoId(size) ||
-          size < 1 ||
-          (input.search !== undefined && typeof input.search !== "string") ||
-          (input.email !== undefined && typeof input.email !== "string") ||
-          (input.roleId !== undefined && !dtoId(input.roleId)) ||
-          (input.isActive !== undefined && typeof input.isActive !== "boolean")
-        )
-          throw new UserError("INVALID_QUERY")
-        let params = new HttpParams().set("pagina", page).set("tamanio", size)
-        if (input.search !== undefined) params = params.set("busqueda", input.search)
-        if (input.email !== undefined) params = params.set("correo", input.email)
-        if (input.roleId !== undefined) params = params.set("idRol", input.roleId)
-        if (input.isActive !== undefined) params = params.set("activo", input.isActive)
-        return this.http.get<unknown>(`${this.origin}/api/usuarios`, {
-          params,
+      () =>
+        this.http.get<unknown>(`${this.origin}/api/usuarios`, {
+          params: new HttpParams().set("pagina", 0).set("tamanio", 500),
           transferCache: false
-        })
-      },
+        }),
       value => {
         const p = dtoRecord(value)
         const page = p["pagina"],
@@ -172,13 +150,13 @@ export class UserHttpSource {
           totalPages !== Math.ceil(total / size) ||
           p["contenido"].length > size ||
           p["contenido"].length > total ||
-          page !== (input.page ?? 0)
+          page !== 0
         )
           throw new UserError("INVALID_RESPONSE")
         const items = p["contenido"].map(userDto)
         if (new Set(items.map(user => user.id)).size !== items.length)
           throw new UserError("INVALID_RESPONSE")
-        return { items, page, size, total, totalPages }
+        return items
       }
     )
   }

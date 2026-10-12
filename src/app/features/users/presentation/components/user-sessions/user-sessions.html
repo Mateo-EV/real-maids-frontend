@@ -81,17 +81,6 @@
       </button>
     </div>
   } @else if (catalogReady()) {
-    @if (incompleteCatalog()) {
-      <div class="p-4">
-        <div hlmAlert>
-          <h2 hlmAlertTitle>Catálogo incompleto</h2>
-          <p hlmAlertDescription>
-            Se muestran usuarios cargados y propietarios recibidos en sesiones; no todos los
-            usuarios del backend. Los vacíos se limitan a estos datos.
-          </p>
-        </div>
-      </div>
-    }
     <div class="grid gap-3 p-4">
       @for (user of visibleUsers(); track user.id) {
         <details class="rounded-lg border bg-card" [attr.data-session-user]="user.id">
@@ -101,7 +90,7 @@
             <span class="font-semibold break-words">{{ user.name }} · #USR-{{ user.id }}</span>
             <span class="ml-2 text-xs break-words">{{ user.email }}</span>
             @if (user.outsideCatalog) {
-              <span hlmBadge variant="outline" class="ml-2">Fuera del catálogo cargado</span>
+              <span hlmBadge variant="outline" class="ml-2">Usuario de sesión</span>
             }
             <span hlmBadge variant="secondary" class="ml-2">{{
               verified()
@@ -118,9 +107,7 @@
                 ausencia.
               </p>
             } @else if (!user.sessions.length) {
-              <p class="text-sm text-muted-foreground">
-                Sin sesiones en la colección verificada del servidor.
-              </p>
+              <p class="text-sm text-muted-foreground">Sin sesiones.</p>
             } @else {
               @for (session of user.sessions; track session.id) {
                 <article
@@ -179,9 +166,7 @@
         <div hlmEmpty>
           <div hlmEmptyHeader>
             <h2 hlmEmptyTitle>Sin usuarios para estos filtros</h2>
-            <p hlmEmptyDescription>
-              No hay coincidencias en los usuarios cargados y propietarios de sesiones verificados.
-            </p>
+            <p hlmEmptyDescription>Prueba otra búsqueda o restablece los filtros.</p>
           </div>
         </div>
       }
@@ -189,7 +174,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-t p-4">
       <p class="text-xs text-muted-foreground" role="status">
         Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ filteredUsers().length }} usuarios
-        filtrados · {{ users.users().length }} usuarios del catálogo cargados
+        filtrados · {{ groups().length }} usuarios
       </p>
       <app-table-pagination
         label="Paginación de usuarios con sesiones"
@@ -201,9 +186,9 @@
     </div>
   }
   <p class="border-t p-4 text-xs text-muted-foreground">
-    Total global del servidor: {{ sessions.loaded() ? sessions.sessionCount() : "—" }} sesiones.
+    {{ verified() ? sessions.sessionCount() : "—" }} sesiones.
     @if (!verified()) {
-      Último total confirmado o pendiente de verificación.
+      Pendiente de actualización.
     }
     Independiente de filtros locales y del reloj.
   </p>

@@ -5,8 +5,6 @@ import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
-import { UserQuery } from "../../domain/models/user-query"
-import { UserPage } from "../../domain/models/user-page"
 
 type UserFields = Pick<User, "name" | "email" | "lang" | "isActive" | "roleId">
 
@@ -98,36 +96,8 @@ export class UserInMemorySource {
     )
   }
 
-  getUsers(): Observable<Result<User[], UserError>>
-  getUsers(query: UserQuery): Observable<Result<UserPage, UserError>>
-  getUsers(query?: UserQuery): Observable<Result<User[] | UserPage, UserError>> {
-    const input = query === undefined ? undefined : { ...query }
-    return timer(250).pipe(
-      switchMap(() => {
-        if (!input) return of(Result.success(this.users.map(cloneUser)))
-        const page = input.page ?? 0,
-          size = input.size ?? 20
-        const matches = this.users.filter(
-          user =>
-            (!input.search ||
-              `${user.name} ${user.email}`
-                .toLocaleLowerCase("es")
-                .includes(input.search.toLocaleLowerCase("es"))) &&
-            (!input.email || user.email.includes(input.email)) &&
-            (input.roleId === undefined || user.roleId === input.roleId) &&
-            (input.isActive === undefined || user.isActive === input.isActive)
-        )
-        return of(
-          Result.success({
-            items: matches.slice(page * size, (page + 1) * size).map(cloneUser),
-            page,
-            size,
-            total: matches.length,
-            totalPages: Math.ceil(matches.length / size)
-          })
-        )
-      })
-    )
+  getUsers(): Observable<Result<User[], UserError>> {
+    return timer(250).pipe(switchMap(() => of(Result.success(this.users.map(cloneUser)))))
   }
 
   deleteUserById(id: number): Observable<Result<void, UserError>> {

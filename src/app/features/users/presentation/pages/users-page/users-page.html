@@ -10,7 +10,7 @@
         (click)="section.set('users')"
       >
         Administración de Usuarios
-        <span hlmBadge variant="secondary">{{ users.users().length }} cargados</span>
+        <span hlmBadge variant="secondary">{{ users.users().length }}</span>
       </button>
       <button
         data-sessions-tab
@@ -25,8 +25,8 @@
           hlmBadge
           variant="secondary"
           class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
-          >{{ sessions.loaded() ? sessionCount() : "—" }} globales</span
-        >
+          >{{ sessions.loaded() ? sessionCount() : "—" }} en línea
+        </span>
       </button>
       <button
         data-rbac-tab
@@ -57,14 +57,13 @@
     >
       <article hlmCard>
         <div hlmCardHeader>
-          <p class="kpi-label">Usuarios cargados</p>
+          <p class="kpi-label">Usuarios</p>
           <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
             ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
           /></span>
           <p class="kpi-value">{{ users.users().length }}</p>
           <p hlmCardDescription>
-            En el catálogo cargado: {{ activeCount() }} activos ·
-            {{ users.users().length - activeCount() }} inactivos
+            {{ activeCount() }} activos · {{ users.users().length - activeCount() }} inactivos
           </p>
         </div>
       </article>
@@ -78,10 +77,8 @@
             {{ sessions.loaded() ? sessionCount() : "—" }}
           </p>
           <p hlmCardDescription>
-            Total global del servidor, independiente de filtros locales.
-            @if (!sessions.collectionComplete() || sessions.loading() || sessions.error()) {
-              Pendiente de verificación o último total confirmado.
-            }
+            <!-- Por definir -->
+            3 Móviles
           </p>
         </div>
       </article>
@@ -92,7 +89,14 @@
             ><ng-icon name="lucideShield" aria-hidden="true" size="24"
           /></span>
           <p class="kpi-value">{{ roles.roles().length }}</p>
-          <p hlmCardDescription>Catálogo del backend, no concesiones de permisos</p>
+          <p hlmCardDescription>
+            {{
+              roles
+                .roles()
+                .map(r => r.name[0].toUpperCase() + r.name.slice(1).toLowerCase())
+                .join(", ")
+            }}
+          </p>
         </div>
       </article>
       <article hlmCard>
@@ -182,24 +186,6 @@
             </button>
           </div>
         </div>
-        @if (
-          incompleteCatalog() &&
-          !initializing() &&
-          !users.loading() &&
-          !loadError() &&
-          !users.error()
-        ) {
-          <div class="p-4" data-incomplete-catalog>
-            <div hlmAlert role="alert">
-              <p hlmAlertTitle>Catálogo incompleto</p>
-              <p hlmAlertDescription>
-                Se cargaron {{ users.users().length }} de {{ users.total() }} usuarios informados
-                por el servidor. La búsqueda, los filtros y las páginas solo incluyen los usuarios
-                cargados; puede haber más coincidencias en el backend.
-              </p>
-            </div>
-          </div>
-        }
         @if (initializing() || users.loading()) {
           <div class="flex min-h-64 items-center justify-center gap-3" role="status">
             <hlm-spinner />Cargando catálogo…
@@ -231,20 +217,16 @@
               </div>
               <h2 hlmEmptyTitle>
                 {{
-                  incompleteCatalog()
-                    ? "Sin resultados entre los usuarios cargados"
-                    : search() || roleFilter() || statusFilter() !== "all"
-                      ? "Sin resultados"
-                      : "Aún no hay usuarios"
+                  search() || roleFilter() || statusFilter() !== "all"
+                    ? "Sin resultados"
+                    : "Aún no hay usuarios"
                 }}
               </h2>
               <p hlmEmptyDescription>
                 {{
-                  incompleteCatalog()
-                    ? "El catálogo está incompleto; no se puede descartar que existan más usuarios o coincidencias en el backend."
-                    : search() || roleFilter() || statusFilter() !== "all"
-                      ? "Prueba otra búsqueda o restablece los filtros."
-                      : "Selecciona un rol activo del catálogo y registra un usuario."
+                  search() || roleFilter() || statusFilter() !== "all"
+                    ? "Prueba otra búsqueda o restablece los filtros."
+                    : "Selecciona un rol activo del catálogo y registra un usuario."
                 }}
               </p>
             </div>
@@ -404,8 +386,7 @@
         >
           <p class="text-xs text-muted-foreground" role="status">
             Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios
-            del filtro · {{ users.users().length }} cargados de {{ users.total() }} informados por
-            el servidor
+            del filtro · {{ users.users().length }} usuarios
           </p>
           <app-table-pagination
             label="Paginación de usuarios"

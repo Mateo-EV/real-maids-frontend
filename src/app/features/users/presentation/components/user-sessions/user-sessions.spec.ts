@@ -31,7 +31,6 @@ const sessions = [true, false].map((actual, index) =>
     "real@example.test"
   )
 )
-const page = { items: sessions, page: 0, size: 20, total: 2, totalPages: 1 }
 const catalog = () =>
   Array.from({ length: 7 }, (_, i) =>
     User.create(
@@ -51,19 +50,14 @@ describe("UserSessions grouped catalog", () => {
     users: signal(catalog()),
     loaded: signal(true),
     loading: signal(false),
-    error: signal<unknown>(undefined),
-    total: signal(7),
-    page: signal(0),
-    totalPages: signal(1)
+    error: signal<unknown>(undefined)
   }
   beforeEach(() => {
     users.users.set(catalog())
     users.loaded.set(true)
     users.loading.set(false)
     users.error.set(undefined)
-    users.total.set(7)
-    users.totalPages.set(1)
-    repository = { getUserSessions: vi.fn(() => of(Result.success(page))) }
+    repository = { getUserSessions: vi.fn(() => of(Result.success(sessions))) }
     TestBed.configureTestingModule({
       imports: [UserSessions],
       providers: [
@@ -132,15 +126,14 @@ describe("UserSessions grouped catalog", () => {
     component.goToPage(Number.NaN)
     expect(component.currentPage()).toBe(1)
   })
-  it("retains sessions whose owners are absent and warns that the user catalog is incomplete", async () => {
+  it("retains real identities of session owners absent from users without technical disclosures", async () => {
     users.users.set(catalog().slice(1))
-    users.total.set(10)
-    users.totalPages.set(2)
     const { element, store, component, fixture } = await setup()
     component.goToPage(2)
     fixture.detectChanges()
-    expect(element.textContent).toContain("Catálogo incompleto")
-    expect(element.textContent).toContain("Fuera del catálogo cargado")
+    expect(element.textContent).not.toContain("Catálogo incompleto")
+    expect(element.textContent).not.toContain("Fuera del catálogo")
+    expect(element.textContent).toContain("Usuario de sesión")
     expect(element.textContent).toContain("Persona del servidor")
     expect(store.sessionCount()).toBe(2)
   })
@@ -178,7 +171,7 @@ describe("UserSessions grouped catalog", () => {
     expect(subject.observers).toHaveLength(1)
     fixture.destroy()
     expect(subject.observed).toBe(false)
-    repository.getUserSessions.mockReturnValue(of(Result.success(page)))
+    repository.getUserSessions.mockReturnValue(of(Result.success(sessions)))
     await firstValueFrom(store.loadAllSessions())
     expect(store.loaded()).toBe(true)
   })

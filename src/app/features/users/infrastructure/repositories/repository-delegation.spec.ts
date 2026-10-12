@@ -124,7 +124,7 @@ describe("Infrastructure repository delegation", () => {
     expect(repository.deleteUserById(1)).toBe(response)
     expect(create).toHaveBeenCalledExactlyOnceWith(params)
     expect(read).toHaveBeenCalledExactlyOnceWith(1)
-    expect(list).toHaveBeenCalledExactlyOnceWith({})
+    expect(list).toHaveBeenCalledExactlyOnceWith()
     expect(update).toHaveBeenCalledExactlyOnceWith(1, params)
     expect(remove).toHaveBeenCalledExactlyOnceWith(1)
   })

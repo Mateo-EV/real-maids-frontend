@@ -7,8 +7,6 @@ import { User } from "@/app/features/users/domain/entities/user.entity"
 import { UserError } from "@/app/features/users/domain/errors/user.error"
 import { CreateUserParams } from "@/app/features/users/domain/params/create-user.params"
 import { UpdateUserParams } from "@/app/features/users/domain/params/update-user.params"
-import { UserQuery } from "../../domain/models/user-query"
-import { UserPage } from "../../domain/models/user-page"
 import { Result } from "@/app/shared/utils/result"
 import { inject } from "@angular/core"
 import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
@@ -28,20 +26,12 @@ import {
 
 interface UserState {
   readonly users: User[]
-  readonly page: number
-  readonly size: number
-  readonly total: number
-  readonly totalPages: number
   readonly loading: boolean
   readonly loaded: boolean
   readonly error: UserError | undefined
 }
 const initialUserState: UserState = {
   users: [],
-  page: 0,
-  size: 50,
-  total: 0,
-  totalPages: 0,
   loading: false,
   loaded: false,
   error: undefined
@@ -62,7 +52,6 @@ export const UserStore = signalStore(
       let pending = 0
       let revision = 0
       let latestLoad = 0
-      let query: UserQuery = { page: 0, size: 50 }
       const cancelLoad = new Subject<void>()
       const execute = <T>(request: () => Observable<Result<T, UserError>>) =>
         defer(() => {
@@ -78,33 +67,22 @@ export const UserStore = signalStore(
             })
           )
         })
-      const loadUsers = (input: UserQuery = query): Observable<Result<UserPage, UserError>> =>
+      const loadUsers = (): Observable<Result<User[], UserError>> =>
         defer(() => {
           cancelLoad.next()
-          query = { ...input }
+          patchState(store, { loaded: false })
           const requestId = ++latestLoad,
             snapshot = revision
           return execute(() =>
-            getUsers.execute(query).pipe(
-              switchMap(result => {
-                if (result.success && result.data.page > Math.max(0, result.data.totalPages - 1)) {
-                  query = { ...query, page: Math.max(0, result.data.totalPages - 1) }
-                  return getUsers.execute(query)
-                }
-                return of(result)
-              })
-            )
+            getUsers
+              .execute()
+              .pipe(defaultIfEmpty(Result.failure(new UserError("INVALID_RESPONSE"))))
           ).pipe(
             tap(result => {
               if (requestId !== latestLoad || snapshot !== revision) return
               if (result.success) {
-                const page = result.data
                 patchState(store, {
-                  users: page.items,
-                  page: page.page,
-                  size: page.size,
-                  total: page.total,
-                  totalPages: page.totalPages,
+                  users: result.data,
                   loaded: true,
                   error: undefined
                 })
@@ -124,8 +102,8 @@ export const UserStore = signalStore(
               return of(result)
             }
             revision++
-            // Sorting, filters and totals are backend-owned. Never append a guessed page after a write.
-            return loadUsers(query).pipe(map(() => result))
+            // Requery after writes, including partial updates; never replay a mutation.
+            return loadUsers().pipe(map(() => result))
           })
         )
       return {

@@ -64,10 +64,7 @@ describe("Audit viewer server queries and CSV", () => {
       ]),
       loaded: signal(true),
       loading: signal(false),
-      error: signal<UserError | undefined>(undefined),
-      total: signal(2),
-      page: signal(0),
-      totalPages: signal(1)
+      error: signal<UserError | undefined>(undefined)
     }
     TestBed.configureTestingModule({
       imports: [AuditViewer],
@@ -124,10 +121,9 @@ describe("Audit viewer server queries and CSV", () => {
     expect(element.textContent).toContain("No pudimos cargar el catálogo de actores")
     catalog.error.set(undefined)
     catalog.users.set([])
-    catalog.total.set(10)
     fixture.detectChanges()
-    expect(element.textContent).toContain("Catálogo incompleto")
-    expect(element.textContent).toContain("Fuera del catálogo cargado")
+    expect(element.textContent).not.toContain("Catálogo incompleto")
+    expect(element.textContent).toContain("Actor no disponible")
     expect(viewer.filters().userId).toBe(7)
     selectActor(fixture, "")
     expect(viewer.filters().userId).toBeUndefined()

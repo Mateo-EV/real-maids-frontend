@@ -114,8 +114,14 @@ describe("USERS_ROUTES", () => {
       )
       expect(sessions.request.headers.get("Authorization")).toBe("Bearer fake-token")
       expect(sessions.request.params.get("pagina")).toBe("0")
-      expect(sessions.request.params.get("tamanio")).toBe("20")
-      sessions.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+      expect(sessions.request.params.get("tamanio")).toBe("1000")
+      sessions.flush({
+        contenido: [],
+        pagina: 0,
+        tamanio: 1000,
+        totalElementos: 0,
+        totalPaginas: 0
+      })
       const audit = http.expectOne(request => request.url === "http://localhost:8080/api/auditoria")
       expect(audit.request.headers.get("Authorization")).toBe("Bearer fake-token")
       expect(audit.request.params.get("tamanio")).toBe("1")
@@ -139,7 +145,7 @@ describe("USERS_ROUTES", () => {
         ])
       const users = http.expectOne(request => request.url === "http://localhost:8080/api/usuarios")
       expect(users.request.params.get("pagina")).toBe("0")
-      expect(users.request.params.get("tamanio")).toBe("10000")
+      expect(users.request.params.get("tamanio")).toBe("500")
       expect(users.request.headers.get("Authorization")).toBe("Bearer fake-token")
       users.flush({
         contenido: [
@@ -157,7 +163,7 @@ describe("USERS_ROUTES", () => {
           }
         ],
         pagina: 0,
-        tamanio: 10000,
+        tamanio: 500,
         totalElementos: 1,
         totalPaginas: 1
       })

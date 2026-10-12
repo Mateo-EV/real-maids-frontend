@@ -8,8 +8,6 @@ import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { Result } from "@/app/shared/utils/result"
 import { UserSession } from "../../domain/entities/user-session.entity"
 import { UserSessionError, UserSessionErrorCode } from "../../domain/errors/user-session.error"
-import { UserSessionQuery } from "../../domain/models/user-session-query"
-import { UserSessionPage } from "../../domain/models/user-session-page"
 
 const id = (v: unknown): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= -2147483648 && v <= 2147483647
@@ -135,29 +133,15 @@ export class UserSessionHttpSource {
       )
     })
   }
-  getUserSessions(
-    query: UserSessionQuery = {}
-  ): Observable<Result<UserSessionPage, UserSessionError>> {
-    const input = { ...query },
-      page = input.page === undefined ? 0 : input.page,
-      size = input.size === undefined ? 20 : input.size
+  getUserSessions(): Observable<Result<UserSession[], UserSessionError>> {
+    const page = 0,
+      size = 1000
     return this.request(
-      () => {
-        if (
-          !id(page) ||
-          page < 0 ||
-          !id(size) ||
-          size < 1 ||
-          (input.userId !== undefined && !id(input.userId))
-        )
-          throw new UserSessionError("INVALID_QUERY")
-        let params = new HttpParams().set("pagina", page).set("tamanio", size)
-        if (input.userId !== undefined) params = params.set("idUsuario", input.userId)
-        return this.http.get<unknown>(`${this.origin}/api/sesiones`, {
-          params,
+      () =>
+        this.http.get<unknown>(`${this.origin}/api/sesiones`, {
+          params: new HttpParams().set("pagina", page).set("tamanio", size),
           transferCache: false
-        })
-      },
+        }),
       v => {
         const p = record(v),
           total = p["totalElementos"],
@@ -173,14 +157,14 @@ export class UserSessionHttpSource {
           pages !== Math.ceil(total / size)
         )
           invalid()
-        const items = sessions(p["contenido"], input.userId)
+        const items = sessions(p["contenido"])
         const expected = Math.min(size, Math.max(0, total - page * size))
         if (
           items.length !== expected ||
           items.some((s, i) => i > 0 && s.startDate > items[i - 1].startDate)
         )
           invalid()
-        return { items, page, size, total, totalPages: pages }
+        return items
       }
     )
   }

@@ -39,7 +39,6 @@ import { RolesStore } from "../../state/roles.store"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, forkJoin, interval, of, Subject, switchMap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { UserQuery } from "../../../domain/models/user-query"
 import { demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
 import {
@@ -59,9 +58,6 @@ import { UserSessions } from "../../components/user-sessions/user-sessions"
 import { RbacMatrix } from "../../components/rbac-matrix/rbac-matrix"
 import { AuditViewer } from "../../components/audit-viewer/audit-viewer"
 import { AuditLogsStore } from "../../state/audit-logs.store"
-
-// Temporarily approved for the small user catalog; not a shared query default.
-const TEMPORARY_USERS_CATALOG_SIZE = 10000
 
 @Component({
   selector: "app-users-page",
@@ -120,7 +116,7 @@ export class UsersPage implements OnInit {
   readonly search = signal("")
   readonly roleFilter = signal("")
   readonly statusFilter = signal("all")
-  readonly pageSize = 5
+  readonly pageSize = 10
   readonly activeCount = computed(() => this.users.users().filter(user => user.isActive).length)
   readonly filteredUsers = computed(() => {
     const text = this.search().trim().toLocaleLowerCase("es")
@@ -144,13 +140,6 @@ export class UsersPage implements OnInit {
     source: this.pageCount,
     computation: (count, previous) => Math.min(previous?.value ?? 1, count)
   })
-  readonly incompleteCatalog = computed(
-    () =>
-      this.users.loaded() &&
-      (this.users.total() > this.users.users().length ||
-        this.users.page() !== 0 ||
-        this.users.totalPages() > 1)
-  )
   readonly visibleUsers = computed(() => {
     const start = (this.currentPage() - 1) * this.pageSize
     return this.filteredUsers().slice(start, start + this.pageSize)
@@ -161,17 +150,16 @@ export class UsersPage implements OnInit {
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
-  private readonly queries = new Subject<UserQuery>()
+  private readonly queries = new Subject<void>()
 
   private reload(): void {
-    if (!this.destroyRef.destroyed)
-      this.queries.next({ page: 0, size: TEMPORARY_USERS_CATALOG_SIZE })
+    if (!this.destroyRef.destroyed) this.queries.next()
   }
 
   ngOnInit(): void {
     this.queries
       .pipe(
-        switchMap(query =>
+        switchMap(() =>
           defer(() => {
             this.initializing.set(true)
             this.loadError.set(false)
@@ -179,7 +167,7 @@ export class UsersPage implements OnInit {
               roles: this.roles.loaded()
                 ? of(Result.success(this.roles.roles()))
                 : this.roles.loadRoles(),
-              users: this.users.loadUsers(query)
+              users: this.users.loadUsers()
             }).pipe(
               finalize(() => {
                 if (!this.destroyRef.destroyed) this.initializing.set(false)

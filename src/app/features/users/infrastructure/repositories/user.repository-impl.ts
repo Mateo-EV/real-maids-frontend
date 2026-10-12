@@ -3,7 +3,6 @@ import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { UserRepository } from "../../domain/repositories/user.repository"
 import { UserHttpSource } from "../source/user-http.source"
-import { UserQuery } from "../../domain/models/user-query"
 
 @Injectable({ providedIn: "root" })
 export class UserRepositoryImpl implements UserRepository {
@@ -17,8 +16,8 @@ export class UserRepositoryImpl implements UserRepository {
     return this.source.getUserById(id)
   }
 
-  getUsers(query: UserQuery = {}) {
-    return this.source.getUsers(query)
+  getUsers() {
+    return this.source.getUsers()
   }
 
   deleteUserById(id: number) {

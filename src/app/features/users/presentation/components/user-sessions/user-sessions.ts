@@ -61,17 +61,10 @@ export class UserSessions {
   readonly filters = form(this.model)
   readonly presence = signal("all")
   readonly verified = computed(
-    () => this.sessions.collectionComplete() && !this.sessions.loading() && !this.sessions.error()
+    () => this.sessions.loaded() && !this.sessions.loading() && !this.sessions.error()
   )
   readonly catalogReady = computed(
     () => this.users.loaded() && !this.users.loading() && !this.users.error()
-  )
-  readonly incompleteCatalog = computed(
-    () =>
-      this.users.loaded() &&
-      (this.users.total() > this.users.users().length ||
-        this.users.page() !== 0 ||
-        this.users.totalPages() > 1)
   )
   readonly groups = computed(() => {
     const byOwner = new Map<number, UserSession[]>()

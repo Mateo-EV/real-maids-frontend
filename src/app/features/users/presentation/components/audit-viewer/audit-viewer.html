@@ -137,10 +137,9 @@
     Días UTC, desde y hasta incluidos. CSV: todos los resultados del filtro, máximo 10000 eventos.
   </p>
   <p id="audit-actor-help" class="mt-2 text-xs text-muted-foreground">
-    Busca entre usuarios cargados y selecciona un actor. La búsqueda no cambia el filtro
-    seleccionado. Actores históricos o eliminados pueden no aparecer; Todos los actores conserva sus
-    eventos. Los resultados, totales y CSV provienen de auditoría del servidor, no del catálogo de
-    usuarios.
+    Busca usuarios y selecciona un actor. La búsqueda no cambia el filtro seleccionado. Actores
+    históricos o eliminados pueden no aparecer; Todos los actores conserva sus eventos. Los
+    resultados, totales y CSV provienen de auditoría del servidor, no del catálogo de usuarios.
   </p>
   @if (users.loading() || (!users.loaded() && !users.error())) {
     <p class="mt-2 text-xs text-muted-foreground" role="status">Cargando catálogo de actores…</p>
@@ -154,21 +153,12 @@
     </div>
   } @else if (!actorOptions().length) {
     <p class="mt-2 text-xs text-muted-foreground" role="status">
-      Sin coincidencias entre los usuarios cargados. Esto no indica ausencia de eventos.
+      Sin coincidencias. Esto no indica ausencia de eventos.
     </p>
-  }
-  @if (incompleteCatalog()) {
-    <div hlmAlert class="mt-3" role="status">
-      <h2 hlmAlertTitle>Catálogo incompleto</h2>
-      <p hlmAlertDescription>
-        La selección solo incluye usuarios cargados, no todos los actores de auditoría.
-      </p>
-    </div>
   }
   @if (actorOutsideCatalog()) {
     <p class="mt-2 text-xs text-muted-foreground" role="status">
-      Fuera del catálogo cargado: se conserva el actor seleccionado y su ID para consultar y
-      exportar.
+      Actor no disponible: se conserva el actor seleccionado y su ID para consultar y exportar.
     </p>
   }
   @if (exportError()) {
