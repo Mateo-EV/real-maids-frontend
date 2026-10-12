@@ -37,9 +37,10 @@
 }
 
 .brand-subtitle {
+  font-weight: bold;
   margin-top: 0.125rem;
-  color: color-mix(in oklch, var(--cream) 65%, var(--navy-deep));
-  font-size: 0.625rem;
+  color: var(--gold);
+  font-size: 0.725rem;
   line-height: 1.5;
 }
 
@@ -58,7 +59,7 @@
 .module-label {
   height: 2rem;
   padding-inline: 0.75rem;
-  color: color-mix(in oklch, var(--cream) 65%, var(--navy-deep));
+  color: var(--gold);
   font-size: 0.625rem;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -84,7 +85,7 @@
 }
 
 .module-button:disabled ng-icon {
-  color: color-mix(in oklch, var(--cream) 78%, var(--navy-deep));
+  color: var(--gold);
 }
 
 .module-button[data-active="true"] {
