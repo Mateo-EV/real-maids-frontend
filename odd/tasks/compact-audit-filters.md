@@ -1,25 +1,26 @@
-# Compact audit filters
+# Progressive audit filters
 
 ## Objective
-Reduce the audit filter area's height without changing queries, actor identity, CSV export or accessibility (T6 / RNF06).
+Give audit results more space through progressive disclosure without changing audit filter or CSV semantics. Existing T6 / RNF06/RNF08/RNF09/RNF10/RNF12 apply; audit-specific RF/HU traceability remains documented as missing.
 
-## Scope and constraints
-Change only the audit viewer template and focused structural tests. Preserve existing Spanish labels, controls, errors and help associations. Do not change shared Helm or global catalog styles, state, contracts or dependencies.
+## Scope
+Only audit filter presentation, component-local state, tests and the existing T6 product description. Generate missing Helm combobox through the installed Spartan CLI; no new dependencies. Do not redesign results/table/cards, change endpoints, store lifetimes or transport contracts.
 
 ## Tasks
-- [ ] T1 — Implement a full-width responsive filter grid below the title with compact actions; add focused structural regression coverage. Route: delegated worker (template and test changes).
-- [ ] T2 — Verify formatting, focused tests and production build; inspect the exact diff. Browser responsive/keyboard acceptance requires a browser and must be reported separately.
-- [ ] T3 — Human staging and approved work-unit commit; review remains pending until the work unit exists.
+- [ ] T1 — Implement actor combobox, compact main toolbar, advanced disclosure, secondary-field count, applied chips/removal and conditional clear. Delegated writer; multi-file trigger. Implementation in progress, commit pending.
+- [ ] T2 — Observe focused test RED/GREEN, format touched files, run full tests and build, inspect diff. Browser responsiveness/keyboard acceptance must be reported independently.
+- [ ] T3 — Human staging and precise snapshot/message approval before a source commit. Source work unit remains open until committed.
 
 ## Acceptance
-Dates remain adjacent where space permits; actor search/selection retain usable widths; entity/action remain visible. Phones use one column without horizontal overflow. All existing filtering and export semantics remain intact.
+Main toolbar shows only responsible actor combobox, Más filtros with icon and secondary active count, Exportar CSV. Search never changes query; only selection supplies identity; Todos los actores clears actor. Preserve selected historic/deleted actors and catalog loading/error states. Advanced UTC dates/entity/action use two desktop columns and mobile stacking. Toggling never reloads or loses filters. Chips stay visible when collapsed, remove fields independently, and Limpiar todo only appears with applied filters. Count each secondary applied field, excluding actor/search/defaults. Export uses applied filters. Preserve cancellation, query/page reset, export guards and accessibility.
 
-## Progress and verification
-Repository initially clean. Exploration identified full-width Helm fields inside a wrapping form beside the title as the stacking cause. No shared changes required.
-T1 in progress. Visual spacing has no meaningful behavioral RED; add structural regression before changing the template where feasible and run existing behavior tests.
+## Evidence
+Previous compact-grid baseline: worker structural RED then 9/9 GREEN; independent verifier confirmed 9/9, formatting and whitespace checks. Build succeeded including prerender with initial-budget warning 511.98 kB against 500 kB. Browser acceptance was not run.
+Native source review review-6be70c14bf4c662d was approved and acknowledged for the previous grid candidate, not this forthcoming redesign. No source commit exists.
+CLI discovery and combobox dry-run confirmed 22 generated files under libs/ui/combobox plus tsconfig.json/tsconfig.app.json aliases; no package changes. Existing Brain is installed. Use native disclosure if no Helm collapsible is needed.
 
 ## Delivery
-Forecast: approximately 100–180 authored diff lines. Strategy: single reviewable work unit; no commits or staging authorized.
+Single writer, no staging/committing by agent. Forecast approximately 300–450 authored non-generated diff lines; protect focus and report if scope grows. Generated component files are mechanical CLI assets.
 
 ## Next step
-Bounded worker implements T1 and runs formatting, focused test and build commands. Record observed results, not inherited counts.
+Bounded writer implements the progressive-disclosure iteration, extends behavioral tests, updates T6 description and runs authorized checks. Browser tooling may be unavailable; never assert acceptance without evidence.
