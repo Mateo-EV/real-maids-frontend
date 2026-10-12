@@ -69,6 +69,30 @@ describe("UserSessionHttpSource", () => {
     expect(result.success && Array.isArray(result.data) && result.data.length).toBe(1000)
     http.expectNone(() => true)
   })
+  it.each([1, 100, 1000])(
+    "accepts effective response size %i without fetching more pages",
+    async size => {
+      const pending = firstValueFrom(source.getUserSessions())
+      const records = Array.from({ length: size }, (_, idSesion) => dto({ idSesion }))
+      http
+        .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
+        .flush(page(records, { tamanio: size, totalElementos: size + 1, totalPaginas: 2 }))
+      const result = await pending
+      expect(result.success && result.data.length).toBe(size)
+      http.expectNone(() => true)
+    }
+  )
+  it.each([{ records: [] }, { records: [dto()] }])(
+    "accepts an empty or partial effective-size page %#",
+    async ({ records }) => {
+      const pending = firstValueFrom(source.getUserSessions())
+      http
+        .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
+        .flush(page(records, { tamanio: 100 }))
+      expect((await pending).success).toBe(true)
+      http.expectNone(() => true)
+    }
+  )
   it("loads a complete per-user list without pagination or inventing current metadata", async () => {
     const pending = firstValueFrom(source.getUserSessionsByUser(42))
     http
@@ -100,7 +124,14 @@ describe("UserSessionHttpSource", () => {
     { totalElementos: -1 },
     { totalElementos: 1001, totalPaginas: 1 },
     { pagina: 1 },
-    { tamanio: 2 },
+    { tamanio: 0 },
+    { tamanio: -1 },
+    { tamanio: 1.5 },
+    { tamanio: "100" },
+    { tamanio: 1001 },
+    { tamanio: Number.MAX_SAFE_INTEGER + 1 },
+    { tamanio: 100, totalElementos: 101, totalPaginas: 1 },
+    { tamanio: 100, totalElementos: 101, totalPaginas: 2 },
     { totalElementos: 2 },
     { totalPaginas: 1.5 }
   ])("rejects inconsistent page metadata %j", async overrides => {

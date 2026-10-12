@@ -97,7 +97,7 @@ describe("UserSessions grouped catalog", () => {
     expect(element.querySelectorAll("article button")).toHaveLength(1)
     expect(element.querySelector("#session-user-id")).toBeNull()
   })
-  it("searches name/email and filters presence locally, resets pages and never refetches or counts expiry", async () => {
+  it("searches name/email locally, resets pages and never refetches or counts expiry", async () => {
     const { element, fixture, component, store } = await setup()
     component.goToPage(2)
     fixture.detectChanges()
@@ -106,15 +106,15 @@ describe("UserSessions grouped catalog", () => {
     fixture.detectChanges()
     expect(element.querySelectorAll("details")).toHaveLength(1)
     expect(component.currentPage()).toBe(1)
-    const select = element.querySelector<HTMLSelectElement>("select")!
-    select.value = "without"
-    select.dispatchEvent(new Event("change"))
-    fixture.detectChanges()
-    expect(element.querySelectorAll("details")).toHaveLength(0)
-    select.value = "with"
-    select.dispatchEvent(new Event("change"))
+    expect(element.querySelector('[data-session-user="842"]')?.textContent).toContain("2 sesiones")
+    expect(element.querySelectorAll("article")).toHaveLength(2)
+    search(element, "Persona 1")
     fixture.detectChanges()
     expect(element.querySelectorAll("details")).toHaveLength(1)
+    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
+      "Sin sesiones"
+    )
+    expect(element.querySelectorAll("article")).toHaveLength(0)
     expect(store.sessionCount()).toBe(2)
     expect(repository.getUserSessions).toHaveBeenCalledOnce()
     component.clearFilters()
@@ -152,6 +152,21 @@ describe("UserSessions grouped catalog", () => {
     expect(element.querySelector('[data-session-user="843"]')?.textContent).not.toContain(
       "Sin sesiones"
     )
+    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
+      "Sesiones sin verificar"
+    )
+    repository.getUserSessions.mockReturnValue(of(Result.success(sessions)))
+    const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
+      button => button.textContent?.trim() === "Reintentar sesiones"
+    )!
+    retry.click()
+    fixture.detectChanges()
+    expect(repository.getUserSessions).toHaveBeenCalledTimes(4)
+    expect(element.textContent).not.toContain("No pudimos cargar las sesiones")
+    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
+      "Sin sesiones"
+    )
+    expect(element.querySelector('[data-session-user="842"]')?.textContent).toContain("2 sesiones")
     users.error.set(new Error())
     fixture.detectChanges()
     expect(element.textContent).toContain("No pudimos cargar el catálogo")

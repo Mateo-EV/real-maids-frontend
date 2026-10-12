@@ -1,31 +1,32 @@
+import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { DatePipe } from "@angular/common"
 import {
   Component,
   computed,
   DestroyRef,
+  effect,
   inject,
   linkedSignal,
+  model,
   output,
   signal
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { form, FormField, FormRoot } from "@angular/forms/signals"
-import { Subject, switchMap } from "rxjs"
-import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
-import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmInputImports } from "@spartan-ng/helm/input"
-import { HlmFieldImports } from "@spartan-ng/helm/field"
-import { HlmBadgeImports } from "@spartan-ng/helm/badge"
-import { HlmAlertImports } from "@spartan-ng/helm/alert"
-import { HlmEmptyImports } from "@spartan-ng/helm/empty"
-import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
-import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
-import { UserSessionsStore } from "../../state/user-sessions.store"
-import { UserSession } from "../../../domain/entities/user-session.entity"
-import { UserStore } from "../../state/user.store"
-import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
+import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { HlmBadgeImports } from "@spartan-ng/helm/badge"
+import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HlmEmptyImports } from "@spartan-ng/helm/empty"
+import { HlmFieldImports } from "@spartan-ng/helm/field"
+import { HlmInputImports } from "@spartan-ng/helm/input"
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
+import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
+import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
+import { Subject, switchMap } from "rxjs"
+import { UserSession } from "../../../domain/entities/user-session.entity"
+import { UserSessionsStore } from "../../state/user-sessions.store"
+import { UserStore } from "../../state/user.store"
 import {
   RevokeSessionContext,
   RevokeSessionDialog
@@ -35,8 +36,6 @@ import {
   selector: "app-user-sessions",
   imports: [
     DatePipe,
-    FormField,
-    FormRoot,
     HlmInputImports,
     HlmNativeSelectImports,
     HlmInputGroupImports,
@@ -57,8 +56,7 @@ export class UserSessions {
   private readonly destroyRef = inject(DestroyRef)
   readonly retry = output<void>()
   readonly users = inject(UserStore)
-  readonly model = signal({ search: "" })
-  readonly filters = form(this.model)
+  readonly search = signal("")
   readonly presence = signal("all")
   readonly verified = computed(
     () => this.sessions.loaded() && !this.sessions.loading() && !this.sessions.error()
@@ -94,7 +92,7 @@ export class UserSessions {
     return groups
   })
   readonly filteredUsers = computed(() => {
-    const text = this.model().search.trim().toLocaleLowerCase("es")
+    const text = this.search().trim().toLocaleLowerCase("es")
     return this.groups().filter(
       user =>
         (!text ||
@@ -108,7 +106,7 @@ export class UserSessions {
   readonly currentPage = linkedSignal<{ count: number; search: string; presence: string }, number>({
     source: () => ({
       count: this.pageCount(),
-      search: this.model().search,
+      search: this.search(),
       presence: this.presence()
     }),
     computation: (source, previous) =>
@@ -129,6 +127,7 @@ export class UserSessions {
   )
   private readonly queries = new Subject<void>()
   constructor() {
+    effect(() => console.log(this.sessions.error()))
     this.queries
       .pipe(
         switchMap(() => this.sessions.loadAllSessions()),
@@ -137,7 +136,7 @@ export class UserSessions {
       .subscribe()
   }
   clearFilters(): void {
-    this.model.set({ search: "" })
+    this.search.set("")
     this.presence.set("all")
   }
   goToPage(page: number): void {

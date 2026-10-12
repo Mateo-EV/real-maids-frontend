@@ -4,46 +4,27 @@
   [attr.aria-busy]="sessions.loading() || users.loading()"
 >
   <div class="flex flex-wrap items-end justify-between gap-4 border-b p-4">
-    <div>
+    <div class="xl:self-start">
       <h1 id="sessions-title" class="text-lg font-bold text-primary">Sesiones por usuario</h1>
       <p class="mt-1 text-xs text-muted-foreground">
         Abre un usuario para consultar sus conexiones del servidor.
       </p>
     </div>
-    <form
-      [formRoot]="filters"
-      (submit)="$event.preventDefault()"
-      class="catalog-filter-row flex flex-wrap items-end gap-2"
-    >
+    <div class="catalog-filter-row">
       <div hlmField class="catalog-filter-search">
-        <label hlmFieldLabel for="session-search">Buscar nombre o correo</label>
+        <label hlmFieldLabel class="text-xs" for="session-search">Buscar nombre o correo</label>
         <hlm-input-group>
           <input
             hlmInputGroupInput
             id="session-search"
             type="search"
             placeholder="Buscar nombre o email…"
-            [formField]="filters.search"
+            [value]="search()"
+            (input)="search.set($event.target.value)"
           />
         </hlm-input-group>
       </div>
-      <div hlmField>
-        <label hlmFieldLabel for="session-presence">Sesiones</label>
-        <hlm-native-select
-          selectId="session-presence"
-          [value]="presence()"
-          (valueChange)="presence.set($event ?? 'all')"
-          [disabled]="!verified()"
-        >
-          <option value="all">Todos</option>
-          <option value="with">Con sesiones</option>
-          <option value="without">Sin sesiones</option>
-        </hlm-native-select>
-      </div>
-      <button hlmBtn variant="outline" type="button" (click)="clearFilters()">
-        Limpiar filtros
-      </button>
-    </form>
+    </div>
   </div>
   @if (sessions.loading()) {
     <div class="flex items-center gap-3 p-4" role="status">
@@ -185,11 +166,4 @@
       />
     </div>
   }
-  <p class="border-t p-4 text-xs text-muted-foreground">
-    {{ verified() ? sessions.sessionCount() : "—" }} sesiones.
-    @if (!verified()) {
-      Pendiente de actualización.
-    }
-    Independiente de filtros locales y del reloj.
-  </p>
 </section>

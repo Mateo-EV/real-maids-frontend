@@ -144,21 +144,25 @@ export class UserSessionHttpSource {
         }),
       v => {
         const p = record(v),
+          effectiveSize = p["tamanio"],
           total = p["totalElementos"],
           pages = p["totalPaginas"]
         if (
           p["pagina"] !== page ||
-          p["tamanio"] !== size ||
+          typeof effectiveSize !== "number" ||
+          !Number.isSafeInteger(effectiveSize) ||
+          effectiveSize <= 0 ||
+          effectiveSize > size ||
           typeof total !== "number" ||
           !Number.isSafeInteger(total) ||
           total < 0 ||
           !id(pages) ||
           pages < 0 ||
-          pages !== Math.ceil(total / size)
+          pages !== Math.ceil(total / effectiveSize)
         )
           invalid()
         const items = sessions(p["contenido"])
-        const expected = Math.min(size, Math.max(0, total - page * size))
+        const expected = Math.min(effectiveSize, Math.max(0, total - page * effectiveSize))
         if (
           items.length !== expected ||
           items.some((s, i) => i > 0 && s.startDate > items[i - 1].startDate)

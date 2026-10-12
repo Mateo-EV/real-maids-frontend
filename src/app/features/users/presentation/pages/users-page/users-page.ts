@@ -105,6 +105,7 @@ export class UsersPage implements OnInit {
   private readonly platformId = inject(PLATFORM_ID)
   readonly section = signal<"users" | "sessions" | "rbac" | "audit">("users")
   readonly sessionCount = computed(() => this.sessions.sessionCount())
+  readonly sessionActiveCount = computed(() => this.sessions.activeSessions().length)
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
