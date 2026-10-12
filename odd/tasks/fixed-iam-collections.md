@@ -12,9 +12,9 @@ Initial branch: main. Existing unstaged edits in users-page.ts, users-page.html 
 
 ## Tasks
 
-- [ ] T1: Migrate users collection contracts/source/store/consumers, tests and demo compatibility. Route: delegated writer; multi-file contract migration.
-- [ ] T2: Migrate sessions to a single array read and array-derived state/counts; remove collection-completeness UI coupling, including audit actor picker. Route: same single writer; coordinated contract migration.
-- [ ] T3: Reconcile project guidance and product documentation, format touched files, run focused and full tests and build, inspect candidate. Route: writer verification plus parent structural readback/native assessment. Commit and review pending separate authorization.
+- [x] T1: Migrate users collection contracts/source/store/consumers, tests and demo compatibility. Route: delegated writer; multi-file contract migration.
+- [x] T2: Migrate sessions to a single array read and array-derived state/counts; remove collection-completeness UI coupling, including audit actor picker. Route: same single writer; coordinated contract migration.
+- [x] T3: Reconcile project guidance and product documentation, format touched files, run focused and full tests and build, inspect candidate. Route: writer verification plus parent structural readback/native assessment. Commit and review pending separate authorization.
 
 ## Acceptance and checks
 
@@ -43,6 +43,12 @@ Observed RED: old size-20 source requests failed fixed-size expectations. Writer
 
 Native assessment failed `schema-incompatible` and required independent verification, which was completed. Final native START for target `24241d99580a8cfe57ce2286ef91213d56a901a7661817affd6f78ccab21090b` stopped at `lens_context_budget_exceeded`; no authority/lineage was created or mutated. No retry of that exact scope can succeed. Review requires smaller approved staged/committed candidates. Earlier human host declines were snapshot-specific, not final candidate approval. Current total diff including pre-existing changes: 39 files, 441 additions/975 deletions. No code staged or committed.
 
+## Closure
+
+The user approved adapting the shell test to the removed demo notice. Only the test name and notice-absence assertion changed; email fallback/initials coverage remains. Independent verification: shell 6/6; full `npm test -- --watch=false` passed 731 tests in 67 files; exact spec Prettier check and `git diff --check` passed. Build was not rerun for this test-only adaptation; the migration build result above stands.
+
+The user manually reviewed and staged all 40 changed files and approved the staged snapshot and Conventional Commit message. Immediately before commit, HEAD and raw staged binary diff SHA-256 were rechecked against the approved identities. Commit: `f03a885e02e028e6913ac276484944c4f85755b8` (`refactor(iam): isolate fixed collection requests in HTTP sources`), 443 additions and 977 deletions. Working tree was clean immediately afterward. T1–T3 are closed under the user's explicit manual-review disposition, not a native RDD approval. Native review did not complete due to context budget; no native approval receipt exists.
+
 ## Next step
 
-Resolve the unrelated shell/test mismatch only on explicit user authorization. Before code commit/review preparation, choose smaller coherent review candidates and have the human stage them and approve each exact snapshot/message. Do not silently change the preserved mobile KPI caption, shell edits, or delete unused models. Full-suite green, browser acceptance, code commit and native review remain pending.
+No further implementation is required for this request. Browser/live backend acceptance and the build budget warning remain disclosed limitations. Four unused model files and the human mobile KPI caption remain unchanged. Push/PR are separate user decisions. This closure documentation may be committed separately by the configured documentation runtime.
