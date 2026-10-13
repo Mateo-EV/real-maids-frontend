@@ -22,5 +22,10 @@ CLI discovery and combobox dry-run confirmed 22 generated files under libs/ui/co
 ## Delivery
 Single writer, no staging/committing by agent. Forecast approximately 300–450 authored non-generated diff lines; protect focus and report if scope grows. Generated component files are mechanical CLI assets.
 
+## Latest verification
+Progressive toolbar, actor combobox, advanced disclosure, secondary counts, persistent chips/individual removal and conditional clear implemented. User explicitly approved adding users-page.spec.ts to migrate its retained-audit integration interaction; assertions preserved. Focused RED reproduced 46 passed/1 failed; focused GREEN 47/47. Full suite: 748/748 across 67 files. Production build passed including one prerendered route; initial bundle 515.66 kB exceeds 500 kB warning budget by 15.66 kB. Exact touched-file Prettier write/check and git diff whitespace checks passed (CRLF notices only).
+Native final-candidate review review-b90db52e509952a7 approved and acknowledgement consumed successfully, including 22 generated combobox files. ASSESS could not determine risk because of untracked declarations, but returned closed-review plan: writer verification stands, no additional independent verifier required. A final focused spot check is running.
+Browser responsive/long-name overlay/focus/download acceptance remains pending. Source files have not been staged or committed; implementation tasks remain unchecked pending their work-unit commit. Changed product documentation was child-written and requires manual staging.
+
 ## Next step
-Bounded writer implements the progressive-disclosure iteration, extends behavioral tests, updates T6 description and runs authorized checks. Browser tooling may be unavailable; never assert acceptance without evidence.
+Receive final focused spot-check result; report browser limitations and bundle warning. Human stages exact intended source/generated/config/test/docs paths before any explicit commit approval.
