@@ -336,6 +336,20 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   background: color-mix(in oklch, var(--primary-foreground) 12%, transparent);
 }
 
+[brnComboboxInput]:focus-visible,
+[brnComboboxInput]:focus {
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+  border: none !important;
+  --ring: none !important; /* Desactiva el anillo de Shadcn */
+}
+
+[brnComboboxInput] {
+  --ring: none !important;
+  border: none !important; /* Desactiva el anillo de Shadcn */
+}
+
 /* Share default Helm action hover across buttons, links and overlay hosts.
    The utilities layer also overrides Nova's anchor-only primary/80 hover. */
 @layer utilities {
