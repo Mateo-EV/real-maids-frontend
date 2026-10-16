@@ -1,10 +1,12 @@
 import { signal } from "@angular/core"
+import { By } from "@angular/platform-browser"
+import { BrnCombobox } from "@spartan-ng/brain/combobox"
 import { UserStore } from "../../state/user.store"
 import { UserError } from "../../../domain/errors/user.error"
 import { provideRouter } from "@angular/router"
 import { TestBed } from "@angular/core/testing"
 import { of, Subject } from "rxjs"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AUDIT_LOG_REPOSITORY } from "../../../domain/repositories/audit-log.repository"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
@@ -41,15 +43,23 @@ const page = (total = 17, current = 0): AuditPage => ({
 })
 function selectActor(fixture: ReturnType<typeof TestBed.createComponent<AuditViewer>>, id: string) {
   fixture.detectChanges()
-  const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
-    "select#audit-actor"
-  )!
-  expect(select).not.toBeNull()
-  select.value = id
-  select.dispatchEvent(new Event("change"))
+  const combobox = fixture.debugElement.query(By.directive(BrnCombobox)).injector.get(BrnCombobox)
+  combobox.select(id || "all")
   fixture.detectChanges()
 }
 describe("Audit viewer server queries and CSV", () => {
+  beforeEach(() => {
+    // jsdom has no element-size observer; overlay geometry remains browser acceptance work.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
   function setup() {
     const reads = new Subject<Result<AuditPage, AuditLogError>>()
     const exports = new Subject<Result<Blob, AuditLogError>>()
@@ -91,22 +101,129 @@ describe("Audit viewer server queries and CSV", () => {
       success
     }
   }
-  it("searches loaded names/emails without querying and retains the selected stable ID across catalog gaps", () => {
+  it("reveals advanced fields locally, preserves values and shows independently removable applied chips", () => {
+    const { fixture, viewer, element, getAuditLogs } = setup()
+    const toggle = element.querySelector<HTMLButtonElement>("[data-audit-more]")!
+    expect(toggle).not.toBeNull()
+    expect(toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(element.querySelector("#audit-advanced")?.hasAttribute("hidden")).toBe(true)
+    expect(element.querySelector("[data-audit-clear]")).toBeNull()
+    const calls = getAuditLogs.mock.calls.length
+    toggle.click()
+    fixture.detectChanges()
+    expect(toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(getAuditLogs).toHaveBeenCalledTimes(calls)
+    viewer.filterModel.update(model => ({
+      ...model,
+      fromUTC: "2026-09-01",
+      toUTC: "2026-09-02",
+      actorSearch: "Ana"
+    }))
+    viewer.setFrom("2026-09-01")
+    viewer.setTo("2026-09-02")
+    viewer.selectActor("2")
+    viewer.setEntity("usuario")
+    viewer.setAction("ACTUALIZAR")
+    fixture.detectChanges()
+    expect(element.querySelector("[data-audit-secondary-count]")?.textContent?.trim()).toBe("4")
+    const filteredCalls = getAuditLogs.mock.calls.length
+    toggle.click()
+    fixture.detectChanges()
+    expect(getAuditLogs).toHaveBeenCalledTimes(filteredCalls)
+    expect(element.querySelector<HTMLInputElement>("#audit-from")?.value).toBe("2026-09-01")
+    expect(element.querySelectorAll("[data-audit-chip]")).toHaveLength(5)
+    expect(
+      element.querySelector("#audit-advanced")?.contains(element.querySelector("[data-audit-chip]"))
+    ).toBe(false)
+    element
+      .querySelector<HTMLButtonElement>('[aria-label="Quitar Desde (UTC): 2026-09-01"]')!
+      .click()
+    fixture.detectChanges()
+    expect(viewer.filters()).toMatchObject({
+      userId: 2,
+      toUTC: "2026-09-02",
+      entity: "usuario",
+      action: "ACTUALIZAR"
+    })
+    expect(viewer.filters().fromUTC).toBeUndefined()
+    expect(viewer.filterModel().fromUTC).toBe("")
+    expect(element.querySelector("[data-audit-secondary-count]")?.textContent?.trim()).toBe("3")
+    element.querySelector<HTMLButtonElement>("[data-audit-clear]")!.click()
+    fixture.detectChanges()
+    expect(viewer.filters()).toEqual({})
+    expect(element.querySelector("[data-audit-clear]")).toBeNull()
+    expect(element.querySelectorAll("[data-audit-chip]")).toHaveLength(0)
+    expect(element.querySelector("[data-audit-secondary-count]")).toBeNull()
+  })
+  it("excludes actor, search and default options from secondary applied counts", () => {
+    const { fixture, viewer, element } = setup()
+    viewer.selectActor("2")
+    viewer.filterModel.update(model => ({ ...model, actorSearch: "Ana" }))
+    viewer.setEntity("")
+    viewer.setAction("")
+    fixture.detectChanges()
+    expect(element.querySelector("[data-audit-secondary-count]")).toBeNull()
+    expect(element.querySelectorAll("[data-audit-chip]")).toHaveLength(1)
+    expect(element.querySelector("[data-audit-clear]")).not.toBeNull()
+  })
+  it("groups the title and toolbar in the form header and keeps advanced fields separate", () => {
+    const { element } = setup()
+    const form = element.querySelector("form")!
+    const fields = Array.from(form.querySelectorAll<HTMLElement>('[data-slot="field"]'))
+    expect(fields).toHaveLength(5)
+    const grid = fields[1].parentElement!
+    expect(grid).not.toBe(form)
+    expect(grid.classList.contains("grid")).toBe(true)
+    expect(fields.slice(1).every(field => field.parentElement === grid)).toBe(true)
+    expect(grid.parentElement?.id).toBe("audit-advanced")
+    expect(grid.parentElement?.parentElement).toBe(form)
+    const header = form.firstElementChild!
+    expect(header.querySelector("#audit-title")).not.toBeNull()
+    expect(header.querySelector("[data-audit-toolbar]")?.parentElement).toBe(header)
+    expect(grid.parentElement?.previousElementSibling).toBe(header)
+
+    for (const id of ["audit-from", "audit-to", "audit-entity", "audit-action"]) {
+      expect(grid.querySelector(`label[for="${id}"]`)?.textContent?.trim()).toBeTruthy()
+      expect(grid.querySelector(`#${id}`)).not.toBeNull()
+    }
+    for (const helpId of ["audit-range-help", "audit-actor-help"]) {
+      expect(element.querySelector(`#${helpId}`)?.textContent?.trim()).toBeTruthy()
+    }
+    expect(grid.querySelector(".catalog-filter-search")).toBeNull()
+    const actions = Array.from(form.querySelectorAll<HTMLButtonElement>("button"))
+    expect(actions).toHaveLength(3)
+    expect(actions[0].parentElement).not.toBe(grid)
+    expect(form.querySelector("[data-audit-toolbar]")?.contains(actions[0])).toBe(true)
+    expect(actions.slice(1).map(button => button.textContent?.trim())).toEqual([
+      "Más filtros",
+      "Exportar CSV"
+    ])
+    expect(form.querySelector('label[for="audit-actor"]')?.textContent).toContain(
+      "Usuario responsable"
+    )
+    expect(actions[0].getAttribute("role")).toBe("combobox")
+    expect(actions.every(button => button.type === "button")).toBe(true)
+  })
+  it("searches loaded names/emails without querying and retains the selected stable ID across catalog gaps", async () => {
     const { fixture, viewer, element, catalog, getAuditLogs } = setup()
-    const search = element.querySelector<HTMLInputElement>("#audit-actor-search")!
+    element.querySelector<HTMLButtonElement>("#audit-actor")!.click()
+    fixture.detectChanges()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    const search = document.querySelector<HTMLInputElement>("#audit-actor-search")!
     expect(search).not.toBeNull()
     const type = (text: string) => {
       search.value = text
       search.dispatchEvent(new Event("input"))
       fixture.detectChanges()
     }
-    expect(element.querySelector("select#audit-actor")?.textContent).toContain("otra@example.test")
-    type("ana")
-    expect(element.querySelectorAll("select#audit-actor option")).toHaveLength(3)
-    type(" OTRA@ ")
-    expect(element.querySelector("select#audit-actor")?.textContent).not.toContain(
-      "ana@example.test"
+    expect(document.querySelector('[data-slot="combobox-list"]')?.textContent).toContain(
+      "otra@example.test"
     )
+    type("ana")
+    expect(viewer.actorOptions()).toHaveLength(2)
+    type(" OTRA@ ")
+    expect(viewer.actorOptions().map(actor => actor.email)).toEqual(["otra@example.test"])
     expect(getAuditLogs).toHaveBeenCalledOnce()
     selectActor(fixture, "7")
     expect(viewer.filters().userId).toBe(7)
@@ -125,11 +242,84 @@ describe("Audit viewer server queries and CSV", () => {
     expect(element.textContent).not.toContain("Catálogo incompleto")
     expect(element.textContent).toContain("Actor no disponible")
     expect(viewer.filters().userId).toBe(7)
+    expect(element.querySelector("#audit-actor")?.textContent).toContain("otra@example.test")
     selectActor(fixture, "")
     expect(viewer.filters().userId).toBeUndefined()
     viewer.clearFilters()
     fixture.detectChanges()
     expect(search.value).toBe("")
+  })
+  it("selects a searched actor with library keyboard behavior while typing and erasing never apply identity", async () => {
+    const { fixture, viewer, element, getAuditLogs } = setup()
+    element.querySelector<HTMLButtonElement>("#audit-actor")!.click()
+    fixture.detectChanges()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    const search = document.querySelector<HTMLInputElement>("#audit-actor-search")!
+    search.value = "otra@"
+    search.dispatchEvent(new Event("input"))
+    fixture.detectChanges()
+    expect(getAuditLogs).toHaveBeenCalledOnce()
+    expect(viewer.filters().userId).toBeUndefined()
+    const options = document.querySelectorAll<HTMLElement>('[data-slot="combobox-item"]')
+    // jsdom has no layout/scrolling; retain real library key handling.
+    options.forEach(option => {
+      option.scrollIntoView = vi.fn()
+    })
+    search.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", keyCode: 40, bubbles: true })
+    )
+    search.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", keyCode: 40, bubbles: true })
+    )
+    fixture.detectChanges()
+    expect(search.getAttribute("aria-activedescendant")).toBeTruthy()
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    fixture.detectChanges()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    expect(viewer.filters().userId).toBe(7)
+    expect(element.querySelector("#audit-actor")?.textContent).toContain("otra@example.test")
+    const calls = getAuditLogs.mock.calls.length
+    element.querySelector<HTMLButtonElement>("#audit-actor")!.click()
+    fixture.detectChanges()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    const reopened = document.querySelector<HTMLInputElement>("#audit-actor-search")!
+    reopened.value = ""
+    reopened.dispatchEvent(new Event("input"))
+    fixture.detectChanges()
+    expect(viewer.filters().userId).toBe(7)
+    expect(getAuditLogs).toHaveBeenCalledTimes(calls)
+    const allActors = document.querySelector<HTMLElement>('[data-slot="combobox-item"]')!
+    allActors.scrollIntoView = vi.fn()
+    allActors.click()
+    fixture.detectChanges()
+    expect(viewer.filters().userId).toBeUndefined()
+    expect(element.querySelector("#audit-actor")?.textContent).toContain("Todos los actores")
+  })
+  it("removes each applied field without changing other fields and resets the query page", () => {
+    const { fixture, viewer, element, getAuditLogs } = setup()
+    for (const field of ["userId", "fromUTC", "toUTC", "entity", "action"] as const) {
+      viewer.selectActor("2")
+      viewer.filterModel.update(model => ({ ...model, fromUTC: "2026-09-01", toUTC: "2026-09-02" }))
+      viewer.setFrom("2026-09-01")
+      viewer.setTo("2026-09-02")
+      viewer.setEntity("usuario")
+      viewer.setAction("ACTUALIZAR")
+      viewer.page.set(3)
+      const before = { ...viewer.filters() }
+      viewer.removeFilter(field)
+      fixture.detectChanges()
+      expect(viewer.filters()).toEqual({ ...before, [field]: undefined })
+      expect(viewer.page()).toBe(1)
+      expect(getAuditLogs.mock.calls.at(-1)?.[0]).toMatchObject({ page: 0, size: 5 })
+      expect(element.querySelectorAll("[data-audit-chip]")).toHaveLength(4)
+    }
+    viewer.clearFilters()
+    viewer.searchActors("Ana")
+    fixture.detectChanges()
+    expect(element.querySelector("[data-audit-clear]")).toBeNull()
   })
   it("shows loading, server totals, responsive metadata and inclusive UTC help", () => {
     const { fixture, viewer, element, reads, getAuditLogs } = setup()
@@ -231,6 +421,19 @@ describe("Audit viewer server queries and CSV", () => {
     viewer.selectActor("7")
     expect(viewer.selectedActor()?.id).toBe(2)
     viewer.clearFilters()
+    viewer.removeFilter("fromUTC")
+    viewer.setDay("2026-10-01")
+    viewer.searchActors("otra")
+    fixture.detectChanges()
+    expect(viewer.filterModel().actorSearch).toBe("")
+    expect(viewer.filters().fromUTC).toBe("2026-09-01")
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>("#audit-actor")
+        ?.disabled
+    ).toBe(true)
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector("#audit-actor")?.textContent
+    ).toContain("ana@example.test")
     expect(viewer.filters().entity).toBe("usuario")
     expect(exportAuditLogs).toHaveBeenCalledOnce()
     expect(exportAuditLogs.mock.calls[0][0]).toEqual({

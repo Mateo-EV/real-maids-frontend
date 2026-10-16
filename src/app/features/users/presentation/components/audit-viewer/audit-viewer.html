@@ -3,136 +3,212 @@
   aria-labelledby="audit-title"
   [attr.aria-busy]="store.loading()"
 >
-  <div class="flex flex-col gap-4 border-b pb-4 xl:flex-row xl:items-end xl:justify-between">
-    <div class="xl:self-start">
-      <h1 id="audit-title" class="text-lg font-bold tracking-tight text-primary">
-        Visor de Auditoría y Trazabilidad
-      </h1>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Consulta quién, cuándo y qué registro cambió.
-      </p>
+  <form
+    [formRoot]="filterForm"
+    (submit)="$event.preventDefault()"
+    class="flex w-full min-w-0 flex-col gap-3"
+  >
+    <div class="flex gap-4 border-b pb-4 flex-col lg:flex-row justify-between">
+      <div>
+        <h1 id="audit-title" class="text-lg font-bold tracking-tight text-primary">
+          Visor de Auditoría y Trazabilidad
+        </h1>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Consulta quién, cuándo y qué registro cambió.
+        </p>
+      </div>
+      <div
+        class="catalog-filter-row flex min-w-0 lg:w-180 flex-wrap items-end gap-2"
+        data-audit-toolbar
+      >
+        <div hlmField class="min-w-0 w-full sm:flex-1">
+          <label hlmFieldLabel for="audit-actor">Usuario responsable</label>
+          <hlm-combobox
+            [value]="selectedActor() ? '' + selectedActor()!.id : 'all'"
+            [search]="filterModel().actorSearch"
+            (searchChange)="searchActors($event)"
+            (valueChange)="selectActor($event)"
+            [disabled]="exporting()"
+            [itemToString]="actorLabel"
+            [filter]="showActorOption"
+            [state]="actorOpen()"
+            (stateChanged)="actorStateChanged($event)"
+          >
+            <hlm-combobox-trigger buttonId="audit-actor" class="w-full min-w-0 justify-between">
+              <span
+                hlmComboboxValue
+                class="min-w-0 truncate"
+                placeholder="Todos los actores"
+              ></span>
+            </hlm-combobox-trigger>
+            <hlm-combobox-content *hlmComboboxPortal class="max-w-[calc(100vw-2rem)]">
+              <label for="audit-actor-search" class="sr-only"
+                >Buscar actor por nombre o correo</label
+              >
+              <input
+                hlmInput
+                brnComboboxInput
+                id="audit-actor-search"
+                placeholder="Buscar nombre o correo…"
+                aria-describedby="audit-actor-help"
+                [attr.aria-activedescendant]="activeActorOption()"
+              />
+              <div hlmComboboxList>
+                <hlm-combobox-item value="all" [disabled]="exporting()"
+                  >Todos los actores</hlm-combobox-item
+                >
+                @for (actor of actorOptions(); track actor.id) {
+                  <hlm-combobox-item
+                    [value]="'' + actor.id"
+                    [disabled]="exporting() || !catalogReady()"
+                  >
+                    <span class="min-w-0 break-words [overflow-wrap:anywhere]"
+                      >{{ actor.name }} · {{ actor.email }} (USR-{{ actor.id }})</span
+                    >
+                  </hlm-combobox-item>
+                }
+              </div>
+            </hlm-combobox-content>
+          </hlm-combobox>
+        </div>
+        <button
+          #more
+          hlmBtn
+          variant="outline"
+          size="sm"
+          type="button"
+          data-audit-more
+          [attr.aria-expanded]="advancedOpen()"
+          aria-controls="audit-advanced"
+          (click)="advancedOpen.set(!advancedOpen())"
+        >
+          <ng-icon name="lucideSlidersHorizontal" aria-hidden="true" />
+          Más filtros
+          @if (secondaryCount()) {
+            <span
+              hlmBadge
+              variant="secondary"
+              data-audit-secondary-count
+              [attr.aria-label]="secondaryCount() + ' filtros adicionales aplicados'"
+              >{{ secondaryCount() }}</span
+            >
+          }
+        </button>
+        <button
+          hlmBtn
+          size="sm"
+          type="button"
+          data-audit-export
+          [disabled]="exporting() || store.loading() || !!store.error() || store.total() === 0"
+          [attr.aria-busy]="exporting()"
+          (click)="exportCsv()"
+        >
+          @if (exporting()) {
+            <hlm-spinner aria-label="Exportando" />
+          }
+          {{ exporting() ? "Exportando…" : "Exportar CSV" }}
+        </button>
+      </div>
     </div>
-    <form
-      [formRoot]="filterForm"
-      (submit)="$event.preventDefault()"
-      class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2"
-    >
-      <div hlmField class="min-w-0">
-        <label hlmFieldLabel for="audit-from">Desde (UTC)</label>
-        <hlm-input-group>
-          <input
-            #from
-            hlmInputGroupInput
-            id="audit-from"
-            type="date"
-            [formField]="filterForm.fromUTC"
-            aria-describedby="audit-range-help"
-            (input)="setFrom(from.value)"
-          />
-        </hlm-input-group>
-        @for (error of filterForm.fromUTC().errors(); track error) {
-          <hlm-field-error>{{ error.message }}</hlm-field-error>
-        }
-      </div>
-      <div hlmField class="min-w-0">
-        <label hlmFieldLabel for="audit-to">Hasta (UTC)</label>
-        <hlm-input-group>
-          <input
-            #to
-            hlmInputGroupInput
-            id="audit-to"
-            type="date"
-            [formField]="filterForm.toUTC"
-            aria-describedby="audit-range-help"
-            (input)="setTo(to.value)"
-          />
-        </hlm-input-group>
-        @for (error of filterForm.toUTC().errors(); track error) {
-          <hlm-field-error>{{ error.message }}</hlm-field-error>
-        }
-      </div>
-      <div hlmField class="catalog-filter-search min-w-0">
-        <label hlmFieldLabel for="audit-actor-search">Buscar actor por nombre o correo</label>
-        <hlm-input-group>
-          <input
-            hlmInputGroupInput
-            id="audit-actor-search"
-            type="search"
-            [formField]="filterForm.actorSearch"
-            aria-describedby="audit-actor-help"
-          />
-        </hlm-input-group>
-      </div>
-      <div hlmField class="min-w-0">
-        <label hlmFieldLabel for="audit-actor">Actor seleccionado</label>
-        <hlm-native-select
-          selectId="audit-actor"
-          [value]="selectedActor() ? '' + selectedActor()!.id : ''"
-          [disabled]="exporting()"
-          (valueChange)="selectActor($event)"
-        >
-          <option value="">Todos los actores</option>
-          @for (actor of actorOptions(); track actor.id) {
-            <option [value]="actor.id" [disabled]="!catalogReady()">
-              {{ actor.name }} · {{ actor.email }} (USR-{{ actor.id }})
-            </option>
+    <div id="audit-advanced" [hidden]="!advancedOpen()">
+      <div class="catalog-filter-row grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
+        <div hlmField class="min-w-0">
+          <label hlmFieldLabel for="audit-from">Desde (UTC)</label>
+          <hlm-input-group>
+            <input
+              #from
+              hlmInputGroupInput
+              id="audit-from"
+              type="date"
+              [formField]="filterForm.fromUTC"
+              aria-describedby="audit-range-help"
+              (input)="setFrom(from.value)"
+            />
+          </hlm-input-group>
+          @for (error of filterForm.fromUTC().errors(); track error) {
+            <hlm-field-error>{{ error.message }}</hlm-field-error>
           }
-        </hlm-native-select>
-      </div>
-      <div hlmField>
-        <label hlmFieldLabel for="audit-entity">Entidad</label>
-        <hlm-native-select
-          selectId="audit-entity"
-          [value]="filters().entity ?? ''"
-          [disabled]="exporting()"
-          (valueChange)="setEntity($event)"
-        >
-          <option value="">Todas las entidades</option>
-          @for (entity of entities; track entity) {
-            <option [value]="entity">{{ entity }}</option>
+        </div>
+        <div hlmField class="min-w-0">
+          <label hlmFieldLabel for="audit-to">Hasta (UTC)</label>
+          <hlm-input-group>
+            <input
+              #to
+              hlmInputGroupInput
+              id="audit-to"
+              type="date"
+              [formField]="filterForm.toUTC"
+              aria-describedby="audit-range-help"
+              (input)="setTo(to.value)"
+            />
+          </hlm-input-group>
+          @for (error of filterForm.toUTC().errors(); track error) {
+            <hlm-field-error>{{ error.message }}</hlm-field-error>
           }
-        </hlm-native-select>
+        </div>
+        <div hlmField class="min-w-0">
+          <label hlmFieldLabel for="audit-entity">Entidad</label>
+          <hlm-native-select
+            selectId="audit-entity"
+            [value]="filters().entity ?? ''"
+            [disabled]="exporting()"
+            (valueChange)="setEntity($event)"
+          >
+            <option value="">Todas las entidades</option>
+            @for (entity of entities; track entity) {
+              <option [value]="entity">{{ entity }}</option>
+            }
+          </hlm-native-select>
+        </div>
+        <div hlmField class="min-w-0">
+          <label hlmFieldLabel for="audit-action">Acción</label>
+          <hlm-native-select
+            selectId="audit-action"
+            [value]="filters().action ?? ''"
+            [disabled]="exporting()"
+            (valueChange)="setAction($event)"
+          >
+            <option value="">Todas las acciones</option>
+            @for (action of actions; track action) {
+              <option [value]="action">{{ action }}</option>
+            }
+          </hlm-native-select>
+        </div>
       </div>
-      <div hlmField>
-        <label hlmFieldLabel for="audit-action">Acción</label>
-        <hlm-native-select
-          selectId="audit-action"
-          [value]="filters().action ?? ''"
-          [disabled]="exporting()"
-          (valueChange)="setAction($event)"
-        >
-          <option value="">Todas las acciones</option>
-          @for (action of actions; track action) {
-            <option [value]="action">{{ action }}</option>
-          }
-        </hlm-native-select>
-      </div>
-      <button
-        hlmBtn
-        size="sm"
-        type="button"
-        data-audit-export
-        [disabled]="exporting() || store.loading() || !!store.error() || store.total() === 0"
-        [attr.aria-busy]="exporting()"
-        (click)="exportCsv()"
-      >
-        @if (exporting()) {
-          <hlm-spinner aria-label="Exportando" />
+    </div>
+    @if (appliedChips().length) {
+      <div class="flex min-w-0 flex-wrap items-center gap-2" aria-label="Filtros aplicados">
+        @for (chip of appliedChips(); track chip.field) {
+          <span hlmBadge variant="secondary" class="max-w-full" data-audit-chip>
+            <span class="min-w-0 break-words [overflow-wrap:anywhere]">{{ chip.label }}</span>
+            <button
+              hlmBtn
+              variant="ghost"
+              size="icon-xs"
+              type="button"
+              [attr.aria-label]="'Quitar ' + chip.label"
+              [disabled]="exporting()"
+              (click)="removeFilter(chip.field); more.focus()"
+            >
+              <ng-icon name="lucideX" aria-hidden="true" />
+            </button>
+          </span>
         }
-        {{ exporting() ? "Exportando…" : "Exportar Log (CSV)" }}
-      </button>
-      <button
-        hlmBtn
-        variant="outline"
-        size="sm"
-        type="button"
-        [disabled]="exporting()"
-        (click)="clearFilters()"
-      >
-        Limpiar filtros
-      </button>
-    </form>
-  </div>
+        <button
+          hlmBtn
+          variant="ghost"
+          size="sm"
+          type="button"
+          data-audit-clear
+          [disabled]="exporting()"
+          (click)="clearFilters(); more.focus()"
+        >
+          Limpiar todo
+        </button>
+      </div>
+    }
+  </form>
+
   <p id="audit-range-help" class="mt-2 text-xs text-muted-foreground">
     Días UTC, desde y hasta incluidos. CSV: todos los resultados del filtro, máximo 10000 eventos.
   </p>
@@ -164,7 +240,7 @@
   @if (exportError()) {
     <div hlmAlert variant="destructive" class="mt-4" role="alert">
       <h2 hlmAlertTitle>No se inició la descarga</h2>
-      <p hlmAlertDescription>{{ exportError() }} Reintenta con Exportar Log (CSV).</p>
+      <p hlmAlertDescription>{{ exportError() }} Reintenta con Exportar CSV.</p>
     </div>
   }
   @if (store.loading()) {

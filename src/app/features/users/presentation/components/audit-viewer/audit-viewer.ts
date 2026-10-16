@@ -1,8 +1,22 @@
 import { DatePipe } from "@angular/common"
-import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
+import {
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  OnInit,
+  signal,
+  viewChild
+} from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, Subscription } from "rxjs"
 import { disabled, form, FormField, FormRoot, validate } from "@angular/forms/signals"
+import { NgIcon, provideIcons } from "@ng-icons/core"
+import { lucideSlidersHorizontal, lucideX } from "@ng-icons/lucide"
+import { BrnCombobox, BrnComboboxInput } from "@spartan-ng/brain/combobox"
+import { HlmComboboxImports } from "@spartan-ng/helm/combobox"
+import { HlmInputImports } from "@spartan-ng/helm/input"
 import { HlmFieldImports } from "@spartan-ng/helm/field"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
@@ -33,6 +47,10 @@ import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
   selector: "app-audit-viewer",
   imports: [
     DatePipe,
+    NgIcon,
+    BrnComboboxInput,
+    HlmComboboxImports,
+    HlmInputImports,
     FormField,
     FormRoot,
     HlmFieldImports,
@@ -47,6 +65,7 @@ import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
     HlmSkeleton,
     TablePagination
   ],
+  providers: [provideIcons({ lucideSlidersHorizontal, lucideX })],
   templateUrl: "./audit-viewer.html"
 })
 export class AuditViewer implements OnInit {
@@ -95,7 +114,67 @@ export class AuditViewer implements OnInit {
       ? [this.users.users().find(user => user.id === selected.id) ?? selected, ...users]
       : users
   })
+  readonly advancedOpen = signal(false)
+  readonly actorOpen = signal<"open" | "closed">("closed")
+  private readonly actorCombobox = viewChild(BrnCombobox)
+  readonly activeActorOption = signal<string | null>(null)
+  constructor() {
+    // Brain manages keyboard highlighting; expose its active option to assistive technology.
+    effect(onCleanup => {
+      const combobox = this.actorCombobox()
+      if (!combobox) return
+      const subscription = combobox.keyManager.change.subscribe(() => {
+        this.activeActorOption.set(combobox.keyManager.activeItem?.id() ?? null)
+      })
+      onCleanup(() => subscription.unsubscribe())
+    })
+  }
+  readonly secondaryCount = computed(() => {
+    const { fromUTC, toUTC, entity, action } = this.filters()
+    return [fromUTC, toUTC, entity, action].filter(Boolean).length
+  })
+  readonly appliedChips = computed(() => {
+    const filters = this.filters()
+    const chips: { field: "userId" | "fromUTC" | "toUTC" | "entity" | "action"; label: string }[] =
+      []
+    if (filters.userId !== undefined)
+      chips.push({ field: "userId", label: `Actor: ${this.actorLabel(String(filters.userId))}` })
+    for (const [field, title] of [
+      ["fromUTC", "Desde (UTC)"],
+      ["toUTC", "Hasta (UTC)"],
+      ["entity", "Entidad"],
+      ["action", "Acción"]
+    ] as const) {
+      if (filters[field]) chips.push({ field, label: `${title}: ${filters[field]}` })
+    }
+    return chips
+  })
+  readonly actorLabel = (value: string): string => {
+    if (value === "all") return "Todos los actores"
+    const actor =
+      this.selectedActor()?.id === Number(value)
+        ? this.selectedActor()
+        : this.users.users().find(user => String(user.id) === value)
+    return actor ? `${actor.name} · ${actor.email} (USR-${actor.id})` : `USR-${value}`
+  }
+  // Options are already filtered locally by name/email, never by the secondary ID.
+  readonly showActorOption = () => true
   readonly filterModel = signal({ fromUTC: "", toUTC: "", actorSearch: "" })
+  searchActors(value: string): void {
+    if (this.destroyRef.destroyed || this.exporting()) return
+    this.filterModel.update(model => ({ ...model, actorSearch: value }))
+  }
+  actorStateChanged(state: "open" | "closed"): void {
+    this.actorOpen.set(this.exporting() ? "closed" : state)
+    if (state === "closed") this.searchActors("")
+  }
+  removeFilter(field: "userId" | "fromUTC" | "toUTC" | "entity" | "action"): void {
+    if (this.destroyRef.destroyed || this.exporting()) return
+    if (field === "userId") this.selectedActor.set(undefined)
+    if (field === "fromUTC" || field === "toUTC")
+      this.filterModel.update(model => ({ ...model, [field]: "" }))
+    this.updateFilters({ ...this.filters(), [field]: undefined })
+  }
   readonly filterForm = form(this.filterModel, path => {
     for (const field of [path.fromUTC, path.toUTC]) {
       disabled(field, () => this.exporting())
@@ -140,6 +219,7 @@ export class AuditViewer implements OnInit {
     this.retry()
   }
   setDay(value: string): void {
+    if (this.destroyRef.destroyed || this.exporting()) return
     this.filterModel.update(model => ({ ...model, fromUTC: value, toUTC: value }))
     this.updateFilters({
       ...this.filters(),
@@ -156,15 +236,18 @@ export class AuditViewer implements OnInit {
   }
   selectActor(value: string | null | undefined): void {
     if (this.destroyRef.destroyed || this.exporting()) return
-    if (!value) {
+    if (!value || value === "all") {
+      this.searchActors("")
       this.selectedActor.set(undefined)
       this.updateFilters({ ...this.filters(), userId: undefined })
       return
     }
+    if (value === String(this.selectedActor()?.id)) return
     if (!this.catalogReady()) return
     // Only a loaded option supplies identity; search text is never an ID.
     const actor = this.users.users().find(user => String(user.id) === value)
     if (!actor) return
+    this.searchActors("")
     this.selectedActor.set({ id: actor.id, name: actor.name, email: actor.email })
     this.updateFilters({ ...this.filters(), userId: actor.id })
   }
@@ -212,6 +295,8 @@ export class AuditViewer implements OnInit {
       this.store.total() === 0
     )
       return
+    this.actorOpen.set("closed")
+    this.searchActors("")
     this.exporting.set(true)
     this.exportError.set("")
     const filters = { ...this.filters() }

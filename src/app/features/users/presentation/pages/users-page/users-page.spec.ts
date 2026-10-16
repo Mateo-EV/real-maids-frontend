@@ -55,7 +55,10 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 
 describe("UsersPage", () => {
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [UsersPage],
@@ -260,6 +263,15 @@ describe("UsersPage", () => {
   })
 
   it("loads Audit only on first visit and retains filters, page and rows without another query", async () => {
+    // jsdom has no overlay geometry; stub only the browser APIs this interaction needs.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    )
     const query = vi.spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
     const { fixture, element } = await setup()
     const globalCalls = query.mock.calls.length // the independent global metric query is allowed
@@ -280,10 +292,24 @@ describe("UsersPage", () => {
       .click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    const actor = element.querySelector<HTMLSelectElement>("#audit-actor")!
-    actor.value = "1"
-    actor.dispatchEvent(new Event("change"))
+    const actor = element.querySelector<HTMLButtonElement>("#audit-actor")!
+    expect(actor.getAttribute("role")).toBe("combobox")
+    const callsBeforeOpening = query.mock.calls.length
+    actor.click()
     await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(query).toHaveBeenCalledTimes(callsBeforeOpening)
+    const option = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="combobox-item"]')
+    ).find(item => item.textContent?.includes("(USR-1)"))!
+    expect(option).toBeDefined()
+    option.scrollIntoView = vi.fn()
+    option.click()
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
+    const actorLabel = actor.textContent
+    expect(actorLabel).toContain("(USR-1)")
     viewer.goToPage(2)
     await flush(fixture.whenStable())
     fixture.detectChanges()
@@ -298,7 +324,8 @@ describe("UsersPage", () => {
     await visit(fixture, "audit")
     expect(fixture.debugElement.query(By.directive(AuditViewer)).componentInstance).toBe(viewer)
     expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
-    expect(element.querySelector<HTMLSelectElement>("#audit-actor")!.value).toBe("1")
+    expect(element.querySelector<HTMLButtonElement>("#audit-actor")!.textContent).toBe(actorLabel)
+    expect(viewer.selectedActor()?.id).toBe(1)
     expect(viewer.page()).toBe(2)
     expect(element.querySelector("app-audit-viewer tbody")!.textContent).toBe(rows)
     expect(query).toHaveBeenCalledTimes(calls)
