@@ -6,40 +6,19 @@ import { API_URL } from "@/app/core/tokens/api-url.token"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { Result } from "@/app/shared/utils/result"
+import { dtoDate, dtoId, dtoRecord, dtoText } from "@/app/shared/infrastructure/http/dto-validation"
 import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError, UserErrorCode } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 
-export const dtoRecord = (value: unknown): Record<string, unknown> => {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new UserError("INVALID_RESPONSE")
-  return value as Record<string, unknown>
+function invalid(): never {
+  throw new UserError("INVALID_RESPONSE")
 }
-export const dtoText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0
-export const dtoId = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isInteger(value) &&
-  value >= -2147483648 &&
-  value <= 2147483647
-export function dtoDate(value: unknown): Date {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
-  )
-    throw new UserError("INVALID_RESPONSE")
-  const date = new Date(value)
-  const year = Number(value.slice(0, 4)),
-    month = Number(value.slice(5, 7)),
-    day = Number(value.slice(8, 10))
-  const days = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  if (!Number.isFinite(date.getTime()) || month < 1 || month > 12 || day < 1 || day > days)
-    throw new UserError("INVALID_RESPONSE")
-  return date
-}
+const record = (value: unknown) => dtoRecord(value, invalid)
+const date = (value: unknown) => dtoDate(value, invalid)
 function userDto(value: unknown): User {
-  const p = dtoRecord(value)
+  const p = record(value)
   if (
     !dtoId(p["idUsuario"]) ||
     !dtoId(p["idRol"]) ||
@@ -57,10 +36,10 @@ function userDto(value: unknown): User {
     p["correo"],
     p["idioma"],
     p["activo"],
-    dtoDate(p["fechaCreacion"]),
-    dtoDate(p["fechaActualizacion"]),
+    date(p["fechaCreacion"]),
+    date(p["fechaActualizacion"]),
     p["idRol"],
-    p["ultimoAcceso"] === null ? null : dtoDate(p["ultimoAcceso"])
+    p["ultimoAcceso"] === null ? null : date(p["ultimoAcceso"])
   )
 }
 function userForId(value: unknown, id: number): User {
@@ -68,7 +47,7 @@ function userForId(value: unknown, id: number): User {
   if (user.id !== id) throw new UserError("INVALID_RESPONSE")
   return user
 }
-export function userTransportCode(error: unknown): UserErrorCode {
+function userTransportCode(error: unknown): UserErrorCode {
   if (error instanceof UserError) return error.code
   if (error instanceof AuthError) {
     return error.code === "FORBIDDEN"
@@ -128,7 +107,7 @@ export class UserHttpSource {
           transferCache: false
         }),
       value => {
-        const p = dtoRecord(value)
+        const p = record(value)
         const page = p["pagina"],
           size = p["tamanio"],
           total = p["totalElementos"],

@@ -1,5 +1,5 @@
 import { isPlatformBrowser } from "@angular/common"
-import { HttpClient } from "@angular/common/http"
+import { HttpClient, HttpErrorResponse } from "@angular/common/http"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { catchError, defer, map, Observable, of } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -7,11 +7,46 @@ import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-pol
 import { Result } from "@/app/shared/utils/result"
 import { Permission, PermissionAssignment } from "../../domain/entities/permission.entity"
 import { RbacError, RbacErrorCode } from "../../domain/errors/rbac.error"
-import { dtoId, dtoRecord, dtoText, userTransportCode } from "./user-http.source"
+import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
+import { dtoId, dtoRecord, dtoText } from "@/app/shared/infrastructure/http/dto-validation"
+
+function invalid(): never {
+  throw new RbacError("INVALID_RESPONSE")
+}
+function rbacTransportCode(error: unknown): RbacErrorCode {
+  if (error instanceof RbacError) return error.code
+  if (error instanceof AuthError) {
+    switch (error.code) {
+      case "FORBIDDEN":
+      case "NETWORK":
+      case "UNCONFIGURED":
+        return error.code
+      case "INVALID_CREDENTIALS":
+      case "COORDINATION":
+      case "CANCELLED":
+        return "UNAUTHENTICATED"
+    }
+  }
+  if (error instanceof HttpErrorResponse) {
+    switch (error.status) {
+      case 0:
+        return "NETWORK"
+      case 400:
+        return "VALIDATION"
+      case 401:
+        return "UNAUTHENTICATED"
+      case 403:
+        return "FORBIDDEN"
+      case 404:
+        return "ROLE_NOT_FOUND"
+    }
+  }
+  return "UNEXPECTED"
+}
 function permissionsDto(value: unknown): Permission[] {
   if (!Array.isArray(value)) throw new RbacError("INVALID_RESPONSE")
   const items = value.map(item => {
-    const p = dtoRecord(item)
+    const p = dtoRecord(item, invalid)
     if (
       !dtoId(p["idPermiso"]) ||
       p["idPermiso"] < 0 ||
@@ -47,23 +82,7 @@ export class RbacHttpSource {
       if (!this.browser || !this.origin) return of(Result.failure(new RbacError("UNCONFIGURED")))
       return defer(send).pipe(
         map(value => Result.success(parse(value))),
-        catchError(error => {
-          const code = userTransportCode(error)
-          const mapped: RbacErrorCode =
-            error instanceof RbacError
-              ? error.code
-              : code === "USER_NOT_FOUND"
-                ? "ROLE_NOT_FOUND"
-                : code === "INVALID_RESPONSE" ||
-                    code === "FORBIDDEN" ||
-                    code === "UNAUTHENTICATED" ||
-                    code === "NETWORK" ||
-                    code === "UNCONFIGURED" ||
-                    code === "VALIDATION"
-                  ? code
-                  : "UNEXPECTED"
-          return of(Result.failure(new RbacError(mapped)))
-        })
+        catchError(error => of(Result.failure(new RbacError(rbacTransportCode(error)))))
       )
     })
   }
@@ -105,7 +124,7 @@ export class RbacHttpSource {
         )
       },
       value => {
-        const role = dtoRecord(value)
+        const role = dtoRecord(value, invalid)
         if (role["idRol"] !== roleId) throw new RbacError("INVALID_RESPONSE")
         const permissions = permissionsDto(role["permisos"])
         if (

@@ -1,5 +1,5 @@
 import { isPlatformBrowser } from "@angular/common"
-import { HttpClient } from "@angular/common/http"
+import { HttpClient, HttpErrorResponse } from "@angular/common/http"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { catchError, defer, map, of } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -9,10 +9,43 @@ import { Role } from "../../domain/entities/role.entity"
 import { RoleError, RoleErrorCode } from "../../domain/errors/role.error"
 import { CreateRoleParams } from "../../domain/params/create-role.params"
 import { UpdateRoleParams } from "../../domain/params/update-role.params"
-import { dtoDate, dtoId, dtoRecord, dtoText, userTransportCode } from "./user-http.source"
+import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
+import { dtoDate, dtoId, dtoRecord, dtoText } from "@/app/shared/infrastructure/http/dto-validation"
+
+function invalid(): never {
+  throw new RoleError("INVALID_RESPONSE")
+}
+function roleTransportCode(error: unknown): RoleErrorCode {
+  if (error instanceof RoleError) return error.code
+  if (error instanceof AuthError) {
+    switch (error.code) {
+      case "FORBIDDEN":
+      case "NETWORK":
+      case "UNCONFIGURED":
+        return error.code
+      case "INVALID_CREDENTIALS":
+      case "COORDINATION":
+      case "CANCELLED":
+        return "UNAUTHENTICATED"
+    }
+  }
+  if (error instanceof HttpErrorResponse) {
+    switch (error.status) {
+      case 0:
+        return "NETWORK"
+      case 401:
+        return "UNAUTHENTICATED"
+      case 403:
+        return "FORBIDDEN"
+      case 404:
+        return "ROLE_NOT_FOUND"
+    }
+  }
+  return "UNEXPECTED"
+}
 
 function roleDto(value: unknown): Role {
-  const role = dtoRecord(value)
+  const role = dtoRecord(value, invalid)
   if (
     !dtoId(role["idRol"]) ||
     !dtoText(role["nombre"]) ||
@@ -26,7 +59,7 @@ function roleDto(value: unknown): Role {
     role["nombre"],
     role["descripcion"],
     role["activo"],
-    dtoDate(role["fechaCreacion"])
+    dtoDate(role["fechaCreacion"], invalid)
   )
 }
 @Injectable({ providedIn: "root" })
@@ -40,24 +73,7 @@ export class RoleHttpSource {
       if (!this.browser || !this.origin) return of(Result.failure(new RoleError("UNCONFIGURED")))
       return this.http.get<unknown>(`${this.origin}${path}`, { transferCache: false }).pipe(
         map(value => Result.success(parse(value))),
-        catchError(error => {
-          const code = userTransportCode(error)
-          const roleCode: RoleErrorCode =
-            error instanceof RoleError
-              ? error.code
-              : code === "USER_NOT_FOUND"
-                ? "ROLE_NOT_FOUND"
-                : [
-                      "INVALID_RESPONSE",
-                      "UNAUTHENTICATED",
-                      "FORBIDDEN",
-                      "NETWORK",
-                      "UNCONFIGURED"
-                    ].includes(code)
-                  ? (code as RoleErrorCode)
-                  : "UNEXPECTED"
-          return of(Result.failure(new RoleError(roleCode)))
-        })
+        catchError(error => of(Result.failure(new RoleError(roleTransportCode(error)))))
       )
     })
   }

@@ -6,18 +6,19 @@ import { API_URL } from "@/app/core/tokens/api-url.token"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { Result } from "@/app/shared/utils/result"
+import {
+  dtoId as id,
+  dtoText as text,
+  dtoRecord
+} from "@/app/shared/infrastructure/http/dto-validation"
 import { UserSession } from "../../domain/entities/user-session.entity"
 import { UserSessionError, UserSessionErrorCode } from "../../domain/errors/user-session.error"
 
-const id = (v: unknown): v is number =>
-  typeof v === "number" && Number.isInteger(v) && v >= -2147483648 && v <= 2147483647
-const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0
 function invalid(): never {
   throw new UserSessionError("INVALID_RESPONSE")
 }
 function record(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== "object" || Array.isArray(v)) invalid()
-  return v as Record<string, unknown>
+  return dtoRecord(v, invalid)
 }
 function date(v: unknown): Date {
   if (
