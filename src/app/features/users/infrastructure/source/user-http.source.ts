@@ -11,6 +11,8 @@ import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError, UserErrorCode } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
+import { UserListQuery } from "../../domain/models/user-list-query"
+import { UserListPage } from "../../domain/models/user-list-page"
 
 function invalid(): never {
   throw new UserError("INVALID_RESPONSE")
@@ -99,6 +101,58 @@ export class UserHttpSource {
       )
     })
   }
+  getUsersPage(query: UserListQuery): Observable<Result<UserListPage, UserError>> {
+    const q = { ...query }
+    return this.request(
+      () => {
+        const int32 = (value: number) =>
+          Number.isSafeInteger(value) && value >= 0 && value <= 2147483647
+        if (
+          !int32(q.page) ||
+          !int32(q.size) ||
+          q.size < 1 ||
+          (q.roleId !== undefined && !int32(q.roleId)) ||
+          (q.search !== undefined && typeof q.search !== "string") ||
+          (q.isActive !== undefined && typeof q.isActive !== "boolean")
+        )
+          throw new UserError("VALIDATION")
+        let params = new HttpParams().set("pagina", q.page).set("tamanio", q.size)
+        if (q.search) params = params.set("busqueda", q.search)
+        if (q.roleId !== undefined) params = params.set("idRol", q.roleId)
+        if (q.isActive !== undefined) params = params.set("activo", q.isActive)
+        return this.http.get<unknown>(`${this.origin}/api/usuarios`, {
+          params,
+          transferCache: false
+        })
+      },
+      value => {
+        const p = record(value)
+        const page = p["pagina"],
+          size = p["tamanio"],
+          total = p["totalElementos"],
+          totalPages = p["totalPaginas"]
+        const integer = (n: unknown): n is number =>
+          typeof n === "number" && Number.isSafeInteger(n) && n >= 0
+        if (
+          !integer(page) ||
+          page !== q.page ||
+          !integer(size) ||
+          size < 1 ||
+          size > q.size ||
+          !integer(total) ||
+          !integer(totalPages) ||
+          totalPages !== Math.ceil(total / size) ||
+          !Array.isArray(p["contenido"]) ||
+          p["contenido"].length !== Math.min(size, Math.max(0, total - page * size))
+        )
+          return invalid()
+        const items = p["contenido"].map(userDto)
+        if (new Set(items.map(user => user.id)).size !== items.length) return invalid()
+        return { items, page, size, total, totalPages }
+      }
+    )
+  }
+
   getUsers(): Observable<Result<User[], UserError>> {
     return this.request(
       () =>

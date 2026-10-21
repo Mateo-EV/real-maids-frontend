@@ -129,6 +129,7 @@ describe("UserStore collection", () => {
       })
     )
     expect(list.execute).toHaveBeenCalledTimes(6)
+    expect(store.mutationRevision()).toBe(5)
     expect(list.execute.mock.calls.every(args => args.length === 0)).toBe(true)
     expect(create.execute).toHaveBeenCalledTimes(1)
     expect(update.execute).toHaveBeenCalledTimes(2)
@@ -167,6 +168,7 @@ describe("UserStore collection", () => {
     store.createUser(params).subscribe(next)
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: user }))
     expect(store.error()?.code).toBe("NETWORK")
+    expect(store.mutationRevision()).toBe(1)
     expect(store.users()).toEqual([user])
   })
   it("performs just one read even for an empty collection", () => {

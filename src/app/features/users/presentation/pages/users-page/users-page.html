@@ -118,7 +118,7 @@
       <section
         class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
         aria-labelledby="users-title"
-        [attr.aria-busy]="initializing() || users.loading()"
+        [attr.aria-busy]="list.loading()"
       >
         <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
           <div class="xl:self-start">
@@ -187,10 +187,9 @@
           </div>
         </div>
         @if (initializing() || users.loading()) {
-          <div class="flex min-h-64 items-center justify-center gap-3" role="status">
-            <hlm-spinner />Cargando catálogo…
-          </div>
-        } @else if (loadError() || users.error()) {
+          <p class="p-4 text-sm" role="status">Cargando catálogo compartido…</p>
+        }
+        @if (loadError() || users.error()) {
           <div class="p-5">
             <div hlmAlert variant="destructive" role="alert">
               <p hlmAlertTitle>No pudimos cargar el catálogo</p>
@@ -209,7 +208,29 @@
               Reintentar
             </button>
           </div>
-        } @else if (filteredUsers().length === 0) {
+        }
+        @if (list.loading()) {
+          <div class="flex min-h-64 items-center justify-center gap-3" role="status">
+            <hlm-spinner />Cargando usuarios…
+          </div>
+        } @else if (list.error()) {
+          <div class="p-5">
+            <div hlmAlert variant="destructive" role="alert" data-list-error>
+              <p hlmAlertTitle>No pudimos cargar los usuarios del filtro</p>
+              <p hlmAlertDescription>Reintenta la consulta para continuar.</p>
+            </div>
+            <button
+              data-retry-list
+              hlmBtn
+              variant="outline"
+              class="mt-4"
+              type="button"
+              (click)="retryList()"
+            >
+              Reintentar listado
+            </button>
+          </div>
+        } @else if (list.loaded() && visibleUsers().length === 0) {
           <div hlmEmpty class="min-h-64">
             <div hlmEmptyHeader>
               <div hlmEmptyMedia variant="icon">
@@ -243,7 +264,7 @@
               <button hlmBtn type="button" (click)="editUser()">Nuevo usuario</button>
             </div>
           </div>
-        } @else {
+        } @else if (list.loaded()) {
           <div hlmTableContainer class="hidden lg:block">
             <table hlmTable>
               <caption class="sr-only">
@@ -385,14 +406,18 @@
           class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
         >
           <p class="text-xs text-muted-foreground" role="status">
-            Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ filteredUsers().length }} usuarios
-            del filtro · {{ users.users().length }} usuarios
+            @if (list.loaded()) {
+              Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ list.result()?.total }} usuarios
+              del filtro
+            } @else {
+              Resultados sin verificar
+            }
           </p>
           <app-table-pagination
             label="Paginación de usuarios"
             [currentPage]="currentPage()"
             [pageCount]="pageCount()"
-            [disabled]="initializing() || users.loading()"
+            [disabled]="list.loading() || !list.loaded()"
             (pageSelected)="goToPage($event)"
           />
         </div>

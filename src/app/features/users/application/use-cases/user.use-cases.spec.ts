@@ -10,6 +10,7 @@ import { USER_REPOSITORY, UserRepository } from "../../domain/repositories/user.
 import { CreateUserUseCase } from "./create-user.use-case"
 import { GetUserByIdUseCase } from "./get-user-by-id.use-case"
 import { GetUsersUseCase } from "./get-users.use-case"
+import { GetUsersPageUseCase } from "./get-users-page.use-case"
 import { UpdateUserStatusByIdUseCase } from "./update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "./update-user-by-id.use-case"
 import { DeleteUserByIdUseCase } from "./delete-user-by-id.use-case"
@@ -42,6 +43,7 @@ describe("Users use cases", () => {
       createUser: vi.fn(),
       getUserById: vi.fn(),
       getUsers: vi.fn(),
+      getUsersPage: vi.fn(),
       updateUserById: vi.fn(),
       updateUserStatusById: vi.fn(),
       deleteUserById: vi.fn()
@@ -92,6 +94,18 @@ describe("Users use cases", () => {
         () => TestBed.inject(GetUsersUseCase).execute(),
         []
       ))
+
+    it(`delegates server listing and preserves ${outcome}`, () => {
+      const query = { page: 0, size: 10, roleId: 0, isActive: false }
+      return check(
+        "getUsersPage",
+        success
+          ? Result.success({ items: [user], page: 0, size: 10, total: 1, totalPages: 1 })
+          : Result.failure(error),
+        () => TestBed.inject(GetUsersPageUseCase).execute(query),
+        [query]
+      )
+    })
 
     it(`delegates update and preserves ${outcome}`, () =>
       check(

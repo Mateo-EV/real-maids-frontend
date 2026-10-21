@@ -5,7 +5,8 @@ import {
   computed,
   DestroyRef,
   inject,
-  linkedSignal,
+  effect,
+  untracked,
   OnInit,
   PLATFORM_ID,
   signal
@@ -36,6 +37,8 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
+import { UserListStore } from "../../state/user-list.store"
+import { UserListQuery } from "../../../domain/models/user-list-query"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, forkJoin, interval, of, Subject, switchMap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
@@ -83,6 +86,7 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
     AuditViewer
   ],
   providers: [
+    UserListStore,
     provideIcons({
       lucideUsers,
       lucideSmartphone,
@@ -100,6 +104,7 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
 })
 export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
+  readonly list = inject(UserListStore)
   readonly roles = inject(RolesStore)
   readonly sessions = inject(UserSessionsStore)
   private readonly platformId = inject(PLATFORM_ID)
@@ -119,45 +124,67 @@ export class UsersPage implements OnInit {
   readonly statusFilter = signal("all")
   readonly pageSize = 10
   readonly activeCount = computed(() => this.users.users().filter(user => user.isActive).length)
-  readonly filteredUsers = computed(() => {
-    const text = this.search().trim().toLocaleLowerCase("es")
-    const role = this.roleFilter()
-    const status = this.statusFilter()
-    return this.users
-      .users()
-      .filter(
-        user =>
-          (!text ||
-            user.name.toLocaleLowerCase("es").includes(text) ||
-            user.email.toLocaleLowerCase("es").includes(text)) &&
-          (!role || user.roleId === Number(role)) &&
-          (status === "all" || user.isActive === (status === "active"))
-      )
-  })
-  readonly pageCount = computed(() =>
-    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize))
+  readonly pageCount = computed(() => Math.max(1, this.list.result()?.totalPages ?? 0))
+  readonly currentPage = computed(() => this.list.query().page + 1)
+  readonly visibleUsers = computed(() =>
+    this.list.loaded() ? (this.list.result()?.items ?? []) : []
   )
-  readonly currentPage = linkedSignal<number, number>({
-    source: this.pageCount,
-    computation: (count, previous) => Math.min(previous?.value ?? 1, count)
+  readonly rangeStart = computed(() => {
+    const page = this.list.result()
+    return this.visibleUsers().length && page ? page.page * page.size + 1 : 0
   })
-  readonly visibleUsers = computed(() => {
-    const start = (this.currentPage() - 1) * this.pageSize
-    return this.filteredUsers().slice(start, start + this.pageSize)
-  })
-  readonly rangeStart = computed(() =>
-    this.visibleUsers().length ? (this.currentPage() - 1) * this.pageSize + 1 : 0
-  )
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
   private readonly queries = new Subject<void>()
+  private readonly listQueries = new Subject<{ query: UserListQuery; delay: number }>()
+  private mutationRevision = this.users.mutationRevision()
+
+  constructor() {
+    effect(() => {
+      const revision = this.users.mutationRevision()
+      if (revision === this.mutationRevision) return
+      this.mutationRevision = revision
+      untracked(() => this.retryList())
+    })
+  }
+
+  private loadList(query: UserListQuery, delay = 0): void {
+    if (!this.destroyRef.destroyed) this.listQueries.next({ query, delay })
+  }
+
+  retryList(): void {
+    this.loadList(this.list.query())
+  }
+
+  private applyFilters(delay = 0): void {
+    const search = this.search().trim(),
+      role = this.roleFilter(),
+      status = this.statusFilter()
+    this.loadList(
+      {
+        page: 0,
+        size: this.pageSize,
+        ...(search ? { search } : {}),
+        ...(role !== "" ? { roleId: Number(role) } : {}),
+        ...(status !== "all" ? { isActive: status === "active" } : {})
+      },
+      delay
+    )
+  }
 
   private reload(): void {
     if (!this.destroyRef.destroyed) this.queries.next()
   }
 
   ngOnInit(): void {
+    this.listQueries
+      .pipe(
+        switchMap(({ query, delay }) => this.list.load(query, delay)),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe()
+    this.retryList()
     this.queries
       .pipe(
         switchMap(() =>
@@ -204,24 +231,25 @@ export class UsersPage implements OnInit {
 
   setSearch(value: string): void {
     this.search.set(value)
-    this.currentPage.set(1)
+    this.applyFilters(250)
   }
   setRoleFilter(value: string | null | undefined): void {
     this.roleFilter.set(value ?? "")
-    this.currentPage.set(1)
+    this.applyFilters()
   }
   setStatusFilter(value: string | null | undefined): void {
     this.statusFilter.set(value ?? "all")
-    this.currentPage.set(1)
+    this.applyFilters()
   }
   clearFilters(): void {
     this.search.set("")
     this.roleFilter.set("")
     this.statusFilter.set("all")
-    this.currentPage.set(1)
+    this.applyFilters()
   }
   goToPage(page: number): void {
-    this.currentPage.set(Math.max(1, Math.min(page, this.pageCount())))
+    const selected = Math.max(1, Math.min(page, this.pageCount()))
+    if (selected !== this.currentPage()) this.loadList({ ...this.list.query(), page: selected - 1 })
   }
   roleName(user: User): string {
     const role = this.roles.roles().find(item => item.id === user.roleId)

@@ -6,7 +6,11 @@ import { UpdateUserParams } from "@/app/features/users/domain/params/update-user
 import { Result } from "@/app/shared/utils/result"
 import { Observable } from "rxjs"
 
+import { UserListQuery } from "../models/user-list-query"
+import { UserListPage } from "../models/user-list-page"
+
 export interface UserRepository {
+  getUsersPage(query: UserListQuery): Observable<Result<UserListPage, UserError>>
   createUser(params: CreateUserParams): Observable<Result<User, UserError>>
   getUserById(id: number): Observable<Result<User, UserError>>
   getUsers(): Observable<Result<User[], UserError>>

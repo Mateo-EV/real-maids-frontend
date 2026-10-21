@@ -44,6 +44,80 @@ describe("wired users backend contract", () => {
     http = TestBed.inject(HttpTestingController)
   })
   afterEach(() => http.verify())
+  it("maps server listing filters including false and zero without changing the catalog request", async () => {
+    const pending = firstValueFrom(
+      repository.getUsersPage({ page: 0, size: 10, search: "Fake", roleId: 0, isActive: false })
+    )
+    const request = http.expectOne(req => req.url === endpoint)
+    expect(request.request.params.keys().sort()).toEqual([
+      "activo",
+      "busqueda",
+      "idRol",
+      "pagina",
+      "tamanio"
+    ])
+    expect(request.request.params.get("busqueda")).toBe("Fake")
+    expect(request.request.params.get("idRol")).toBe("0")
+    expect(request.request.params.get("activo")).toBe("false")
+    expect(request.request.params.get("pagina")).toBe("0")
+    expect(request.request.params.get("tamanio")).toBe("10")
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ ...page, tamanio: 5 })
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { items: [{ id: 41 }], page: 0, size: 5, total: 1, totalPages: 1 }
+    })
+  })
+  it.each([
+    { pagina: 1 },
+    { tamanio: 0 },
+    { tamanio: 11 },
+    { tamanio: "5" },
+    { totalElementos: -1 },
+    { totalElementos: Number.MAX_SAFE_INTEGER + 1 },
+    { totalPaginas: 0 },
+    { totalPaginas: 1.5 },
+    { contenido: [] },
+    { contenido: [dto, dto], totalElementos: 2 },
+    { contenido: [{ ...dto, activo: null }] }
+  ])("rejects invalid listing metadata/items %j", async changed => {
+    const pending = firstValueFrom(repository.getUsersPage({ page: 0, size: 10 }))
+    http.expectOne(req => req.url === endpoint).flush({ ...page, tamanio: 5, ...changed })
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
+  it("validates effective size on later pages and allows empty out-of-range responses for bounded recovery", async () => {
+    const pending = firstValueFrom(repository.getUsersPage({ page: 2, size: 10 }))
+    http
+      .expectOne(req => req.url === endpoint)
+      .flush({ ...page, pagina: 2, tamanio: 5, totalElementos: 11, totalPaginas: 3 })
+    expect(await pending).toMatchObject({ success: true, data: { page: 2, size: 5, total: 11 } })
+    const empty = firstValueFrom(repository.getUsersPage({ page: 2, size: 10 }))
+    http
+      .expectOne(req => req.url === endpoint)
+      .flush({ ...page, contenido: [], pagina: 2, tamanio: 5, totalElementos: 10, totalPaginas: 2 })
+    expect(await empty).toMatchObject({ success: true, data: { items: [], page: 2 } })
+  })
+  it.each([
+    { page: -1, size: 10 },
+    { page: 0, size: 0 },
+    { page: 0, size: 10, roleId: -1 },
+    { page: 2147483648, size: 10 }
+  ])("rejects invalid listing queries without HTTP %j", async query => {
+    expect(await firstValueFrom(repository.getUsersPage(query))).toMatchObject({
+      success: false,
+      error: { code: "VALIDATION" }
+    })
+    http.expectNone(() => true)
+  })
+  it("cancels paged requests without affecting an independent catalog request", () => {
+    const catalog = repository.getUsers().subscribe()
+    const listing = repository.getUsersPage({ page: 0, size: 10 }).subscribe()
+    const requests = http.match(req => req.url === endpoint)
+    listing.unsubscribe()
+    expect(requests[1].cancelled).toBe(true)
+    expect(requests[0].cancelled).toBe(false)
+    catalog.unsubscribe()
+  })
   it("requests one fixed unfiltered catalog and returns only the entity array", async () => {
     const pending = firstValueFrom(repository.getUsers())
     const request = http.expectOne(req => req.url === endpoint)
@@ -242,6 +316,7 @@ describe("wired users backend contract", () => {
     })
     const repo = TestBed.inject(UserRepositoryImpl)
     expect((await firstValueFrom(repo.getUsers())).success).toBe(false)
+    expect((await firstValueFrom(repo.getUsersPage({ page: 0, size: 10 }))).success).toBe(false)
     expect((await firstValueFrom(repo.createUser(input))).success).toBe(false)
     TestBed.inject(HttpTestingController).expectNone(() => true)
   })

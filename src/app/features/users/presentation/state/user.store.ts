@@ -25,12 +25,14 @@ import {
 } from "rxjs"
 
 interface UserState {
+  readonly mutationRevision: number
   readonly users: User[]
   readonly loading: boolean
   readonly loaded: boolean
   readonly error: UserError | undefined
 }
 const initialUserState: UserState = {
+  mutationRevision: 0,
   users: [],
   loading: false,
   loaded: false,
@@ -102,6 +104,8 @@ export const UserStore = signalStore(
               return of(result)
             }
             revision++
+            // Signal the page-owned listing even when the write only partially succeeded.
+            patchState(store, { mutationRevision: store.mutationRevision() + 1 })
             // Requery after writes, including partial updates; never replay a mutation.
             return loadUsers().pipe(map(() => result))
           })

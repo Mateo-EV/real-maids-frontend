@@ -143,11 +143,22 @@ describe("USERS_ROUTES", () => {
             fechaCreacion: "2026-01-01T00:00:00Z"
           }
         ])
-      const users = http.expectOne(request => request.url === "http://localhost:8080/api/usuarios")
+      const users = http.expectOne(
+        request =>
+          request.url === "http://localhost:8080/api/usuarios" &&
+          request.params.get("tamanio") === "500"
+      )
+      const listing = http.expectOne(
+        request =>
+          request.url === "http://localhost:8080/api/usuarios" &&
+          request.params.get("tamanio") === "10"
+      )
+      expect(listing.request.params.get("pagina")).toBe("0")
+      expect(listing.request.headers.get("Authorization")).toBe("Bearer fake-token")
       expect(users.request.params.get("pagina")).toBe("0")
       expect(users.request.params.get("tamanio")).toBe("500")
       expect(users.request.headers.get("Authorization")).toBe("Bearer fake-token")
-      users.flush({
+      const userResponse = {
         contenido: [
           {
             idUsuario: 7,
@@ -166,7 +177,9 @@ describe("USERS_ROUTES", () => {
         tamanio: 500,
         totalElementos: 1,
         totalPaginas: 1
-      })
+      }
+      users.flush(userResponse)
+      listing.flush({ ...userResponse, tamanio: 10 })
     }
     await establishSession()
     const harness = await RouterTestingHarness.create()

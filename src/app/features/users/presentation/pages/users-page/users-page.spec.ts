@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs"
-import { signal } from "@angular/core"
+import { inject, signal } from "@angular/core"
+import { UserListQuery } from "../../../domain/models/user-list-query"
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -15,6 +16,7 @@ import { provideRouter } from "@angular/router"
 import { firstValueFrom, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
+import { User } from "../../../domain/entities/user.entity"
 import { UserSession } from "../../../domain/entities/user-session.entity"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
@@ -41,7 +43,42 @@ import {
 } from "../../components/user-status-dialog/user-status-dialog"
 
 const providers = [
-  { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
+  {
+    provide: USER_REPOSITORY,
+    useFactory: () => {
+      const source = inject(UserInMemorySource)
+      return {
+        getUsers: () => source.getUsers(),
+        getUsersPage: (query: UserListQuery) =>
+          source.getUsers().pipe(
+            map(result => {
+              if (!result.success) return result
+              const text = query.search?.toLowerCase() ?? ""
+              const items = result.data.filter(
+                user =>
+                  (!text ||
+                    user.name.toLowerCase().includes(text) ||
+                    user.email.toLowerCase().includes(text)) &&
+                  (query.roleId === undefined || user.roleId === query.roleId) &&
+                  (query.isActive === undefined || user.isActive === query.isActive)
+              )
+              return Result.success({
+                items: items.slice(query.page * query.size, (query.page + 1) * query.size),
+                page: query.page,
+                size: query.size,
+                total: items.length,
+                totalPages: Math.ceil(items.length / query.size)
+              })
+            })
+          ),
+        createUser: source.createUser.bind(source),
+        updateUserById: source.updateUserById.bind(source),
+        updateUserStatusById: source.updateUserStatusById.bind(source),
+        deleteUserById: source.deleteUserById.bind(source),
+        getUserById: source.getUserById.bind(source)
+      }
+    }
+  },
   { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
   { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
   { provide: RBAC_REPOSITORY, useExisting: RbacRepositoryImpl },
@@ -466,7 +503,7 @@ describe("UsersPage", () => {
     expect(page.users.users().every(user => user.id !== 90)).toBe(true)
     element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
     fixture.detectChanges()
-    expect(page.filteredUsers()).toHaveLength(48)
+    expect(page.visibleUsers()).toHaveLength(10)
     expect(page.users.users()).toHaveLength(48)
   })
 
@@ -827,106 +864,137 @@ describe("UsersPage", () => {
     )
   })
 
-  it.each([12, 101])(
-    "accepts capped HTTP catalogs with total %s while local controls make no HTTP requests",
-    async total => {
-      TestBed.configureTestingModule({
-        providers: [
-          provideHttpClient(),
-          provideHttpClientTesting(),
-          { provide: API_URL, useValue: "http://localhost:8080" }
-        ]
-      })
-      TestBed.overrideProvider(USER_REPOSITORY, {
-        useFactory: () => TestBed.inject(UserRepositoryImpl)
-      })
-      const http = TestBed.inject(HttpTestingController)
-      const fixture = TestBed.createComponent(UsersPage)
-      fixture.detectChanges()
-      const request = http.expectOne(req => req.url === "http://localhost:8080/api/usuarios")
-      expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
-      expect(request.request.params.get("tamanio")).toBe("500")
-      request.flush({
-        contenido: Array.from({ length: 12 }, (_, index) => ({
-          idUsuario: index + 1,
-          nombre: `Server user ${index + 1}`,
-          correo: `server${index + 1}@example.test`,
-          idRol: (index % 2) + 1,
+  it("queries server pages and filters while preserving the independent fixed catalog", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" }
+      ]
+    })
+    TestBed.overrideProvider(USER_REPOSITORY, {
+      useFactory: () => TestBed.inject(UserRepositoryImpl)
+    })
+    const http = TestBed.inject(HttpTestingController)
+    const fixture = TestBed.createComponent(UsersPage)
+    fixture.detectChanges()
+    const response = (page: number, size: number, total: number, first = page * size + 1) => ({
+      contenido: Array.from(
+        { length: Math.min(size, Math.max(0, total - page * size)) },
+        (_, index) => ({
+          idUsuario: first + index,
+          nombre: `Server user ${first + index}`,
+          correo: `server${first + index}@example.test`,
+          idRol: 1,
           idioma: "es",
-          activo: index % 2 === 0,
+          activo: true,
           ultimoAcceso: null,
           fechaCreacion: "2026-01-01T00:00:00Z",
           fechaActualizacion: "2026-01-01T00:00:00Z"
-        })),
-        pagina: 0,
-        tamanio: 100,
-        totalElementos: total,
-        totalPaginas: Math.ceil(total / 100)
-      })
-      await flush(fixture.whenStable())
-      fixture.detectChanges()
-      const page = fixture.componentInstance
-      const element = fixture.nativeElement as HTMLElement
-      expect(page.loadError()).toBe(false)
-      expect(page.users.users()).toHaveLength(12)
-      expect(page.visibleUsers()).toHaveLength(10)
-      expect(element.querySelectorAll("tbody tr")).toHaveLength(10)
-      expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
-      expect(element.querySelector(".users-catalog")?.textContent).not.toMatch(
-        /Catálogo incompleto|informados por el servidor|backend/
+        })
+      ),
+      pagina: page,
+      tamanio: size,
+      totalElementos: total,
+      totalPaginas: Math.ceil(total / size)
+    })
+    const request = () =>
+      http.expectOne(
+        req =>
+          req.url === "http://localhost:8080/api/usuarios" && req.params.get("tamanio") === "10"
       )
-      page.goToPage(3)
-      expect(page.visibleUsers()).toHaveLength(2)
-      expect(page.rangeStart()).toBe(11)
-      expect(page.rangeEnd()).toBe(12)
-      page.setSearch("SERVER12@")
-      expect(page.filteredUsers().map(user => user.id)).toEqual([12])
-      page.clearFilters()
-      page.setRoleFilter("2")
-      page.setStatusFilter("inactive")
-      expect(page.filteredUsers()).toHaveLength(6)
-      expect(page.currentPage()).toBe(1)
-      page.goToPage(2)
-      expect(page.visibleUsers()).toHaveLength(6)
-      http.expectNone(() => true)
-      http.verify()
-      fixture.destroy()
-    }
-  )
+    const catalog = http.expectOne(req => req.params.get("tamanio") === "500")
+    catalog.flush(response(0, 100, 12))
+    request().flush(response(0, 5, 21, 901))
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    const page = fixture.componentInstance
+    const element = fixture.nativeElement as HTMLElement
+    expect(page.users.users()).toHaveLength(12)
+    expect(page.visibleUsers().map(user => user.id)).toEqual([901, 902, 903, 904, 905])
+    expect(page.pageCount()).toBe(5)
+    page.goToPage(3)
+    const third = request()
+    expect(third.request.params.get("pagina")).toBe("2")
+    third.flush(response(2, 5, 21))
+    fixture.detectChanges()
+    expect(page.rangeStart()).toBe(11)
+    expect(page.rangeEnd()).toBe(15)
+    page.setSearch("Server")
+    await vi.advanceTimersByTimeAsync(100)
+    page.setSearch("SERVER12@")
+    await vi.advanceTimersByTimeAsync(249)
+    http.expectNone(req => req.params.has("busqueda"))
+    await vi.advanceTimersByTimeAsync(1)
+    const search = request()
+    expect(search.request.params.get("busqueda")).toBe("SERVER12@")
+    expect(search.request.params.get("pagina")).toBe("0")
+    page.setRoleFilter("0")
+    expect(search.cancelled).toBe(true)
+    const role = request()
+    expect(role.request.params.get("idRol")).toBe("0")
+    page.setStatusFilter("inactive")
+    expect(role.cancelled).toBe(true)
+    const inactive = request()
+    expect(inactive.request.params.get("activo")).toBe("false")
+    expect(inactive.request.params.get("pagina")).toBe("0")
+    inactive.flush(response(0, 5, 1, 800))
+    fixture.detectChanges()
+    // Do not reapply local filters: these server records remain authoritative.
+    expect(page.visibleUsers().map(user => user.id)).toEqual([800])
+    expect(element.textContent).toContain("de 1 usuarios")
+    expect(page.users.users()).toHaveLength(12)
+    page.clearFilters()
+    const reset = request()
+    expect(reset.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    fixture.destroy()
+    expect(reset.cancelled).toBe(true)
+    http.verify()
+  })
 
-  it("loads an argument-free array once and filters/pages of ten without further requests", async () => {
-    const query = vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers")
+  it("keeps the argument-free catalog fixed while requesting filtered ten-row server pages", async () => {
+    const query = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsers")
+    const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
     const { page, roles, fixture } = await setup()
     expect(query).toHaveBeenCalledExactlyOnceWith()
     expect(page.pageSize).toBe(10)
     expect(page.visibleUsers()).toHaveLength(10)
     page.goToPage(4)
+    await flush(fixture.whenStable())
     expect(page.rangeStart()).toBe(31)
     page.setSearch(" CARLOS ")
     expect(page.currentPage()).toBe(1)
-    expect(page.filteredUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
+    await flush(fixture.whenStable())
+    expect(page.visibleUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
+    expect(listing).toHaveBeenLastCalledWith({ page: 0, size: 10, search: "CARLOS" })
     page.setSearch("persona.48@")
-    expect(page.filteredUsers()).toHaveLength(1)
+    await flush(fixture.whenStable())
+    expect(page.visibleUsers()).toHaveLength(1)
     page.clearFilters()
+    await flush(fixture.whenStable())
     page.goToPage(8)
     page.setRoleFilter(String(roles.roles()[2].id))
     expect(page.currentPage()).toBe(1)
-    expect(page.filteredUsers().every(user => user.roleId === roles.roles()[2].id)).toBe(true)
+    await flush(fixture.whenStable())
+    expect(page.visibleUsers().every(user => user.roleId === roles.roles()[2].id)).toBe(true)
     page.goToPage(2)
     page.setStatusFilter("inactive")
     expect(page.currentPage()).toBe(1)
-    expect(page.filteredUsers().every(user => !user.isActive)).toBe(true)
+    await flush(fixture.whenStable())
+    expect(page.visibleUsers().every(user => !user.isActive)).toBe(true)
     page.clearFilters()
     await flush(fixture.whenStable())
-    expect(page.filteredUsers()).toHaveLength(48)
+    expect(page.visibleUsers()).toHaveLength(10)
     expect(query).toHaveBeenCalledTimes(1)
+    expect(listing.mock.calls.length).toBeGreaterThan(1)
   })
 
-  it("keeps local empty-result copy independent of removed transport metadata", async () => {
+  it("keeps server empty-result copy independent of the shared catalog", async () => {
     const { page, fixture, element } = await setup()
     page.retry()
     await flush(fixture.whenStable())
     page.setSearch("no-such-user")
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
     expect(element.textContent).toContain("Sin resultados")
@@ -941,15 +1009,16 @@ describe("UsersPage", () => {
     const active = page.users.users().filter(user => user.isActive).length
     expect(page.activeCount()).toBe(active)
     page.setStatusFilter("inactive")
+    await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.activeCount()).toBe(active)
     expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
     expect(element.textContent).toContain(`${active} activos`)
     expect(element.textContent).toContain(`${48 - active} inactivos`)
-    expect(page.rangeEnd()).toBe(Math.min(10, page.filteredUsers().length))
+    expect(page.rangeEnd()).toBe(Math.min(10, page.visibleUsers().length))
   })
 
-  it("connects bounded shared navigation to local pages and filter resets", async () => {
+  it("connects bounded shared navigation to server pages and filter resets", async () => {
     const { page, fixture, element } = await setup()
     const nav = () =>
       element.querySelector('app-table-pagination nav[aria-label="Paginación de usuarios"]')!
@@ -996,8 +1065,11 @@ describe("UsersPage", () => {
     page.goToPage(5)
     await flush(fixture.whenStable())
     expect(page.visibleUsers()).toHaveLength(8)
+    const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
     for (const user of [...page.visibleUsers()])
       await flush(firstValueFrom(users.deleteUserById(user.id)))
+    await flush(fixture.whenStable()) // The bounded last-page recovery is a second read.
+    expect(listing.mock.calls.slice(-2).map(args => args[0].page)).toEqual([4, 3])
     expect(page.currentPage()).toBe(4)
     expect(page.visibleUsers()).toHaveLength(10)
     // Later growth must not resurrect the previously invalid page 5.
@@ -1032,8 +1104,102 @@ describe("UsersPage", () => {
     reset.click()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(page.filteredUsers()).toHaveLength(48)
+    expect(page.visibleUsers()).toHaveLength(10)
     expect(page.users.users()).toHaveLength(48)
+  })
+
+  it.each(["create", "edit", "status", "delete", "partial"] as const)(
+    "refreshes both independent reads after %s without replaying writes",
+    async operation => {
+      const { page, users, fixture, element } = await setup()
+      page.setSearch("persona")
+      await flush(fixture.whenStable())
+      const repository = TestBed.inject(USER_REPOSITORY)
+      const catalog = vi
+        .spyOn(repository, "getUsers")
+        .mockReturnValueOnce(of(Result.failure(new UserError("NETWORK"))))
+      const listing = vi
+        .spyOn(repository, "getUsersPage")
+        .mockReturnValueOnce(of(Result.failure(new UserError("FORBIDDEN"))))
+      const user = users.users()[0]
+      const input = {
+        name: user.name,
+        email: user.email,
+        password: "Password1",
+        lang: user.lang,
+        roleId: user.roleId,
+        isActive: user.isActive
+      }
+      const method =
+        operation === "create"
+          ? "createUser"
+          : operation === "delete"
+            ? "deleteUserById"
+            : operation === "status"
+              ? "updateUserStatusById"
+              : "updateUserById"
+      const write = vi
+        .spyOn(repository, method)
+        .mockReturnValue(
+          of(
+            operation === "partial"
+              ? Result.failure(new UserError("PARTIAL_UPDATE"))
+              : Result.success(user)
+          ) as never
+        )
+      const result = await firstValueFrom<Result<User | void, UserError>>(
+        operation === "create"
+          ? users.createUser(input)
+          : operation === "delete"
+            ? users.deleteUserById(user.id)
+            : operation === "status"
+              ? users.updateUserStatusById(user.id, false)
+              : users.updateUserById(user.id, input)
+      )
+      await flush(fixture.whenStable())
+      fixture.detectChanges()
+      expect(result.success).toBe(operation !== "partial")
+      if (!result.success) expect(result.error.code).toBe("PARTIAL_UPDATE")
+      expect(write).toHaveBeenCalledOnce()
+      expect(catalog).toHaveBeenCalledExactlyOnceWith()
+      expect(listing).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 10, search: "persona" })
+      expect(users.error()?.code).toBe("NETWORK")
+      expect(page.list.error()?.code).toBe("FORBIDDEN")
+      expect(element.textContent).toContain("No pudimos cargar el catálogo")
+      expect(element.querySelector("[data-list-error]")).not.toBeNull()
+      expect(element.querySelector("tbody")).toBeNull()
+      const retry = element.querySelector<HTMLButtonElement>("[data-retry-list]")!
+      retry.click()
+      await flush(fixture.whenStable())
+      fixture.detectChanges()
+      expect(listing).toHaveBeenCalledTimes(2)
+      expect(listing).toHaveBeenLastCalledWith({ page: 0, size: 10, search: "persona" })
+      expect(catalog).toHaveBeenCalledOnce()
+      expect(write).toHaveBeenCalledOnce()
+      expect(element.querySelector("tbody")).not.toBeNull()
+      expect(element.textContent).toContain("No pudimos cargar el catálogo")
+      page.retry()
+      await flush(fixture.whenStable())
+      fixture.detectChanges()
+      expect(catalog).toHaveBeenCalledTimes(2)
+      expect(listing).toHaveBeenCalledTimes(2)
+      expect(element.textContent).not.toContain("No pudimos cargar")
+    }
+  )
+
+  it("does not start a listing refresh after its owning page is destroyed", async () => {
+    const { page, users, fixture } = await setup()
+    const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
+    const pending = new Subject<Result<User, UserError>>()
+    vi.spyOn(TestBed.inject(USER_REPOSITORY), "updateUserStatusById").mockReturnValue(pending)
+    const subscription = users.updateUserStatusById(1, false).subscribe()
+    fixture.destroy()
+    pending.next(Result.success(users.users()[0]))
+    pending.complete()
+    await vi.advanceTimersByTimeAsync(750)
+    expect(listing).not.toHaveBeenCalled()
+    expect(page.list.loading()).toBe(false)
+    subscription.unsubscribe()
   })
 
   it("displays query failure with retry and a loading state", async () => {
