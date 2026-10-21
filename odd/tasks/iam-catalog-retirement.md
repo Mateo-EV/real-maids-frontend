@@ -18,8 +18,8 @@ Explicit user requirement: manage asynchronous statistics, lookup, session-summa
 
 ## Implementation units
 
-- [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: in progress; delegated writer (multi-file rule).
-- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: pending; single writer after T1.
+- [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: implemented and focused-verified; pending final integration review and human-approved commit. Delegated writer (multi-file rule).
+- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: in progress; single writer after T1.
 - [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: pending; single writer after T2.
 - [ ] T4 — Independently verify and natively review the normalized candidate, report acceptance limits and human staging/commit next step. Status: pending. Tasks stay open until a separately human-approved implementation commit.
 
@@ -46,4 +46,15 @@ Recovery: this file plus Engram topic `odd/iam-catalog-retirement/tasks`. Keep s
 
 ## Progress and next step
 
-Read-only mapping confirmed all fixed-catalog consumers. Dialogs use mutation methods and selected User context rather than requiring the catalog for writes. Initial Angular targets/build/test and version-22 best practices were discovered. No frontend source writes yet. Delegate T1 with narrow surfaces; preserve legacy catalog until Sessions migrates in T2 and retirement is safe in T3.
+Read-only mapping confirmed all fixed-catalog consumers. Dialogs use mutation methods and selected User context rather than requiring the catalog for writes. Angular targets and version-22 best practices were discovered.
+
+T1 implementation evidence:
+
+- Seventeen authorized files changed. UserStatisticsStore is page-provided; Audit owns a separate UserListStore. Components own subscriptions/cancellation and selected actor identity, not async result caches.
+- RED: absent statistics contract/model/store, followed by actor-query independence failure (13 passed, 1 failed).
+- GREEN: final focused run 179 tests across 6 files passed. Complete Users feature suite 558 tests across 43 files passed after correcting a route fixture's unflushed statistics request.
+- Statistics invalid/unsafe/inconsistent/zero counts, 403/SSR/unconfigured, cancellation/stale reads, successful/PARTIAL_UPDATE refresh, actor effective-size paging, retained identity and export/destruction guards covered.
+- Workspace-local Prettier write/check on 17 exact paths passed; diff whitespace check passed with LF/CRLF notices. Existing Helm components reused after CLI info.
+- Full workspace suite/build remain intentionally deferred to T3; browser/authenticated acceptance unrun. Sessions and fixed catalog remain for T2/T3. No source staging/commits/push.
+
+Next: T2 session migration with stores, bounded owner pages, lazy per-user details and exact global session total. Preserve legacy fixed user catalog until retirement is safe in T3.
