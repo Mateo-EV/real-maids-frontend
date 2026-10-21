@@ -15,13 +15,14 @@ import {
 } from "rxjs"
 import { GetUsersPageUseCase } from "../../application/use-cases/get-users-page.use-case"
 import { UserListQuery } from "../../domain/models/user-list-query"
-import { UserListPage } from "../../domain/models/user-list-page"
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+import { User } from "../../domain/entities/user.entity"
 import { UserError } from "../../domain/errors/user.error"
 import { Result } from "@/app/shared/utils/result"
 
 interface UserListState {
   query: UserListQuery
-  result: UserListPage | undefined
+  result: PaginationResponse<User> | undefined
   loading: boolean
   loaded: boolean
   error: UserError | undefined
@@ -30,7 +31,7 @@ interface UserListState {
 /** Provided by the page. The caller owns every subscription, including post-write refreshes. */
 export const UserListStore = signalStore(
   withState<UserListState>({
-    query: { page: 0, size: 10 },
+    query: { offset: 0, limit: 10 },
     result: undefined,
     loading: false,
     loaded: false,
@@ -41,7 +42,10 @@ export const UserListStore = signalStore(
     const cancel = new Subject<void>()
     const invalid = () => Result.failure(new UserError("INVALID_RESPONSE"))
     return {
-      load(query: UserListQuery, delayMs = 0): Observable<Result<UserListPage, UserError>> {
+      load(
+        query: UserListQuery,
+        delayMs = 0
+      ): Observable<Result<PaginationResponse<User>, UserError>> {
         const snapshot = { ...query }
         return defer(() => {
           cancel.next()
@@ -56,16 +60,16 @@ export const UserListStore = signalStore(
           const request = (
             q: UserListQuery,
             mayClamp: boolean
-          ): Observable<Result<UserListPage, UserError>> =>
+          ): Observable<Result<PaginationResponse<User>, UserError>> =>
             defer(() => read.execute(q)).pipe(
               defaultIfEmpty(invalid()),
               switchMap(result => {
                 if (!result.success) return of(result)
                 const page = result.data
-                const last = Math.max(0, page.totalPages - 1)
-                if (page.page <= last) return of(result)
+                const lastOffset = Math.max(0, Math.ceil(page.total / page.limit) - 1) * page.limit
+                if (page.offset <= lastOffset) return of(result)
                 if (!mayClamp) return of(invalid())
-                const clamped = { ...q, page: last }
+                const clamped = { ...q, offset: lastOffset, limit: page.limit }
                 if (id === latest) patchState(store, { query: clamped })
                 return request(clamped, false)
               })
@@ -78,7 +82,12 @@ export const UserListStore = signalStore(
             tap(result => {
               if (id !== latest) return
               if (result.success)
-                patchState(store, { result: result.data, loaded: true, error: undefined })
+                patchState(store, {
+                  query: { ...store.query(), offset: result.data.offset, limit: result.data.limit },
+                  result: result.data,
+                  loaded: true,
+                  error: undefined
+                })
               else patchState(store, { error: result.error, loaded: false })
             }),
             takeUntil(cancel),

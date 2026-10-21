@@ -12,7 +12,7 @@ import { UserError, UserErrorCode } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { UserListQuery } from "../../domain/models/user-list-query"
-import { UserListPage } from "../../domain/models/user-list-page"
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 
 function invalid(): never {
   throw new UserError("INVALID_RESPONSE")
@@ -101,22 +101,26 @@ export class UserHttpSource {
       )
     })
   }
-  getUsersPage(query: UserListQuery): Observable<Result<UserListPage, UserError>> {
-    const q = { ...query }
+  getUsersPage(query: UserListQuery): Observable<Result<PaginationResponse<User>, UserError>> {
+    const q = { ...query, offset: query.offset ?? 0, limit: query.limit ?? 20 }
+    const requestedPage = q.offset / q.limit
     return this.request(
       () => {
         const int32 = (value: number) =>
           Number.isSafeInteger(value) && value >= 0 && value <= 2147483647
         if (
-          !int32(q.page) ||
-          !int32(q.size) ||
-          q.size < 1 ||
+          !Number.isSafeInteger(q.offset) ||
+          q.offset < 0 ||
+          !int32(q.limit) ||
+          q.limit < 1 ||
+          q.offset % q.limit !== 0 ||
+          !int32(requestedPage) ||
           (q.roleId !== undefined && !int32(q.roleId)) ||
           (q.search !== undefined && typeof q.search !== "string") ||
           (q.isActive !== undefined && typeof q.isActive !== "boolean")
         )
           throw new UserError("VALIDATION")
-        let params = new HttpParams().set("pagina", q.page).set("tamanio", q.size)
+        let params = new HttpParams().set("pagina", requestedPage).set("tamanio", q.limit)
         if (q.search) params = params.set("busqueda", q.search)
         if (q.roleId !== undefined) params = params.set("idRol", q.roleId)
         if (q.isActive !== undefined) params = params.set("activo", q.isActive)
@@ -135,10 +139,11 @@ export class UserHttpSource {
           typeof n === "number" && Number.isSafeInteger(n) && n >= 0
         if (
           !integer(page) ||
-          page !== q.page ||
+          page !== requestedPage ||
           !integer(size) ||
           size < 1 ||
-          size > q.size ||
+          size > q.limit ||
+          !Number.isSafeInteger(page * size) ||
           !integer(total) ||
           !integer(totalPages) ||
           totalPages !== Math.ceil(total / size) ||
@@ -148,7 +153,7 @@ export class UserHttpSource {
           return invalid()
         const items = p["contenido"].map(userDto)
         if (new Set(items.map(user => user.id)).size !== items.length) return invalid()
-        return { items, page, size, total, totalPages }
+        return { items, offset: page * size, limit: size, total }
       }
     )
   }

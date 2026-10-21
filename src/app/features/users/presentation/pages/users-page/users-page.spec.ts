@@ -62,12 +62,13 @@ const providers = [
                   (query.roleId === undefined || user.roleId === query.roleId) &&
                   (query.isActive === undefined || user.isActive === query.isActive)
               )
+              const offset = query.offset ?? 0,
+                limit = query.limit ?? 20
               return Result.success({
-                items: items.slice(query.page * query.size, (query.page + 1) * query.size),
-                page: query.page,
-                size: query.size,
-                total: items.length,
-                totalPages: Math.ceil(items.length / query.size)
+                items: items.slice(offset, offset + limit),
+                offset,
+                limit,
+                total: items.length
               })
             })
           ),
@@ -898,21 +899,24 @@ describe("UsersPage", () => {
       totalElementos: total,
       totalPaginas: Math.ceil(total / size)
     })
-    const request = () =>
+    const request = (limit = 10) =>
       http.expectOne(
         req =>
-          req.url === "http://localhost:8080/api/usuarios" && req.params.get("tamanio") === "10"
+          req.url === "http://localhost:8080/api/usuarios" &&
+          req.params.get("tamanio") === String(limit)
       )
     const catalog = http.expectOne(req => req.params.get("tamanio") === "500")
     catalog.flush(response(0, 100, 12))
-    request().flush(response(0, 5, 21, 901))
+    request().flush(response(0, 10, 21, 901))
     await flush(fixture.whenStable())
     fixture.detectChanges()
     const page = fixture.componentInstance
     const element = fixture.nativeElement as HTMLElement
     expect(page.users.users()).toHaveLength(12)
-    expect(page.visibleUsers().map(user => user.id)).toEqual([901, 902, 903, 904, 905])
-    expect(page.pageCount()).toBe(5)
+    expect(page.visibleUsers().map(user => user.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => 901 + index)
+    )
+    expect(page.pageCount()).toBe(3)
     page.goToPage(3)
     const third = request()
     expect(third.request.params.get("pagina")).toBe("2")
@@ -920,6 +924,21 @@ describe("UsersPage", () => {
     fixture.detectChanges()
     expect(page.rangeStart()).toBe(11)
     expect(page.rangeEnd()).toBe(15)
+    expect(page.pageCount()).toBe(5)
+    expect(page.currentPage()).toBe(3)
+    expect(page.list.query()).toEqual({ offset: 10, limit: 5 })
+    page.goToPage(4)
+    const next = request(5)
+    expect(next.request.params.get("pagina")).toBe("3")
+    next.flush(response(3, 5, 21))
+    fixture.detectChanges()
+    expect(page.rangeStart()).toBe(16)
+    expect(page.rangeEnd()).toBe(20)
+    page.goToPage(3)
+    const back = request(5)
+    expect(back.request.params.get("pagina")).toBe("2")
+    back.flush(response(2, 5, 21))
+    expect(page.list.query()).toEqual({ offset: 10, limit: 5 })
     page.setSearch("Server")
     await vi.advanceTimersByTimeAsync(100)
     page.setSearch("SERVER12@")
@@ -966,7 +985,7 @@ describe("UsersPage", () => {
     expect(page.currentPage()).toBe(1)
     await flush(fixture.whenStable())
     expect(page.visibleUsers().map(user => user.name)).toEqual(["Carlos Mendoza"])
-    expect(listing).toHaveBeenLastCalledWith({ page: 0, size: 10, search: "CARLOS" })
+    expect(listing).toHaveBeenLastCalledWith({ offset: 0, limit: 10, search: "CARLOS" })
     page.setSearch("persona.48@")
     await flush(fixture.whenStable())
     expect(page.visibleUsers()).toHaveLength(1)
@@ -1069,7 +1088,7 @@ describe("UsersPage", () => {
     for (const user of [...page.visibleUsers()])
       await flush(firstValueFrom(users.deleteUserById(user.id)))
     await flush(fixture.whenStable()) // The bounded last-page recovery is a second read.
-    expect(listing.mock.calls.slice(-2).map(args => args[0].page)).toEqual([4, 3])
+    expect(listing.mock.calls.slice(-2).map(args => args[0].offset)).toEqual([40, 30])
     expect(page.currentPage()).toBe(4)
     expect(page.visibleUsers()).toHaveLength(10)
     // Later growth must not resurrect the previously invalid page 5.
@@ -1162,7 +1181,7 @@ describe("UsersPage", () => {
       if (!result.success) expect(result.error.code).toBe("PARTIAL_UPDATE")
       expect(write).toHaveBeenCalledOnce()
       expect(catalog).toHaveBeenCalledExactlyOnceWith()
-      expect(listing).toHaveBeenCalledExactlyOnceWith({ page: 0, size: 10, search: "persona" })
+      expect(listing).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 10, search: "persona" })
       expect(users.error()?.code).toBe("NETWORK")
       expect(page.list.error()?.code).toBe("FORBIDDEN")
       expect(element.textContent).toContain("No pudimos cargar el catálogo")
@@ -1173,7 +1192,7 @@ describe("UsersPage", () => {
       await flush(fixture.whenStable())
       fixture.detectChanges()
       expect(listing).toHaveBeenCalledTimes(2)
-      expect(listing).toHaveBeenLastCalledWith({ page: 0, size: 10, search: "persona" })
+      expect(listing).toHaveBeenLastCalledWith({ offset: 0, limit: 10, search: "persona" })
       expect(catalog).toHaveBeenCalledOnce()
       expect(write).toHaveBeenCalledOnce()
       expect(element.querySelector("tbody")).not.toBeNull()

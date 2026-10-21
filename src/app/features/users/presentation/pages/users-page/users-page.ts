@@ -124,14 +124,20 @@ export class UsersPage implements OnInit {
   readonly statusFilter = signal("all")
   readonly pageSize = 10
   readonly activeCount = computed(() => this.users.users().filter(user => user.isActive).length)
-  readonly pageCount = computed(() => Math.max(1, this.list.result()?.totalPages ?? 0))
-  readonly currentPage = computed(() => this.list.query().page + 1)
+  readonly pageCount = computed(() => {
+    const result = this.list.result()
+    return Math.max(1, result ? Math.ceil(result.total / result.limit) : 0)
+  })
+  readonly currentPage = computed(() => {
+    const query = this.list.query()
+    return (query.offset ?? 0) / (query.limit ?? this.pageSize) + 1
+  })
   readonly visibleUsers = computed(() =>
     this.list.loaded() ? (this.list.result()?.items ?? []) : []
   )
   readonly rangeStart = computed(() => {
     const page = this.list.result()
-    return this.visibleUsers().length && page ? page.page * page.size + 1 : 0
+    return this.visibleUsers().length && page ? page.offset + 1 : 0
   })
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
@@ -163,8 +169,8 @@ export class UsersPage implements OnInit {
       status = this.statusFilter()
     this.loadList(
       {
-        page: 0,
-        size: this.pageSize,
+        offset: 0,
+        limit: this.pageSize,
         ...(search ? { search } : {}),
         ...(role !== "" ? { roleId: Number(role) } : {}),
         ...(status !== "all" ? { isActive: status === "active" } : {})
@@ -249,7 +255,10 @@ export class UsersPage implements OnInit {
   }
   goToPage(page: number): void {
     const selected = Math.max(1, Math.min(page, this.pageCount()))
-    if (selected !== this.currentPage()) this.loadList({ ...this.list.query(), page: selected - 1 })
+    if (selected !== this.currentPage()) {
+      const query = this.list.query()
+      this.loadList({ ...query, offset: (selected - 1) * (query.limit ?? this.pageSize) })
+    }
   }
   roleName(user: User): string {
     const role = this.roles.roles().find(item => item.id === user.roleId)

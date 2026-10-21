@@ -119,7 +119,7 @@ describe("Infrastructure repository delegation", () => {
     expect(repository.createUser(params)).toBe(response)
     expect(repository.getUserById(1)).toBe(response)
     expect(repository.getUsers()).toBe(response)
-    const query = { page: 2, size: 10, roleId: 0, isActive: false }
+    const query = { offset: 20, limit: 10, roleId: 0, isActive: false }
     expect(repository.getUsersPage(query)).toBe(response)
     expect(paged).toHaveBeenCalledExactlyOnceWith(query)
     expect(repository.updateUserById(1, params)).toBe(response)

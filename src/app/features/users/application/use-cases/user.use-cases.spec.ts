@@ -96,11 +96,11 @@ describe("Users use cases", () => {
       ))
 
     it(`delegates server listing and preserves ${outcome}`, () => {
-      const query = { page: 0, size: 10, roleId: 0, isActive: false }
+      const query = { offset: 0, limit: 10, roleId: 0, isActive: false }
       return check(
         "getUsersPage",
         success
-          ? Result.success({ items: [user], page: 0, size: 10, total: 1, totalPages: 1 })
+          ? Result.success({ items: [user], offset: 0, limit: 10, total: 1 })
           : Result.failure(error),
         () => TestBed.inject(GetUsersPageUseCase).execute(query),
         [query]

@@ -46,7 +46,7 @@ describe("wired users backend contract", () => {
   afterEach(() => http.verify())
   it("maps server listing filters including false and zero without changing the catalog request", async () => {
     const pending = firstValueFrom(
-      repository.getUsersPage({ page: 0, size: 10, search: "Fake", roleId: 0, isActive: false })
+      repository.getUsersPage({ offset: 0, limit: 10, search: "Fake", roleId: 0, isActive: false })
     )
     const request = http.expectOne(req => req.url === endpoint)
     expect(request.request.params.keys().sort()).toEqual([
@@ -65,7 +65,7 @@ describe("wired users backend contract", () => {
     request.flush({ ...page, tamanio: 5 })
     expect(await pending).toMatchObject({
       success: true,
-      data: { items: [{ id: 41 }], page: 0, size: 5, total: 1, totalPages: 1 }
+      data: { items: [{ id: 41 }], offset: 0, limit: 5, total: 1 }
     })
   })
   it.each([
@@ -81,27 +81,39 @@ describe("wired users backend contract", () => {
     { contenido: [dto, dto], totalElementos: 2 },
     { contenido: [{ ...dto, activo: null }] }
   ])("rejects invalid listing metadata/items %j", async changed => {
-    const pending = firstValueFrom(repository.getUsersPage({ page: 0, size: 10 }))
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 0, limit: 10 }))
     http.expectOne(req => req.url === endpoint).flush({ ...page, tamanio: 5, ...changed })
     expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
   })
   it("validates effective size on later pages and allows empty out-of-range responses for bounded recovery", async () => {
-    const pending = firstValueFrom(repository.getUsersPage({ page: 2, size: 10 }))
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 20, limit: 10 }))
     http
       .expectOne(req => req.url === endpoint)
       .flush({ ...page, pagina: 2, tamanio: 5, totalElementos: 11, totalPaginas: 3 })
-    expect(await pending).toMatchObject({ success: true, data: { page: 2, size: 5, total: 11 } })
-    const empty = firstValueFrom(repository.getUsersPage({ page: 2, size: 10 }))
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { offset: 10, limit: 5, total: 11 }
+    })
+    const empty = firstValueFrom(repository.getUsersPage({ offset: 20, limit: 10 }))
     http
       .expectOne(req => req.url === endpoint)
       .flush({ ...page, contenido: [], pagina: 2, tamanio: 5, totalElementos: 10, totalPaginas: 2 })
-    expect(await empty).toMatchObject({ success: true, data: { items: [], page: 2 } })
+    expect(await empty).toMatchObject({ success: true, data: { items: [], offset: 10, limit: 5 } })
   })
   it.each([
-    { page: -1, size: 10 },
-    { page: 0, size: 0 },
-    { page: 0, size: 10, roleId: -1 },
-    { page: 2147483648, size: 10 }
+    { offset: -1, limit: 10 },
+    { offset: 0, limit: 0 },
+    { offset: 0, limit: 10, roleId: -1 },
+    { offset: 2147483648, limit: 1 },
+    { offset: 1, limit: 10 },
+    { offset: 0.5, limit: 10 },
+    { offset: Number.MAX_SAFE_INTEGER + 1, limit: 10 },
+    { offset: Number.NaN, limit: 10 },
+    { offset: Number.POSITIVE_INFINITY, limit: 10 },
+    { offset: 0, limit: -1 },
+    { offset: 0, limit: 1.5 },
+    { offset: 0, limit: 2147483648 },
+    { offset: 0, limit: Number.MAX_SAFE_INTEGER + 1 }
   ])("rejects invalid listing queries without HTTP %j", async query => {
     expect(await firstValueFrom(repository.getUsersPage(query))).toMatchObject({
       success: false,
@@ -109,9 +121,73 @@ describe("wired users backend contract", () => {
     })
     http.expectNone(() => true)
   })
+  it.each([
+    [{}, 0, 20],
+    [{ offset: 40 }, 2, 20],
+    [{ limit: 200 }, 0, 200],
+    [{ offset: 4294967294, limit: 2 }, 2147483647, 2],
+    [{ offset: 0, limit: 2147483647 }, 0, 2147483647]
+  ] as const)(
+    "resolves optional defaults and accepts valid int32 boundaries without a maximum of 100: %j",
+    async (query, expectedPage, expectedLimit) => {
+      const pending = firstValueFrom(repository.getUsersPage(query))
+      const request = http.expectOne(req => req.url === endpoint)
+      expect(request.request.params.get("pagina")).toBe(String(expectedPage))
+      expect(request.request.params.get("tamanio")).toBe(String(expectedLimit))
+      request.flush({
+        ...page,
+        contenido: [],
+        pagina: expectedPage,
+        tamanio: expectedLimit,
+        totalElementos: 0,
+        totalPaginas: 0
+      })
+      const result = await pending
+      expect(result.success).toBe(true)
+      if (!result.success) throw result.error
+      expect(result.data).toEqual({
+        items: [],
+        offset: expectedPage * expectedLimit,
+        limit: expectedLimit,
+        total: 0
+      })
+    }
+  )
+  it("snapshots shared queries before subscription and exposes no transport metadata", async () => {
+    const query = { offset: 20, limit: 10 }
+    const pending = repository.getUsersPage(query)
+    query.offset = 0
+    query.limit = 200
+    const result = firstValueFrom(pending)
+    const request = http.expectOne(req => req.url === endpoint)
+    expect(request.request.params.get("pagina")).toBe("2")
+    expect(request.request.params.get("tamanio")).toBe("10")
+    request.flush({ ...page, pagina: 2, tamanio: 5, totalElementos: 11, totalPaginas: 3 })
+    const response = await result
+    expect(response.success && Object.keys(response.data).sort()).toEqual([
+      "items",
+      "limit",
+      "offset",
+      "total"
+    ])
+  })
+  it("rejects response offsets whose multiplication overflows safe integer bounds", async () => {
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 0, limit: 2147483647 }))
+    http
+      .expectOne(req => req.url === endpoint)
+      .flush({
+        ...page,
+        contenido: [],
+        pagina: 2147483647,
+        tamanio: 2147483647,
+        totalElementos: 0,
+        totalPaginas: 0
+      })
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
   it("cancels paged requests without affecting an independent catalog request", () => {
     const catalog = repository.getUsers().subscribe()
-    const listing = repository.getUsersPage({ page: 0, size: 10 }).subscribe()
+    const listing = repository.getUsersPage({ offset: 0, limit: 10 }).subscribe()
     const requests = http.match(req => req.url === endpoint)
     listing.unsubscribe()
     expect(requests[1].cancelled).toBe(true)
@@ -316,7 +392,7 @@ describe("wired users backend contract", () => {
     })
     const repo = TestBed.inject(UserRepositoryImpl)
     expect((await firstValueFrom(repo.getUsers())).success).toBe(false)
-    expect((await firstValueFrom(repo.getUsersPage({ page: 0, size: 10 }))).success).toBe(false)
+    expect((await firstValueFrom(repo.getUsersPage({ offset: 0, limit: 10 }))).success).toBe(false)
     expect((await firstValueFrom(repo.createUser(input))).success).toBe(false)
     TestBed.inject(HttpTestingController).expectNone(() => true)
   })
