@@ -1,0 +1,49 @@
+# Replace the fixed IAM user catalog with scoped backend reads
+
+Consume backend commit `9439829` and remove the frontend's incomplete fixed `getUsers()` catalog. Keep user mutations, reliable metrics, server pagination and accessible session/audit workflows.
+
+## Authorization and contracts
+
+The user requested frontend integration after the backend commit, then explicitly selected the complete integration/catalog-retirement scope. Baseline frontend is clean at `87e21bf`. Backend `mateo` commit `9439829` is clean; no more backend edits are needed. No frontend staging, commit or push is authorized.
+
+Verified backend code contracts:
+
+- `GET /api/usuarios/estadisticas` returns `{ total, activos, inactivos }`, nonnegative integer counts with total equal to active plus inactive; `USUARIO_LEER`.
+- `GET /api/sesiones/usuarios` accepts `busqueda`, optional boolean `tieneSesiones`, zero-based `pagina`, `tamanio` (1..100). Standard page envelope contains `{ idUsuario, nombre, correo, sesionesVigentes }` rows. Requires both `USUARIO_LEER` and `SESION_LEER`.
+- Existing paged `/api/usuarios?busqueda=...` supplies actor options. Existing `/api/usuarios/{id}/sesiones` supplies detail only on explicit disclosure. Existing paged `/api/sesiones?pagina=0&tamanio=1` supplies its exact global session total; neither owner totals nor array lengths substitute for that number.
+
+Reuse shared `PaginationParams`, `PaginationResponse<T>` and `TablePagination`; transport metadata stays in HTTP sources. Preserve effective offset/limit handling and bounded last-page recovery. Do not fetch all pages, manufacture identities/counts, infer role ACLs or add dependencies.
+
+Explicit user requirement: manage asynchronous statistics, lookup, session-summary/detail and count state with NgRx SignalStore. Components keep only local form/view state, not ad hoc HTTP result caches. Use independent scoped store instances where appropriate; actor lookup must not overwrite the Users listing. Callers own subscriptions/cancellation, preserving established root lifetimes.
+
+## Implementation units
+
+- [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: in progress; delegated writer (multi-file rule).
+- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: pending; single writer after T1.
+- [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: pending; single writer after T2.
+- [ ] T4 — Independently verify and natively review the normalized candidate, report acceptance limits and human staging/commit next step. Status: pending. Tasks stay open until a separately human-approved implementation commit.
+
+## Acceptance criteria
+
+- User metrics use global backend statistics, independently of list filters/pages. Users active/inactive is not sessions/owners count.
+- Session user search and Todos/Con/Sin filtering happen on the server with five-owner pages; an absent record on an incomplete page never implies no sessions.
+- Details load only when the user opens a native disclosure, with separate loading/error/retry state and explicit current-session Logout guidance. No initial per-owner detail requests or automatic N+1 count reads.
+- Confirmed revokes refresh active summary, exact global count and affected open detail at most once per read; no write replay or optimistic totals. Failed refresh remains visible; component destruction suppresses late feedback but cannot roll back a dispatched write.
+- Audit actor search is debounced, independently paged and cancellable. Only selecting a loaded option applies numeric identity. Selected ID/name/email survives query gaps and retained visits; historical/deleted audit records remain valid independently of current user membership.
+- `UserStore` keeps mutation actions and notification, not an implied complete user array. No fixed `pagina=0&tamanio=500` or global session `tamanio=1000` reads remain in wired UI. Dialogs retain their selected-user contexts and guarded pending behavior.
+- Sources validate unknown DTOs, safe counts/metadata, uniqueness and target identity; 403 and unconfigured/SSR behavior fail visibly, with no demo fallback.
+- Root repository/source lifetimes and `useExisting` composition are unchanged. New independent query states must not overwrite Users listing state or couple root lifetimes to a component.
+
+## Checks, scope and recovery
+
+Use test-first RED/GREEN for deterministic new query/state/UI behavior, relevant specs per unit and focused cross-feature checks. At closure run full Angular Vitest test target and production build. Use Angular MCP targets when available and local fallback only on failure/unavailability. Run workspace-local Prettier write/check on exact touched paths before final checks. Preserve Spanish UI conventions and existing Helm accessibility/mobile behavior; run Spartan info before adding controls. Browser/authenticated backend/CORS acceptance remains pending unless actually performed.
+
+Backend tests/compilation passed but SQL against an isolated MariaDB/MySQL database has not been accepted; do not claim end-to-end completion. Its session page/count/grouped reads may momentarily diverge under concurrent writes without snapshot guarantees.
+
+The full integration spans statistics, Sessions and Audit. The user explicitly accepted that scope. Forecast is above 400 authored diff lines; divide work into the three coherent implementation units above, retaining tests rather than compressing code. Delivery strategy: ask-on-risk; commit/PR slicing remains a separate decision.
+
+Recovery: this file plus Engram topic `odd/iam-catalog-retirement/tasks`. Keep source writes single-threaded. Rollback boundary is each unit's scoped frontend contract/state/UI/test changes; backend APIs remain compatible and committed independently.
+
+## Progress and next step
+
+Read-only mapping confirmed all fixed-catalog consumers. Dialogs use mutation methods and selected User context rather than requiring the catalog for writes. Initial Angular targets/build/test and version-22 best practices were discovered. No frontend source writes yet. Delegate T1 with narrow surfaces; preserve legacy catalog until Sessions migrates in T2 and retirement is safe in T3.
