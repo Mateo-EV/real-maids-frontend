@@ -20,7 +20,7 @@ Explicit user requirement: manage asynchronous statistics, lookup, session-summa
 
 - [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: implemented and focused-verified; pending final integration review and human-approved commit. Delegated writer (multi-file rule).
 - [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: implementation recovered through read-only diagnosis; six focused specs (155 tests) passed, no concrete source blocker found. Pending formatting, full integration checks and human-approved commit.
-- [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: in progress; single fresh writer for retirement/reconciliation after verified T2 recovery.
+- [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: in progress; parent removed five obsolete use-case/spec files blocked by worker deletion policy, then resumed the same bounded writer for import/store/source reconciliation and final checks.
 - [ ] T4 — Independently verify and natively review the normalized candidate, report acceptance limits and human staging/commit next step. Status: pending. Tasks stay open until a separately human-approved implementation commit.
 
 ## Acceptance criteria
@@ -61,4 +61,6 @@ T2 interruption and recovery: the writer failed with only `assistant reported an
 
 The obsolete first-1000 session source/repository/use-case path remains but has no wired UI consumers; remove/reconcile it with the fixed user catalog in T3. Full workspace suite/build/formatting and live/browser checks are still pending.
 
-Next: fresh bounded T3 writer retires the unused fixed reads and UserStore catalog state, preserves mutation notifications/partial-update behavior, updates docs/tests and runs final formatting/full tests/build. Do not repeat or replace working T1/T2 implementations.
+T3 deletion boundary: the worker stopped before edits because its role prohibits file deletion. Parent read the five obsolete files and removed the three old GetUsers/GetUserSessions/GetAllUserSessions use cases plus the two standalone old session-use-case specs. The same worker was resumed afterward to reconcile dangling imports, retire fixed repository/source methods and collection state, preserve mutation notifications/partial updates and complete docs/tests/formatting/full suite/build. These deletions retire unused production paths, not coverage for retained behavior; replacement paged/detail/count paths retain tests.
+
+Next: await resumed T3 results and final checks. Do not repeat or replace working T1/T2 implementations. No verified complete integration is claimed while imports/checks remain unfinished.
