@@ -19,7 +19,7 @@ Explicit user requirement: manage asynchronous statistics, lookup, session-summa
 ## Implementation units
 
 - [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: implemented and focused-verified; pending final integration review and human-approved commit. Delegated writer (multi-file rule).
-- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: in progress; single writer after T1.
+- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: interrupted worker left partial source/test changes without a verification handoff; read-only incident diagnosis in progress before resuming a single writer.
 - [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: pending; single writer after T2.
 - [ ] T4 — Independently verify and natively review the normalized candidate, report acceptance limits and human staging/commit next step. Status: pending. Tasks stay open until a separately human-approved implementation commit.
 
@@ -57,4 +57,6 @@ T1 implementation evidence:
 - Workspace-local Prettier write/check on 17 exact paths passed; diff whitespace check passed with LF/CRLF notices. Existing Helm components reused after CLI info.
 - Full workspace suite/build remain intentionally deferred to T3; browser/authenticated acceptance unrun. Sessions and fixed catalog remain for T2/T3. No source staging/commits/push.
 
-Next: T2 session migration with stores, bounded owner pages, lazy per-user details and exact global session total. Preserve legacy fixed user catalog until retirement is safe in T3.
+T2 interruption: the writer failed with only `assistant reported an error`, without a retained handoff. Partial source/test artifacts are present for session-owner contracts, source/repository/use cases, owner/root stores and session/page UI. No success or RED/GREEN evidence is assumed for those changes. Parent inspected Git state without reverting or overwriting files and dispatched a read-only verifier to run the focused session/source/store/page specs and identify remaining work. No source writes overlap the diagnosis.
+
+Next: use the incident verifier's observed failures/evidence to resume T2 through a fresh bounded writer. Preserve T1 changes and the remaining fixed catalog until retirement is safe in T3.
