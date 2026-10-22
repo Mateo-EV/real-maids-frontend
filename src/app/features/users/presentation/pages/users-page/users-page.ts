@@ -1,4 +1,4 @@
-import { DatePipe, isPlatformBrowser, NgTemplateOutlet } from "@angular/common"
+import { DatePipe, NgTemplateOutlet } from "@angular/common"
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,7 +8,6 @@ import {
   effect,
   untracked,
   OnInit,
-  PLATFORM_ID,
   signal
 } from "@angular/core"
 import { NgIcon, provideIcons } from "@ng-icons/core"
@@ -38,9 +37,10 @@ import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { UserListStore } from "../../state/user-list.store"
+import { UserStatisticsStore } from "../../state/user-statistics.store"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { defer, finalize, forkJoin, interval, of, Subject, switchMap } from "rxjs"
+import { defer, finalize, of, Subject, switchMap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
@@ -87,6 +87,7 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
   ],
   providers: [
     UserListStore,
+    UserStatisticsStore,
     provideIcons({
       lucideUsers,
       lucideSmartphone,
@@ -105,12 +106,11 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
 export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
   readonly list = inject(UserListStore)
+  readonly statistics = inject(UserStatisticsStore)
   readonly roles = inject(RolesStore)
   readonly sessions = inject(UserSessionsStore)
-  private readonly platformId = inject(PLATFORM_ID)
   readonly section = signal<"users" | "sessions" | "rbac" | "audit">("users")
   readonly sessionCount = computed(() => this.sessions.sessionCount())
-  readonly sessionActiveCount = computed(() => this.sessions.activeSessions().length)
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
@@ -123,7 +123,9 @@ export class UsersPage implements OnInit {
   readonly roleFilter = signal("")
   readonly statusFilter = signal("all")
   readonly pageSize = 10
-  readonly activeCount = computed(() => this.users.users().filter(user => user.isActive).length)
+  readonly activeCount = computed(() =>
+    this.statistics.loaded() ? this.statistics.result()?.active : undefined
+  )
   readonly pageCount = computed(() => {
     const result = this.list.result()
     return Math.max(1, result ? Math.ceil(result.total / result.limit) : 0)
@@ -145,18 +147,34 @@ export class UsersPage implements OnInit {
   private readonly queries = new Subject<void>()
   private readonly listQueries = new Subject<{ query: UserListQuery; delay: number }>()
   private mutationRevision = this.users.mutationRevision()
+  private sessionMutationRevision = this.sessions.mutationRevision()
 
   constructor() {
     effect(() => {
       const revision = this.users.mutationRevision()
       if (revision === this.mutationRevision) return
       this.mutationRevision = revision
-      untracked(() => this.retryList())
+      untracked(() => {
+        this.retryList()
+        this.retryStatistics()
+        this.loadSessionCount()
+      })
+    })
+    effect(() => {
+      const revision = this.sessions.mutationRevision()
+      if (revision === this.sessionMutationRevision) return
+      this.sessionMutationRevision = revision
+      untracked(() => this.loadSessionCount())
     })
   }
 
   private loadList(query: UserListQuery, delay = 0): void {
     if (!this.destroyRef.destroyed) this.listQueries.next({ query, delay })
+  }
+
+  retryStatistics(): void {
+    if (!this.destroyRef.destroyed)
+      this.statistics.load().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retryList(): void {
@@ -184,6 +202,7 @@ export class UsersPage implements OnInit {
   }
 
   ngOnInit(): void {
+    this.retryStatistics()
     this.listQueries
       .pipe(
         switchMap(({ query, delay }) => this.list.load(query, delay)),
@@ -197,12 +216,9 @@ export class UsersPage implements OnInit {
           defer(() => {
             this.initializing.set(true)
             this.loadError.set(false)
-            return forkJoin({
-              roles: this.roles.loaded()
-                ? of(Result.success(this.roles.roles()))
-                : this.roles.loadRoles(),
-              users: this.users.loadUsers()
-            }).pipe(
+            return (
+              this.roles.loaded() ? of(Result.success(this.roles.roles())) : this.roles.loadRoles()
+            ).pipe(
               finalize(() => {
                 if (!this.destroyRef.destroyed) this.initializing.set(false)
               })
@@ -213,21 +229,16 @@ export class UsersPage implements OnInit {
       )
       .subscribe(result => {
         if (this.destroyRef.destroyed) return
-        this.loadError.set(!result.roles.success || !result.users.success)
+        this.loadError.set(!result.success)
       })
     this.retry()
-    this.retrySessions()
+    this.loadSessionCount()
     this.audit.loadGlobalTotal().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
-    if (isPlatformBrowser(this.platformId)) {
-      interval(1000)
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe(() => this.sessions.refreshClock())
-    }
   }
 
-  retrySessions(): void {
-    if (this.destroyRef.destroyed || this.sessions.loading()) return
-    this.sessions.loadAllSessions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+  loadSessionCount(): void {
+    if (this.destroyRef.destroyed) return
+    this.sessions.loadSessionCount().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retry(): void {

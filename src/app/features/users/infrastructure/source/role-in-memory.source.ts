@@ -15,7 +15,7 @@ import { Role } from "../../domain/entities/role.entity"
 import { RoleError } from "../../domain/errors/role.error"
 import { CreateRoleParams } from "../../domain/params/create-role.params"
 import { UpdateRoleParams } from "../../domain/params/update-role.params"
-import { USER_REPOSITORY } from "../../domain/repositories/user.repository"
+import { UserInMemorySource } from "./user-in-memory.source"
 
 const copyFields = (input: CreateRoleParams): CreateRoleParams => ({
   name: input.name,
@@ -33,7 +33,7 @@ const cloneRole = (role: Role): Role =>
 
 @Injectable({ providedIn: "root" })
 export class RoleInMemorySource {
-  private readonly users = inject(USER_REPOSITORY)
+  private readonly users = inject(UserInMemorySource)
   // FICTITIOUS DEMO DATA — stable catalog IDs match source-owned users, not permissions.
   private roles: Role[] = [
     Role.create(
@@ -131,7 +131,7 @@ export class RoleInMemorySource {
         if (!this.roles.some(role => role.id === id)) {
           return of(Result.failure(new RoleError("ROLE_NOT_FOUND")))
         }
-        // Repository-level integrity, including inactive users; no reverse dependency/DI cycle.
+        // Unwired fixture integrity, including inactive users; never consult the HTTP repository.
         return defer(() => this.users.getUsers()).pipe(
           take(1),
           map((result): Result<void, RoleError> => {

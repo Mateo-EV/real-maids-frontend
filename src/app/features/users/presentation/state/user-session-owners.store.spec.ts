@@ -1,0 +1,73 @@
+import { TestBed } from "@angular/core/testing"
+import { firstValueFrom, of, Subject } from "rxjs"
+import { describe, it, expect, vi } from "vitest"
+import { Result } from "@/app/shared/utils/result"
+import { USER_SESSION_REPOSITORY } from "../../domain/repositories/user-session.repository"
+import { UserSessionOwnersStore } from "./user-session-owners.store"
+
+describe("UserSessionOwnersStore", () => {
+  it("adopts effective pagination, preserves false filters and clamps only once", async () => {
+    const getSessionOwners = vi
+      .fn()
+      .mockReturnValueOnce(of(Result.success({ items: [], total: 3, offset: 4, limit: 2 })))
+      .mockReturnValueOnce(
+        of(Result.success({ items: [{ id: 3 }], total: 3, offset: 2, limit: 2 }))
+      )
+    TestBed.configureTestingModule({
+      providers: [
+        UserSessionOwnersStore,
+        { provide: USER_SESSION_REPOSITORY, useValue: { getSessionOwners } }
+      ]
+    })
+    const store = TestBed.inject(UserSessionOwnersStore)
+    await firstValueFrom(store.load({ offset: 10, limit: 5, hasSessions: false }))
+    expect(getSessionOwners.mock.calls).toEqual([
+      [{ offset: 10, limit: 5, hasSessions: false }],
+      [{ offset: 2, limit: 2, hasSessions: false }]
+    ])
+    expect(store.query()).toEqual({ offset: 2, limit: 2, hasSessions: false })
+    expect(store.loaded()).toBe(true)
+  })
+  it("bounds corrective reads, hides failed results and permits retry with effective query", async () => {
+    const getSessionOwners = vi
+      .fn()
+      .mockReturnValue(of(Result.success({ items: [], total: 0, offset: 5, limit: 5 })))
+    TestBed.configureTestingModule({
+      providers: [
+        UserSessionOwnersStore,
+        { provide: USER_SESSION_REPOSITORY, useValue: { getSessionOwners } }
+      ]
+    })
+    const store = TestBed.inject(UserSessionOwnersStore)
+    await firstValueFrom(store.load({ offset: 10, limit: 5, search: "Ana" }))
+    expect(getSessionOwners).toHaveBeenCalledTimes(2)
+    expect(store.error()?.code).toBe("INVALID_RESPONSE")
+    expect(store.loaded()).toBe(false)
+    expect(store.result()).toBeUndefined()
+    getSessionOwners.mockReturnValue(
+      of(Result.success({ items: [], total: 0, offset: 0, limit: 5 }))
+    )
+    await firstValueFrom(store.load(store.query()))
+    expect(store.loaded()).toBe(true)
+    expect(store.query()).toEqual({ offset: 0, limit: 5, search: "Ana" })
+  })
+  it("cancels obsolete queries and never trusts cancelled results", () => {
+    const old = new Subject(),
+      fresh = new Subject()
+    const getSessionOwners = vi.fn().mockReturnValueOnce(old).mockReturnValueOnce(fresh)
+    TestBed.configureTestingModule({
+      providers: [
+        UserSessionOwnersStore,
+        { provide: USER_SESSION_REPOSITORY, useValue: { getSessionOwners } }
+      ]
+    })
+    const store = TestBed.inject(UserSessionOwnersStore)
+    store.load({ offset: 0, limit: 5 }).subscribe()
+    const subscription = store.load({ offset: 0, limit: 5, search: "Ana" }).subscribe()
+    expect(old.observed).toBe(false)
+    subscription.unsubscribe()
+    expect(fresh.observed).toBe(false)
+    expect(store.loaded()).toBe(false)
+    expect(store.loading()).toBe(false)
+  })
+})

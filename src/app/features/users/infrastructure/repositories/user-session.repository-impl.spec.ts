@@ -18,11 +18,21 @@ describe("UserSessionRepositoryImpl", () => {
     })
     const repository = TestBed.inject(USER_SESSION_REPOSITORY)
     expect(repository).toBe(TestBed.inject(UserSessionRepositoryImpl))
-    const subscription = repository.getUserSessions().subscribe()
+    const subscription = repository.getUserSessionsByUser(42).subscribe()
     const http = TestBed.inject(HttpTestingController)
-    const request = http.expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1000")
+    const request = http.expectOne("http://localhost:8080/api/usuarios/42/sesiones")
     expect(request.request.method).toBe("GET")
-    request.flush({ contenido: [], pagina: 0, tamanio: 1000, totalElementos: 0, totalPaginas: 0 })
+    request.flush([])
+    repository.getSessionOwners({ offset: 0, limit: 5, hasSessions: false }).subscribe()
+    http
+      .expectOne(
+        "http://localhost:8080/api/sesiones/usuarios?pagina=0&tamanio=5&tieneSesiones=false"
+      )
+      .flush({ contenido: [], pagina: 0, tamanio: 5, totalElementos: 0, totalPaginas: 0 })
+    repository.getSessionCount().subscribe()
+    http
+      .expectOne("http://localhost:8080/api/sesiones?pagina=0&tamanio=1")
+      .flush({ contenido: [], pagina: 0, tamanio: 1, totalElementos: 0, totalPaginas: 0 })
     http.verify()
     subscription.unsubscribe()
   })

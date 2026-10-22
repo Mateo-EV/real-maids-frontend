@@ -5,7 +5,6 @@ import { Result } from "@/app/shared/utils/result"
 import { Role } from "../../domain/entities/role.entity"
 import { RoleError } from "../../domain/errors/role.error"
 import { UserError } from "../../domain/errors/user.error"
-import { USER_REPOSITORY } from "../../domain/repositories/user.repository"
 import { Lang } from "../../domain/entities/user.entity"
 import { UserInMemorySource } from "./user-in-memory.source"
 import { RoleInMemorySource } from "./role-in-memory.source"
@@ -21,11 +20,16 @@ describe("RoleInMemorySource", () => {
   let source: RoleInMemorySource
   let users: UserInMemorySource
   beforeEach(() => {
-    TestBed.configureTestingModule({
-      providers: [{ provide: USER_REPOSITORY, useExisting: UserInMemorySource }]
-    })
+    TestBed.configureTestingModule({})
     source = TestBed.inject(RoleInMemorySource)
     users = TestBed.inject(UserInMemorySource)
+  })
+
+  it("keeps fixture integrity independent of the production user repository", async () => {
+    const role = await data(source.createRole(params))
+    const read = vi.spyOn(users, "getUsers")
+    expect(await data(source.deleteRoleById(role.id))).toBeUndefined()
+    expect(read).toHaveBeenCalledExactlyOnceWith()
   })
 
   it("starts with five stable roles and isolated valid dates", async () => {

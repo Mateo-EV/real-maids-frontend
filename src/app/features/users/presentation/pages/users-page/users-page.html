@@ -10,7 +10,9 @@
         (click)="section.set('users')"
       >
         Administración de Usuarios
-        <span hlmBadge variant="secondary">{{ users.users().length }}</span>
+        <span hlmBadge variant="secondary">{{
+          statistics.loaded() ? statistics.result()?.total : "—"
+        }}</span>
       </button>
       <button
         data-sessions-tab
@@ -25,7 +27,7 @@
           hlmBadge
           variant="secondary"
           class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
-          >{{ sessions.loaded() ? sessionActiveCount() : "—" }} en línea
+          >{{ sessions.loaded() ? sessionCount() : "—" }} vigentes
         </span>
       </button>
       <button
@@ -61,15 +63,27 @@
           <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
             ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
           /></span>
-          <p class="kpi-value">{{ users.users().length }}</p>
-          <p hlmCardDescription>
-            {{ activeCount() }} activos · {{ users.users().length - activeCount() }} inactivos
+          <p class="kpi-value" data-user-metric>
+            {{ statistics.loaded() ? statistics.result()?.total : "—" }}
           </p>
+          <p hlmCardDescription>
+            @if (statistics.loaded()) {
+              {{ activeCount() }} activos · {{ statistics.result()?.inactive }} inactivos
+            } @else {
+              {{ statistics.loading() ? "Cargando estadísticas…" : "Estadísticas sin verificar" }}
+            }
+          </p>
+          @if (statistics.error()) {
+            <p role="alert" class="text-sm text-destructive">{{ statistics.error()?.message }}</p>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="retryStatistics()">
+              Reintentar estadísticas
+            </button>
+          }
         </div>
       </article>
       <article hlmCard>
         <div hlmCardHeader>
-          <p class="kpi-label">Sesiones concurrentes</p>
+          <p class="kpi-label">Sesiones vigentes</p>
           <span hlmCardAction class="kpi-tile" data-kpi-tone="amber"
             ><ng-icon name="lucideSmartphone" aria-hidden="true" size="24"
           /></span>
@@ -77,9 +91,20 @@
             {{ sessions.loaded() ? sessionCount() : "—" }}
           </p>
           <p hlmCardDescription>
-            <!-- Por definir -->
-            3 Móviles
+            {{
+              sessions.loaded()
+                ? "Total global del servidor"
+                : sessions.loading()
+                  ? "Cargando sesiones…"
+                  : "Sesiones sin verificar"
+            }}
           </p>
+          @if (sessions.error()) {
+            <p role="alert" class="text-sm text-destructive">{{ sessions.error()?.message }}</p>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="loadSessionCount()">
+              Reintentar total de sesiones
+            </button>
+          }
         </div>
       </article>
       <article hlmCard>
@@ -111,7 +136,7 @@
       </article>
     </section>
     @if (section() === "sessions") {
-      <app-user-sessions (retry)="retry()" />
+      <app-user-sessions />
     } @else if (
       section() === "users" || (section() !== "audit" && (initializing() || loadError()))
     ) {
@@ -186,13 +211,13 @@
             </button>
           </div>
         </div>
-        @if (initializing() || users.loading()) {
-          <p class="p-4 text-sm" role="status">Cargando catálogo compartido…</p>
+        @if (initializing()) {
+          <p class="p-4 text-sm" role="status">Cargando roles…</p>
         }
-        @if (loadError() || users.error()) {
+        @if (loadError()) {
           <div class="p-5">
             <div hlmAlert variant="destructive" role="alert">
-              <p hlmAlertTitle>No pudimos cargar el catálogo</p>
+              <p hlmAlertTitle>No pudimos cargar los roles</p>
               <p hlmAlertDescription>
                 Los datos existentes se conservan. Reintenta para continuar.
               </p>

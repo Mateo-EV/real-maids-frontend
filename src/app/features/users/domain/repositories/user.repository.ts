@@ -9,11 +9,13 @@ import { Observable } from "rxjs"
 import { UserListQuery } from "../models/user-list-query"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 
+import { UserStatistics } from "../models/user-statistics"
+
 export interface UserRepository {
+  getUserStatistics(): Observable<Result<UserStatistics, UserError>>
   getUsersPage(query: UserListQuery): Observable<Result<PaginationResponse<User>, UserError>>
   createUser(params: CreateUserParams): Observable<Result<User, UserError>>
   getUserById(id: number): Observable<Result<User, UserError>>
-  getUsers(): Observable<Result<User[], UserError>>
   deleteUserById(id: number): Observable<Result<void, UserError>>
   updateUserById(id: number, params: UpdateUserParams): Observable<Result<User, UserError>>
   updateUserStatusById(id: number, isActive: boolean): Observable<Result<User, UserError>>

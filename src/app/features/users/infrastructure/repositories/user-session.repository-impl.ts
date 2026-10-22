@@ -1,12 +1,16 @@
 import { inject, Injectable } from "@angular/core"
+import { UserSessionOwnerQuery } from "../../domain/models/user-session-owner-query"
 import { UserSessionRepository } from "../../domain/repositories/user-session.repository"
 import { UserSessionHttpSource } from "../source/user-session-http.source"
 
 @Injectable({ providedIn: "root" })
 export class UserSessionRepositoryImpl implements UserSessionRepository {
   private readonly source = inject(UserSessionHttpSource)
-  getUserSessions() {
-    return this.source.getUserSessions()
+  getSessionOwners(query: UserSessionOwnerQuery) {
+    return this.source.getSessionOwners(query)
+  }
+  getSessionCount() {
+    return this.source.getSessionCount()
   }
   getUserSessionsByUser(userId: number) {
     return this.source.getUserSessionsByUser(userId)

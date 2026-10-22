@@ -44,6 +44,41 @@ describe("wired users backend contract", () => {
     http = TestBed.inject(HttpTestingController)
   })
   afterEach(() => http.verify())
+  it.each([
+    { total: 9, activos: 6, inactivos: 3 },
+    { total: 0, activos: 0, inactivos: 0 }
+  ])("maps global statistics %j", async dto => {
+    const pending = firstValueFrom(repository.getUserStatistics())
+    const request = http.expectOne(`${endpoint}/estadisticas`)
+    expect(request.request.transferCache).toBe(false)
+    request.flush(dto)
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { total: dto.total, active: dto.activos, inactive: dto.inactivos }
+    })
+  })
+  it.each([
+    { total: -1, activos: 0, inactivos: 0 },
+    { total: 1, activos: -1, inactivos: 2 },
+    { total: 1, activos: 1, inactivos: -1 },
+    { total: 2, activos: 1, inactivos: 0 },
+    { total: 1, activos: Number.MAX_SAFE_INTEGER + 1, inactivos: 0 },
+    { total: 1, activos: 0, inactivos: Number.MAX_SAFE_INTEGER + 1 },
+    { total: 0, activos: null, inactivos: 0 },
+    { total: Number.MAX_SAFE_INTEGER + 1, activos: Number.MAX_SAFE_INTEGER, inactivos: 1 },
+    { total: Number.MAX_SAFE_INTEGER, activos: Number.MAX_SAFE_INTEGER, inactivos: 1 },
+    { total: 1, activos: "1", inactivos: 0 },
+    { total: 1.5, activos: 1, inactivos: 0.5 }
+  ])("rejects malformed statistics %j", async dto => {
+    const pending = firstValueFrom(repository.getUserStatistics())
+    http.expectOne(`${endpoint}/estadisticas`).flush(dto)
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
+  it("reports forbidden statistics separately", async () => {
+    const pending = firstValueFrom(repository.getUserStatistics())
+    http.expectOne(`${endpoint}/estadisticas`).flush({}, { status: 403, statusText: "Forbidden" })
+    expect(await pending).toMatchObject({ success: false, error: { code: "FORBIDDEN" } })
+  })
   it("maps server listing filters including false and zero without changing the catalog request", async () => {
     const pending = firstValueFrom(
       repository.getUsersPage({ offset: 0, limit: 10, search: "Fake", roleId: 0, isActive: false })
@@ -185,8 +220,8 @@ describe("wired users backend contract", () => {
       })
     expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
   })
-  it("cancels paged requests without affecting an independent catalog request", () => {
-    const catalog = repository.getUsers().subscribe()
+  it("cancels paged requests without affecting an independent lookup request", () => {
+    const catalog = repository.getUsersPage({ offset: 0, limit: 20 }).subscribe()
     const listing = repository.getUsersPage({ offset: 0, limit: 10 }).subscribe()
     const requests = http.match(req => req.url === endpoint)
     listing.unsubscribe()
@@ -194,41 +229,28 @@ describe("wired users backend contract", () => {
     expect(requests[0].cancelled).toBe(false)
     catalog.unsubscribe()
   })
-  it("requests one fixed unfiltered catalog and returns only the entity array", async () => {
-    const pending = firstValueFrom(repository.getUsers())
-    const request = http.expectOne(req => req.url === endpoint)
-    expect(request.request.params.get("pagina")).toBe("0")
-    expect(request.request.params.get("tamanio")).toBe("500")
-    expect(request.request.transferCache).toBe(false)
-    request.flush(page)
-    expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
-    expect(await pending).toMatchObject({ success: true, data: [{ id: 41 }] })
-    http.expectNone(() => true)
+  it("has no fixed collection method on the production adapter", () => {
+    expect(repository).not.toHaveProperty("getUsers")
   })
-  it("never requests another page when totals exceed 500 and never exposes metadata", async () => {
-    const pending = firstValueFrom(repository.getUsers())
-    const request = http.expectOne(req => req.url === endpoint)
-    expect(request.request.params.get("tamanio")).toBe("500")
-    const records = Array.from({ length: 500 }, (_, idUsuario) => ({ ...dto, idUsuario }))
-    request.flush({ ...page, contenido: records, totalElementos: 501, totalPaginas: 2 })
-    const result = await pending
-    expect(result.success && Array.isArray(result.data) && result.data.length).toBe(500)
-    http.expectNone(() => true)
-  })
-  it("validates backend-capped metadata internally without exposing it or retrying", async () => {
-    const pending = firstValueFrom(repository.getUsers())
-    http.expectOne(req => req.url === endpoint).flush({ ...page, tamanio: 100 })
-    expect(await pending).toMatchObject({ success: true, data: [{ id: 41 }] })
-    http.expectNone(() => true)
-  })
-  it("maps backend profiles without retaining pagination metadata", async () => {
-    const pending = firstValueFrom(repository.getUsers())
+  it("maps backend profiles with shared pagination metadata", async () => {
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 0, limit: 500 }))
     http.expectOne(req => req.url === endpoint).flush(page)
     expect(await pending).toMatchObject({
       success: true,
-      data: [
-        { id: 41, name: dto.nombre, email: dto.correo, roleId: 19, lang: Lang.ES, lastAccess: null }
-      ]
+      data: {
+        items: [
+          {
+            id: 41,
+            name: dto.nombre,
+            email: dto.correo,
+            roleId: 19,
+            lang: Lang.ES,
+            lastAccess: null
+          }
+        ],
+        offset: 0,
+        limit: 500
+      }
     })
   })
   it.each([
@@ -255,16 +277,16 @@ describe("wired users backend contract", () => {
     { ...page, contenido: [{ ...dto, fechaActualizacion: "2026-01-02" }] },
     { ...page, contenido: [{ ...dto, fechaCreacion: "2026-02-31T00:00:00Z" }] }
   ])("rejects malformed required consumer data %j", async value => {
-    const pending = firstValueFrom(repository.getUsers())
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 0, limit: 500 }))
     http.expectOne(req => req.url === endpoint).flush(value)
     expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
   })
   it("accepts a valid empty collection", async () => {
-    const pending = firstValueFrom(repository.getUsers())
+    const pending = firstValueFrom(repository.getUsersPage({ offset: 0, limit: 20 }))
     http
       .expectOne(req => req.url === endpoint)
-      .flush({ ...page, contenido: [], totalElementos: 0, totalPaginas: 0 })
-    expect(await pending).toMatchObject({ success: true, data: [] })
+      .flush({ ...page, tamanio: 20, contenido: [], totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({ success: true, data: { items: [], total: 0 } })
   })
   it("creates using only documented fields, never retains age/password or invents dates", async () => {
     const pending = firstValueFrom(repository.createUser({ ...input, lastAccess: new Date() }))
@@ -374,6 +396,12 @@ describe("wired users backend contract", () => {
     expect(await pending).toMatchObject({ success: false, error: { code: "NETWORK" } })
     http.expectNone(endpoint)
   })
+  it("cancels statistics HTTP on unsubscribe", () => {
+    const subscription = repository.getUserStatistics().subscribe()
+    const request = http.expectOne(`${endpoint}/estadisticas`)
+    subscription.unsubscribe()
+    expect(request.cancelled).toBe(true)
+  })
   it("aborts an unsubscribed request rather than producing a late success", () => {
     const subscription = repository.createUser(input).subscribe()
     const request = http.expectOne(endpoint)
@@ -391,7 +419,10 @@ describe("wired users backend contract", () => {
       ]
     })
     const repo = TestBed.inject(UserRepositoryImpl)
-    expect((await firstValueFrom(repo.getUsers())).success).toBe(false)
+    expect(await firstValueFrom(repo.getUserStatistics())).toMatchObject({
+      success: false,
+      error: { code: "UNCONFIGURED" }
+    })
     expect((await firstValueFrom(repo.getUsersPage({ offset: 0, limit: 10 }))).success).toBe(false)
     expect((await firstValueFrom(repo.createUser(input))).success).toBe(false)
     TestBed.inject(HttpTestingController).expectNone(() => true)

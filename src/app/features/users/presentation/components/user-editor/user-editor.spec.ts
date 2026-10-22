@@ -18,7 +18,6 @@ async function loadCatalogs() {
   await flush(
     firstValueFrom(
       forkJoin({
-        users: TestBed.inject(UserStore).loadUsers(),
         roles: TestBed.inject(RolesStore).loadRoles()
       })
     )
@@ -56,6 +55,11 @@ describe("UserEditor Signal Forms", () => {
     })
   )
 
+  async function records() {
+    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
+    if (!result.success) throw result.error
+    return result.data
+  }
   async function setup(user: User | null = null) {
     await loadCatalogs()
     const fixture = TestBed.createComponent(TestHost)
@@ -111,7 +115,7 @@ describe("UserEditor Signal Forms", () => {
       expect(cancel).toHaveBeenCalled()
       expect(ref.state()).toBe("closed")
       expect(saved).not.toHaveBeenCalled()
-      expect(users.users()).toHaveLength(48)
+      expect(await records()).toHaveLength(48)
     }
   )
 
@@ -139,7 +143,7 @@ describe("UserEditor Signal Forms", () => {
       expect(response.observed).toBe(false)
       response.next(
         outcome === "success"
-          ? Result.success(users.users()[0])
+          ? Result.success((await records())[0])
           : Result.failure(new UserError("UNEXPECTED"))
       )
       response.complete()
@@ -167,7 +171,7 @@ describe("UserEditor Signal Forms", () => {
     getDebugNode(element)!.injector.get(CdkDialogRef).close()
     await flush(pending)
     expect(users.loading()).toBe(false)
-    expect(users.users()).toHaveLength(48)
+    expect(await records()).toHaveLength(48)
     expect(editor.error()).toBe("")
     expect(saved).not.toHaveBeenCalled()
   })
@@ -302,7 +306,7 @@ describe("UserEditor Signal Forms", () => {
     )
     expect(saved).toHaveBeenCalledOnce()
     expect(ref.state()).toBe("closed")
-    const created = users.users().find(user => user.email === "new@example.test")!
+    const created = (await records()).find(user => user.email === "new@example.test")!
     expect(created.name).toBe("Nueva Persona")
     expect(created.roleId).toBe(roles.roles()[0].id)
     expect(created.lastAccess).toBeNull()
@@ -310,9 +314,9 @@ describe("UserEditor Signal Forms", () => {
     ref.forceClose()
     const next = await setup()
     next.editor.model.update(model => ({ ...model, name: "Unsaved" }))
-    const count = next.users.users().length
+    const count = (await records()).length
     next.editor.cancel()
-    expect(next.users.users()).toHaveLength(count)
+    expect(await records()).toHaveLength(count)
     expect(next.editor.context.user).toBeNull()
     next.ref.forceClose()
   })
@@ -321,7 +325,7 @@ describe("UserEditor Signal Forms", () => {
     await loadCatalogs()
     const users = TestBed.inject(UserStore),
       roles = TestBed.inject(RolesStore)
-    const user = users.users()[0],
+    const user = (await records())[0],
       role = roles.roles().find(item => item.id === user.roleId)!
     await flush(
       firstValueFrom(
@@ -336,13 +340,9 @@ describe("UserEditor Signal Forms", () => {
     expect(editor.availableRoles().find(item => item.id === role.id)?.isActive).toBe(false)
     editor.model.update(model => ({ ...model, name: "Edited", isActive: false }))
     await flush(editor.save())
-    expect(
-      users
-        .users()
-        .find(item => item.id === user.id)
-        ?.lastAccess?.getTime()
-    ).toBe(user.lastAccess?.getTime())
-    expect(users.users().find(item => item.id === user.id)?.roleId).toBe(role.id)
+    const updated = (await records()).find(item => item.id === user.id)!
+    expect(updated.lastAccess?.getTime()).toBe(user.lastAccess?.getTime())
+    expect(updated.roleId).toBe(role.id)
     ref.forceClose()
     const next = await setup()
     expect(next.editor.availableRoles().some(item => item.id === role.id)).toBe(false)

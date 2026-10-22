@@ -40,7 +40,7 @@ import { UserSessionHttpSource } from "@/app/features/users/infrastructure/sourc
 import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
 import { UserSessionInMemorySource } from "@/app/features/users/infrastructure/source/user-session-in-memory.source"
-import { GetUserSessionsUseCase } from "@/app/features/users/application/use-cases/get-user-sessions.use-case"
+import { GetSessionCountUseCase } from "@/app/features/users/application/use-cases/get-session-count.use-case"
 
 async function settle<T>(stream: Observable<T>): Promise<T> {
   const pending = firstValueFrom(stream)
@@ -95,12 +95,13 @@ describe("Application repository composition", () => {
     expect(repository).toBe(TestBed.inject(UserSessionRepositoryImpl))
     expect(repository).not.toBe(TestBed.inject(UserSessionHttpSource))
     expect(repository).not.toBe(TestBed.inject(UserSessionInMemorySource))
-    const pending = firstValueFrom(TestBed.inject(GetUserSessionsUseCase).execute())
+    const pending = firstValueFrom(TestBed.inject(GetSessionCountUseCase).execute())
     const http = TestBed.inject(HttpTestingController)
     const request = http.expectOne(r => r.url === "http://localhost:8080/api/sesiones")
     expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
-    request.flush({ contenido: [], pagina: 0, tamanio: 1000, totalElementos: 0, totalPaginas: 0 })
-    expect(await pending).toMatchObject({ success: true, data: [] })
+    expect(request.request.params.get("tamanio")).toBe("1")
+    request.flush({ contenido: [], pagina: 0, tamanio: 1, totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({ success: true, data: 0 })
     http.verify()
   })
 

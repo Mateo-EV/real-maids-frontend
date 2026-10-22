@@ -33,12 +33,16 @@ describe("DeleteUserDialog", () => {
       ]
     })
   )
+  async function records() {
+    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
+    if (!result.success) throw result.error
+    return result.data
+  }
   async function setup() {
-    await flush(firstValueFrom(TestBed.inject(UserStore).loadUsers()))
     const fixture = TestBed.createComponent(TestHost)
     fixture.detectChanges()
     const users = TestBed.inject(UserStore),
-      user = users.users()[0],
+      user = (await records())[0],
       deleted = vi.fn()
     const ref = TestBed.inject(HlmDialogService).open<void, DeleteUserContext>(DeleteUserDialog, {
       context: { user, onDeleted: deleted },
@@ -86,7 +90,7 @@ describe("DeleteUserDialog", () => {
       await vi.runAllTimersAsync()
       expect(cancel).toHaveBeenCalled()
       expect(ref.state()).toBe("closed")
-      expect(users.users()).toHaveLength(48)
+      expect(await records()).toHaveLength(48)
       expect(deleted).not.toHaveBeenCalled()
     }
   )
@@ -124,7 +128,7 @@ describe("DeleteUserDialog", () => {
     getDebugNode(element)!.injector.get(CdkDialogRef).close()
     await flush(pending)
     expect(users.loading()).toBe(false)
-    expect(users.users().some(item => item.id === user.id)).toBe(true)
+    expect((await records()).some(item => item.id === user.id)).toBe(true)
     expect(dialog.error()).toBe("")
     expect(deleted).not.toHaveBeenCalled()
   })
@@ -149,11 +153,11 @@ describe("DeleteUserDialog", () => {
     expect(element.textContent).toContain("Esta acción elimina el perfil del usuario.")
     expect(element.textContent).not.toMatch(/demo|demostración|en memoria|fictici/i)
     dialog.cancel()
-    expect(users.users()).toHaveLength(48)
+    expect(await records()).toHaveLength(48)
     ref.forceClose()
     const next = await setup()
     await flush(next.dialog.confirm())
-    expect(next.users.users()).toHaveLength(47)
+    expect(await records()).toHaveLength(47)
     expect(next.deleted).toHaveBeenCalledOnce()
     expect(next.ref.state()).toBe("closed")
     expect(deleted).not.toHaveBeenCalled()
@@ -184,7 +188,7 @@ describe("DeleteUserDialog", () => {
     response.complete()
     await pending
     expect(dialog.error()).toContain("No pudimos eliminar")
-    expect(users.users()).toHaveLength(48)
+    expect(await records()).toHaveLength(48)
     expect(deleted).not.toHaveBeenCalled()
     expect(dialog.submitting()).toBe(false)
     TestBed.tick()

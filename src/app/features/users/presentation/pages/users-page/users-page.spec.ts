@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs"
 import { inject, signal } from "@angular/core"
 import { UserListQuery } from "../../../domain/models/user-list-query"
+import { UserStatistics } from "../../../domain/models/user-statistics"
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -16,8 +17,9 @@ import { provideRouter } from "@angular/router"
 import { firstValueFrom, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
+import { RoleError } from "../../../domain/errors/role.error"
 import { User } from "../../../domain/entities/user.entity"
-import { UserSession } from "../../../domain/entities/user-session.entity"
+import { UserSessionError } from "../../../domain/errors/user-session.error"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -48,7 +50,7 @@ const providers = [
     useFactory: () => {
       const source = inject(UserInMemorySource)
       return {
-        getUsers: () => source.getUsers(),
+        getUserStatistics: () => of(Result.success({ total: 1200, active: 900, inactive: 300 })),
         getUsersPage: (query: UserListQuery) =>
           source.getUsers().pipe(
             map(result => {
@@ -115,25 +117,17 @@ describe("UsersPage", () => {
     })
     TestBed.overrideProvider(USER_SESSION_REPOSITORY, {
       useValue: {
-        getUserSessions: () =>
-          timer(250).pipe(
-            map(() =>
-              Result.success(
-                Array.from({ length: 26 }, (_, index) =>
-                  UserSession.create(
-                    index + 1,
-                    90,
-                    "192.0.2.1",
-                    "Chrome",
-                    new Date("2026-01-01T00:00:00Z"),
-                    new Date("2027-01-01T00:00:00Z"),
-                    index === 0,
-                    "Server user",
-                    "server@example.test"
-                  )
-                )
-              )
-            )
+        getSessionCount: () => timer(250).pipe(map(() => Result.success(26))),
+        getSessionOwners: (query: { offset?: number; limit?: number; search?: string }) =>
+          of(
+            Result.success({
+              items: [
+                { id: 90, name: "Server user", email: "server@example.test", sessionCount: 26 }
+              ],
+              total: 1,
+              offset: 0,
+              limit: query.limit ?? 5
+            })
           ),
         revokeUserSession: () => timer(250).pipe(map(() => Result.success<void>(undefined))),
         revokeUserSessions: vi.fn(),
@@ -311,7 +305,9 @@ describe("UsersPage", () => {
       }
     )
     const query = vi.spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
+    const userReads = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
     const { fixture, element } = await setup()
+    expect(userReads).toHaveBeenCalledOnce() // Users listing only; lookup is lazy.
     const globalCalls = query.mock.calls.length // the independent global metric query is allowed
     expect(element.querySelector("app-audit-viewer")).toBeNull()
     await visit(fixture, "rbac")
@@ -320,6 +316,7 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     const viewer = fixture.debugElement.query(By.directive(AuditViewer))
       .componentInstance as AuditViewer
+    expect(userReads).toHaveBeenCalledTimes(2) // Independent first-visit actor page.
     const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
     entity.value = "sesion"
     entity.dispatchEvent(new Event("change"))
@@ -364,6 +361,7 @@ describe("UsersPage", () => {
     expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
     expect(element.querySelector<HTMLButtonElement>("#audit-actor")!.textContent).toBe(actorLabel)
     expect(viewer.selectedActor()?.id).toBe(1)
+    expect(userReads).toHaveBeenCalledTimes(2)
     expect(viewer.page()).toBe(2)
     expect(element.querySelector("app-audit-viewer tbody")!.textContent).toBe(rows)
     expect(query).toHaveBeenCalledTimes(calls)
@@ -373,9 +371,28 @@ describe("UsersPage", () => {
     expect(element.querySelector("app-audit-viewer")?.textContent).not.toContain("Cargando")
   })
 
-  it("keeps RBAC gated until catalog retry succeeds", async () => {
-    vi.spyOn(TestBed.inject(UserStore), "loadUsers").mockReturnValueOnce(
-      of(Result.failure(new UserError("UNEXPECTED")))
+  it("initializes roles and RBAC independently of failed listing and statistics reads", async () => {
+    const repository = TestBed.inject(USER_REPOSITORY)
+    vi.spyOn(repository, "getUsersPage").mockReturnValue(
+      of(Result.failure(new UserError("FORBIDDEN")))
+    )
+    vi.spyOn(repository, "getUserStatistics").mockReturnValue(
+      of(Result.failure(new UserError("FORBIDDEN")))
+    )
+    const query = vi.spyOn(TestBed.inject(RbacRepositoryImpl), "getRolePermissions")
+    const { fixture, page } = await setup()
+    expect(page.loadError()).toBe(false)
+    expect(page.initializing()).toBe(false)
+    expect(page.roles.loaded()).toBe(true)
+    expect(page.list.error()?.code).toBe("FORBIDDEN")
+    expect(page.statistics.error()?.code).toBe("FORBIDDEN")
+    await visit(fixture, "rbac")
+    expect(query).toHaveBeenCalledOnce()
+  })
+
+  it("keeps RBAC gated only until roles retry succeeds", async () => {
+    vi.spyOn(TestBed.inject(RolesStore), "loadRoles").mockReturnValueOnce(
+      of(Result.failure(new RoleError("UNEXPECTED")))
     )
     const query = vi.spyOn(TestBed.inject(RbacRepositoryImpl), "getRolePermissions")
     const fixture = TestBed.createComponent(UsersPage)
@@ -384,7 +401,7 @@ describe("UsersPage", () => {
     expect(query).not.toHaveBeenCalled()
     await flush(fixture.whenStable())
     fixture.detectChanges()
-    expect(fixture.nativeElement.textContent).toContain("No pudimos cargar el catálogo")
+    expect(fixture.nativeElement.textContent).toContain("No pudimos cargar los roles")
     expect(query).not.toHaveBeenCalled()
     fixture.nativeElement.querySelector("[data-retry]").click()
     fixture.detectChanges()
@@ -472,64 +489,70 @@ describe("UsersPage", () => {
     expect(row.querySelector(".h-9, .sm\\:w-60, .xl\\:w-100")).toBeNull()
   })
 
-  it("collects global sessions, groups loaded users and filters locally without altering global metrics", async () => {
+  it("uses server owner summaries independently of the fixed user catalog and global count", async () => {
     const { element, fixture, page } = await setup()
-    const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getUserSessions")
-    const tab = element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!
-    expect(tab.disabled).toBe(false)
-    expect(page.sessions.sessions()).toHaveLength(26)
+    const repository = TestBed.inject(USER_SESSION_REPOSITORY)
+    const query = vi.spyOn(repository, "getSessionOwners")
+    const detail = vi.spyOn(repository, "getUserSessionsByUser")
     expect(page.sessions.loaded()).toBe(true)
     expect(page.sessionCount()).toBe(26)
-    tab.click()
+    element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!.click()
     fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
-    element
-      .querySelector<HTMLButtonElement>('app-user-sessions button[aria-label="Página siguiente"]')!
-      .click()
-    fixture.detectChanges()
-    expect(element.textContent).toContain("Mostrando 6–10 de 49 usuarios")
+    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
+    expect(element.textContent).toContain("Server user")
+    expect(query).toHaveBeenCalledOnce()
+    expect(detail).not.toHaveBeenCalled()
     const input = element.querySelector<HTMLInputElement>("#session-search")!
     input.value = "server@example.test"
     input.dispatchEvent(new Event("input"))
+    await vi.advanceTimersByTimeAsync(250)
     fixture.detectChanges()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(1)
-    expect(element.textContent).toContain("Usuario de sesión")
-    expect(element.textContent).toContain("Tu sesión actual")
-    expect(element.textContent).toContain("Para cerrarla usa Salir")
-    expect(element.textContent).toContain("Mostrando 1–1 de 1 usuarios")
-    expect(element.querySelector("#session-user-id")).toBeNull()
-    expect(query).not.toHaveBeenCalled()
-    expect(page.sessionCount()).toBe(26)
+    expect(query).toHaveBeenLastCalledWith({ offset: 0, limit: 5, search: "server@example.test" })
     expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
-    expect(page.users.users().every(user => user.id !== 90)).toBe(true)
-    element.querySelector<HTMLButtonElement>("[data-users-tab]")!.click()
-    fixture.detectChanges()
-    expect(page.visibleUsers()).toHaveLength(10)
-    expect(page.users.users()).toHaveLength(48)
+    expect(page.users).not.toHaveProperty("users")
   })
 
-  it("requeries once after revoke and derives counts from records, not expiry", async () => {
+  it("requeries exact count once after revoke, ignores clock and cancels page-owned reads", async () => {
     const { page, fixture, element } = await setup()
-    const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getUserSessions")
-    expect(page.sessionCount()).toBe(26)
+    const query = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
     await flush(firstValueFrom(page.sessions.revokeSession(90, 2)))
+    fixture.detectChanges()
+    await vi.advanceTimersByTimeAsync(250)
     fixture.detectChanges()
     expect(query).toHaveBeenCalledExactlyOnceWith()
     expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
-    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("26")
-    vi.setSystemTime(
-      Math.max(...page.sessions.sessions().map(session => session.expiryDate.getTime()))
-    )
+    vi.setSystemTime(new Date("2030-01-01"))
     await vi.advanceTimersByTimeAsync(1000)
-    fixture.detectChanges()
-    expect(page.sessions.activeSessions()).toHaveLength(0)
     expect(page.sessionCount()).toBe(26)
-    const clock = vi.spyOn(page.sessions, "refreshClock")
+    const pending = new Subject()
+    query.mockReturnValue(pending as never)
+    page.loadSessionCount()
     fixture.destroy()
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(clock).not.toHaveBeenCalled()
+    expect(pending.observed).toBe(false)
+    expect(page.sessions.loaded()).toBe(false)
   })
 
+  it("refreshes the exact session count once on user mutation and keeps failed counts unverified with retry", async () => {
+    const { page, fixture, element } = await setup()
+    const count = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
+    await flush(firstValueFrom(page.users.updateUserStatusById(1, false)))
+    fixture.detectChanges()
+    await vi.advanceTimersByTimeAsync(250)
+    fixture.detectChanges()
+    expect(count).toHaveBeenCalledOnce()
+    count.mockReturnValueOnce(of(Result.failure(new UserSessionError("FORBIDDEN"))))
+    page.loadSessionCount()
+    fixture.detectChanges()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("—")
+    expect(element.textContent).toContain("Sesiones sin verificar")
+    const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
+      button => button.textContent?.trim() === "Reintentar total de sesiones"
+    )!
+    retry.click()
+    await vi.advanceTimersByTimeAsync(250)
+    fixture.detectChanges()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+  })
   it("enables RBAC and preserves Users filters after returning", async () => {
     const { element, fixture, page } = await setup()
     page.setSearch("Laura")
@@ -552,40 +575,41 @@ describe("UsersPage", () => {
     expect(element.querySelector("#user-search")).not.toBeNull()
   })
 
-  it("starts concurrent catalog queries and cancels both on destruction without mutations", async () => {
+  it("starts independent roles/list queries and cancels them on destruction without mutations", async () => {
     const roles = TestBed.inject(RolesStore),
       users = TestBed.inject(UserStore)
-    const loadUsers = vi.spyOn(users, "loadUsers")
+    const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
     const createRole = vi.spyOn(roles, "createRole")
     const fixture = TestBed.createComponent(UsersPage)
     fixture.detectChanges()
     const page = fixture.componentInstance
     expect(roles.loading()).toBe(true)
-    expect(users.loading()).toBe(true)
+    expect(users.loading()).toBe(false)
+    expect(page.list.loading()).toBe(true)
     expect(page.sessions.loading()).toBe(true)
-    expect(loadUsers).toHaveBeenCalledOnce()
+    expect(listing).toHaveBeenCalledOnce()
     fixture.destroy()
     await vi.advanceTimersByTimeAsync(250)
     expect(roles.loading()).toBe(false)
     expect(users.loading()).toBe(false)
     expect(createRole).not.toHaveBeenCalled()
     expect(roles.roles()).toEqual([])
-    expect(users.users()).toEqual([])
-    expect(page.sessions.sessions()).toEqual([])
+    expect(page.list.result()).toBeUndefined()
+    expect(page.sessions.sessionCount()).toBeUndefined()
     expect(page.sessions.loading()).toBe(false)
     expect(page.loadError()).toBe(false)
   })
 
   it("does not set page feedback after a cancelled query", async () => {
-    const response = new Subject<ReturnType<typeof Result.failure<UserError>>>()
-    vi.spyOn(TestBed.inject(UserStore), "loadUsers").mockReturnValue(response)
+    const response = new Subject<ReturnType<typeof Result.failure<RoleError>>>()
+    vi.spyOn(TestBed.inject(RolesStore), "loadRoles").mockReturnValue(response)
     const fixture = TestBed.createComponent(UsersPage)
     fixture.detectChanges()
     const page = fixture.componentInstance
     const setError = vi.spyOn(page.loadError, "set")
     fixture.destroy()
     expect(response.observed).toBe(false)
-    response.next(Result.failure(new UserError("UNEXPECTED")))
+    response.next(Result.failure(new RoleError("UNEXPECTED")))
     response.complete()
     await Promise.resolve()
     expect(setError).not.toHaveBeenCalled()
@@ -699,9 +723,10 @@ describe("UsersPage", () => {
     expect([page.search(), page.roleFilter(), page.statusFilter(), page.currentPage()]).toEqual(
       filters
     )
-    page.changeUserStatus(users.users()[0])
+    const activeUser = (open.mock.calls[0][1]!.context as UserStatusContext).user
+    page.changeUserStatus(activeUser)
     ;(open.mock.calls.at(-1)![1]!.context as UserStatusContext).onChanged()
-    expect(success).toHaveBeenLastCalledWith(`Usuario ${users.users()[0].name} desactivado`)
+    expect(success).toHaveBeenLastCalledWith(`Usuario ${activeUser.name} desactivado`)
   })
 
   it("renders catalog copy and counts without duplicating shell identity or navigation", async () => {
@@ -710,15 +735,16 @@ describe("UsersPage", () => {
     expect(element.querySelector("header")).toBeNull()
     expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
-    expect(element.textContent).toContain("42 activos · 6 inactivos")
+    expect(element.textContent).toContain("900 activos · 300 inactivos")
     expect(element.querySelector(".users-catalog")?.textContent).not.toContain(
       "informados por el servidor"
     )
     expect(element.textContent).not.toContain("CORE BACKOFFICE")
     expect(element.textContent).toContain("Gestiona estados, roles")
     expect(element.textContent).toContain("Total global del servidor")
-    expect(element.textContent).toContain("3 Móviles")
-    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("en línea")
+    expect(element.textContent).not.toContain("3 Móviles")
+    expect(element.textContent).toContain("Sesiones vigentes")
+    expect(element.querySelector("[data-sessions-tab]")?.textContent).toContain("vigentes")
     expect(element.textContent).not.toMatch(/demostración|simulad/i)
     const catalog = element.querySelector(".users-catalog")!
     const accessibleCopy = Array.from(
@@ -865,7 +891,7 @@ describe("UsersPage", () => {
     )
   })
 
-  it("queries server pages and filters while preserving the independent fixed catalog", async () => {
+  it("queries server pages and filters without a fixed collection read", async () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -905,18 +931,36 @@ describe("UsersPage", () => {
           req.url === "http://localhost:8080/api/usuarios" &&
           req.params.get("tamanio") === String(limit)
       )
-    const catalog = http.expectOne(req => req.params.get("tamanio") === "500")
-    catalog.flush(response(0, 100, 12))
+    http
+      .expectOne("http://localhost:8080/api/usuarios/estadisticas")
+      .flush({ total: 1200, activos: 900, inactivos: 300 })
+    http.expectNone(
+      req => req.params.get("tamanio") === "500" || req.params.get("tamanio") === "1000"
+    )
     request().flush(response(0, 10, 21, 901))
     await flush(fixture.whenStable())
     fixture.detectChanges()
     const page = fixture.componentInstance
     const element = fixture.nativeElement as HTMLElement
-    expect(page.users.users()).toHaveLength(12)
+    expect(page.users).not.toHaveProperty("users")
     expect(page.visibleUsers().map(user => user.id)).toEqual(
       Array.from({ length: 10 }, (_, index) => 901 + index)
     )
     expect(page.pageCount()).toBe(3)
+    const write = firstValueFrom(page.users.updateUserStatusById(901, false))
+    const statusWrite = http.expectOne("http://localhost:8080/api/usuarios/901/estado")
+    expect(statusWrite.request.method).toBe("PATCH")
+    statusWrite.flush({ ...response(0, 10, 21, 901).contenido[0], activo: false })
+    expect((await write).success).toBe(true)
+    fixture.detectChanges()
+    http.expectNone(
+      req => req.params.get("tamanio") === "500" || req.params.get("tamanio") === "1000"
+    )
+    request().flush(response(0, 10, 21, 901))
+    http
+      .expectOne("http://localhost:8080/api/usuarios/estadisticas")
+      .flush({ total: 1200, activos: 899, inactivos: 301 })
+    expect(page.users.mutationRevision()).toBe(1)
     page.goToPage(3)
     const third = request()
     expect(third.request.params.get("pagina")).toBe("2")
@@ -962,7 +1006,6 @@ describe("UsersPage", () => {
     // Do not reapply local filters: these server records remain authoritative.
     expect(page.visibleUsers().map(user => user.id)).toEqual([800])
     expect(element.textContent).toContain("de 1 usuarios")
-    expect(page.users.users()).toHaveLength(12)
     page.clearFilters()
     const reset = request()
     expect(reset.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
@@ -971,11 +1014,10 @@ describe("UsersPage", () => {
     http.verify()
   })
 
-  it("keeps the argument-free catalog fixed while requesting filtered ten-row server pages", async () => {
-    const query = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsers")
+  it("requests only filtered ten-row server pages without a fixed catalog method", async () => {
+    expect(TestBed.inject(USER_REPOSITORY)).not.toHaveProperty("getUsers")
     const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
     const { page, roles, fixture } = await setup()
-    expect(query).toHaveBeenCalledExactlyOnceWith()
     expect(page.pageSize).toBe(10)
     expect(page.visibleUsers()).toHaveLength(10)
     page.goToPage(4)
@@ -1004,7 +1046,6 @@ describe("UsersPage", () => {
     page.clearFilters()
     await flush(fixture.whenStable())
     expect(page.visibleUsers()).toHaveLength(10)
-    expect(query).toHaveBeenCalledTimes(1)
     expect(listing.mock.calls.length).toBeGreaterThan(1)
   })
 
@@ -1023,9 +1064,44 @@ describe("UsersPage", () => {
     expect(element.textContent).not.toContain("Aún no hay usuarios")
   })
 
-  it("counts every loaded user independently of local filters and hides the warning for a complete catalog", async () => {
+  it("keeps statistics loading/error unverified with independent retry and caller cancellation", async () => {
+    const repository = TestBed.inject(USER_REPOSITORY)
+    const read = new Subject<Result<UserStatistics, UserError>>()
+    const statistics = vi.spyOn(repository, "getUserStatistics").mockReturnValueOnce(read)
+    const listing = vi.spyOn(repository, "getUsersPage")
     const { page, fixture, element } = await setup()
-    const active = page.users.users().filter(user => user.isActive).length
+    expect(element.querySelector("[data-user-metric]")?.textContent?.trim()).toBe("—")
+    expect(element.textContent).toContain("Cargando estadísticas")
+    expect(page.visibleUsers()).toHaveLength(10)
+    read.next(Result.failure(new UserError("FORBIDDEN")))
+    read.complete()
+    fixture.detectChanges()
+    expect(element.querySelector("[data-user-metric]")?.textContent?.trim()).toBe("—")
+    expect(page.loadError()).toBe(false)
+    expect(page.list.error()).toBeUndefined()
+    const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+      button.textContent?.includes("Reintentar estadísticas")
+    )!
+    retry.click()
+    fixture.detectChanges()
+    expect(statistics).toHaveBeenCalledTimes(2)
+    expect(listing).toHaveBeenCalledOnce()
+    expect(page.statistics.loaded()).toBe(true)
+    const late = new Subject<Result<UserStatistics, UserError>>()
+    statistics.mockReturnValueOnce(late)
+    page.retryStatistics()
+    fixture.detectChanges()
+    expect(element.querySelector("[data-user-metric]")?.textContent?.trim()).toBe("—")
+    fixture.destroy()
+    expect(late.observed).toBe(false)
+    expect(page.statistics.loading()).toBe(false)
+    expect(page.statistics.loaded()).toBe(false)
+  })
+
+  it("uses global account statistics independently of catalog, list filters and pages", async () => {
+    const { page, fixture, element } = await setup()
+    const active = 900
+    expect(page.statistics.result()?.total).toBe(1200)
     expect(page.activeCount()).toBe(active)
     page.setStatusFilter("inactive")
     await flush(fixture.whenStable())
@@ -1033,7 +1109,7 @@ describe("UsersPage", () => {
     expect(page.activeCount()).toBe(active)
     expect(element.querySelector("[data-incomplete-catalog]")).toBeNull()
     expect(element.textContent).toContain(`${active} activos`)
-    expect(element.textContent).toContain(`${48 - active} inactivos`)
+    expect(element.textContent).toContain("300 inactivos")
     expect(page.rangeEnd()).toBe(Math.min(10, page.visibleUsers().length))
   })
 
@@ -1098,7 +1174,7 @@ describe("UsersPage", () => {
           name: "New user",
           email: "new@example.test",
           password: "Password1",
-          lang: page.users.users()[0].lang,
+          lang: page.visibleUsers()[0].lang,
           roleId: 1,
           isActive: true
         })
@@ -1124,23 +1200,23 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(page.visibleUsers()).toHaveLength(10)
-    expect(page.users.users()).toHaveLength(48)
+    expect(page.users).not.toHaveProperty("users")
   })
 
   it.each(["create", "edit", "status", "delete", "partial"] as const)(
-    "refreshes both independent reads after %s without replaying writes",
+    "refreshes listing and global statistics after %s without a catalog reread or write replay",
     async operation => {
       const { page, users, fixture, element } = await setup()
       page.setSearch("persona")
       await flush(fixture.whenStable())
       const repository = TestBed.inject(USER_REPOSITORY)
-      const catalog = vi
-        .spyOn(repository, "getUsers")
-        .mockReturnValueOnce(of(Result.failure(new UserError("NETWORK"))))
+      const statistics = vi
+        .spyOn(repository, "getUserStatistics")
+        .mockReturnValueOnce(of(Result.success({ total: 1201, active: 901, inactive: 300 })))
       const listing = vi
         .spyOn(repository, "getUsersPage")
         .mockReturnValueOnce(of(Result.failure(new UserError("FORBIDDEN"))))
-      const user = users.users()[0]
+      const user = page.visibleUsers()[0]
       const input = {
         name: user.name,
         email: user.email,
@@ -1180,11 +1256,13 @@ describe("UsersPage", () => {
       expect(result.success).toBe(operation !== "partial")
       if (!result.success) expect(result.error.code).toBe("PARTIAL_UPDATE")
       expect(write).toHaveBeenCalledOnce()
-      expect(catalog).toHaveBeenCalledExactlyOnceWith()
+      expect(statistics).toHaveBeenCalledExactlyOnceWith()
+      expect(page.statistics.result()?.total).toBe(1201)
+      expect(element.querySelector("[data-user-metric]")?.textContent?.trim()).toBe("1201")
       expect(listing).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 10, search: "persona" })
-      expect(users.error()?.code).toBe("NETWORK")
+      expect(users.error()?.code).toBe(operation === "partial" ? "PARTIAL_UPDATE" : undefined)
       expect(page.list.error()?.code).toBe("FORBIDDEN")
-      expect(element.textContent).toContain("No pudimos cargar el catálogo")
+      expect(element.textContent).not.toContain("No pudimos cargar los roles")
       expect(element.querySelector("[data-list-error]")).not.toBeNull()
       expect(element.querySelector("tbody")).toBeNull()
       const retry = element.querySelector<HTMLButtonElement>("[data-retry-list]")!
@@ -1193,14 +1271,12 @@ describe("UsersPage", () => {
       fixture.detectChanges()
       expect(listing).toHaveBeenCalledTimes(2)
       expect(listing).toHaveBeenLastCalledWith({ offset: 0, limit: 10, search: "persona" })
-      expect(catalog).toHaveBeenCalledOnce()
       expect(write).toHaveBeenCalledOnce()
       expect(element.querySelector("tbody")).not.toBeNull()
-      expect(element.textContent).toContain("No pudimos cargar el catálogo")
+      expect(element.textContent).not.toContain("No pudimos cargar los roles")
       page.retry()
       await flush(fixture.whenStable())
       fixture.detectChanges()
-      expect(catalog).toHaveBeenCalledTimes(2)
       expect(listing).toHaveBeenCalledTimes(2)
       expect(element.textContent).not.toContain("No pudimos cargar")
     }
@@ -1209,22 +1285,25 @@ describe("UsersPage", () => {
   it("does not start a listing refresh after its owning page is destroyed", async () => {
     const { page, users, fixture } = await setup()
     const listing = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage")
+    const statistics = vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUserStatistics")
     const pending = new Subject<Result<User, UserError>>()
     vi.spyOn(TestBed.inject(USER_REPOSITORY), "updateUserStatusById").mockReturnValue(pending)
+    const user = page.visibleUsers()[0]
     const subscription = users.updateUserStatusById(1, false).subscribe()
     fixture.destroy()
-    pending.next(Result.success(users.users()[0]))
+    pending.next(Result.success(user))
     pending.complete()
     await vi.advanceTimersByTimeAsync(750)
     expect(listing).not.toHaveBeenCalled()
+    expect(statistics).not.toHaveBeenCalled()
     expect(page.list.loading()).toBe(false)
     subscription.unsubscribe()
   })
 
   it("displays query failure with retry and a loading state", async () => {
-    const users = TestBed.inject(UserStore)
-    const load = vi.spyOn(users, "loadUsers")
-    load.mockReturnValueOnce(of(Result.failure(new UserError("UNEXPECTED"))))
+    const roles = TestBed.inject(RolesStore)
+    const load = vi.spyOn(roles, "loadRoles")
+    load.mockReturnValueOnce(of(Result.failure(new RoleError("UNEXPECTED"))))
     const fixture = TestBed.createComponent(UsersPage)
     fixture.detectChanges()
     await flush(fixture.whenStable())
@@ -1234,7 +1313,7 @@ describe("UsersPage", () => {
     const retry = element.querySelector<HTMLButtonElement>("[data-retry]")!
     retry.click()
     fixture.detectChanges()
-    expect(element.textContent).toContain("Cargando catálogo")
+    expect(element.textContent).toContain("Cargando roles")
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(element.textContent).toContain("Carlos Mendoza")

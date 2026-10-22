@@ -41,7 +41,7 @@ describe("RevokeSessionDialog", () => {
         {
           provide: USER_SESSION_REPOSITORY,
           useValue: {
-            getUserSessions: () => of(Result.success(records)),
+            getUserSessionsByUser: () => of(Result.success(records)),
             revokeUserSession: (_userId: number, id: number) =>
               timer(250).pipe(
                 map(() => {
@@ -58,11 +58,11 @@ describe("RevokeSessionDialog", () => {
   afterEach(() => vi.useRealTimers())
   async function setup(current = false) {
     const sessions = TestBed.inject(UserSessionsStore)
-    await flush(firstValueFrom(sessions.loadSessions()))
+    await flush(firstValueFrom(sessions.loadDetails(42)))
     const user = { id: 42, name: "Persona real", email: "real@example.test" },
       session = sessions
-        .sessions()
-        .find(item => item.userId === user.id && item.isCurrent === current)!
+        .details()[42]
+        .items.find(item => item.userId === user.id && item.isCurrent === current)!
     const fixture = TestBed.createComponent(TestHost)
     fixture.detectChanges()
     const changed = vi.fn()
@@ -97,10 +97,13 @@ describe("RevokeSessionDialog", () => {
     expect(element.textContent).not.toContain(user.email)
     const pending = dialog.confirm()
     expect(changed).not.toHaveBeenCalled()
-    expect(sessions.sessions().some(item => item.id === session.id)).toBe(true)
+    expect(sessions.details()[42].items.some(item => item.id === session.id)).toBe(true)
     await flush(pending)
     expect(changed).toHaveBeenCalledOnce()
-    expect(sessions.sessions().some(item => item.id === session.id)).toBe(false)
+    expect(sessions.details()[42].loaded).toBe(false)
+    expect(sessions.mutationRevision()).toBe(1)
+    await flush(firstValueFrom(sessions.loadDetails(42)))
+    expect(sessions.details()[42].items.some(item => item.id === session.id)).toBe(false)
     expect(ref.state()).toBe("closed")
   })
   it.each(["cancel", "backdrop", "outside", "escape"])("allows idle %s dismissal", async action => {
@@ -200,7 +203,7 @@ describe("RevokeSessionDialog", () => {
     const pending = dialog.confirm()
     cdk.close()
     await flush(pending)
-    expect(sessions.sessions().some(item => item.id === session.id)).toBe(true)
+    expect(sessions.details()[42].items.some(item => item.id === session.id)).toBe(true)
     expect(changed).not.toHaveBeenCalled()
   })
 })

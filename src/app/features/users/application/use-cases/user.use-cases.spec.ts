@@ -9,7 +9,7 @@ import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { USER_REPOSITORY, UserRepository } from "../../domain/repositories/user.repository"
 import { CreateUserUseCase } from "./create-user.use-case"
 import { GetUserByIdUseCase } from "./get-user-by-id.use-case"
-import { GetUsersUseCase } from "./get-users.use-case"
+import { GetUserStatisticsUseCase } from "./get-user-statistics.use-case"
 import { GetUsersPageUseCase } from "./get-users-page.use-case"
 import { UpdateUserStatusByIdUseCase } from "./update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "./update-user-by-id.use-case"
@@ -42,7 +42,7 @@ describe("Users use cases", () => {
     repository = {
       createUser: vi.fn(),
       getUserById: vi.fn(),
-      getUsers: vi.fn(),
+      getUserStatistics: vi.fn(),
       getUsersPage: vi.fn(),
       updateUserById: vi.fn(),
       updateUserStatusById: vi.fn(),
@@ -87,11 +87,11 @@ describe("Users use cases", () => {
         [7]
       ))
 
-    it(`delegates list and preserves ${outcome}`, () =>
+    it(`delegates global statistics and preserves ${outcome}`, () =>
       check(
-        "getUsers",
-        success ? Result.success([user]) : Result.failure(error),
-        () => TestBed.inject(GetUsersUseCase).execute(),
+        "getUserStatistics",
+        success ? Result.success({ total: 3, active: 2, inactive: 1 }) : Result.failure(error),
+        () => TestBed.inject(GetUserStatisticsUseCase).execute(),
         []
       ))
 

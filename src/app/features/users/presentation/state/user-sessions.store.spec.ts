@@ -13,21 +13,18 @@ const current = () =>
     42,
     "192.0.2.1",
     "Browser",
-    new Date(Date.now() - 1000),
-    new Date(Date.now() + 60000),
+    new Date(0),
+    new Date(60000),
     true,
     "Real",
     "real@example.test"
   )
 describe("UserSessionsStore", () => {
-  let repository: {
-    getUserSessions: ReturnType<typeof vi.fn>
-    revokeUserSession: ReturnType<typeof vi.fn>
-    revokeUserSessions: ReturnType<typeof vi.fn>
-  }
+  let repository: Record<string, ReturnType<typeof vi.fn>>
   beforeEach(() => {
     repository = {
-      getUserSessions: vi.fn(() => of(Result.success([current()]))),
+      getSessionCount: vi.fn(() => of(Result.success(1007))),
+      getUserSessionsByUser: vi.fn(() => of(Result.success([current()]))),
       revokeUserSession: vi.fn(() => of(Result.success(undefined))),
       revokeUserSessions: vi.fn(() => of(Result.success(undefined)))
     }
@@ -35,134 +32,96 @@ describe("UserSessionsStore", () => {
       providers: [{ provide: USER_SESSION_REPOSITORY, useValue: repository }]
     })
   })
-  it("derives counts solely from the array and exposes no transport metadata", async () => {
+  it("loads exact global count independently of detail, owners and clock", async () => {
     const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadSessions())
-    expect(repository.getUserSessions).toHaveBeenCalledExactlyOnceWith()
-    expect(store.sessionCount()).toBe(1)
-    for (const field of ["total", "page", "size", "totalPages", "query", "collectionComplete"])
-      expect(store).not.toHaveProperty(field)
-    expect(store.loaded()).toBe(true)
-    store.sessions()[0].expiryDate = new Date(0)
-    store.refreshClock()
-    expect(store.sessionCount()).toBe(1)
-    expect(store.activeSessions()).toEqual([])
+    await firstValueFrom(store.loadSessionCount())
+    expect(store.sessionCount()).toBe(1007)
+    expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
+    await firstValueFrom(store.loadDetails(42))
+    expect(store.sessionCount()).toBe(1007)
+    expect(store.details()[42].items[0].isCurrent).toBe(true)
   })
-  it("guards only the actual flag, never a local credential marker", async () => {
+  it("guards current actual and notifies writes once without starting orphan refreshes", async () => {
     const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadSessions())
+    await firstValueFrom(store.loadDetails(42))
     const result = await firstValueFrom(store.revokeSession(42, 91))
     expect(!result.success && result.error.code).toBe("CURRENT_SESSION")
-    expect(repository.revokeUserSession).not.toHaveBeenCalled()
+    expect(repository["revokeUserSession"]).not.toHaveBeenCalled()
     await firstValueFrom(store.revokeSession(42, 92))
-    expect(repository.revokeUserSession).toHaveBeenCalledExactlyOnceWith(42, 92)
-  })
-  it("requeries once after individual/bulk success and retains the caller's current session", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadSessions())
-    await firstValueFrom(store.revokeSession(42, 92))
+    expect(store.mutationRevision()).toBe(1)
+    expect(store.affectedUserId()).toBe(42)
     await firstValueFrom(store.revokeSessions(42))
-    expect(repository.getUserSessions).toHaveBeenCalledTimes(3)
-    expect(repository.getUserSessions.mock.calls.every(args => args.length === 0)).toBe(true)
-    expect(repository.revokeUserSessions).toHaveBeenCalledExactlyOnceWith(42)
-    expect(store.sessions()[0].isCurrent).toBe(true)
+    expect(store.mutationRevision()).toBe(2)
+    expect(repository["getSessionCount"]).not.toHaveBeenCalled()
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledOnce()
+    // Bulk delegates without deleting the caller's retained current session.
+    expect(store.details()[42].items[0].isCurrent).toBe(true)
+    expect(store.details()[42].loaded).toBe(false)
   })
-  it("does not optimistically delete records while an authoritative refresh is pending", async () => {
+  it("cancels stale per-ID requests independently and leaves cancelled caches unverified", async () => {
     const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadSessions())
-    const response = new Subject<Result<UserSession[], UserSessionError>>()
-    repository.getUserSessions.mockReturnValue(response)
-    const subscription = store.revokeSessions(42).subscribe()
-    expect(store.sessions()[0].isCurrent).toBe(true)
-    expect(store.loaded()).toBe(false)
-    response.next(Result.success([current()]))
-    response.complete()
-    subscription.unsubscribe()
-    expect(store.loaded()).toBe(true)
-  })
-  it("ignores stale success and failure without binding the root lifetime to a caller", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    const old = new Subject<Result<UserSession[], UserSessionError>>()
-    repository.getUserSessions.mockReturnValueOnce(old)
-    const subscription = store.loadSessions().subscribe()
-    await firstValueFrom(store.loadSessions())
-    old.next(Result.failure(new UserSessionError("NETWORK")))
+    const old = new Subject(),
+      other = new Subject()
+    repository["getUserSessionsByUser"].mockReturnValueOnce(old).mockReturnValueOnce(other)
+    store.loadDetails(42).subscribe()
+    const subscription = store.loadDetails(43).subscribe()
+    await firstValueFrom(store.loadDetails(42))
+    expect(old.observed).toBe(false)
+    expect(other.observed).toBe(true)
     old.next(Result.success([]))
-    old.complete()
-    expect(store.sessions()).toHaveLength(1)
-    expect(store.error()).toBeUndefined()
-    expect(store.loading()).toBe(false)
+    expect(store.details()[42].items).toHaveLength(1)
     subscription.unsubscribe()
-    repository.getUserSessions.mockReturnValue(new Subject())
-    store.loadSessions().subscribe().unsubscribe()
-    expect(store.loading()).toBe(false)
-    expect(store.loaded()).toBe(false)
-    repository.getUserSessions.mockReturnValue(of(Result.success([current()])))
-    await firstValueFrom(store.loadSessions())
-    expect(store.loaded()).toBe(true)
+    expect(other.observed).toBe(false)
+    expect(store.details()[43].loaded).toBe(false)
+    expect(store.details()[43].loading).toBe(false)
   })
-  it("invalidates a pre-write read so it cannot resurrect closed sessions", async () => {
+  it("preserves write success when independent refresh fails; retry never replays writes", async () => {
     const store = TestBed.inject(UserSessionsStore)
-    const old = new Subject<Result<UserSession[], UserSessionError>>()
-    repository.getUserSessions.mockReturnValueOnce(old)
-    store.loadSessions().subscribe()
-    repository.getUserSessions.mockReturnValue(of(Result.success([])))
-    await firstValueFrom(store.revokeSessions(42))
-    old.next(Result.success([current()]))
-    old.complete()
-    expect(store.sessions()).toEqual([])
-    expect(store.sessionCount()).toBe(0)
-  })
-  it("reads an empty array once without a corrective or subsequent page request", async () => {
-    repository.getUserSessions.mockReturnValue(of(Result.success([])))
-    const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadAllSessions())
-    expect(repository.getUserSessions).toHaveBeenCalledExactlyOnceWith()
-    expect(store.loaded()).toBe(true)
-    expect(store.sessionCount()).toBe(0)
-  })
-  it("keeps prior records/counts while loading or failing and supports read retry", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadAllSessions())
-    const previous = store.sessions()
-    const response = new Subject<Result<UserSession[], UserSessionError>>()
-    repository.getUserSessions.mockReturnValue(response)
-    const subscription = store.loadAllSessions().subscribe()
-    expect(store.loaded()).toBe(false)
-    expect(store.sessions()).toBe(previous)
-    response.next(Result.failure(new UserSessionError("NETWORK")))
-    response.complete()
-    expect(store.error()?.code).toBe("NETWORK")
-    expect(store.sessions()).toBe(previous)
-    expect(store.sessionCount()).toBe(1)
-    subscription.unsubscribe()
-    repository.getUserSessions.mockReturnValue(of(Result.success([])))
-    await firstValueFrom(store.loadAllSessions())
-    expect(store.loaded()).toBe(true)
-    expect(store.sessionCount()).toBe(0)
-  })
-  it("reports refresh failure without replaying a successful write", async () => {
-    const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadSessions())
-    const previous = store.sessions()
-    repository.getUserSessions.mockReturnValue(throwError(() => new Error("private")))
-    const result = await firstValueFrom(store.revokeSessions(42))
-    expect(result.success).toBe(true)
+    expect((await firstValueFrom(store.revokeSessions(42))).success).toBe(true)
+    repository["getSessionCount"].mockReturnValue(throwError(() => Error("private")))
+    await firstValueFrom(store.loadSessionCount())
     expect(store.error()?.code).toBe("UNEXPECTED")
-    expect(store.sessions()).toBe(previous)
-    expect(repository.revokeUserSessions).toHaveBeenCalledOnce()
-    repository.revokeUserSession.mockReturnValue(
-      of(Result.failure(new UserSessionError("VALIDATION")))
-    )
-    expect((await firstValueFrom(store.revokeSession(42, 92))).success).toBe(false)
-    expect(store.sessions()).toBe(previous)
-  })
-  it("rejects an empty observable rather than a successful empty collection", async () => {
-    repository.getUserSessions.mockReturnValue(EMPTY)
-    const store = TestBed.inject(UserSessionsStore)
-    const result = await firstValueFrom(store.loadSessions())
-    expect(!result.success && result.error.code).toBe("INVALID_RESPONSE")
     expect(store.loaded()).toBe(false)
-    expect(store.loading()).toBe(false)
+    repository["getUserSessionsByUser"].mockReturnValue(
+      of(Result.failure(new UserSessionError("FORBIDDEN")))
+    )
+    await firstValueFrom(store.loadDetails(42))
+    expect(store.details()[42].error?.code).toBe("FORBIDDEN")
+    expect(store.details()[42].loaded).toBe(false)
+    expect(repository["revokeUserSessions"]).toHaveBeenCalledOnce()
+  })
+  it("invalidates pre-write count/detail reads so late results cannot resurrect confirmed state", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    const count = new Subject(),
+      detail = new Subject()
+    repository["getSessionCount"].mockReturnValueOnce(count)
+    repository["getUserSessionsByUser"].mockReturnValueOnce(detail)
+    store.loadSessionCount().subscribe()
+    store.loadDetails(42).subscribe()
+    await firstValueFrom(store.revokeSessions(42))
+    expect(count.observed).toBe(false)
+    expect(detail.observed).toBe(false)
+    count.next(Result.success(9000))
+    detail.next(Result.success([current()]))
+    expect(store.loaded()).toBe(false)
+    expect(store.details()[42].loaded).toBe(false)
+    await firstValueFrom(store.loadSessionCount())
+    await firstValueFrom(store.loadDetails(42))
+    expect(store.sessionCount()).toBe(1007)
+    expect(store.details()[42].loaded).toBe(true)
+  })
+  it("does not notify failed writes, and rejects empty count/detail streams", async () => {
+    const store = TestBed.inject(UserSessionsStore)
+    repository["revokeUserSession"].mockReturnValue(
+      of(Result.failure(new UserSessionError("FORBIDDEN")))
+    )
+    await firstValueFrom(store.revokeSession(42, 92))
+    expect(store.mutationRevision()).toBe(0)
+    repository["getSessionCount"].mockReturnValue(EMPTY)
+    repository["getUserSessionsByUser"].mockReturnValue(EMPTY)
+    await firstValueFrom(store.loadSessionCount())
+    await firstValueFrom(store.loadDetails(42))
+    expect(store.error()?.code).toBe("INVALID_RESPONSE")
+    expect(store.details()[42].error?.code).toBe("INVALID_RESPONSE")
   })
 })

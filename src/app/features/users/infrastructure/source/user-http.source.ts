@@ -12,6 +12,7 @@ import { UserError, UserErrorCode } from "../../domain/errors/user.error"
 import { CreateUserParams } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { UserListQuery } from "../../domain/models/user-list-query"
+import { UserStatistics } from "../../domain/models/user-statistics"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 
 function invalid(): never {
@@ -101,6 +102,32 @@ export class UserHttpSource {
       )
     })
   }
+  getUserStatistics(): Observable<Result<UserStatistics, UserError>> {
+    return this.request(
+      () =>
+        this.http.get<unknown>(`${this.origin}/api/usuarios/estadisticas`, {
+          transferCache: false
+        }),
+      value => {
+        const dto = record(value)
+        const total = dto["total"],
+          active = dto["activos"],
+          inactive = dto["inactivos"]
+        const count = (n: unknown): n is number =>
+          typeof n === "number" && Number.isSafeInteger(n) && n >= 0
+        if (
+          !count(total) ||
+          !count(active) ||
+          !count(inactive) ||
+          !Number.isSafeInteger(active + inactive) ||
+          total !== active + inactive
+        )
+          return invalid()
+        return { total, active, inactive }
+      }
+    )
+  }
+
   getUsersPage(query: UserListQuery): Observable<Result<PaginationResponse<User>, UserError>> {
     const q = { ...query, offset: query.offset ?? 0, limit: query.limit ?? 20 }
     const requestedPage = q.offset / q.limit
@@ -158,46 +185,6 @@ export class UserHttpSource {
     )
   }
 
-  getUsers(): Observable<Result<User[], UserError>> {
-    return this.request(
-      () =>
-        this.http.get<unknown>(`${this.origin}/api/usuarios`, {
-          params: new HttpParams().set("pagina", 0).set("tamanio", 500),
-          transferCache: false
-        }),
-      value => {
-        const p = record(value)
-        const page = p["pagina"],
-          size = p["tamanio"],
-          total = p["totalElementos"],
-          totalPages = p["totalPaginas"]
-        if (
-          !Array.isArray(p["contenido"]) ||
-          typeof page !== "number" ||
-          !Number.isSafeInteger(page) ||
-          page < 0 ||
-          typeof size !== "number" ||
-          !Number.isSafeInteger(size) ||
-          size < 1 ||
-          typeof total !== "number" ||
-          !Number.isSafeInteger(total) ||
-          total < 0 ||
-          typeof totalPages !== "number" ||
-          !Number.isSafeInteger(totalPages) ||
-          totalPages < 0 ||
-          totalPages !== Math.ceil(total / size) ||
-          p["contenido"].length > size ||
-          p["contenido"].length > total ||
-          page !== 0
-        )
-          throw new UserError("INVALID_RESPONSE")
-        const items = p["contenido"].map(userDto)
-        if (new Set(items.map(user => user.id)).size !== items.length)
-          throw new UserError("INVALID_RESPONSE")
-        return items
-      }
-    )
-  }
   getUserById(id: number) {
     return this.request(
       () => this.http.get<unknown>(`${this.origin}/api/usuarios/${id}`, { transferCache: false }),

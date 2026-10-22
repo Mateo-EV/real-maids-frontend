@@ -1,7 +1,7 @@
 <section
   class="rounded-xl border bg-card shadow-sm"
   aria-labelledby="sessions-title"
-  [attr.aria-busy]="sessions.loading() || users.loading()"
+  [attr.aria-busy]="owners.loading()"
 >
   <div class="flex flex-wrap items-end justify-between gap-4 border-b p-4">
     <div class="xl:self-start">
@@ -20,77 +20,90 @@
             type="search"
             placeholder="Buscar nombre o email…"
             [value]="search()"
-            (input)="search.set($event.target.value)"
+            (input)="setSearch($event.target.value)"
           />
         </hlm-input-group>
       </div>
+      <div hlmField>
+        <label hlmFieldLabel for="session-presence">Sesiones</label>
+        <hlm-native-select
+          selectId="session-presence"
+          [value]="presence()"
+          (valueChange)="setPresence($event)"
+        >
+          <option value="all">Todos</option>
+          <option value="with">Con sesiones</option>
+          <option value="without">Sin sesiones</option>
+        </hlm-native-select>
+      </div>
+      <button hlmBtn variant="outline" type="button" (click)="clearFilters()">
+        Limpiar filtros
+      </button>
     </div>
   </div>
-  @if (sessions.loading()) {
+  @if (owners.loading()) {
     <div class="flex items-center gap-3 p-4" role="status">
       <hlm-spinner />Cargando sesiones… Los recuentos están sin verificar.
     </div>
-  } @else if (sessions.error()) {
+  } @else if (owners.error()) {
     <div class="p-4">
       <div hlmAlert variant="destructive" role="alert">
-        <h2 hlmAlertTitle>No pudimos cargar las sesiones</h2>
+        <h2 hlmAlertTitle>No pudimos cargar los usuarios con sesiones</h2>
         <p hlmAlertDescription>
-          La colección no está verificada. Reintenta la lectura; no se repetirán cierres
-          confirmados.
+          {{ owners.error()?.message }} Reintenta la lectura; no se repetirán cierres confirmados.
         </p>
       </div>
       <button hlmBtn variant="outline" class="mt-3" type="button" (click)="reload()">
         Reintentar sesiones
       </button>
     </div>
-  } @else if (!verified()) {
+  } @else if (!owners.loaded()) {
     <p class="p-4 text-sm" role="status">
       Sesiones sin verificar.
       <button hlmBtn variant="outline" type="button" (click)="reload()">Consultar sesiones</button>
     </p>
   }
-  @if (users.loading() || (!users.loaded() && !users.error())) {
-    <div class="flex items-center gap-3 p-4" role="status"><hlm-spinner />Cargando usuarios…</div>
-  } @else if (users.error()) {
-    <div class="p-4">
-      <div hlmAlert variant="destructive" role="alert">
-        <h2 hlmAlertTitle>No pudimos cargar el catálogo</h2>
-        <p hlmAlertDescription>No podemos verificar la lista de usuarios.</p>
-      </div>
-      <button hlmBtn variant="outline" class="mt-3" type="button" (click)="retry.emit()">
-        Reintentar usuarios
-      </button>
-    </div>
-  } @else if (catalogReady()) {
+  @if (owners.loaded()) {
     <div class="grid gap-3 p-4">
       @for (user of visibleUsers(); track user.id) {
-        <details class="rounded-lg border bg-card" [attr.data-session-user]="user.id">
+        <details
+          class="rounded-lg border bg-card"
+          [attr.data-session-user]="user.id"
+          [open]="openIds().has(user.id)"
+          (toggle)="toggle(user.id, $event)"
+        >
           <summary
             class="cursor-pointer rounded-lg p-4 focus-visible:outline-2 focus-visible:outline-ring"
           >
             <span class="font-semibold break-words">{{ user.name }} · #USR-{{ user.id }}</span>
             <span class="ml-2 text-xs break-words">{{ user.email }}</span>
-            @if (user.outsideCatalog) {
-              <span hlmBadge variant="outline" class="ml-2">Usuario de sesión</span>
-            }
             <span hlmBadge variant="secondary" class="ml-2">{{
-              verified()
-                ? user.sessions.length
-                  ? user.sessions.length + " sesiones"
-                  : "Sin sesiones"
-                : "Sesiones sin verificar"
+              user.sessionCount ? user.sessionCount + " sesiones" : "Sin sesiones"
             }}</span>
           </summary>
           <div class="grid gap-3 border-t p-4">
-            @if (!verified()) {
-              <p class="text-sm text-muted-foreground">
-                Sesiones sin verificar. Consulta la colección completa antes de confirmar su
-                ausencia.
-              </p>
-            } @else if (!user.sessions.length) {
-              <p class="text-sm text-muted-foreground">Sin sesiones.</p>
-            } @else {
-              @for (session of user.sessions; track session.id) {
+            @let detail = sessions.details()[user.id];
+            @if (detail?.loading) {
+              <p role="status"><hlm-spinner />Cargando conexiones…</p>
+            } @else if (detail?.error) {
+              <div hlmAlert variant="destructive" role="alert">
+                <h2 hlmAlertTitle>No pudimos cargar las conexiones</h2>
+                <p hlmAlertDescription>{{ detail.error?.message }}</p>
+              </div>
+              <button hlmBtn variant="outline" type="button" (click)="refreshDetail(user.id)">
+                Reintentar conexiones de {{ user.name }}
+              </button>
+            } @else if (detail?.loaded) {
+              <button
+                hlmBtn
+                variant="outline"
+                size="sm"
+                type="button"
+                (click)="refreshDetail(user.id)"
+              >
+                Actualizar conexiones de {{ user.name }}
+              </button>
+              @for (session of detail.items; track session.id) {
                 <article
                   class="rounded-lg border bg-card p-4"
                   [attr.aria-label]="session.userName + ' · ' + session.device"
@@ -139,7 +152,15 @@
                     </div>
                   </dl>
                 </article>
+              } @empty {
+                <p class="text-sm text-muted-foreground">
+                  Sin conexiones vigentes en esta consulta.
+                </p>
               }
+            } @else {
+              <p class="text-sm text-muted-foreground">
+                Conexiones sin verificar. Abre el usuario para consultarlas.
+              </p>
             }
           </div>
         </details>
@@ -154,14 +175,14 @@
     </div>
     <div class="flex flex-wrap items-center justify-between gap-3 border-t p-4">
       <p class="text-xs text-muted-foreground" role="status">
-        Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ filteredUsers().length }} usuarios
-        filtrados · {{ groups().length }} usuarios
+        Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ owners.result()?.total }} usuarios
+        filtrados
       </p>
       <app-table-pagination
         label="Paginación de usuarios con sesiones"
         [currentPage]="currentPage()"
         [pageCount]="pageCount()"
-        [disabled]="filteredUsers().length === 0"
+        [disabled]="owners.loading() || !visibleUsers().length"
         (pageSelected)="goToPage($event)"
       />
     </div>

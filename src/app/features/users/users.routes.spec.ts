@@ -109,16 +109,19 @@ describe("USERS_ROUTES", () => {
       http.verify()
     }
     function flushHttpCatalog(includeRoles: boolean) {
+      const statistics = http.expectOne("http://localhost:8080/api/usuarios/estadisticas")
+      expect(statistics.request.headers.get("Authorization")).toBe("Bearer fake-token")
+      statistics.flush({ total: 1, activos: 1, inactivos: 0 })
       const sessions = http.expectOne(
         request => request.url === "http://localhost:8080/api/sesiones"
       )
       expect(sessions.request.headers.get("Authorization")).toBe("Bearer fake-token")
       expect(sessions.request.params.get("pagina")).toBe("0")
-      expect(sessions.request.params.get("tamanio")).toBe("1000")
+      expect(sessions.request.params.get("tamanio")).toBe("1")
       sessions.flush({
         contenido: [],
         pagina: 0,
-        tamanio: 1000,
+        tamanio: 1,
         totalElementos: 0,
         totalPaginas: 0
       })
@@ -143,10 +146,9 @@ describe("USERS_ROUTES", () => {
             fechaCreacion: "2026-01-01T00:00:00Z"
           }
         ])
-      const users = http.expectOne(
+      http.expectNone(
         request =>
-          request.url === "http://localhost:8080/api/usuarios" &&
-          request.params.get("tamanio") === "500"
+          request.params.get("tamanio") === "500" || request.params.get("tamanio") === "1000"
       )
       const listing = http.expectOne(
         request =>
@@ -155,9 +157,6 @@ describe("USERS_ROUTES", () => {
       )
       expect(listing.request.params.get("pagina")).toBe("0")
       expect(listing.request.headers.get("Authorization")).toBe("Bearer fake-token")
-      expect(users.request.params.get("pagina")).toBe("0")
-      expect(users.request.params.get("tamanio")).toBe("500")
-      expect(users.request.headers.get("Authorization")).toBe("Bearer fake-token")
       const userResponse = {
         contenido: [
           {
@@ -178,7 +177,6 @@ describe("USERS_ROUTES", () => {
         totalElementos: 1,
         totalPaginas: 1
       }
-      users.flush(userResponse)
       listing.flush({ ...userResponse, tamanio: 10 })
     }
     await establishSession()
@@ -220,6 +218,9 @@ describe("USERS_ROUTES", () => {
     const sessions = pageElement.query(debug => debug.name === "app-user-sessions")
     expect(sessions).not.toBeNull()
     expect(sessions.injector.get(HotToastService)).toBe(toast)
+    http
+      .expectOne("http://localhost:8080/api/sesiones/usuarios?pagina=0&tamanio=5")
+      .flush({ contenido: [], pagina: 0, tamanio: 5, totalElementos: 0, totalPaginas: 0 })
 
     auth.logout()
     expect(auth.session()).toBeNull()

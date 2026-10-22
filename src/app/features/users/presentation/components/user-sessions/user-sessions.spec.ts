@@ -1,4 +1,3 @@
-import { signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { firstValueFrom, of, Subject } from "rxjs"
@@ -7,7 +6,6 @@ import { Result } from "@/app/shared/utils/result"
 import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
 import { UserSession } from "../../../domain/entities/user-session.entity"
 import { UserSessionError } from "../../../domain/errors/user-session.error"
-import { Lang, User } from "../../../domain/entities/user.entity"
 import { UserSessionsStore } from "../../state/user-sessions.store"
 import { UserStore } from "../../state/user.store"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
@@ -31,181 +29,207 @@ const sessions = [true, false].map((actual, index) =>
     "real@example.test"
   )
 )
-const catalog = () =>
-  Array.from({ length: 7 }, (_, i) =>
-    User.create(
-      842 + i,
-      `Persona ${i}`,
-      `persona${i}@example.test`,
-      Lang.ES,
-      true,
-      new Date(),
-      new Date(),
-      1
-    )
-  )
-describe("UserSessions grouped catalog", () => {
-  let repository: { getUserSessions: ReturnType<typeof vi.fn> }
-  const users = {
-    users: signal(catalog()),
-    loaded: signal(true),
-    loading: signal(false),
-    error: signal<unknown>(undefined)
-  }
+const owners = Array.from({ length: 5 }, (_, i) => ({
+  id: 842 + i,
+  name: `Persona ${i}`,
+  email: `persona${i}@example.test`,
+  sessionCount: i === 0 ? 9 : 0
+}))
+const page = { items: owners, total: 7, offset: 0, limit: 5 }
+describe("UserSessions server owners and disclosure details", () => {
+  let repository: Record<string, ReturnType<typeof vi.fn>>
   beforeEach(() => {
-    users.users.set(catalog())
-    users.loaded.set(true)
-    users.loading.set(false)
-    users.error.set(undefined)
-    repository = { getUserSessions: vi.fn(() => of(Result.success(sessions))) }
+    repository = {
+      getSessionOwners: vi.fn(() => of(Result.success(page))),
+      getSessionCount: vi.fn(() => of(Result.success(1007))),
+      getUserSessionsByUser: vi.fn(() => of(Result.success(sessions))),
+      revokeUserSession: vi.fn(() => of(Result.success(undefined))),
+      revokeUserSessions: vi.fn(() => of(Result.success(undefined)))
+    }
     TestBed.configureTestingModule({
       imports: [UserSessions],
       providers: [
         provideRouter([]),
         { provide: USER_SESSION_REPOSITORY, useValue: repository },
-        { provide: UserStore, useValue: users },
+        { provide: UserStore, useValue: { mutationRevision: () => 0 } },
         { provide: HotToastService, useValue: { success: vi.fn() } }
       ]
     })
   })
-  async function setup() {
-    const store = TestBed.inject(UserSessionsStore)
-    await firstValueFrom(store.loadAllSessions())
+  function setup() {
     const fixture = TestBed.createComponent(UserSessions)
     fixture.detectChanges()
     return {
-      store,
       fixture,
       component: fixture.componentInstance,
-      element: fixture.nativeElement as HTMLElement
+      element: fixture.nativeElement as HTMLElement,
+      store: TestBed.inject(UserSessionsStore)
     }
   }
-  function search(element: HTMLElement, text: string) {
-    const input = element.querySelector<HTMLInputElement>('input[type="search"]')!
-    input.value = text
-    input.dispatchEvent(new Event("input"))
+  function open(element: HTMLElement, id = 842) {
+    const details = element.querySelector<HTMLDetailsElement>(`[data-session-user="${id}"]`)!
+    details.open = true
+    details.dispatchEvent(new Event("toggle"))
+    return details
   }
-  it("groups five users in native disclosures with server session metadata and actual guidance", async () => {
-    const { element } = await setup()
-    expect(element.querySelectorAll("details[data-session-user]")).toHaveLength(5)
-    expect(element.querySelector("details > summary")).not.toBeNull()
+  it("renders server summaries without initial per-owner or global-array reads; only explicit open loads detail", () => {
+    const { element, fixture } = setup()
+    expect(element.querySelectorAll("details")).toHaveLength(5)
+    expect(element.querySelector("summary")?.textContent).toContain("9 sesiones")
+    expect(element.querySelectorAll("article")).toHaveLength(0)
+    expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
+    open(element)
+    fixture.detectChanges()
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledExactlyOnceWith(842)
     expect(element.querySelectorAll("article")).toHaveLength(2)
-    expect(element.textContent).toContain("Sin sesiones")
     expect(element.textContent).toContain("Tu sesión actual")
     expect(element.textContent).toContain("Para cerrarla usa Salir")
-    expect(element.textContent).toContain("Inicio · UTC")
-    expect(element.querySelectorAll("article button")).toHaveLength(1)
-    expect(element.querySelector("#session-user-id")).toBeNull()
+    expect(element.querySelector("summary")?.textContent).toContain("9 sesiones")
   })
-  it("searches name/email locally, resets pages and never refetches or counts expiry", async () => {
-    const { element, fixture, component, store } = await setup()
-    component.goToPage(2)
-    fixture.detectChanges()
+  it("debounces name/email server search, resets page, and emits false presence rather than omitting it", async () => {
+    vi.useFakeTimers()
+    try {
+      const { component, fixture } = setup()
+      component.setSearch("Ana")
+      expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({
+        offset: 0,
+        limit: 5,
+        search: "Ana"
+      })
+      component.setPresence("without")
+      expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({
+        offset: 0,
+        limit: 5,
+        search: "Ana",
+        hasSessions: false
+      })
+      component.clearFilters()
+      expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({ offset: 0, limit: 5 })
+      expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
+      fixture.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("uses effective sizes for navigation without slicing returned rows", () => {
+    repository["getSessionOwners"].mockReturnValueOnce(
+      of(Result.success({ ...page, limit: 2, items: owners.slice(0, 2) }))
+    )
+    const { component, element } = setup()
     expect(element.querySelectorAll("details")).toHaveLength(2)
-    search(element, "persona0@example.test")
-    fixture.detectChanges()
-    expect(element.querySelectorAll("details")).toHaveLength(1)
-    expect(component.currentPage()).toBe(1)
-    expect(element.querySelector('[data-session-user="842"]')?.textContent).toContain("2 sesiones")
-    expect(element.querySelectorAll("article")).toHaveLength(2)
-    search(element, "Persona 1")
-    fixture.detectChanges()
-    expect(element.querySelectorAll("details")).toHaveLength(1)
-    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
-      "Sin sesiones"
-    )
-    expect(element.querySelectorAll("article")).toHaveLength(0)
-    expect(store.sessionCount()).toBe(2)
-    expect(repository.getUserSessions).toHaveBeenCalledOnce()
-    component.clearFilters()
     component.goToPage(2)
-    fixture.detectChanges()
-    users.users.set(catalog().slice(0, 2))
-    fixture.detectChanges()
-    expect(component.currentPage()).toBe(1)
+    expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({ offset: 2, limit: 2 })
     component.goToPage(Number.NaN)
-    expect(component.currentPage()).toBe(1)
+    expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
   })
-  it("retains real identities of session owners absent from users without technical disclosures", async () => {
-    users.users.set(catalog().slice(1))
-    const { element, store, component, fixture } = await setup()
-    component.goToPage(2)
+  it("keeps detail failure separate from valid summaries; row retry never replays writes", () => {
+    repository["getUserSessionsByUser"].mockReturnValueOnce(
+      of(Result.failure(new UserSessionError("FORBIDDEN")))
+    )
+    const { element, fixture, component } = setup()
+    open(element)
     fixture.detectChanges()
-    expect(element.textContent).not.toContain("Catálogo incompleto")
-    expect(element.textContent).not.toContain("Fuera del catálogo")
-    expect(element.textContent).toContain("Usuario de sesión")
-    expect(element.textContent).toContain("Persona del servidor")
-    expect(store.sessionCount()).toBe(2)
+    expect(element.textContent).toContain("No pudimos cargar las conexiones")
+    expect(element.querySelector("summary")?.textContent).toContain("9 sesiones")
+    component.refreshDetail(842)
+    fixture.detectChanges()
+    expect(element.querySelectorAll("article")).toHaveLength(2)
+    expect(repository["getSessionOwners"]).toHaveBeenCalledOnce()
+    expect(repository["revokeUserSession"]).not.toHaveBeenCalled()
   })
-  it("never claims zero sessions during reads/errors or mistakes a failed catalog for empty", async () => {
-    const { element, fixture, component } = await setup()
-    repository.getUserSessions.mockReturnValue(new Subject())
+  it("hides failed/unverified summaries, retries independently and cancels all owned reads on destroy", () => {
+    const { element, fixture, component } = setup()
+    const detail = new Subject(),
+      summary = new Subject()
+    repository["getUserSessionsByUser"].mockReturnValue(detail)
+    open(element)
+    repository["getSessionOwners"].mockReturnValue(summary)
     component.reload()
     fixture.detectChanges()
-    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
-      "Sesiones sin verificar"
-    )
-    repository.getUserSessions.mockReturnValue(of(Result.failure(new UserSessionError("NETWORK"))))
-    component.reload()
-    fixture.detectChanges()
-    expect(element.textContent).toContain("No pudimos cargar las sesiones")
-    expect(element.querySelector('[data-session-user="843"]')?.textContent).not.toContain(
-      "Sin sesiones"
-    )
-    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
-      "Sesiones sin verificar"
-    )
-    repository.getUserSessions.mockReturnValue(of(Result.success(sessions)))
-    const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
-      button => button.textContent?.trim() === "Reintentar sesiones"
-    )!
-    retry.click()
-    fixture.detectChanges()
-    expect(repository.getUserSessions).toHaveBeenCalledTimes(4)
-    expect(element.textContent).not.toContain("No pudimos cargar las sesiones")
-    expect(element.querySelector('[data-session-user="843"]')?.textContent).toContain(
-      "Sin sesiones"
-    )
-    expect(element.querySelector('[data-session-user="842"]')?.textContent).toContain("2 sesiones")
-    users.error.set(new Error())
-    fixture.detectChanges()
-    expect(element.textContent).toContain("No pudimos cargar el catálogo")
-    users.error.set(undefined)
-    users.loaded.set(false)
-    users.loading.set(true)
-    fixture.detectChanges()
-    expect(element.textContent).toContain("Cargando usuarios")
-  })
-  it("cancels superseded reloads and component destruction without binding root lifetime", async () => {
-    const { component, fixture, store } = await setup()
-    const subject = new Subject()
-    repository.getUserSessions.mockReturnValue(subject)
-    component.reload()
-    expect(subject.observed).toBe(true)
-    component.reload()
-    expect(subject.observers).toHaveLength(1)
+    expect(element.querySelectorAll("summary")).toHaveLength(0)
     fixture.destroy()
-    expect(subject.observed).toBe(false)
-    repository.getUserSessions.mockReturnValue(of(Result.success(sessions)))
-    await firstValueFrom(store.loadAllSessions())
-    expect(store.loaded()).toBe(true)
+    expect(detail.observed).toBe(false)
+    expect(summary.observed).toBe(false)
   })
-  it("opens guarded named confirmation, protects actual and suppresses late toast", async () => {
-    const { component, fixture, element } = await setup()
-    const open = vi
+  it("refreshes active owner page and affected open detail once per confirmed mutation, never count here", async () => {
+    const { element, fixture, store } = setup()
+    open(element)
+    fixture.detectChanges()
+    await firstValueFrom(store.revokeSession(842, 72))
+    fixture.detectChanges()
+    expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
+    expect(repository["getSessionCount"]).not.toHaveBeenCalled()
+    expect(repository["revokeUserSession"]).toHaveBeenCalledOnce()
+  })
+  it("shows summary failures instead of a false empty page and retries the same query", () => {
+    repository["getSessionOwners"].mockReturnValueOnce(
+      of(Result.failure(new UserSessionError("FORBIDDEN")))
+    )
+    const { element, fixture, component } = setup()
+    expect(element.textContent).toContain("No pudimos cargar los usuarios con sesiones")
+    expect(element.textContent).not.toContain("Sin usuarios para estos filtros")
+    expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
+    component.reload()
+    fixture.detectChanges()
+    expect(element.querySelectorAll("summary")).toHaveLength(5)
+  })
+  it("cancels closed disclosures, never reads closed owners on mutation and revalidates on reopen", async () => {
+    const { element, fixture, store } = setup()
+    const pending = new Subject()
+    repository["getUserSessionsByUser"].mockReturnValueOnce(pending)
+    const details = open(element)
+    fixture.detectChanges()
+    details.open = false
+    details.dispatchEvent(new Event("toggle"))
+    expect(pending.observed).toBe(false)
+    await firstValueFrom(store.revokeSessions(842))
+    fixture.detectChanges()
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledOnce()
+    open(element)
+    fixture.detectChanges()
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
+    expect(element.querySelectorAll("article")).toHaveLength(2)
+  })
+  it("keeps confirmed writes successful despite failed owner/detail refresh, without replay", async () => {
+    const { element, fixture, store } = setup()
+    open(element)
+    fixture.detectChanges()
+    repository["getSessionOwners"].mockReturnValueOnce(
+      of(Result.failure(new UserSessionError("NETWORK")))
+    )
+    repository["getUserSessionsByUser"].mockReturnValueOnce(
+      of(Result.failure(new UserSessionError("NETWORK")))
+    )
+    expect((await firstValueFrom(store.revokeSession(842, 72))).success).toBe(true)
+    fixture.detectChanges()
+    expect(element.textContent).toContain("No pudimos cargar los usuarios con sesiones")
+    expect(store.details()[842].loaded).toBe(false)
+    expect(store.details()[842].error?.code).toBe("NETWORK")
+    expect(repository["revokeUserSession"]).toHaveBeenCalledOnce()
+    expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
+  })
+  it("opens guarded named confirmation, protects actual and suppresses late toast", () => {
+    const { element, component, fixture } = setup()
+    open(element)
+    fixture.detectChanges()
+    const dialog = vi
       .spyOn(TestBed.inject(HlmDialogService), "open")
       .mockReturnValue(undefined as never)
-    const toast = TestBed.inject(HotToastService).success
     element.querySelector<HTMLButtonElement>("article button")!.click()
-    expect(open.mock.calls[0][0]).toBe(RevokeSessionDialog)
-    const options = open.mock.calls[0][1]!
+    expect(dialog.mock.calls[0][0]).toBe(RevokeSessionDialog)
+    const options = dialog.mock.calls[0][1]!
     expect(options.disableClose).toBe(true)
     const context = options.context as RevokeSessionContext
     expect(context.user).toEqual({ id: 842, name: "Persona del servidor" })
     context.onRevoked()
+    const toast = TestBed.inject(HotToastService).success
     expect(toast).toHaveBeenCalledOnce()
     component.revoke(sessions[0])
-    expect(open).toHaveBeenCalledOnce()
+    expect(dialog).toHaveBeenCalledOnce()
     fixture.destroy()
     context.onRevoked()
     expect(toast).toHaveBeenCalledOnce()

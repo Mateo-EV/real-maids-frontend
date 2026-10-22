@@ -14,6 +14,52 @@ import {
 import { UserSession } from "../../domain/entities/user-session.entity"
 import { UserSessionError, UserSessionErrorCode } from "../../domain/errors/user-session.error"
 
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+import { UserSessionOwner } from "../../domain/models/user-session-owner"
+import { UserSessionOwnerQuery } from "../../domain/models/user-session-owner-query"
+
+const integer = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0
+function envelope(v: unknown, requestedPage: number, maxSize: number) {
+  const p = record(v)
+  const page = p["pagina"],
+    size = p["tamanio"],
+    total = p["totalElementos"],
+    pages = p["totalPaginas"]
+  if (
+    !integer(page) ||
+    page !== requestedPage ||
+    !integer(size) ||
+    size < 1 ||
+    size > maxSize ||
+    !Number.isSafeInteger(page * size) ||
+    !integer(total) ||
+    !integer(pages) ||
+    pages !== Math.ceil(total / size) ||
+    !Array.isArray(p["contenido"]) ||
+    p["contenido"].length !== Math.min(size, Math.max(0, total - page * size))
+  )
+    invalid()
+  return { content: p["contenido"] as unknown[], offset: page * size, limit: size, total }
+}
+function owner(v: unknown): UserSessionOwner {
+  const p = record(v)
+  if (
+    !id(p["idUsuario"]) ||
+    !text(p["nombre"]) ||
+    !text(p["correo"]) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p["correo"]) ||
+    !integer(p["sesionesVigentes"])
+  )
+    invalid()
+  return {
+    id: p["idUsuario"],
+    name: p["nombre"],
+    email: p["correo"],
+    sessionCount: p["sesionesVigentes"]
+  }
+}
+
 function invalid(): never {
   throw new UserSessionError("INVALID_RESPONSE")
 }
@@ -134,42 +180,52 @@ export class UserSessionHttpSource {
       )
     })
   }
-  getUserSessions(): Observable<Result<UserSession[], UserSessionError>> {
-    const page = 0,
-      size = 1000
+  getSessionOwners(
+    query: UserSessionOwnerQuery
+  ): Observable<Result<PaginationResponse<UserSessionOwner>, UserSessionError>> {
+    const q = { ...query, offset: query.offset ?? 0, limit: query.limit ?? 20 }
+    const page = q.offset / q.limit
+    return this.request(
+      () => {
+        if (
+          !integer(q.offset) ||
+          !integer(q.limit) ||
+          q.limit < 1 ||
+          q.limit > 100 ||
+          q.offset % q.limit !== 0 ||
+          !integer(page) ||
+          page > 2147483647 ||
+          (q.search !== undefined && typeof q.search !== "string") ||
+          (q.hasSessions !== undefined && typeof q.hasSessions !== "boolean")
+        )
+          throw new UserSessionError("INVALID_QUERY")
+        let params = new HttpParams().set("pagina", page).set("tamanio", q.limit)
+        if (q.search) params = params.set("busqueda", q.search)
+        if (q.hasSessions !== undefined) params = params.set("tieneSesiones", q.hasSessions)
+        return this.http.get<unknown>(`${this.origin}/api/sesiones/usuarios`, {
+          params,
+          transferCache: false
+        })
+      },
+      value => {
+        const p = envelope(value, page, q.limit)
+        const items = p.content.map(owner)
+        if (new Set(items.map(item => item.id)).size !== items.length) invalid()
+        return { items, offset: p.offset, limit: p.limit, total: p.total }
+      }
+    )
+  }
+  getSessionCount(): Observable<Result<number, UserSessionError>> {
     return this.request(
       () =>
         this.http.get<unknown>(`${this.origin}/api/sesiones`, {
-          params: new HttpParams().set("pagina", page).set("tamanio", size),
+          params: new HttpParams().set("pagina", 0).set("tamanio", 1),
           transferCache: false
         }),
-      v => {
-        const p = record(v),
-          effectiveSize = p["tamanio"],
-          total = p["totalElementos"],
-          pages = p["totalPaginas"]
-        if (
-          p["pagina"] !== page ||
-          typeof effectiveSize !== "number" ||
-          !Number.isSafeInteger(effectiveSize) ||
-          effectiveSize <= 0 ||
-          effectiveSize > size ||
-          typeof total !== "number" ||
-          !Number.isSafeInteger(total) ||
-          total < 0 ||
-          !id(pages) ||
-          pages < 0 ||
-          pages !== Math.ceil(total / effectiveSize)
-        )
-          invalid()
-        const items = sessions(p["contenido"])
-        const expected = Math.min(effectiveSize, Math.max(0, total - page * effectiveSize))
-        if (
-          items.length !== expected ||
-          items.some((s, i) => i > 0 && s.startDate > items[i - 1].startDate)
-        )
-          invalid()
-        return items
+      value => {
+        const p = envelope(value, 0, 1)
+        sessions(p.content)
+        return p.total
       }
     )
   }

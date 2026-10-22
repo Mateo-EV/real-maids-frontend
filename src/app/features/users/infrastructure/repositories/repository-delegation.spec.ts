@@ -102,8 +102,8 @@ describe("Infrastructure repository delegation", () => {
     const response = of(Result.failure(new UserError("USER_NOT_FOUND")))
     const create = vi.spyOn(source, "createUser").mockReturnValue(response)
     const read = vi.spyOn(source, "getUserById").mockReturnValue(response)
-    const list = vi.spyOn(source, "getUsers").mockReturnValue(response)
     const paged = vi.spyOn(source, "getUsersPage").mockReturnValue(response)
+    const statistics = vi.spyOn(source, "getUserStatistics").mockReturnValue(response)
     const update = vi.spyOn(source, "updateUserById").mockReturnValue(response)
     const status = vi.spyOn(source, "updateUserStatusById").mockReturnValue(response)
     const remove = vi.spyOn(source, "deleteUserById").mockReturnValue(response)
@@ -118,7 +118,8 @@ describe("Infrastructure repository delegation", () => {
     }
     expect(repository.createUser(params)).toBe(response)
     expect(repository.getUserById(1)).toBe(response)
-    expect(repository.getUsers()).toBe(response)
+    expect(repository.getUserStatistics()).toBe(response)
+    expect(statistics).toHaveBeenCalledExactlyOnceWith()
     const query = { offset: 20, limit: 10, roleId: 0, isActive: false }
     expect(repository.getUsersPage(query)).toBe(response)
     expect(paged).toHaveBeenCalledExactlyOnceWith(query)
@@ -128,7 +129,6 @@ describe("Infrastructure repository delegation", () => {
     expect(repository.deleteUserById(1)).toBe(response)
     expect(create).toHaveBeenCalledExactlyOnceWith(params)
     expect(read).toHaveBeenCalledExactlyOnceWith(1)
-    expect(list).toHaveBeenCalledExactlyOnceWith()
     expect(update).toHaveBeenCalledExactlyOnceWith(1, params)
     expect(remove).toHaveBeenCalledExactlyOnceWith(1)
   })

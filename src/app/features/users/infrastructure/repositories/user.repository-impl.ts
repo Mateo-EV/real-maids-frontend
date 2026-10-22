@@ -17,12 +17,12 @@ export class UserRepositoryImpl implements UserRepository {
     return this.source.getUserById(id)
   }
 
-  getUsersPage(query: UserListQuery) {
-    return this.source.getUsersPage(query)
+  getUserStatistics() {
+    return this.source.getUserStatistics()
   }
 
-  getUsers() {
-    return this.source.getUsers()
+  getUsersPage(query: UserListQuery) {
+    return this.source.getUsersPage(query)
   }
 
   deleteUserById(id: number) {

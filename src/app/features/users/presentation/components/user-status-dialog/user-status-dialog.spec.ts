@@ -30,10 +30,14 @@ describe("UserStatusDialog", () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  async function records() {
+    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
+    if (!result.success) throw result.error
+    return result.data
+  }
   async function setup(active = true) {
     const users = TestBed.inject(UserStore)
-    await flush(firstValueFrom(users.loadUsers()))
-    const user = users.users().find(item => item.isActive === active)!
+    const user = (await records()).find(item => item.isActive === active)!
     const fixture = TestBed.createComponent(TestHost)
     fixture.detectChanges()
     const changed = vi.fn()
@@ -88,7 +92,7 @@ describe("UserStatusDialog", () => {
       expect(update).toHaveBeenCalledExactlyOnceWith(user.id, !active)
       expect(profileUpdate).not.toHaveBeenCalled()
       await flush(pending)
-      const updated = users.users().find(item => item.id === user.id)!
+      const updated = (await records()).find(item => item.id === user.id)!
       expect(updated).toEqual({ ...before, isActive: !active, updatedAt: expect.any(Date) })
       expect(user).toEqual(before)
       expect(changed).toHaveBeenCalledOnce()
@@ -141,7 +145,7 @@ describe("UserStatusDialog", () => {
     TestBed.tick()
     expect(element.querySelector('[role="alert"]')?.textContent).toContain("No pudimos cambiar")
     expect(dialog.submitting()).toBe(false)
-    expect(users.users().find(item => item.id === user.id)?.isActive).toBe(true)
+    expect((await records()).find(item => item.id === user.id)?.isActive).toBe(true)
     expect(changed).not.toHaveBeenCalled()
     await flush(dialog.confirm())
     expect(update).toHaveBeenCalledTimes(2)
@@ -222,7 +226,7 @@ describe("UserStatusDialog", () => {
     cdk.close()
     await flush(pending)
     expect(users.loading()).toBe(false)
-    expect(users.users().find(item => item.id === user.id)).toEqual(user)
+    expect((await records()).find(item => item.id === user.id)).toEqual(user)
     expect(changed).not.toHaveBeenCalled()
     expect(dialog.error()).toBe("")
   })
