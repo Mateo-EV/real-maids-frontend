@@ -4,7 +4,7 @@ Consume backend commit `9439829` and remove the frontend's incomplete fixed `get
 
 ## Authorization and contracts
 
-The user requested frontend integration after the backend commit, then explicitly selected the complete integration/catalog-retirement scope. Baseline frontend is clean at `87e21bf`. Backend `mateo` commit `9439829` is clean; no more backend edits are needed. The human stages frontend changes and approves each exact snapshot/message separately. Audit-only commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904` was explicitly authorized and created; no other implementation commit or push is authorized.
+The user requested frontend integration after the backend commit, then explicitly selected the complete integration/catalog-retirement scope. Baseline frontend is clean at `87e21bf`. Backend `mateo` commit `9439829` is clean; no more backend edits are needed. The human stages frontend changes and approves each exact snapshot/message separately. Audit-only commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904` and remaining integration commit `fcd9ec8407db06b570a1f34a22c9bdb8af665bda` were explicitly authorized and created. The user selected one final combined commit without native review. No push is authorized.
 
 Verified backend code contracts:
 
@@ -19,10 +19,10 @@ Explicit user requirement: manage asynchronous statistics, lookup, session-summa
 ## Implementation units
 
 - [x] T1a — Deliver the independently scoped Audit actor lookup. Commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904`; 59 tests across 3 files, production build and native review approved in the isolated worktree. Main staged diff matched the reviewed diff exactly before commit.
-- [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: implemented and focused-verified; pending final integration review and human-approved commit. Delegated writer (multi-file rule).
-- [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: implementation recovered through read-only diagnosis; six focused specs (155 tests) passed, no concrete source blocker found. Pending formatting, full integration checks and human-approved commit.
-- [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: implemented and final checks passed after the user-approved fixture dependency adjustment; pending human staging/commit. No fixed production collection contracts or state remain.
-- [ ] T4 — Independently verify and natively review the normalized candidate, report acceptance limits and human staging/commit next step. Status: independent verification passed; native START returned cancelled with lineage_created=false and no authority mutation. Native review remains pending, not approved. Tasks stay open until a separately human-approved implementation commit.
+- [x] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Delivered in `c35a256` and `fcd9ec8`; focused and integration checks passed.
+- [x] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Delivered in `fcd9ec8`; focused and integration checks passed. T2 RED history remains unavailable.
+- [x] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Delivered in `fcd9ec8` after the approved fixture dependency adjustment; final checks passed.
+- [x] T4 — Independently verify the normalized candidate and report review disposition and acceptance limits. Independent verification passed. Audit native review was approved and acknowledged; the remaining exact candidate's review was declined through the host UI, then the user explicitly requested committing without review. No native approval is claimed for the remaining integration.
 
 ## Acceptance criteria
 
@@ -82,4 +82,8 @@ The full-candidate review later stopped at `lens_context_budget_exceeded`; the u
 
 The human staged only `audit-viewer.ts`, `audit-viewer.html` and `audit-viewer.spec.ts` and explicitly approved the snapshot/message. Immediately before committing, HEAD `23f69943e86b8bb592aca83adc53fb847e9fb690` and staged binary diff hash `5dfa2314b6bec7ebc07e6f8586e6d8af1b3cfb8c` were rechecked; the hash also matched the isolated reviewed diff. Commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904` (`feat(audit): use paginated user lookup for actor filters`) contains only those 3 files (+215/-70). The index is now empty; 38 tracked changes and 11 untracked files remain preserved. No push occurred.
 
-Next: isolate dependency-safe statistics, Sessions and catalog-retirement units, then verify/review each before human staging and exact commit approval. Audit approval does not cover those remaining changes. Backend commit `9439829` is unchanged. Browser/keyboard/responsive, authenticated backend/CORS and isolated SQL acceptance remain pending; automated checks do not certify end-to-end behavior.
+Final delivery: the user superseded the split plan and requested one combined commit for all remaining changes. Host consent declined native review for exact target `sha256:b1995dbda2fe270d78b732bcd208469f74ed48f340541d7d7bfca833dd9a0ac6`, with no lineage created or authority mutation. The user then explicitly approved the proposed snapshot/message and requested committing without review. Before commit, HEAD `e238543225a61e77b9a3ee60ef9aeadce483a9b5` and staged diff hash `a8baca610dd067166ef8882eef28702daf8bb982` were rechecked.
+
+Commit `fcd9ec8407db06b570a1f34a22c9bdb8af665bda` (`feat(iam): integrate statistics and session paging and retire fixed catalogs`) contains the remaining 48 files (+1701/-1139). Git status was clean immediately after committing; no push occurred. Tests/build were not rerun during commit delivery; prior full-suite, build and independent-check evidence is recorded above. Audit approval does not extend to the remaining integration, whose review was explicitly declined.
+
+Backend commit `9439829` is unchanged. Browser/keyboard/responsive, authenticated backend/CORS and isolated SQL acceptance remain pending; automated checks do not certify end-to-end behavior.
