@@ -4,7 +4,7 @@ Consume backend commit `9439829` and remove the frontend's incomplete fixed `get
 
 ## Authorization and contracts
 
-The user requested frontend integration after the backend commit, then explicitly selected the complete integration/catalog-retirement scope. Baseline frontend is clean at `87e21bf`. Backend `mateo` commit `9439829` is clean; no more backend edits are needed. No frontend staging, commit or push is authorized.
+The user requested frontend integration after the backend commit, then explicitly selected the complete integration/catalog-retirement scope. Baseline frontend is clean at `87e21bf`. Backend `mateo` commit `9439829` is clean; no more backend edits are needed. The human stages frontend changes and approves each exact snapshot/message separately. Audit-only commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904` was explicitly authorized and created; no other implementation commit or push is authorized.
 
 Verified backend code contracts:
 
@@ -18,6 +18,7 @@ Explicit user requirement: manage asynchronous statistics, lookup, session-summa
 
 ## Implementation units
 
+- [x] T1a — Deliver the independently scoped Audit actor lookup. Commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904`; 59 tests across 3 files, production build and native review approved in the isolated worktree. Main staged diff matched the reviewed diff exactly before commit.
 - [ ] T1 — Consume user statistics and migrate Audit actor lookup to an independent server-paged query, preserving selected actor identity. Status: implemented and focused-verified; pending final integration review and human-approved commit. Delegated writer (multi-file rule).
 - [ ] T2 — Consume paged session-owner summaries, exact global total and disclosure-only per-user details, including post-revoke refresh. Status: implementation recovered through read-only diagnosis; six focused specs (155 tests) passed, no concrete source blocker found. Pending formatting, full integration checks and human-approved commit.
 - [ ] T3 — Retire fixed catalog reads/state and obsolete use cases, retain mutation facade/revision, reconcile tests/docs and verify full integration. Status: implemented and final checks passed after the user-approved fixture dependency adjustment; pending human staging/commit. No fixed production collection contracts or state remain.
@@ -75,4 +76,10 @@ Final observed checks:
 - UserStore now coordinates mutations/revision only, preserving PARTIAL_UPDATE errors. Page roles initialization is independent; statistics, paged listing, session count/owners/details and Audit actor lookup use their scoped stores and caller-owned subscriptions.
 - Native INSPECT included all 11 new source/test files in the 52-path implementation candidate. START for target `sha256:f53f58bf50db1dd9f88424e14fa1930f479b698f25cf1240f9c5a6da3ea4723f` returned native-operation-failed/cancelled with lineage_created=false and mutation_performed=false. No lineage exists, no approval is claimed, and no automatic retry/reset/recovery was attempted.
 
-Next: resolve the cancelled native review explicitly if desired, then human staging and exact snapshot/message approval for any frontend commit. Source changes remain uncommitted. Backend commit 9439829 is unchanged. Browser/keyboard/responsive, authenticated backend/CORS and isolated SQL acceptance remain pending; automated checks do not certify end-to-end behavior.
+## Delivery update
+
+The full-candidate review later stopped at `lens_context_budget_exceeded`; the user selected smaller independently reviewed units and authorized the linked worktree `D:/angular/real-maids-frontend-iam-review`. The Audit-only unit passed 59 tests across 3 files, production build, formatting and diff checks. Native lineage `review-74fb3a3e76c6919c` was approved and acknowledged; authority was burned for target `sha256:df8eeb167ff8a86a2cfa221d6f4b598b04b2cc3be38a866b1a938bf227eae8b8`.
+
+The human staged only `audit-viewer.ts`, `audit-viewer.html` and `audit-viewer.spec.ts` and explicitly approved the snapshot/message. Immediately before committing, HEAD `23f69943e86b8bb592aca83adc53fb847e9fb690` and staged binary diff hash `5dfa2314b6bec7ebc07e6f8586e6d8af1b3cfb8c` were rechecked; the hash also matched the isolated reviewed diff. Commit `c35a2568c6a2bc75b302ce517cf2c2aa27357904` (`feat(audit): use paginated user lookup for actor filters`) contains only those 3 files (+215/-70). The index is now empty; 38 tracked changes and 11 untracked files remain preserved. No push occurred.
+
+Next: isolate dependency-safe statistics, Sessions and catalog-retirement units, then verify/review each before human staging and exact commit approval. Audit approval does not cover those remaining changes. Backend commit `9439829` is unchanged. Browser/keyboard/responsive, authenticated backend/CORS and isolated SQL acceptance remain pending; automated checks do not certify end-to-end behavior.
