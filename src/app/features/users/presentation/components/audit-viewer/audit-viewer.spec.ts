@@ -1,11 +1,14 @@
-import { signal } from "@angular/core"
 import { By } from "@angular/platform-browser"
 import { BrnCombobox } from "@spartan-ng/brain/combobox"
-import { UserStore } from "../../state/user.store"
+import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
+import { UserListQuery } from "../../../domain/models/user-list-query"
+import { UserListStore } from "../../state/user-list.store"
 import { UserError } from "../../../domain/errors/user.error"
 import { provideRouter } from "@angular/router"
 import { TestBed } from "@angular/core/testing"
-import { of, Subject } from "rxjs"
+import { Observable, of, Subject } from "rxjs"
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+import { Lang, User } from "../../../domain/entities/user.entity"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
 import { AUDIT_LOG_REPOSITORY } from "../../../domain/repositories/audit-log.repository"
@@ -67,20 +70,33 @@ describe("Audit viewer server queries and CSV", () => {
     const exportAuditLogs = vi.fn((_filters?: AuditFilters) => exports)
     const download = vi.fn((_blob: Blob) => Result.success(undefined)),
       success = vi.fn()
-    const catalog = {
-      users: signal([
-        { id: 2, name: "Ana", email: "ana@example.test" },
-        { id: 7, name: "Ana", email: "otra@example.test" }
-      ]),
-      loaded: signal(true),
-      loading: signal(false),
-      error: signal<UserError | undefined>(undefined)
-    }
+    const users = [
+      User.create(2, "Ana", "ana@example.test", Lang.ES, true, new Date(), new Date(), 1),
+      User.create(7, "Ana", "otra@example.test", Lang.ES, true, new Date(), new Date(), 1)
+    ]
+    const getUsersPage = vi.fn(
+      (query: UserListQuery): Observable<Result<PaginationResponse<User>, UserError>> => {
+        const items = users.filter(
+          user =>
+            !query.search ||
+            `${user.name} ${user.email}`.toLowerCase().includes(query.search.toLowerCase())
+        )
+        return of(
+          Result.success({
+            items,
+            total: items.length,
+            offset: query.offset ?? 0,
+            limit: query.limit ?? 10
+          })
+        )
+      }
+    )
     TestBed.configureTestingModule({
       imports: [AuditViewer],
       providers: [
         provideRouter([]),
-        { provide: UserStore, useValue: catalog },
+        UserListStore,
+        { provide: USER_REPOSITORY, useValue: { getUsersPage } },
         { provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogs, exportAuditLogs } },
         { provide: AuditCsvDownload, useValue: { download } },
         { provide: HotToastService, useValue: { success } }
@@ -89,7 +105,8 @@ describe("Audit viewer server queries and CSV", () => {
     const fixture = TestBed.createComponent(AuditViewer)
     fixture.detectChanges()
     return {
-      catalog,
+      users,
+      getUsersPage,
       fixture,
       viewer: fixture.componentInstance,
       element: fixture.nativeElement as HTMLElement,
@@ -101,6 +118,73 @@ describe("Audit viewer server queries and CSV", () => {
       success
     }
   }
+  it("owns an independent server lookup without overwriting the parent listing", () => {
+    const { viewer, fixture, getUsersPage } = setup()
+    expect(getUsersPage).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 10 })
+    expect(fixture.debugElement.injector.get(UserListStore)).not.toBe(TestBed.inject(UserListStore))
+    viewer.searchActors("unknown ID 999")
+    expect(viewer.filters().userId).toBeUndefined()
+  })
+  it("cancels obsolete lookup reads, adopts effective server pages, rejects typed identity and cancels on destroy", async () => {
+    const { fixture, viewer, getUsersPage, getAuditLogs, users } = setup()
+    const pending = new Subject<Result<PaginationResponse<User>, UserError>>()
+    getUsersPage.mockReturnValueOnce(pending)
+    viewer.retryActors()
+    expect(pending.observed).toBe(true)
+    viewer.searchActors("Ana")
+    expect(pending.observed).toBe(false)
+    pending.next(Result.success({ items: [], total: 0, offset: 0, limit: 10 }))
+    viewer.selectActor("7")
+    viewer.selectActor("999")
+    expect(viewer.filters().userId).toBeUndefined()
+    await vi.waitFor(() => expect(viewer.actors.loaded()).toBe(true))
+    viewer.selectActor("7")
+    getUsersPage.mockReturnValueOnce(
+      of(Result.success({ items: [users[0]], total: 11, offset: 0, limit: 5 }))
+    )
+    viewer.retryActors()
+    expect(viewer.actorPageCount()).toBe(3)
+    getUsersPage.mockReturnValueOnce(
+      of(Result.success({ items: [users[0]], total: 11, offset: 5, limit: 5 }))
+    )
+    viewer.goToActorPage(2)
+    expect(getUsersPage).toHaveBeenLastCalledWith({ search: "Ana", offset: 5, limit: 5 })
+    expect(viewer.actorPage()).toBe(2)
+    expect(viewer.actorOptions().map(user => user.id)).toEqual([7, 2])
+    expect(viewer.filters().userId).toBe(7)
+    expect(TestBed.inject(UserListStore).query()).toEqual({ offset: 0, limit: 10 })
+    const calls = getUsersPage.mock.calls.length
+    viewer.goToActorPage(0)
+    viewer.goToActorPage(4)
+    expect(getUsersPage).toHaveBeenCalledTimes(calls)
+    // Lookup pages/search never submit audit identities or reset the applied audit page.
+    expect(getAuditLogs).toHaveBeenCalledTimes(2)
+    const late = new Subject<Result<PaginationResponse<User>, UserError>>()
+    getUsersPage.mockReturnValueOnce(late)
+    viewer.retryActors()
+    fixture.destroy()
+    expect(late.observed).toBe(false)
+    expect(viewer.actors.loading()).toBe(false)
+  })
+  it("keeps lookup failure independent from audit export and freezes lookup controls during export", () => {
+    const { fixture, viewer, reads, getUsersPage, exportAuditLogs } = setup()
+    viewer.selectActor("2")
+    getUsersPage.mockReturnValueOnce(of(Result.failure(new UserError("FORBIDDEN"))))
+    viewer.retryActors()
+    expect(viewer.actors.error()?.code).toBe("FORBIDDEN")
+    reads.next(Result.success(page()))
+    reads.complete()
+    viewer.exportCsv()
+    const calls = getUsersPage.mock.calls.length
+    viewer.searchActors("new")
+    viewer.retryActors()
+    viewer.goToActorPage(2)
+    viewer.selectActor("all")
+    expect(getUsersPage).toHaveBeenCalledTimes(calls)
+    expect(exportAuditLogs).toHaveBeenCalledExactlyOnceWith({ userId: 2 })
+    expect(viewer.selectedActor()?.id).toBe(2)
+    fixture.destroy()
+  })
   it("reveals advanced fields locally, preserves values and shows independently removable applied chips", () => {
     const { fixture, viewer, element, getAuditLogs } = setup()
     const toggle = element.querySelector<HTMLButtonElement>("[data-audit-more]")!
@@ -204,8 +288,8 @@ describe("Audit viewer server queries and CSV", () => {
     expect(actions[0].getAttribute("role")).toBe("combobox")
     expect(actions.every(button => button.type === "button")).toBe(true)
   })
-  it("searches loaded names/emails without querying and retains the selected stable ID across catalog gaps", async () => {
-    const { fixture, viewer, element, catalog, getAuditLogs } = setup()
+  it("debounces independent server search and retains selected identity across lookup failures and gaps", async () => {
+    const { fixture, viewer, element, getUsersPage, getAuditLogs } = setup()
     element.querySelector<HTMLButtonElement>("#audit-actor")!.click()
     fixture.detectChanges()
     await fixture.whenStable()
@@ -221,33 +305,38 @@ describe("Audit viewer server queries and CSV", () => {
       "otra@example.test"
     )
     type("ana")
-    expect(viewer.actorOptions()).toHaveLength(2)
     type(" OTRA@ ")
+    expect(viewer.actors.loading()).toBe(true)
+    expect(getUsersPage).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(getUsersPage).toHaveBeenCalledTimes(2))
+    fixture.detectChanges()
+    expect(getUsersPage).toHaveBeenLastCalledWith({ offset: 0, limit: 10, search: "OTRA@" })
     expect(viewer.actorOptions().map(actor => actor.email)).toEqual(["otra@example.test"])
     expect(getAuditLogs).toHaveBeenCalledOnce()
     selectActor(fixture, "7")
     expect(viewer.filters().userId).toBe(7)
     type("2")
     expect(viewer.filters().userId).toBe(7)
-    catalog.loading.set(true)
+    getUsersPage.mockReturnValueOnce(of(Result.failure(new UserError("FORBIDDEN"))))
+    viewer.retryActors()
     fixture.detectChanges()
-    expect(element.textContent).toContain("Cargando catálogo")
-    catalog.loading.set(false)
-    catalog.error.set(new UserError("UNEXPECTED"))
-    fixture.detectChanges()
-    expect(element.textContent).toContain("No pudimos cargar el catálogo de actores")
-    catalog.error.set(undefined)
-    catalog.users.set([])
+    expect(element.textContent).toContain("No pudimos buscar actores")
+    getUsersPage.mockReturnValueOnce(
+      of(Result.success({ items: [], total: 0, offset: 0, limit: 10 }))
+    )
+    viewer.retryActors()
     fixture.detectChanges()
     expect(element.textContent).not.toContain("Catálogo incompleto")
-    expect(element.textContent).toContain("Actor no disponible")
+    expect(viewer.actorOptions()).toMatchObject([
+      { id: 7, name: "Ana", email: "otra@example.test" }
+    ])
     expect(viewer.filters().userId).toBe(7)
     expect(element.querySelector("#audit-actor")?.textContent).toContain("otra@example.test")
     selectActor(fixture, "")
     expect(viewer.filters().userId).toBeUndefined()
     viewer.clearFilters()
     fixture.detectChanges()
-    expect(search.value).toBe("")
+    expect(viewer.filterModel().actorSearch).toBe("")
   })
   it("selects a searched actor with library keyboard behavior while typing and erasing never apply identity", async () => {
     const { fixture, viewer, element, getAuditLogs } = setup()
@@ -261,6 +350,8 @@ describe("Audit viewer server queries and CSV", () => {
     fixture.detectChanges()
     expect(getAuditLogs).toHaveBeenCalledOnce()
     expect(viewer.filters().userId).toBeUndefined()
+    await vi.waitFor(() => expect(viewer.actors.loaded()).toBe(true))
+    fixture.detectChanges()
     const options = document.querySelectorAll<HTMLElement>('[data-slot="combobox-item"]')
     // jsdom has no layout/scrolling; retain real library key handling.
     options.forEach(option => {

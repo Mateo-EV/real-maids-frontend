@@ -39,7 +39,8 @@ import {
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { ExportAuditLogsUseCase } from "../../../application/use-cases/export-audit-logs.use-case"
 import { AuditCsvDownload } from "../../../infrastructure/export/audit-csv-download"
-import { UserStore } from "../../state/user.store"
+import { UserListStore } from "../../state/user-list.store"
+import { UserListQuery } from "../../../domain/models/user-list-query"
 import { AuditLogsStore } from "../../state/audit-logs.store"
 import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
 
@@ -65,7 +66,7 @@ import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
     HlmSkeleton,
     TablePagination
   ],
-  providers: [provideIcons({ lucideSlidersHorizontal, lucideX })],
+  providers: [UserListStore, provideIcons({ lucideSlidersHorizontal, lucideX })],
   templateUrl: "./audit-viewer.html"
 })
 export class AuditViewer implements OnInit {
@@ -88,32 +89,45 @@ export class AuditViewer implements OnInit {
   readonly rangeEnd = computed(() => Math.min(this.page() * this.pageSize, this.store.total()))
   readonly exporting = signal(false)
   readonly exportError = signal("")
-  readonly users = inject(UserStore)
+  readonly actors = inject(UserListStore)
   readonly selectedActor = signal<{ id: number; name: string; email: string } | undefined>(
     undefined
   )
-  readonly catalogReady = computed(
-    () => this.users.loaded() && !this.users.loading() && !this.users.error()
-  )
-  readonly actorOutsideCatalog = computed(
-    () =>
-      !!this.selectedActor() &&
-      !this.users.users().some(user => user.id === this.selectedActor()!.id)
+  readonly actorReady = computed(
+    () => this.actors.loaded() && !this.actors.loading() && !this.actors.error()
   )
   readonly actorOptions = computed(() => {
-    const text = this.filterModel().actorSearch.trim().toLocaleLowerCase("es")
     const selected = this.selectedActor()
-    const users = this.users
-      .users()
-      .filter(
-        user =>
-          user.id !== selected?.id &&
-          (!text || `${user.name} ${user.email}`.toLocaleLowerCase("es").includes(text))
-      )
-    return selected
-      ? [this.users.users().find(user => user.id === selected.id) ?? selected, ...users]
-      : users
+    const users = this.actorReady() ? (this.actors.result()?.items ?? []) : []
+    return selected ? [selected, ...users.filter(user => user.id !== selected.id)] : users
   })
+  readonly actorPage = computed(
+    () => (this.actors.query().offset ?? 0) / (this.actors.query().limit ?? 10) + 1
+  )
+  readonly actorPageCount = computed(() => {
+    const result = this.actors.result()
+    return Math.max(1, result ? Math.ceil(result.total / result.limit) : 1)
+  })
+  private loadActors(query: UserListQuery, delay = 0): void {
+    if (!this.destroyRef.destroyed)
+      this.actors.load(query, delay).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+  }
+  retryActors(): void {
+    if (!this.exporting()) this.loadActors(this.actors.query())
+  }
+  goToActorPage(page: number): void {
+    if (
+      this.exporting() ||
+      !this.actorReady() ||
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > this.actorPageCount() ||
+      page === this.actorPage()
+    )
+      return
+    const query = this.actors.query()
+    this.loadActors({ ...query, offset: (page - 1) * (query.limit ?? 10) })
+  }
   readonly advancedOpen = signal(false)
   readonly actorOpen = signal<"open" | "closed">("closed")
   private readonly actorCombobox = viewChild(BrnCombobox)
@@ -154,19 +168,27 @@ export class AuditViewer implements OnInit {
     const actor =
       this.selectedActor()?.id === Number(value)
         ? this.selectedActor()
-        : this.users.users().find(user => String(user.id) === value)
+        : this.actorOptions().find(user => String(user.id) === value)
     return actor ? `${actor.name} · ${actor.email} (USR-${actor.id})` : `USR-${value}`
   }
-  // Options are already filtered locally by name/email, never by the secondary ID.
+  // The server filters names/emails; Brain must not filter the returned page again.
   readonly showActorOption = () => true
   readonly filterModel = signal({ fromUTC: "", toUTC: "", actorSearch: "" })
   searchActors(value: string): void {
     if (this.destroyRef.destroyed || this.exporting()) return
+    if (value === this.filterModel().actorSearch) return
     this.filterModel.update(model => ({ ...model, actorSearch: value }))
+    this.loadActors(
+      {
+        offset: 0,
+        limit: this.actors.query().limit ?? 10,
+        ...(value.trim() ? { search: value.trim() } : {})
+      },
+      250
+    )
   }
   actorStateChanged(state: "open" | "closed"): void {
     this.actorOpen.set(this.exporting() ? "closed" : state)
-    if (state === "closed") this.searchActors("")
   }
   removeFilter(field: "userId" | "fromUTC" | "toUTC" | "entity" | "action"): void {
     if (this.destroyRef.destroyed || this.exporting()) return
@@ -184,10 +206,11 @@ export class AuditViewer implements OnInit {
           : { kind: "date", message: "Usa una fecha válida AAAA-MM-DD." }
       )
     }
-    disabled(path.actorSearch, () => this.exporting() || !this.catalogReady())
+    disabled(path.actorSearch, () => this.exporting())
   })
 
   ngOnInit(): void {
+    this.retryActors()
     this.retry()
   }
   retry(): void {
@@ -243,11 +266,10 @@ export class AuditViewer implements OnInit {
       return
     }
     if (value === String(this.selectedActor()?.id)) return
-    if (!this.catalogReady()) return
+    if (!this.actorReady()) return
     // Only a loaded option supplies identity; search text is never an ID.
-    const actor = this.users.users().find(user => String(user.id) === value)
+    const actor = this.actors.result()?.items.find(user => String(user.id) === value)
     if (!actor) return
-    this.searchActors("")
     this.selectedActor.set({ id: actor.id, name: actor.name, email: actor.email })
     this.updateFilters({ ...this.filters(), userId: actor.id })
   }
@@ -267,6 +289,7 @@ export class AuditViewer implements OnInit {
   clearFilters(): void {
     if (this.destroyRef.destroyed || this.exporting()) return
     this.selectedActor.set(undefined)
+    this.searchActors("")
     this.filterModel.set({ fromUTC: "", toUTC: "", actorSearch: "" })
     this.updateFilters({})
   }
@@ -296,7 +319,6 @@ export class AuditViewer implements OnInit {
     )
       return
     this.actorOpen.set("closed")
-    this.searchActors("")
     this.exporting.set(true)
     this.exportError.set("")
     const filters = { ...this.filters() }
