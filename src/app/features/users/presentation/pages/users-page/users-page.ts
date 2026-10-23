@@ -145,7 +145,11 @@ export class UsersPage implements OnInit {
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
   private readonly queries = new Subject<void>()
-  private readonly listQueries = new Subject<{ query: UserListQuery; delay: number }>()
+  private readonly listQueries = new Subject<{
+    query: UserListQuery
+    delay: number
+    force: boolean
+  }>()
   private mutationRevision = this.users.mutationRevision()
   private sessionMutationRevision = this.sessions.mutationRevision()
 
@@ -155,7 +159,6 @@ export class UsersPage implements OnInit {
       if (revision === this.mutationRevision) return
       this.mutationRevision = revision
       untracked(() => {
-        this.retryList()
         this.retryStatistics()
         this.loadSessionCount()
       })
@@ -168,8 +171,8 @@ export class UsersPage implements OnInit {
     })
   }
 
-  private loadList(query: UserListQuery, delay = 0): void {
-    if (!this.destroyRef.destroyed) this.listQueries.next({ query, delay })
+  private loadList(query: UserListQuery, delay = 0, force = false): void {
+    if (!this.destroyRef.destroyed) this.listQueries.next({ query, delay, force })
   }
 
   retryStatistics(): void {
@@ -178,7 +181,7 @@ export class UsersPage implements OnInit {
   }
 
   retryList(): void {
-    this.loadList(this.list.query())
+    this.loadList(this.list.query(), 0, true)
   }
 
   private applyFilters(delay = 0): void {
@@ -205,11 +208,11 @@ export class UsersPage implements OnInit {
     this.retryStatistics()
     this.listQueries
       .pipe(
-        switchMap(({ query, delay }) => this.list.load(query, delay)),
+        switchMap(({ query, delay, force }) => this.list.load(query, delay, force)),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
-    this.retryList()
+    this.loadList(this.list.query())
     this.queries
       .pipe(
         switchMap(() =>

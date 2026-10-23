@@ -238,11 +238,18 @@
           <div class="flex min-h-64 items-center justify-center gap-3" role="status">
             <hlm-spinner />Cargando usuarios…
           </div>
-        } @else if (list.error()) {
+        }
+        @if (list.error()) {
           <div class="p-5">
             <div hlmAlert variant="destructive" role="alert" data-list-error>
               <p hlmAlertTitle>No pudimos cargar los usuarios del filtro</p>
-              <p hlmAlertDescription>Reintenta la consulta para continuar.</p>
+              <p hlmAlertDescription>
+                {{
+                  list.loaded()
+                    ? "Se conservan los resultados anteriores de este filtro; pueden estar desactualizados."
+                    : "Reintenta la consulta para continuar."
+                }}
+              </p>
             </div>
             <button
               data-retry-list
@@ -255,7 +262,13 @@
               Reintentar listado
             </button>
           </div>
-        } @else if (list.loaded() && visibleUsers().length === 0) {
+        }
+        @if (list.refreshing()) {
+          <p class="px-4 py-2 text-xs text-muted-foreground" role="status">
+            Actualizando resultados…
+          </p>
+        }
+        @if (list.loaded() && visibleUsers().length === 0) {
           <div hlmEmpty class="min-h-64">
             <div hlmEmptyHeader>
               <div hlmEmptyMedia variant="icon">

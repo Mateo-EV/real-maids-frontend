@@ -1,3 +1,9 @@
+import { signal } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { UserStore } from "../../state/user.store"
+import { UpdateUserStatusByIdUseCase } from "../../../application/use-cases/update-user-status-by-id.use-case"
 import { By } from "@angular/platform-browser"
 import { BrnCombobox } from "@spartan-ng/brain/combobox"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
@@ -91,11 +97,19 @@ describe("Audit viewer server queries and CSV", () => {
         )
       }
     )
+    const session = signal<AuthSession | null>(
+      AuthSession.create("Test", "test@example.test", null, null, 1)
+    )
+    const sessionChanges = new Subject<AuthSession | null>()
+    const status = { execute: vi.fn(() => of(Result.success(users[0]))) }
     TestBed.configureTestingModule({
       imports: [AuditViewer],
       providers: [
         provideRouter([]),
         UserListStore,
+        { provide: AuthStore, useValue: { session } },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
+        { provide: UpdateUserStatusByIdUseCase, useValue: status },
         { provide: USER_REPOSITORY, useValue: { getUsersPage } },
         { provide: AUDIT_LOG_REPOSITORY, useValue: { getAuditLogs, exportAuditLogs } },
         { provide: AuditCsvDownload, useValue: { download } },
@@ -106,6 +120,9 @@ describe("Audit viewer server queries and CSV", () => {
     fixture.detectChanges()
     return {
       users,
+      session,
+      sessionChanges,
+      status,
       getUsersPage,
       fixture,
       viewer: fixture.componentInstance,
@@ -118,6 +135,25 @@ describe("Audit viewer server queries and CSV", () => {
       success
     }
   }
+  it("invalidates actor options on writes independently, preserves selection, and clears it on session loss", () => {
+    const { viewer, fixture, getUsersPage, session, sessionChanges, users, status } = setup()
+    viewer.selectActor("7")
+    getUsersPage.mockReturnValueOnce(
+      of(Result.success({ items: [users[0]], total: 1, offset: 0, limit: 10 }))
+    )
+    TestBed.inject(UserStore).updateUserStatusById(2, false).subscribe()
+    expect(status.execute).toHaveBeenCalledOnce()
+    expect(getUsersPage).toHaveBeenCalledTimes(2)
+    expect(viewer.actors.result()?.items).toEqual([users[0]])
+    expect(viewer.selectedActor()?.id).toBe(7)
+    expect(viewer.filters().userId).toBe(7)
+    session.set(null)
+    sessionChanges.next(null)
+    expect(viewer.actors.result()).toBeUndefined()
+    fixture.detectChanges()
+    expect(viewer.selectedActor()).toBeUndefined()
+    expect(viewer.filters().userId).toBeUndefined()
+  })
   it("owns an independent server lookup without overwriting the parent listing", () => {
     const { viewer, fixture, getUsersPage } = setup()
     expect(getUsersPage).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 10 })

@@ -1,8 +1,12 @@
-import { Component, signal } from "@angular/core"
+import { Component, inject, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { of } from "rxjs"
+import { of, Subject, map } from "rxjs"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { UserListQuery } from "@/app/features/users/domain/models/user-list-query"
+import { Result } from "@/app/shared/utils/result"
 import { hlm } from "@spartan-ng/helm/utils"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -20,17 +24,53 @@ import { ADMIN_ROUTES } from "./admin.routes"
 class LoginDestination {}
 
 function setup(authenticated: boolean) {
-  const identity = { name: "Demo Identity", email: "identity@example.test" }
+  const identity = AuthSession.create("Demo Identity", "identity@example.test", null, null, 1)
+  const sessionChanges = new Subject<AuthSession | null>()
+  const session = signal<AuthSession | null>(authenticated ? identity : null)
   const auth = {
-    session: signal(authenticated ? identity : null),
-    restoreSession: vi.fn(() => of(authenticated ? identity : null)),
-    logout: vi.fn()
+    session,
+    restoreSession: vi.fn(() => of(session())),
+    logout: vi.fn(() => {
+      session.set(null)
+      sessionChanges.next(null)
+    })
   }
   TestBed.configureTestingModule({
     providers: [
       provideRouter([...ADMIN_ROUTES, { path: "login", component: LoginDestination }]),
       { provide: AuthStore, useValue: auth },
-      { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
+      { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
+      {
+        provide: USER_REPOSITORY,
+        useFactory: () => {
+          const source = inject(UserInMemorySource)
+          return {
+            getUsersPage: (query: UserListQuery) =>
+              source.getUsers().pipe(
+                map(result => {
+                  if (!result.success) return result
+                  const offset = query.offset ?? 0,
+                    limit = query.limit ?? 20
+                  return Result.success({
+                    items: result.data.slice(offset, offset + limit),
+                    total: result.data.length,
+                    offset,
+                    limit
+                  })
+                })
+              ),
+            getUserStatistics: () =>
+              source.getUsers().pipe(
+                map(result => {
+                  if (!result.success) return result
+                  const total = result.data.length,
+                    active = result.data.filter(user => user.isActive).length
+                  return Result.success({ total, active, inactive: total - active })
+                })
+              )
+          }
+        }
+      },
       { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
       { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
       { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
@@ -69,7 +109,6 @@ describe("Admin users navigation", () => {
 
   it("logs out from the shared shell and returns to login", async () => {
     const auth = setup(true)
-    auth.logout.mockImplementation(() => auth.session.set(null))
     const harness = await RouterTestingHarness.create("/admin/users")
     const button = Array.from(
       harness.routeNativeElement!.querySelectorAll<HTMLButtonElement>("button")

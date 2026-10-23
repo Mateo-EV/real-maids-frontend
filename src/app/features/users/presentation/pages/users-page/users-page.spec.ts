@@ -23,6 +23,8 @@ import { UserSessionError } from "../../../domain/errors/user-session.error"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { EMPTY } from "rxjs"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
@@ -45,6 +47,7 @@ import {
 } from "../../components/user-status-dialog/user-status-dialog"
 
 const providers = [
+  { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
   {
     provide: USER_REPOSITORY,
     useFactory: () => {
@@ -109,7 +112,12 @@ describe("UsersPage", () => {
         {
           provide: AuthStore,
           useValue: {
-            session: signal({ name: "Actual identity", email: "identity@example.test" }),
+            session: signal({
+              name: "Actual identity",
+              email: "identity@example.test",
+              id: 1,
+              expiresAt: null
+            }),
             logout: vi.fn()
           }
         }
@@ -316,7 +324,7 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     const viewer = fixture.debugElement.query(By.directive(AuditViewer))
       .componentInstance as AuditViewer
-    expect(userReads).toHaveBeenCalledTimes(2) // Independent first-visit actor page.
+    expect(userReads).toHaveBeenCalledOnce() // Independent state reuses the same fresh query.
     const entity = element.querySelector<HTMLSelectElement>("#audit-entity")!
     entity.value = "sesion"
     entity.dispatchEvent(new Event("change"))
@@ -361,7 +369,7 @@ describe("UsersPage", () => {
     expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
     expect(element.querySelector<HTMLButtonElement>("#audit-actor")!.textContent).toBe(actorLabel)
     expect(viewer.selectedActor()?.id).toBe(1)
-    expect(userReads).toHaveBeenCalledTimes(2)
+    expect(userReads).toHaveBeenCalledOnce()
     expect(viewer.page()).toBe(2)
     expect(element.querySelector("app-audit-viewer tbody")!.textContent).toBe(rows)
     expect(query).toHaveBeenCalledTimes(calls)
@@ -1006,6 +1014,7 @@ describe("UsersPage", () => {
     // Do not reapply local filters: these server records remain authoritative.
     expect(page.visibleUsers().map(user => user.id)).toEqual([800])
     expect(element.textContent).toContain("de 1 usuarios")
+    await vi.advanceTimersByTimeAsync(120000) // Expired initial page must be fetched again.
     page.clearFilters()
     const reset = request()
     expect(reset.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
@@ -1264,7 +1273,8 @@ describe("UsersPage", () => {
       expect(page.list.error()?.code).toBe("FORBIDDEN")
       expect(element.textContent).not.toContain("No pudimos cargar los roles")
       expect(element.querySelector("[data-list-error]")).not.toBeNull()
-      expect(element.querySelector("tbody")).toBeNull()
+      expect(element.querySelector("tbody")).not.toBeNull()
+      expect(element.textContent).toContain("pueden estar desactualizados")
       const retry = element.querySelector<HTMLButtonElement>("[data-retry-list]")!
       retry.click()
       await flush(fixture.whenStable())

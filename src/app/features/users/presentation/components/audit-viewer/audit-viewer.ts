@@ -98,7 +98,7 @@ export class AuditViewer implements OnInit {
   )
   readonly actorOptions = computed(() => {
     const selected = this.selectedActor()
-    const users = this.actorReady() ? (this.actors.result()?.items ?? []) : []
+    const users = this.actors.loaded() ? (this.actors.result()?.items ?? []) : []
     return selected ? [selected, ...users.filter(user => user.id !== selected.id)] : users
   })
   readonly actorPage = computed(
@@ -108,12 +108,12 @@ export class AuditViewer implements OnInit {
     const result = this.actors.result()
     return Math.max(1, result ? Math.ceil(result.total / result.limit) : 1)
   })
-  private loadActors(query: UserListQuery, delay = 0): void {
+  private loadActors(query: UserListQuery, delay = 0, force = false): void {
     if (!this.destroyRef.destroyed)
-      this.actors.load(query, delay).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+      this.actors.load(query, delay, force).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
   retryActors(): void {
-    if (!this.exporting()) this.loadActors(this.actors.query())
+    if (!this.exporting()) this.loadActors(this.actors.query(), 0, true)
   }
   goToActorPage(page: number): void {
     if (
@@ -133,6 +133,11 @@ export class AuditViewer implements OnInit {
   private readonly actorCombobox = viewChild(BrnCombobox)
   readonly activeActorOption = signal<string | null>(null)
   constructor() {
+    effect(() => {
+      if (!this.actors.sessionRevision()) return
+      this.selectedActor.set(undefined)
+      this.filters.update(filters => ({ ...filters, userId: undefined }))
+    })
     // Brain manages keyboard highlighting; expose its active option to assistive technology.
     effect(onCleanup => {
       const combobox = this.actorCombobox()
@@ -210,7 +215,7 @@ export class AuditViewer implements OnInit {
   })
 
   ngOnInit(): void {
-    this.retryActors()
+    this.loadActors(this.actors.query())
     this.retry()
   }
   retry(): void {
