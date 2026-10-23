@@ -36,7 +36,6 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
-import { UserListStore } from "../../state/user-list.store"
 import { UserStatisticsStore } from "../../state/user-statistics.store"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
@@ -86,7 +85,6 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
     AuditViewer
   ],
   providers: [
-    UserListStore,
     UserStatisticsStore,
     provideIcons({
       lucideUsers,
@@ -105,7 +103,8 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
 })
 export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
-  readonly list = inject(UserListStore)
+  private readonly requestedQuery = signal<UserListQuery>({ offset: 0, limit: 10 })
+  readonly list = this.users.selectQuery(this.requestedQuery)
   readonly statistics = inject(UserStatisticsStore)
   readonly roles = inject(RolesStore)
   readonly sessions = inject(UserSessionsStore)
@@ -181,7 +180,7 @@ export class UsersPage implements OnInit {
   }
 
   retryList(): void {
-    this.loadList(this.list.query(), 0, true)
+    this.loadList(this.requestedQuery(), 0, true)
   }
 
   private applyFilters(delay = 0): void {
@@ -208,7 +207,10 @@ export class UsersPage implements OnInit {
     this.retryStatistics()
     this.listQueries
       .pipe(
-        switchMap(({ query, delay, force }) => this.list.load(query, delay, force)),
+        switchMap(({ query, delay, force }) => {
+          this.requestedQuery.set(query)
+          return this.users.observeQuery(query, delay, force)
+        }),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()

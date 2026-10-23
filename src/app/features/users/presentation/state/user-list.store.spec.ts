@@ -3,9 +3,9 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { UpdateUserStatusByIdUseCase } from "../../application/use-cases/update-user-status-by-id.use-case"
-import { UserStore } from "./user.store"
+import { UserStore, userQueryKey } from "./user.store"
 import { TestBed } from "@angular/core/testing"
-import { EMPTY, of, Subject, throwError } from "rxjs"
+import { EMPTY, Observable, of, Subject, Subscription, throwError } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { GetUsersPageUseCase } from "../../application/use-cases/get-users-page.use-case"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
@@ -13,7 +13,27 @@ import { UserListQuery } from "../../domain/models/user-list-query"
 import { UserError } from "../../domain/errors/user.error"
 import { Lang, User } from "../../domain/entities/user.entity"
 import { Result } from "@/app/shared/utils/result"
-import { UserListStore } from "./user-list.store"
+// Test interfaces own controls/subscriptions only, never writable read state.
+function interfaceSelection() {
+  const users = TestBed.inject(UserStore)
+  const query = signal<UserListQuery>({ offset: 0, limit: 10 })
+  const selection = users.selectQuery(query)
+  let subscription = new Subscription()
+  return {
+    ...selection,
+    load(requested: UserListQuery, delay = 0, force = false) {
+      const snapshot = { ...requested }
+      return new Observable<Result<PaginationResponse<User>, UserError>>(subscriber => {
+        subscription.unsubscribe()
+        if (userQueryKey(snapshot) !== userQueryKey(selection.query())) query.set(snapshot)
+        const current = new Subscription()
+        subscription = current
+        current.add(users.observeQuery(query(), delay, force).subscribe(subscriber))
+        return current
+      })
+    }
+  }
+}
 
 const user = User.create(
   19,
@@ -29,9 +49,9 @@ const query: UserListQuery = { offset: 20, limit: 10, isActive: false, roleId: 0
 const page: PaginationResponse<User> = { items: [user], offset: 10, limit: 5, total: 11 }
 const effectiveQuery = { ...query, offset: 10, limit: 5 }
 
-describe("UserListStore ownership", () => {
+describe("UserStore query projections and interface controls", () => {
   const read = { execute: vi.fn() }
-  let store: InstanceType<typeof UserListStore>
+  let store: ReturnType<typeof interfaceSelection>
   const session = signal<AuthSession | null>(null)
   let changes = new Subject<AuthSession | null>()
   const status = { execute: vi.fn() }
@@ -41,14 +61,13 @@ describe("UserListStore ownership", () => {
     changes = new Subject<AuthSession | null>()
     TestBed.configureTestingModule({
       providers: [
-        UserListStore,
         { provide: GetUsersPageUseCase, useValue: read },
         { provide: AuthStore, useValue: { session } },
         { provide: ObserveAuthSessionUseCase, useValue: { execute: () => changes } },
         { provide: UpdateUserStatusByIdUseCase, useValue: status }
       ]
     })
-    store = TestBed.inject(UserListStore)
+    store = interfaceSelection()
     read.execute.mockReturnValue(of(Result.success(page)))
   })
   afterEach(() => vi.useRealTimers())
@@ -73,7 +92,7 @@ describe("UserListStore ownership", () => {
       expect(store.loaded()).toBe(true)
       expect(store.loading()).toBe(false)
       expect(store.refreshing()).toBe(true)
-      const newcomer = TestBed.runInInjectionContext(() => new UserListStore())
+      const newcomer = interfaceSelection()
       const newcomerSubscription = newcomer.load(query).subscribe()
       expect(newcomer.result()).toEqual(page)
       expect(newcomer.loading()).toBe(false)
@@ -176,7 +195,7 @@ describe("UserListStore ownership", () => {
     expect(store.loaded()).toBe(true)
   })
   it("shares readers, preserves same-query rows on background failure, retries and cancels cleanly", () => {
-    const second = TestBed.runInInjectionContext(() => new UserListStore())
+    const second = interfaceSelection()
     const initial = { offset: 0, limit: 10 }
     const data = { ...page, offset: 0, limit: 10 }
     const pending = new Subject<Result<PaginationResponse<User>, UserError>>()

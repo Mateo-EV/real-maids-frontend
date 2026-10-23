@@ -39,7 +39,7 @@ import {
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { ExportAuditLogsUseCase } from "../../../application/use-cases/export-audit-logs.use-case"
 import { AuditCsvDownload } from "../../../infrastructure/export/audit-csv-download"
-import { UserListStore } from "../../state/user-list.store"
+import { UserStore } from "../../state/user.store"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { AuditLogsStore } from "../../state/audit-logs.store"
 import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
@@ -66,7 +66,7 @@ import { AuditDetail, AuditDetailContext } from "../audit-detail/audit-detail"
     HlmSkeleton,
     TablePagination
   ],
-  providers: [UserListStore, provideIcons({ lucideSlidersHorizontal, lucideX })],
+  providers: [provideIcons({ lucideSlidersHorizontal, lucideX })],
   templateUrl: "./audit-viewer.html"
 })
 export class AuditViewer implements OnInit {
@@ -89,7 +89,10 @@ export class AuditViewer implements OnInit {
   readonly rangeEnd = computed(() => Math.min(this.page() * this.pageSize, this.store.total()))
   readonly exporting = signal(false)
   readonly exportError = signal("")
-  readonly actors = inject(UserListStore)
+  readonly users = inject(UserStore)
+  private readonly actorQuery = signal<UserListQuery>({ offset: 0, limit: 10 })
+  readonly actors = this.users.selectQuery(this.actorQuery)
+  private actorRequest?: Subscription
   readonly selectedActor = signal<{ id: number; name: string; email: string } | undefined>(
     undefined
   )
@@ -109,11 +112,20 @@ export class AuditViewer implements OnInit {
     return Math.max(1, result ? Math.ceil(result.total / result.limit) : 1)
   })
   private loadActors(query: UserListQuery, delay = 0, force = false): void {
-    if (!this.destroyRef.destroyed)
-      this.actors.load(query, delay, force).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+    if (this.destroyRef.destroyed) return
+    this.actorRequest?.unsubscribe()
+    this.actorQuery.set(query)
+    const request = new Subscription()
+    this.actorRequest = request
+    request.add(
+      this.users
+        .observeQuery(query, delay, force)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe()
+    )
   }
   retryActors(): void {
-    if (!this.exporting()) this.loadActors(this.actors.query(), 0, true)
+    if (!this.exporting()) this.loadActors(this.actorQuery(), 0, true)
   }
   goToActorPage(page: number): void {
     if (
@@ -134,7 +146,7 @@ export class AuditViewer implements OnInit {
   readonly activeActorOption = signal<string | null>(null)
   constructor() {
     effect(() => {
-      if (!this.actors.sessionRevision()) return
+      if (!this.users.sessionRevision()) return
       this.selectedActor.set(undefined)
       this.filters.update(filters => ({ ...filters, userId: undefined }))
     })

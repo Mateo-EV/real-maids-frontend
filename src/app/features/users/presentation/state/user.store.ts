@@ -14,7 +14,8 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { isPlatformBrowser } from "@angular/common"
-import { DestroyRef, inject, Injector, PLATFORM_ID } from "@angular/core"
+import { DestroyRef, inject, Injector, PLATFORM_ID, Signal } from "@angular/core"
+import { selectUserQuery } from "./user-list.store"
 import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
 import {
   catchError,
@@ -23,6 +24,9 @@ import {
   EMPTY,
   finalize,
   Observable,
+  merge,
+  switchMap,
+  timer,
   of,
   shareReplay,
   Subject,
@@ -53,12 +57,29 @@ export function userQueryKey(query: UserListQuery): string {
   ])
 }
 
+export interface UserQueryEntry {
+  readonly query: UserListQuery
+  readonly result: PaginationResponse<User> | undefined
+  readonly loading: boolean
+  readonly refreshing: boolean
+  readonly error: UserError | undefined
+  readonly expires: number
+}
+
 interface UserState {
+  readonly entries: Readonly<Record<string, UserQueryEntry>>
+  readonly sessionRevision: number
   readonly mutationRevision: number
   readonly loading: boolean
   readonly error: UserError | undefined
 }
-const initialUserState: UserState = { mutationRevision: 0, loading: false, error: undefined }
+const initialUserState: UserState = {
+  entries: {},
+  sessionRevision: 0,
+  mutationRevision: 0,
+  loading: false,
+  error: undefined
+}
 
 export const UserStore = signalStore(
   { providedIn: "root" },
@@ -68,7 +89,19 @@ export const UserStore = signalStore(
       destroyRef = inject(DestroyRef)
     const browser = isPlatformBrowser(inject(PLATFORM_ID))
     // Twenty query variants cover short navigation/search histories without an unbounded catalog.
-    const cache = new Map<string, { page: PaginationResponse<User>; expires: number }>()
+    const active = new Map<string, number>()
+    const updateEntry = (key: string, entry: UserQueryEntry) => {
+      const entries = { ...store.entries(), [key]: entry }
+      // Active views are pinned; prune the oldest inactive variant, never a visible page.
+      while (Object.keys(entries).length > 20) {
+        const oldest = Object.keys(entries).find(
+          candidate => candidate !== key && !active.has(candidate) && !flights.has(candidate)
+        )
+        if (!oldest) throw new Error("At most 20 distinct user queries can be active concurrently")
+        delete entries[oldest]
+      }
+      patchState(store, { entries })
+    }
     const flights = new Map<string, Observable<PageResult>>()
     const cancelled = new Subject<void>()
     const invalidations = new Subject<"mutation" | "session">()
@@ -85,9 +118,23 @@ export const UserStore = signalStore(
       generation++
       if (reason === "session") {
         sessionGeneration++
-        patchState(store, { error: undefined })
+        pending = 0
+        patchState(store, {
+          entries: {},
+          sessionRevision: store.sessionRevision() + 1,
+          loading: false,
+          error: undefined
+        })
+      } else {
+        patchState(store, {
+          entries: Object.fromEntries(
+            Object.entries(store.entries()).map(([key, entry]) => [
+              key,
+              { ...entry, expires: 0, loading: false, refreshing: false }
+            ])
+          )
+        })
       }
-      cache.clear()
       flights.clear()
       cancelled.next()
       invalidations.next(reason)
@@ -113,7 +160,7 @@ export const UserStore = signalStore(
       return sessionKey !== null
     }
     destroyRef.onDestroy(() => {
-      cache.clear()
+      patchState(store, { entries: {} })
       flights.clear()
       cancelled.next()
       cancelled.complete()
@@ -121,6 +168,7 @@ export const UserStore = signalStore(
     })
     const execute = <T>(request: () => Observable<Result<T, UserError>>) =>
       defer(() => {
+        const started = sessionGeneration
         pending++
         patchState(store, { loading: true, error: undefined })
         return defer(request).pipe(
@@ -129,6 +177,7 @@ export const UserStore = signalStore(
             of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
           ),
           finalize(() => {
+            if (started !== sessionGeneration) return
             pending--
             patchState(store, { loading: pending > 0 })
           })
@@ -138,6 +187,7 @@ export const UserStore = signalStore(
       request: () => Observable<Result<T, UserError>>
     ): Observable<Result<T, UserError>> =>
       defer(() => {
+        if (observing) checkSession()
         const started = sessionGeneration
         return execute(request).pipe(
           tap(result => {
@@ -151,46 +201,152 @@ export const UserStore = signalStore(
           })
         )
       })
-    return {
-      observeInvalidations: () => invalidations.asObservable(),
-      getCachedPage(query: UserListQuery): PaginationResponse<User> | undefined {
-        // Stale entries remain bounded and session-guarded; only a successful read renews TTL.
-        return checkSession() ? cache.get(userQueryKey(query))?.page : undefined
-      },
-      readPage(query: UserListQuery, force = false): Observable<PageResult> {
-        const snapshot = normalizeUserQuery(query)
-        return defer(() => {
-          if (!checkSession()) return EMPTY
-          const key = userQueryKey(snapshot),
-            hit = cache.get(key)
-          if (!force && hit && hit.expires > Date.now()) return of(Result.success(hit.page))
-          const existing = flights.get(key)
-          if (existing) return existing
-          const started = generation
-          const flight: Observable<PageResult> = defer(() =>
-            injector.get(GetUsersPageUseCase).execute(snapshot)
-          ).pipe(
+    const readPage = (
+      query: UserListQuery,
+      force = false,
+      effective = false
+    ): Observable<PageResult> => {
+      const snapshot = normalizeUserQuery(query)
+      return defer(() => {
+        if (!checkSession()) return EMPTY
+        const key = userQueryKey(snapshot),
+          hit = store.entries()[key]
+        const existing = flights.get(key)
+        if (existing) return existing
+        if (!force && hit?.result && hit.expires > Date.now()) return of(Result.success(hit.result))
+        if (
+          !hit &&
+          Object.keys(store.entries()).length >= 20 &&
+          Object.keys(store.entries()).every(
+            candidate => active.has(candidate) || flights.has(candidate)
+          )
+        ) {
+          throw new Error("At most 20 distinct user queries can be active concurrently")
+        }
+        const started = generation
+        const requestQuery = effective && hit ? hit.query : snapshot
+        const request = (q: UserListQuery, mayClamp: boolean): Observable<PageResult> =>
+          defer(() => injector.get(GetUsersPageUseCase).execute(q)).pipe(
             take(1),
             defaultIfEmpty(Result.failure(new UserError("INVALID_RESPONSE"))),
-            catchError(error =>
-              of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
-            ),
-            takeUntil(cancelled),
-            tap(result => {
-              if (started !== generation || !result.success) return
-              cache.delete(key)
-              cache.set(key, { page: result.data, expires: Date.now() + 120000 })
-              if (cache.size > 20) cache.delete(cache.keys().next().value!)
+            switchMap(result => {
+              if (!result.success) return of(result)
+              const page = result.data
+              const lastOffset = Math.max(0, Math.ceil(page.total / page.limit) - 1) * page.limit
+              if (page.offset <= lastOffset) return of(result)
+              return mayClamp
+                ? request({ ...q, offset: lastOffset, limit: page.limit }, false)
+                : of(Result.failure(new UserError("INVALID_RESPONSE")))
+            })
+          )
+        const flight: Observable<PageResult> = defer(() => {
+          updateEntry(key, {
+            query: hit?.query ?? snapshot,
+            result: hit?.result,
+            expires: hit?.expires ?? 0,
+            loading: !hit?.result,
+            refreshing: !!hit?.result,
+            error: undefined
+          })
+          return request(requestQuery, true)
+        }).pipe(
+          catchError(error =>
+            of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
+          ),
+          takeUntil(cancelled),
+          tap(result => {
+            if (started !== generation) return
+            const entry = store.entries()[key]!
+            updateEntry(
+              key,
+              result.success
+                ? {
+                    query: { ...snapshot, offset: result.data.offset, limit: result.data.limit },
+                    result: result.data,
+                    expires: Date.now() + 120000,
+                    loading: false,
+                    refreshing: false,
+                    error: undefined
+                  }
+                : { ...entry, loading: false, refreshing: false, error: result.error, expires: 0 }
+            )
+          }),
+          finalize(() => {
+            if (flights.get(key) !== flight) return
+            flights.delete(key)
+            const entry = store.entries()[key]
+            if (started === generation && entry)
+              updateEntry(key, { ...entry, loading: false, refreshing: false })
+          }),
+          shareReplay({ bufferSize: 1, refCount: true })
+        )
+        flights.set(key, flight)
+        return flight
+      })
+    }
+    return {
+      selectQuery: (query: Signal<UserListQuery>) =>
+        selectUserQuery(store.entries, query, userQueryKey),
+      observeQuery(query: UserListQuery, delayMs = 0, force = false): Observable<PageResult> {
+        const snapshot = normalizeUserQuery(query),
+          key = userQueryKey(snapshot)
+        return defer(() => {
+          // Auth observation can emit synchronously. Establish it before subscribing below.
+          checkSession()
+          if (
+            (!active.has(key) && active.size >= 20) ||
+            (!store.entries()[key] &&
+              Object.keys(store.entries()).length >= 20 &&
+              Object.keys(store.entries()).every(
+                candidate => active.has(candidate) || flights.has(candidate)
+              ))
+          ) {
+            throw new Error("At most 20 distinct user queries can be active concurrently")
+          }
+          active.set(key, (active.get(key) ?? 0) + 1)
+          const entry = store.entries()[key]
+          if (
+            delayMs > 0 &&
+            sessionKey !== null &&
+            !flights.has(key) &&
+            (force || !entry || entry.expires <= Date.now())
+          ) {
+            updateEntry(key, {
+              query: entry?.query ?? snapshot,
+              result: entry?.result,
+              expires: entry?.expires ?? 0,
+              error: undefined,
+              loading: !entry?.result,
+              refreshing: !!entry?.result
+            })
+          }
+          return merge(invalidations, of("initial" as const)).pipe(
+            switchMap(reason => {
+              if (reason === "session") return EMPTY
+              return (reason === "initial" && delayMs > 0 ? timer(delayMs) : of(0)).pipe(
+                switchMap(() =>
+                  readPage(
+                    snapshot,
+                    reason === "initial" && force,
+                    reason === "mutation" || force || !!store.entries()[key]?.error
+                  )
+                )
+              )
             }),
             finalize(() => {
-              if (flights.get(key) === flight) flights.delete(key)
-            }),
-            shareReplay({ bufferSize: 1, refCount: true })
+              const count = (active.get(key) ?? 1) - 1
+              if (count) active.set(key, count)
+              else {
+                active.delete(key)
+                const entry = store.entries()[key]
+                if (entry && !flights.has(key))
+                  updateEntry(key, { ...entry, loading: false, refreshing: false })
+              }
+            })
           )
-          flights.set(key, flight)
-          return flight
         })
       },
+      readPage: (query: UserListQuery, force = false) => readPage(query, force),
       createUser: (params: CreateUserParams) =>
         mutate(() => injector.get(CreateUserUseCase).execute(params)),
       updateUserById: (id: number, params: UpdateUserParams) =>

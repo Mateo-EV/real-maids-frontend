@@ -8,7 +8,6 @@ import { By } from "@angular/platform-browser"
 import { BrnCombobox } from "@spartan-ng/brain/combobox"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
 import { UserListQuery } from "../../../domain/models/user-list-query"
-import { UserListStore } from "../../state/user-list.store"
 import { UserError } from "../../../domain/errors/user.error"
 import { provideRouter } from "@angular/router"
 import { TestBed } from "@angular/core/testing"
@@ -106,7 +105,6 @@ describe("Audit viewer server queries and CSV", () => {
       imports: [AuditViewer],
       providers: [
         provideRouter([]),
-        UserListStore,
         { provide: AuthStore, useValue: { session } },
         { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
         { provide: UpdateUserStatusByIdUseCase, useValue: status },
@@ -157,7 +155,11 @@ describe("Audit viewer server queries and CSV", () => {
   it("owns an independent server lookup without overwriting the parent listing", () => {
     const { viewer, fixture, getUsersPage } = setup()
     expect(getUsersPage).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 10 })
-    expect(fixture.debugElement.injector.get(UserListStore)).not.toBe(TestBed.inject(UserListStore))
+    expect(fixture.debugElement.injector.get(UserStore)).toBe(TestBed.inject(UserStore))
+    const parentQuery = signal<UserListQuery>({ offset: 0, limit: 10, roleId: 9 })
+    const parent = TestBed.inject(UserStore).selectQuery(parentQuery)
+    expect(parent.result()).toBeUndefined()
+    expect(viewer.actors.result()).toBeDefined()
     viewer.searchActors("unknown ID 999")
     expect(viewer.filters().userId).toBeUndefined()
   })
@@ -188,7 +190,11 @@ describe("Audit viewer server queries and CSV", () => {
     expect(viewer.actorPage()).toBe(2)
     expect(viewer.actorOptions().map(user => user.id)).toEqual([7, 2])
     expect(viewer.filters().userId).toBe(7)
-    expect(TestBed.inject(UserListStore).query()).toEqual({ offset: 0, limit: 10 })
+    const parentQuery = signal<UserListQuery>({ offset: 0, limit: 10 })
+    expect(TestBed.inject(UserStore).selectQuery(parentQuery).query()).toEqual({
+      offset: 0,
+      limit: 10
+    })
     const calls = getUsersPage.mock.calls.length
     viewer.goToActorPage(0)
     viewer.goToActorPage(4)
