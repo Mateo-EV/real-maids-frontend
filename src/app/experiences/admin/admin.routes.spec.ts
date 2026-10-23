@@ -2,7 +2,7 @@ import { Component, inject, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { of, Subject, map } from "rxjs"
+import { firstValueFrom, of, Subject, map } from "rxjs"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { UserListQuery } from "@/app/features/users/domain/models/user-list-query"
@@ -19,6 +19,7 @@ import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/r
 import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
 import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
 import { ADMIN_ROUTES } from "./admin.routes"
+import { UserStore } from "@/app/features/users/presentation/state/user.store"
 
 @Component({ template: "Login destination" })
 class LoginDestination {}
@@ -110,6 +111,11 @@ describe("Admin users navigation", () => {
   it("logs out from the shared shell and returns to login", async () => {
     const auth = setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
+    await harness.fixture.whenStable()
+    const users = TestBed.inject(UserStore)
+    await firstValueFrom(users.readStatistics())
+    const statistics = users.selectStatistics()
+    expect(statistics.loaded()).toBe(true)
     const button = Array.from(
       harness.routeNativeElement!.querySelectorAll<HTMLButtonElement>("button")
     ).find(item => item.textContent?.includes("Salir"))!
@@ -117,6 +123,8 @@ describe("Admin users navigation", () => {
     await harness.fixture.whenStable()
     expect(auth.logout).toHaveBeenCalledOnce()
     expect(auth.session()).toBeNull()
+    expect(statistics.result()).toBeUndefined()
+    expect(statistics.loaded()).toBe(false)
     expect(TestBed.inject(Router).url).toBe("/login")
   })
 

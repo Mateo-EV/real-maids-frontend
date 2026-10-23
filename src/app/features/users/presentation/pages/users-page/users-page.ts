@@ -36,7 +36,6 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
-import { UserStatisticsStore } from "../../state/user-statistics.store"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, of, Subject, switchMap } from "rxjs"
@@ -85,7 +84,6 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
     AuditViewer
   ],
   providers: [
-    UserStatisticsStore,
     provideIcons({
       lucideUsers,
       lucideSmartphone,
@@ -105,7 +103,7 @@ export class UsersPage implements OnInit {
   readonly users = inject(UserStore)
   private readonly requestedQuery = signal<UserListQuery>({ offset: 0, limit: 10 })
   readonly list = this.users.selectQuery(this.requestedQuery)
-  readonly statistics = inject(UserStatisticsStore)
+  readonly statistics = this.users.selectStatistics()
   readonly roles = inject(RolesStore)
   readonly sessions = inject(UserSessionsStore)
   readonly section = signal<"users" | "sessions" | "rbac" | "audit">("users")
@@ -158,7 +156,6 @@ export class UsersPage implements OnInit {
       if (revision === this.mutationRevision) return
       this.mutationRevision = revision
       untracked(() => {
-        this.retryStatistics()
         this.loadSessionCount()
       })
     })
@@ -176,7 +173,7 @@ export class UsersPage implements OnInit {
 
   retryStatistics(): void {
     if (!this.destroyRef.destroyed)
-      this.statistics.load().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+      this.users.readStatistics(true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retryList(): void {
@@ -204,7 +201,7 @@ export class UsersPage implements OnInit {
   }
 
   ngOnInit(): void {
-    this.retryStatistics()
+    this.users.observeStatistics().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
     this.listQueries
       .pipe(
         switchMap(({ query, delay, force }) => {

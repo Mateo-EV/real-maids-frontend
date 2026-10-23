@@ -73,7 +73,15 @@
               {{ statistics.loading() ? "Cargando estadísticas…" : "Estadísticas sin verificar" }}
             }
           </p>
+          @if (statistics.refreshing()) {
+            <p role="status" class="text-sm">Actualizando estadísticas…</p>
+          }
           @if (statistics.error()) {
+            @if (statistics.loaded()) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
             <p role="alert" class="text-sm text-destructive">{{ statistics.error()?.message }}</p>
             <button hlmBtn type="button" variant="outline" size="sm" (click)="retryStatistics()">
               Reintentar estadísticas

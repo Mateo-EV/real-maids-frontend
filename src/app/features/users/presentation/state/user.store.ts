@@ -16,6 +16,9 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { isPlatformBrowser } from "@angular/common"
 import { DestroyRef, inject, Injector, PLATFORM_ID, Signal } from "@angular/core"
 import { selectUserQuery } from "./user-list.store"
+import { selectUserStatistics, UserStatisticsEntry } from "./user-statistics.store"
+import { GetUserStatisticsUseCase } from "../../application/use-cases/get-user-statistics.use-case"
+import { UserStatistics } from "../../domain/models/user-statistics"
 import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
 import {
   catchError,
@@ -36,6 +39,14 @@ import {
 } from "rxjs"
 
 type PageResult = Result<PaginationResponse<User>, UserError>
+type StatisticsResult = Result<UserStatistics, UserError>
+const emptyStatistics: UserStatisticsEntry = {
+  result: undefined,
+  loading: false,
+  refreshing: false,
+  error: undefined,
+  expires: 0
+}
 export function normalizeUserQuery(query: UserListQuery): UserListQuery {
   const search = query.search?.trim()
   return {
@@ -67,6 +78,7 @@ export interface UserQueryEntry {
 }
 
 interface UserState {
+  readonly statistics: UserStatisticsEntry
   readonly entries: Readonly<Record<string, UserQueryEntry>>
   readonly sessionRevision: number
   readonly mutationRevision: number
@@ -74,6 +86,7 @@ interface UserState {
   readonly error: UserError | undefined
 }
 const initialUserState: UserState = {
+  statistics: emptyStatistics,
   entries: {},
   sessionRevision: 0,
   mutationRevision: 0,
@@ -103,6 +116,8 @@ export const UserStore = signalStore(
       patchState(store, { entries })
     }
     const flights = new Map<string, Observable<PageResult>>()
+    let statisticsFlight: Observable<StatisticsResult> | undefined
+    let mutationStatistics: Observable<StatisticsResult> | undefined
     const cancelled = new Subject<void>()
     const invalidations = new Subject<"mutation" | "session">()
     let generation = 0,
@@ -121,12 +136,14 @@ export const UserStore = signalStore(
         pending = 0
         patchState(store, {
           entries: {},
+          statistics: emptyStatistics,
           sessionRevision: store.sessionRevision() + 1,
           loading: false,
           error: undefined
         })
       } else {
         patchState(store, {
+          statistics: { ...store.statistics(), expires: 0, loading: false, refreshing: false },
           entries: Object.fromEntries(
             Object.entries(store.entries()).map(([key, entry]) => [
               key,
@@ -136,7 +153,14 @@ export const UserStore = signalStore(
         })
       }
       flights.clear()
+      statisticsFlight = undefined
       cancelled.next()
+      // One lazy mutation read shared even when the source completes/fails synchronously.
+      // Only caller-owned observers subscribe; an inactive statistic never refreshes itself.
+      mutationStatistics =
+        reason === "mutation"
+          ? readStatistics(true).pipe(shareReplay({ bufferSize: 1, refCount: true }))
+          : undefined
       invalidations.next(reason)
     }
     const acceptSession = (session: AuthSession | null) => {
@@ -160,7 +184,9 @@ export const UserStore = signalStore(
       return sessionKey !== null
     }
     destroyRef.onDestroy(() => {
-      patchState(store, { entries: {} })
+      patchState(store, { entries: {}, statistics: emptyStatistics })
+      statisticsFlight = undefined
+      mutationStatistics = undefined
       flights.clear()
       cancelled.next()
       cancelled.complete()
@@ -284,7 +310,74 @@ export const UserStore = signalStore(
         return flight
       })
     }
+    const readStatistics = (force = false): Observable<StatisticsResult> =>
+      defer(() => {
+        if (!checkSession()) return EMPTY
+        if (statisticsFlight) return statisticsFlight
+        const hit = store.statistics()
+        if (!force && hit.result && hit.expires > Date.now()) return of(Result.success(hit.result))
+        const started = generation
+        const flight: Observable<StatisticsResult> = defer(() => {
+          patchState(store, {
+            statistics: {
+              ...hit,
+              loading: !hit.result,
+              refreshing: !!hit.result,
+              error: undefined
+            }
+          })
+          return injector.get(GetUserStatisticsUseCase).execute()
+        }).pipe(
+          take(1),
+          defaultIfEmpty(Result.failure(new UserError("INVALID_RESPONSE"))),
+          catchError(error =>
+            of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
+          ),
+          takeUntil(cancelled),
+          tap(result => {
+            if (started !== generation) return
+            patchState(store, {
+              statistics: result.success
+                ? {
+                    result: result.data,
+                    expires: Date.now() + 120000,
+                    loading: false,
+                    refreshing: false,
+                    error: undefined
+                  }
+                : { ...store.statistics(), loading: false, refreshing: false, error: result.error }
+            })
+          }),
+          finalize(() => {
+            if (statisticsFlight !== flight) return
+            statisticsFlight = undefined
+            if (started === generation)
+              patchState(store, {
+                statistics: { ...store.statistics(), loading: false, refreshing: false }
+              })
+          }),
+          shareReplay({ bufferSize: 1, refCount: true })
+        )
+        statisticsFlight = flight
+        return flight
+      })
     return {
+      selectStatistics: () => selectUserStatistics(store.statistics),
+      readStatistics,
+      observeStatistics(): Observable<StatisticsResult> {
+        return defer(() => {
+          checkSession()
+          return merge(invalidations, of("initial" as const)).pipe(
+            switchMap(reason =>
+              reason === "session"
+                ? EMPTY
+                : reason === "mutation"
+                  ? (mutationStatistics ?? EMPTY)
+                  : readStatistics()
+            )
+          )
+        })
+      },
       selectQuery: (query: Signal<UserListQuery>) =>
         selectUserQuery(store.entries, query, userQueryKey),
       observeQuery(query: UserListQuery, delayMs = 0, force = false): Observable<PageResult> {
