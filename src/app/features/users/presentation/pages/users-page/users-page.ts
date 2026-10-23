@@ -38,8 +38,7 @@ import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { defer, finalize, of, Subject, switchMap } from "rxjs"
-import { Result } from "@/app/shared/utils/result"
+import { defer, finalize, Subject, switchMap } from "rxjs"
 import { demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
 import {
@@ -141,7 +140,7 @@ export class UsersPage implements OnInit {
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
-  private readonly queries = new Subject<void>()
+  private readonly queries = new Subject<boolean>()
   private readonly listQueries = new Subject<{
     query: UserListQuery
     delay: number
@@ -156,14 +155,15 @@ export class UsersPage implements OnInit {
       if (revision === this.mutationRevision) return
       this.mutationRevision = revision
       untracked(() => {
-        this.loadSessionCount()
+        this.sessions.refreshOwnersAfterUserMutation(revision)
+        this.loadSessionCount(true)
       })
     })
     effect(() => {
       const revision = this.sessions.mutationRevision()
       if (revision === this.sessionMutationRevision) return
       this.sessionMutationRevision = revision
-      untracked(() => this.loadSessionCount())
+      untracked(() => this.loadSessionCount(true))
     })
   }
 
@@ -196,8 +196,8 @@ export class UsersPage implements OnInit {
     )
   }
 
-  private reload(): void {
-    if (!this.destroyRef.destroyed) this.queries.next()
+  private reload(force = false): void {
+    if (!this.destroyRef.destroyed) this.queries.next(force)
   }
 
   ngOnInit(): void {
@@ -214,13 +214,11 @@ export class UsersPage implements OnInit {
     this.loadList(this.list.query())
     this.queries
       .pipe(
-        switchMap(() =>
+        switchMap(force =>
           defer(() => {
             this.initializing.set(true)
             this.loadError.set(false)
-            return (
-              this.roles.loaded() ? of(Result.success(this.roles.roles())) : this.roles.loadRoles()
-            ).pipe(
+            return this.roles.loadRoles(force).pipe(
               finalize(() => {
                 if (!this.destroyRef.destroyed) this.initializing.set(false)
               })
@@ -233,19 +231,24 @@ export class UsersPage implements OnInit {
         if (this.destroyRef.destroyed) return
         this.loadError.set(!result.success)
       })
-    this.retry()
+    this.reload()
     this.loadSessionCount()
     this.audit.loadGlobalTotal().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
-  loadSessionCount(): void {
+  loadSessionCount(force = false): void {
     if (this.destroyRef.destroyed) return
-    this.sessions.loadSessionCount().pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+    this.sessions.loadSessionCount(force).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
+  }
+
+  retryAuditTotal(): void {
+    if (!this.destroyRef.destroyed)
+      this.audit.loadGlobalTotal(true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
 
   retry(): void {
     if (this.destroyRef.destroyed || this.initializing()) return
-    this.reload()
+    this.reload(true)
   }
 
   setSearch(value: string): void {

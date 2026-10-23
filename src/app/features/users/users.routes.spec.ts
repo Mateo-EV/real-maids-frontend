@@ -233,7 +233,7 @@ describe("USERS_ROUTES", () => {
     await establishSession()
     await harness.navigateByUrl("/admin/users")
     harness.detectChanges()
-    flushHttpCatalog(false)
+    flushHttpCatalog(true) // Session replacement clears the sensitive role catalog too.
     const revisited = harness.routeDebugElement!.query(
       debug => debug.componentInstance instanceof UsersPage
     )

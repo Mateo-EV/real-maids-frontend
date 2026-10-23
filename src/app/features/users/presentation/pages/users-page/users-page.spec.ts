@@ -24,7 +24,7 @@ import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
-import { EMPTY } from "rxjs"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
@@ -46,8 +46,9 @@ import {
   UserStatusDialog
 } from "../../components/user-status-dialog/user-status-dialog"
 
+const sessionChanges = new Subject<AuthSession | null>()
 const providers = [
-  { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
+  { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
   {
     provide: USER_REPOSITORY,
     useFactory: () => {
@@ -97,7 +98,17 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 }
 
 describe("UsersPage", () => {
-  beforeEach(() => vi.useFakeTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    )
+  })
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -112,12 +123,9 @@ describe("UsersPage", () => {
         {
           provide: AuthStore,
           useValue: {
-            session: signal({
-              name: "Actual identity",
-              email: "identity@example.test",
-              id: 1,
-              expiresAt: null
-            }),
+            session: signal<AuthSession | null>(
+              AuthSession.create("Actual identity", "identity@example.test", null, null, 1)
+            ),
             logout: vi.fn()
           }
         }
@@ -215,6 +223,135 @@ describe("UsersPage", () => {
     }
   }
 
+  it("consults role TTL on page return and forces an explicit role retry", async () => {
+    const read = vi.spyOn(TestBed.inject(ROLE_REPOSITORY), "getRoles")
+    const first = await setup()
+    first.fixture.destroy()
+    const second = await setup()
+    expect(read).toHaveBeenCalledOnce()
+    second.fixture.destroy()
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(read).toHaveBeenCalledOnce()
+    const third = await setup()
+    expect(read).toHaveBeenCalledTimes(2)
+    third.page.retry()
+    await flush(third.fixture.whenStable())
+    expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it("revalidates retained Audit and RBAC on expired activation without clearing controls or drafts", async () => {
+    const auditRead = vi.spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
+    const assignment = vi.spyOn(TestBed.inject(RbacRepositoryImpl), "getRolePermissions")
+    const { fixture } = await setup()
+    await visit(fixture, "rbac")
+    await flush(fixture.whenStable())
+    const matrix = fixture.debugElement.query(By.directive(RbacMatrix))
+      .componentInstance as RbacMatrix
+    matrix.toggle(73, true)
+    const draft = matrix.ids()
+    await visit(fixture, "audit")
+    await flush(fixture.whenStable())
+    const viewer = fixture.debugElement.query(By.directive(AuditViewer))
+      .componentInstance as AuditViewer
+    viewer.setEntity("sesion")
+    viewer.advancedOpen.set(true)
+    await flush(fixture.whenStable())
+    const calls = auditRead.mock.calls.length
+    const roleCalls = assignment.mock.calls.length
+    await visit(fixture, "users")
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(auditRead).toHaveBeenCalledTimes(calls)
+    await visit(fixture, "rbac")
+    expect(assignment).toHaveBeenCalledTimes(roleCalls + 1)
+    await flush(fixture.whenStable())
+    expect(matrix.ids()).toEqual(draft)
+    expect(matrix.dirty()).toBe(true)
+    await visit(fixture, "audit")
+    expect(auditRead).toHaveBeenCalledTimes(calls + 1)
+    expect(viewer.filters()).toEqual({ entity: "sesion" })
+    expect(viewer.advancedOpen()).toBe(true)
+  })
+
+  it("invalidates sessions before starting the async post-user-mutation count and deduplicates the child effect", async () => {
+    const { fixture, page, element } = await setup()
+    element.querySelector<HTMLButtonElement>("[data-sessions-tab]")!.click()
+    fixture.detectChanges()
+    const pending = new Subject<Result<number, UserSessionError>>()
+    const invalidation = vi.spyOn(page.sessions, "refreshOwnersAfterUserMutation")
+    const read = vi
+      .spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
+      .mockImplementation(() => {
+        expect(invalidation).toHaveBeenCalledWith(page.users.mutationRevision())
+        expect(page.sessions.countExpiresAt()).toBe(0)
+        return pending
+      })
+    await flush(firstValueFrom(page.users.updateUserStatusById(1, false)))
+    fixture.detectChanges()
+    expect(read).toHaveBeenCalledOnce()
+    expect(pending.observed).toBe(true)
+    expect(page.sessions.refreshing()).toBe(true)
+    pending.next(Result.success(0))
+    pending.complete()
+    fixture.detectChanges()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("0")
+    expect(page.sessions.loaded()).toBe(true)
+    expect(page.sessions.refreshing()).toBe(false)
+  })
+
+  it("keeps initial session and audit metric failures unverified and retries independently", async () => {
+    const count = vi
+      .spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
+      .mockReturnValueOnce(of(Result.failure(new UserSessionError("NETWORK"))))
+    const logs = vi
+      .spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
+      .mockReturnValueOnce(of(Result.failure(new AuditLogError("NETWORK"))))
+    const { element, fixture } = await setup()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("—")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("—")
+    for (const label of ["Reintentar total de sesiones", "Reintentar total de auditoría"]) {
+      Array.from(element.querySelectorAll<HTMLButtonElement>("button"))
+        .find(button => button.textContent?.trim() === label)!
+        .click()
+    }
+    await flush(fixture.whenStable())
+    fixture.detectChanges()
+    expect(count).toHaveBeenCalledTimes(2)
+    expect(logs).toHaveBeenCalledTimes(2)
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("90")
+  })
+
+  it("shows cached metric values and status on expired page return and stale errors on failure", async () => {
+    const first = await setup()
+    first.fixture.destroy()
+    const count = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
+    const logs = vi.spyOn(TestBed.inject(AuditLogRepositoryImpl), "getAuditLogs")
+    const fresh = await setup()
+    expect(count).not.toHaveBeenCalled()
+    expect(logs).not.toHaveBeenCalled()
+    fresh.fixture.destroy()
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(count).not.toHaveBeenCalled()
+    expect(logs).not.toHaveBeenCalled()
+    const countRead = new Subject<Result<number, UserSessionError>>()
+    const auditRead = new Subject<Result<never, AuditLogError>>()
+    count.mockReturnValueOnce(countRead)
+    logs.mockReturnValueOnce(auditRead)
+    const { element, fixture } = await setup()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("90")
+    expect(element.textContent).toContain("Actualizando total de sesiones")
+    expect(element.textContent).toContain("Actualizando total de auditoría")
+    countRead.next(Result.failure(new UserSessionError("NETWORK")))
+    auditRead.next(Result.failure(new AuditLogError("NETWORK")))
+    countRead.complete()
+    auditRead.complete()
+    fixture.detectChanges()
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+    expect(element.querySelector("[data-audit-metric]")?.textContent?.trim()).toBe("90")
+    expect(element.querySelectorAll('[role="alert"]')).toHaveLength(4)
+  })
+
   it("enables Audit and keeps its filtered count separate from the global source metric", async () => {
     const { fixture, element, page } = await setup()
     const audit = element.querySelector<HTMLButtonElement>("[data-audit-tab]")!
@@ -296,7 +433,7 @@ describe("UsersPage", () => {
     expect(matrix.ids()).toEqual(draft)
     expect(matrix.canSave()).toBe(true)
     expect(matrix.loading()).toBe(false)
-    expect(query).toHaveBeenCalledTimes(2) // first visit and explicit role change only
+    expect(query).toHaveBeenCalledOnce() // Selecting the same fresh role and revisiting reuse TTL.
     expect(wrapper?.hidden).toBe(false)
     expect(wrapper?.style.display).toBe("")
     expect(wrapper?.hasAttribute("inert")).toBe(false)
@@ -448,19 +585,21 @@ describe("UsersPage", () => {
       expect(pending.observed).toBe(true)
       await visit(fixture, "users")
       expect(pending.observed).toBe(true)
-      // A hidden initial request can complete with an error; revisit must not silently retry it.
+      // A hidden initial request can complete with an error; activation consults freshness.
       if (section === "rbac") rbacPending.next(Result.failure(new RbacError("UNEXPECTED")))
       else auditPending.next(Result.failure(new AuditLogError("UNEXPECTED")))
       pending.complete()
       // RBAC also awaits its independent real permission-catalog query.
       await vi.advanceTimersByTimeAsync(250)
-      await visit(fixture, section)
-      expect(query).toHaveBeenCalledOnce()
+      fixture.detectChanges()
       expect(
         element.querySelector(
           `app-${section === "rbac" ? "rbac-matrix" : "audit-viewer"} [role="alert"]`
         )
       ).not.toBeNull()
+      await visit(fixture, section)
+      expect(query).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(500)
       const component =
         section === "rbac"
           ? (fixture.debugElement.query(By.directive(RbacMatrix)).componentInstance as RbacMatrix)
@@ -474,7 +613,7 @@ describe("UsersPage", () => {
           `app-${section === "rbac" ? "rbac-matrix" : "audit-viewer"} [role="alert"]`
         )
       ).toBeNull()
-      expect(query).toHaveBeenCalledTimes(2)
+      expect(query).toHaveBeenCalledTimes(3) // Activation revalidation plus explicit forced retry.
       const cancelled = new Subject<never>()
       query.mockReturnValueOnce(cancelled)
       component.retry()
@@ -556,7 +695,7 @@ describe("UsersPage", () => {
     expect(page.statistics.loaded()).toBe(true)
     expect(page.sessionCount()).toBe(26)
     fixture.destroy()
-    expect(page.sessions.ownerEntries()).toEqual({})
+    expect(Object.keys(page.sessions.ownerEntries())).toHaveLength(1) // Verified inactive TTL history remains.
     await flush(firstValueFrom(page.sessions.revokeSession(90, 2)))
     expect(owners).toHaveBeenCalledTimes(3)
     expect(count).toHaveBeenCalledTimes(2)
@@ -577,13 +716,15 @@ describe("UsersPage", () => {
     expect(page.sessionCount()).toBe(26)
     const pending = new Subject()
     query.mockReturnValue(pending as never)
-    page.loadSessionCount()
+    page.loadSessionCount(true)
+    expect(pending.observed).toBe(true)
     fixture.destroy()
     expect(pending.observed).toBe(false)
-    expect(page.sessions.loaded()).toBe(false)
+    expect(page.sessions.loaded()).toBe(true) // Cancellation preserves the verified count.
+    expect(page.sessions.refreshing()).toBe(false)
   })
 
-  it("refreshes the exact session count once on user mutation and keeps failed counts unverified with retry", async () => {
+  it("refreshes the exact session count once on user mutation and retains verified counts on failed forced retry", async () => {
     const { page, fixture, element } = await setup()
     const count = vi.spyOn(TestBed.inject(USER_SESSION_REPOSITORY), "getSessionCount")
     await flush(firstValueFrom(page.users.updateUserStatusById(1, false)))
@@ -592,10 +733,10 @@ describe("UsersPage", () => {
     fixture.detectChanges()
     expect(count).toHaveBeenCalledOnce()
     count.mockReturnValueOnce(of(Result.failure(new UserSessionError("FORBIDDEN"))))
-    page.loadSessionCount()
+    page.loadSessionCount(true)
     fixture.detectChanges()
-    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("—")
-    expect(element.textContent).toContain("Sesiones sin verificar")
+    expect(element.querySelector("[data-session-metric]")?.textContent?.trim()).toBe("26")
+    expect(element.textContent).toContain("El total puede estar desactualizado")
     const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
       button => button.textContent?.trim() === "Reintentar total de sesiones"
     )!

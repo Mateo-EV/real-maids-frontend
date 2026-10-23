@@ -107,9 +107,23 @@
                   : "Sesiones sin verificar"
             }}
           </p>
+          @if (sessions.refreshing()) {
+            <p role="status" class="text-sm">Actualizando total de sesiones…</p>
+          }
           @if (sessions.error()) {
+            @if (sessions.loaded()) {
+              <p role="alert" class="text-sm text-destructive">
+                El total puede estar desactualizado.
+              </p>
+            }
             <p role="alert" class="text-sm text-destructive">{{ sessions.error()?.message }}</p>
-            <button hlmBtn type="button" variant="outline" size="sm" (click)="loadSessionCount()">
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              size="sm"
+              (click)="loadSessionCount(true)"
+            >
               Reintentar total de sesiones
             </button>
           }
@@ -140,6 +154,23 @@
           /></span>
           <p class="kpi-value" data-audit-metric>{{ audit.globalTotal() ?? "—" }}</p>
           <p hlmCardDescription>Total global del servidor, independiente de filtros</p>
+          @if (audit.globalLoading()) {
+            <p role="status" class="text-sm">Cargando total de auditoría…</p>
+          }
+          @if (audit.globalRefreshing()) {
+            <p role="status" class="text-sm">Actualizando total de auditoría…</p>
+          }
+          @if (audit.globalError()) {
+            @if (audit.globalTotal() !== null) {
+              <p role="alert" class="text-sm text-destructive">
+                El total puede estar desactualizado.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">{{ audit.globalError()?.message }}</p>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="retryAuditTotal()">
+              Reintentar total de auditoría
+            </button>
+          }
         </div>
       </article>
     </section>
@@ -476,7 +507,7 @@
       [attr.inert]="section() !== 'rbac' || initializing() || loadError() ? '' : null"
     >
       @defer (when section() === "rbac" && !initializing() && !loadError()) {
-        <app-rbac-matrix />
+        <app-rbac-matrix [active]="section() === 'rbac'" />
       }
     </div>
     <div
@@ -485,7 +516,7 @@
       [attr.inert]="section() !== 'audit' ? '' : null"
     >
       @defer (when section() === "audit") {
-        <app-audit-viewer />
+        <app-audit-viewer [active]="section() === 'audit'" />
       }
     </div>
   </main>
