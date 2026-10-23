@@ -9,19 +9,45 @@ import { GetRolesUseCase } from "../../application/use-cases/get-roles.use-case"
 import { UpdateRoleByIdUseCase } from "../../application/use-cases/update-role-by-id.use-case"
 import { DeleteRoleByIdUseCase } from "../../application/use-cases/delete-role-by-id.use-case"
 import { RolesStore } from "./roles.store"
+import { PLATFORM_ID, signal } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 
+it("RolesStore dispatches no reads during SSR", () => {
+  const list = { execute: vi.fn() }
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: PLATFORM_ID, useValue: "server" },
+      { provide: GetRolesUseCase, useValue: list },
+      { provide: CreateRoleUseCase, useValue: {} },
+      { provide: UpdateRoleByIdUseCase, useValue: {} },
+      { provide: DeleteRoleByIdUseCase, useValue: {} }
+    ]
+  })
+  const store = TestBed.inject(RolesStore)
+  store.loadRoles().subscribe()
+  expect(list.execute).not.toHaveBeenCalled()
+  expect(store.loaded()).toBe(false)
+})
 const params = { name: "Demo", description: "Fictitious", isActive: true }
 const role = Role.create(1, params.name, params.description, true, new Date())
 describe("RolesStore", () => {
   let store: InstanceType<typeof RolesStore>
+  const auth = { session: signal<AuthSession | null>(null) }
+  let changes: Subject<AuthSession | null>
   const list = { execute: vi.fn() },
     create = { execute: vi.fn() },
     update = { execute: vi.fn() },
     remove = { execute: vi.fn() }
   beforeEach(() => {
     vi.resetAllMocks()
+    auth.session.set(AuthSession.create("Tester", "tester@example.test"))
+    changes = new Subject<AuthSession | null>()
     TestBed.configureTestingModule({
       providers: [
+        { provide: AuthStore, useValue: auth },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => changes } },
         { provide: GetRolesUseCase, useValue: list },
         { provide: CreateRoleUseCase, useValue: create },
         { provide: UpdateRoleByIdUseCase, useValue: update },
@@ -29,6 +55,91 @@ describe("RolesStore", () => {
       ]
     })
     store = TestBed.inject(RolesStore)
+  })
+  it("reuses a successful catalog until the exact two-minute boundary without polling", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    try {
+      list.execute.mockReturnValue(of(Result.success([])))
+      store.loadRoles().subscribe()
+      now.mockReturnValue(120999)
+      store.loadRoles().subscribe()
+      expect(list.execute).toHaveBeenCalledTimes(1)
+      now.mockReturnValue(121000)
+      expect(list.execute).toHaveBeenCalledTimes(1)
+      store.loadRoles().subscribe()
+      expect(list.execute).toHaveBeenCalledTimes(2)
+    } finally {
+      now.mockRestore()
+    }
+  })
+  it("clears and fences reads and writes on logout without clearing for same-session renewal", () => {
+    list.execute.mockReturnValue(of(Result.success([role])))
+    store.loadRoles().subscribe()
+    changes.next(AuthSession.create("Tester", "tester@example.test"))
+    store.loadRoles().subscribe()
+    expect(list.execute).toHaveBeenCalledTimes(1)
+    const pending = new Subject<Result<Role, RoleError>>()
+    create.execute.mockReturnValue(pending)
+    store.createRole(params).subscribe()
+    auth.session.set(null)
+    changes.next(null)
+    expect(pending.observed).toBe(false)
+    pending.next(Result.success(role))
+    expect(store.roles()).toEqual([])
+    expect(store.loaded()).toBe(false)
+    expect(store.loading()).toBe(false)
+    store.loadRoles().subscribe()
+    expect(list.execute).toHaveBeenCalledTimes(1)
+  })
+  it("shares reads, keeps stale roles on failure and does not extend TTL on cache hits or errors", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    try {
+      list.execute.mockReturnValue(of(Result.success([role])))
+      store.loadRoles().subscribe()
+      now.mockReturnValue(121000)
+      const response = new Subject<Result<Role[], RoleError>>()
+      list.execute.mockReturnValue(response)
+      const first = store.loadRoles().subscribe()
+      const second = store.loadRoles().subscribe()
+      expect(list.execute).toHaveBeenCalledTimes(2)
+      expect(store.refreshing()).toBe(true)
+      expect(store.roles()).toEqual([role])
+      first.unsubscribe()
+      expect(response.observed).toBe(true)
+      response.next(Result.failure(new RoleError("UNEXPECTED")))
+      response.complete()
+      expect(store.expires()).toBe(121000)
+      expect(store.loaded()).toBe(true)
+      store.loadRoles().subscribe().unsubscribe()
+      expect(list.execute).toHaveBeenCalledTimes(3)
+      second.unsubscribe()
+      expect(store.refreshing()).toBe(false)
+    } finally {
+      now.mockRestore()
+    }
+  })
+  it("fences reads started while a role mutation was pending", () => {
+    const write = new Subject<Result<Role, RoleError>>()
+    const read = new Subject<Result<Role[], RoleError>>()
+    create.execute.mockReturnValue(write)
+    list.execute.mockReturnValue(read)
+    store.createRole(params).subscribe()
+    store.loadRoles().subscribe()
+    write.next(Result.success(role))
+    write.complete()
+    read.next(Result.success([]))
+    read.complete()
+    expect(store.roles()).toEqual([role])
+    expect(store.expires()).toBe(0)
+  })
+  it("invalidates successful fixture mutations without extending catalog freshness", () => {
+    list.execute.mockReturnValue(of(Result.success([role])))
+    store.loadRoles().subscribe()
+    create.execute.mockReturnValue(of(Result.success(role)))
+    store.createRole(params).subscribe()
+    expect(store.expires()).toBe(0)
+    store.loadRoles().subscribe()
+    expect(list.execute).toHaveBeenCalledTimes(2)
   })
   it("defers requests and resets loading on completion, cancellation and empty completion", () => {
     const response = new Subject<Result<Role[], RoleError>>()
@@ -70,7 +181,7 @@ describe("RolesStore", () => {
     list.execute.mockReturnValue(of(Result.success([role])))
     store.loadRoles().subscribe()
     list.execute.mockReturnValue(throwError(() => new Error("offline")))
-    store.loadRoles().subscribe()
+    store.loadRoles(true).subscribe()
     expect(store.error()).toMatchObject({ code: "UNEXPECTED" })
     expect(store.roles()).toEqual([role])
     create.execute.mockImplementation(() => {
@@ -127,7 +238,7 @@ describe("RolesStore", () => {
     list.execute.mockReturnValue(older)
     store.loadRoles().subscribe()
     list.execute.mockReturnValue(of(Result.success([role])))
-    store.loadRoles().subscribe()
+    store.loadRoles(true).subscribe()
     older.next(Result.success([]))
     older.complete()
     expect(store.roles()).toEqual([role])

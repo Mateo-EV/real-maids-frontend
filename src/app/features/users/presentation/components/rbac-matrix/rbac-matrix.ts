@@ -1,4 +1,14 @@
-import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
+import {
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  OnInit,
+  signal,
+  untracked
+} from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { FormField, FormRoot, disabled, form } from "@angular/forms/signals"
 import { forkJoin, Subscription } from "rxjs"
@@ -42,17 +52,23 @@ export class RbacMatrix implements OnInit {
   private readonly destroyRef = inject(DestroyRef)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
+  readonly active = input(true)
+  // Snapshot of the editable draft baseline, not a read cache.
   readonly selectedRoleId = signal<number | undefined>(undefined)
   readonly loaded = signal<PermissionAssignment | undefined>(undefined)
   readonly loadedRoleId = computed(() => this.loaded()?.roleId)
   readonly displayedRole = computed(() =>
     this.roles.roles().find(role => role.id === this.loadedRoleId())
   )
-  readonly catalog = signal<Permission[]>([])
+  readonly catalog = computed(() => this.store.catalog())
+  private readonly draftPermissions = signal<Permission[]>([])
   readonly permissions = computed(() => {
     const all = new Map(this.catalog().map(permission => [permission.id, permission]))
     // Preserve and display assigned IDs absent from the current catalog; never silently revoke them.
-    for (const permission of this.loaded()?.permissions ?? [])
+    for (const permission of [
+      ...(this.loaded()?.permissions ?? []),
+      ...this.draftPermissions().filter(p => this.model()[this.key(p.id)])
+    ])
       if (!all.has(permission.id)) all.set(permission.id, permission)
     return [...all.values()]
   })
@@ -69,9 +85,23 @@ export class RbacMatrix implements OnInit {
       .filter(p => this.model()[this.key(p.id)])
       .map(p => p.id)
   )
-  readonly loading = signal(false)
+  readonly refreshing = computed(
+    () =>
+      this.store.catalogEntry().refreshing ||
+      !!this.store.assignmentEntries()[this.selectedRoleId()!]?.refreshing
+  )
+  readonly loading = computed(
+    () =>
+      this.store.catalogEntry().loading ||
+      !!this.store.assignmentEntries()[this.selectedRoleId()!]?.loading ||
+      this.refreshing()
+  )
   readonly confirmationOpen = signal(false)
-  readonly error = signal("")
+  readonly error = computed(() =>
+    this.store.catalogEntry().error || this.store.assignmentEntries()[this.selectedRoleId()!]?.error
+      ? "No pudimos cargar los permisos. Los cambios visibles se conservan; reintenta para continuar."
+      : ""
+  )
   readonly dirty = computed(() => {
     const saved = this.loaded()?.permissions.map(p => p.id) ?? []
     return saved.length !== this.ids().length || this.ids().some(id => !saved.includes(id))
@@ -88,6 +118,35 @@ export class RbacMatrix implements OnInit {
   readonly canSave = computed(() => this.editable() && this.dirty())
   private request?: Subscription
   private generation = 0
+  private releaseRole?: () => void
+  private sessionRevision = this.store.sessionRevision()
+  constructor() {
+    effect(() => {
+      const revision = this.store.sessionRevision()
+      untracked(() => {
+        if (revision !== this.sessionRevision) {
+          this.sessionRevision = revision
+          this.releaseRole?.()
+          this.releaseRole = undefined
+          this.loaded.set(undefined)
+          this.model.set({})
+          this.draftPermissions.set([])
+        }
+      })
+    })
+    let wasActive: boolean | undefined
+    effect(() => {
+      const active = this.active()
+      const revisiting = wasActive === false && active
+      wasActive = active
+      // ngOnInit owns the initial read; only a later visibility edge checks freshness.
+      if (revisiting)
+        untracked(() => {
+          if (this.selectedRoleId() !== undefined) this.load(false)
+        })
+    })
+    this.destroyRef.onDestroy(() => this.releaseRole?.())
+  }
   key(id: number): string {
     return `permission${id}`
   }
@@ -96,7 +155,7 @@ export class RbacMatrix implements OnInit {
   }
   ngOnInit(): void {
     this.selectedRoleId.set(this.roles.roles()[0]?.id)
-    this.retry()
+    this.load(false)
   }
   selectRole(value: string | null | undefined): void {
     if (this.destroyRef.destroyed || this.confirmationOpen() || value == null || value === "")
@@ -104,47 +163,42 @@ export class RbacMatrix implements OnInit {
     const id = Number(value)
     if (!this.roles.roles().some(role => role.id === id)) return
     this.selectedRoleId.set(id)
-    this.retry()
+    this.load(false)
   }
   retry(): void {
+    this.load(true)
+  }
+  private load(force: boolean): void {
     if (this.destroyRef.destroyed || this.confirmationOpen()) return
     const id = this.selectedRoleId()
     if (id === undefined) return
     const generation = ++this.generation
     this.request?.unsubscribe()
-    this.loading.set(true)
-    this.error.set("")
+    const preserveDraft = this.loadedRoleId() === id && this.dirty()
     this.request = forkJoin({
-      catalog: this.store.loadCatalog(),
-      assignment: this.store.loadPermissions(id)
+      catalog: this.store.loadCatalog(force),
+      assignment: this.store.loadPermissions(id, force)
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (generation !== this.generation || this.destroyRef.destroyed) return
-          this.loading.set(false)
           if (
             result.catalog.success &&
             result.assignment.success &&
             result.assignment.data.roleId === id
           ) {
-            this.catalog.set(result.catalog.data.map(p => ({ ...p })))
-            this.apply(result.assignment.data)
-          } else
-            this.error.set(
-              "No pudimos cargar los permisos. Los cambios visibles se conservan; reintenta para continuar."
-            )
-        },
-        error: () => {
-          if (!this.destroyRef.destroyed && generation === this.generation) {
-            this.loading.set(false)
-            this.error.set("No pudimos cargar los permisos. El borrador se conserva.")
+            if (!preserveDraft) this.apply(result.assignment.data)
           }
         }
       })
   }
   private apply(assignment: PermissionAssignment): void {
+    this.releaseRole?.()
+    this.releaseRole = this.store.retainRole(assignment.roleId)
+    this.draftPermissions.set([])
     this.loaded.set(copyAssignment(assignment))
+    this.draftPermissions.set(this.permissions().map(p => ({ ...p })))
     this.model.set(
       Object.fromEntries(
         this.permissions().map(p => [

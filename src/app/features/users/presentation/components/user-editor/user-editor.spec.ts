@@ -1,11 +1,14 @@
 import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
-import { Component, getDebugNode, inject } from "@angular/core"
+import { Component, getDebugNode, inject, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { EMPTY, firstValueFrom, forkJoin, of, Subject } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { Result } from "@/app/shared/utils/result"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Lang, User } from "../../../domain/entities/user.entity"
 import { UserError } from "../../../domain/errors/user.error"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
@@ -50,7 +53,19 @@ describe("UserEditor Signal Forms", () => {
       imports: [TestHost],
       providers: [
         { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-        { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
+        { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+        {
+          provide: AuthStore,
+          useValue: {
+            session: signal(AuthSession.create("Editor test", "editor@example.test", null, null, 1))
+          }
+        },
+        {
+          provide: ObserveAuthSessionUseCase,
+          useValue: {
+            execute: () => of(TestBed.inject(AuthStore).session())
+          }
+        }
       ]
     })
   )

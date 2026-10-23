@@ -6,6 +6,22 @@ import { RBAC_REPOSITORY } from "../../domain/repositories/rbac.repository"
 import { PermissionAssignment } from "../../domain/entities/permission.entity"
 import { RbacError } from "../../domain/errors/rbac.error"
 import { RbacStore } from "./rbac.store"
+import { signal } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { beforeEach } from "vitest"
+beforeEach(() =>
+  TestBed.configureTestingModule({
+    providers: [
+      {
+        provide: AuthStore,
+        useValue: { session: signal(AuthSession.create("Tester", "tester@example.test")) }
+      },
+      { provide: ObserveAuthSessionUseCase, useValue: { execute: () => new Subject() } }
+    ]
+  })
+)
 describe("RbacStore", () => {
   it("keeps loaded data on query failure and ignores stale loads after save", async () => {
     const initial: PermissionAssignment = {
@@ -28,7 +44,7 @@ describe("RbacStore", () => {
     })
     const store = TestBed.inject(RbacStore)
     await firstValueFrom(store.loadPermissions(19))
-    const stale = store.loadPermissions(19).subscribe()
+    const stale = store.loadPermissions(19, true).subscribe()
     await firstValueFrom(store.savePermissionIds(19, []))
     delayed.next(Result.success(initial))
     delayed.complete()
@@ -53,7 +69,7 @@ describe("RbacStore", () => {
     })
     const store = TestBed.inject(RbacStore)
     store.loadPermissions(19).subscribe()
-    store.loadPermissions(19).subscribe()
+    store.loadPermissions(19, true).subscribe()
     second.next(Result.success({ roleId: 19, permissions: [] }))
     second.complete()
     first.next(
