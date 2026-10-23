@@ -1,3 +1,8 @@
+import { signal } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { EMPTY } from "rxjs"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { firstValueFrom, of, Subject } from "rxjs"
@@ -50,6 +55,13 @@ describe("UserSessions server owners and disclosure details", () => {
       imports: [UserSessions],
       providers: [
         provideRouter([]),
+        {
+          provide: AuthStore,
+          useValue: {
+            session: signal(AuthSession.create("Test", "test@example.test", null, null, 1))
+          }
+        },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
         { provide: USER_SESSION_REPOSITORY, useValue: repository },
         { provide: UserStore, useValue: { mutationRevision: () => 0 } },
         { provide: HotToastService, useValue: { success: vi.fn() } }
@@ -212,6 +224,44 @@ describe("UserSessions server owners and disclosure details", () => {
     expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
     expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
   })
+  it("selects shared root owners while independent component controls cancel only their own activity", async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = new Subject()
+      repository["getSessionOwners"].mockReturnValueOnce(pending)
+      const first = setup(),
+        second = setup()
+      expect(first.component.sessions).toBe(second.component.sessions)
+      expect(repository["getSessionOwners"]).toHaveBeenCalledOnce()
+      expect(first.component.owners.loading()).toBe(true)
+      expect(second.component.owners.loading()).toBe(true)
+      first.component.setSearch("Other")
+      expect(pending.observed).toBe(true)
+      pending.next(Result.success(page))
+      pending.complete()
+      first.fixture.detectChanges()
+      second.fixture.detectChanges()
+      expect(first.component.visibleUsers()).toEqual([])
+      expect(second.component.visibleUsers()).toEqual(owners)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({
+        offset: 0,
+        limit: 5,
+        search: "Other"
+      })
+      expect(first.component.owners.query().search).toBe("Other")
+      expect(second.component.owners.query().search).toBeUndefined()
+      first.fixture.destroy()
+      expect(second.component.owners.loaded()).toBe(true)
+      expect(Object.keys(second.store.ownerEntries())).toHaveLength(1)
+      second.fixture.destroy()
+      expect(second.store.ownerEntries()).toEqual({})
+      expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("opens guarded named confirmation, protects actual and suppresses late toast", () => {
     const { element, component, fixture } = setup()
     open(element)

@@ -25,7 +25,6 @@ import { Subject, Subscription, switchMap } from "rxjs"
 import { UserSession } from "../../../domain/entities/user-session.entity"
 import { UserSessionOwnerQuery } from "../../../domain/models/user-session-owner-query"
 import { UserSessionsStore } from "../../state/user-sessions.store"
-import { UserSessionOwnersStore } from "../../state/user-session-owners.store"
 import { UserStore } from "../../state/user.store"
 import {
   RevokeSessionContext,
@@ -34,7 +33,6 @@ import {
 
 @Component({
   selector: "app-user-sessions",
-  providers: [UserSessionOwnersStore],
   imports: [
     DatePipe,
     HlmNativeSelectImports,
@@ -51,7 +49,8 @@ import {
 })
 export class UserSessions implements OnInit {
   readonly sessions = inject(UserSessionsStore)
-  readonly owners = inject(UserSessionOwnersStore)
+  private readonly requestedQuery = signal<UserSessionOwnerQuery>({ offset: 0, limit: 5 })
+  readonly owners = this.sessions.selectOwners(this.requestedQuery)
   private readonly users = inject(UserStore)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
@@ -82,7 +81,10 @@ export class UserSessions implements OnInit {
   constructor() {
     this.queries
       .pipe(
-        switchMap(({ query, delay }) => this.owners.load(query, delay)),
+        switchMap(({ query, delay }) => {
+          this.requestedQuery.set(query)
+          return this.sessions.observeOwners(query, delay)
+        }),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
@@ -95,7 +97,8 @@ export class UserSessions implements OnInit {
       this.userRevision = users
       if (!sessionChanged && !userChanged) return
       untracked(() => {
-        this.reload()
+        // Owner observers share the root's lazy invalidation read. Do not reload it a second time.
+        if (userChanged) this.sessions.refreshOwnersAfterUserMutation(users)
         if (userChanged) for (const id of this.openIds()) this.refreshDetail(id)
         else {
           const id = this.sessions.affectedUserId()
