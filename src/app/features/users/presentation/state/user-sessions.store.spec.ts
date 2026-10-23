@@ -1,3 +1,7 @@
+import { signal } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { TestBed } from "@angular/core/testing"
 import { EMPTY, firstValueFrom, of, Subject, throwError } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -29,7 +33,16 @@ describe("UserSessionsStore", () => {
       revokeUserSessions: vi.fn(() => of(Result.success(undefined)))
     }
     TestBed.configureTestingModule({
-      providers: [{ provide: USER_SESSION_REPOSITORY, useValue: repository }]
+      providers: [
+        {
+          provide: AuthStore,
+          useValue: {
+            session: signal(AuthSession.create("Test", "test@example.test", null, null, 1))
+          }
+        },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
+        { provide: USER_SESSION_REPOSITORY, useValue: repository }
+      ]
     })
   })
   it("loads exact global count independently of detail, owners and clock", async () => {
@@ -58,17 +71,20 @@ describe("UserSessionsStore", () => {
     expect(store.details()[42].items[0].isCurrent).toBe(true)
     expect(store.details()[42].loaded).toBe(false)
   })
-  it("cancels stale per-ID requests independently and leaves cancelled caches unverified", async () => {
+  it("shares same-ID requests independently and leaves final cancellation unverified", async () => {
     const store = TestBed.inject(UserSessionsStore)
     const old = new Subject(),
       other = new Subject()
     repository["getUserSessionsByUser"].mockReturnValueOnce(old).mockReturnValueOnce(other)
     store.loadDetails(42).subscribe()
     const subscription = store.loadDetails(43).subscribe()
-    await firstValueFrom(store.loadDetails(42))
-    expect(old.observed).toBe(false)
+    const shared = firstValueFrom(store.loadDetails(42))
+    expect(old.observed).toBe(true)
     expect(other.observed).toBe(true)
-    old.next(Result.success([]))
+    old.next(Result.success([current()]))
+    old.complete()
+    await shared
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
     expect(store.details()[42].items).toHaveLength(1)
     subscription.unsubscribe()
     expect(other.observed).toBe(false)

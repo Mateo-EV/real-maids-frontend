@@ -73,7 +73,11 @@ export class UserSessions implements OnInit {
   readonly rangeEnd = computed(() =>
     this.visibleUsers().length ? this.rangeStart() + this.visibleUsers().length - 1 : 0
   )
-  private readonly queries = new Subject<{ query: UserSessionOwnerQuery; delay: number }>()
+  private readonly queries = new Subject<{
+    query: UserSessionOwnerQuery
+    delay: number
+    force: boolean
+  }>()
   private readonly detailSubscriptions = new Map<number, Subscription>()
   private sessionRevision = this.sessions.mutationRevision()
   private userRevision = this.users.mutationRevision()
@@ -81,9 +85,9 @@ export class UserSessions implements OnInit {
   constructor() {
     this.queries
       .pipe(
-        switchMap(({ query, delay }) => {
+        switchMap(({ query, delay, force }) => {
           this.requestedQuery.set(query)
-          return this.sessions.observeOwners(query, delay)
+          return this.sessions.observeOwners(query, delay, force)
         }),
         takeUntilDestroyed(this.destroyRef)
       )
@@ -108,7 +112,7 @@ export class UserSessions implements OnInit {
     })
   }
   ngOnInit(): void {
-    this.reload()
+    this.load(this.owners.query())
   }
   private closeDetails(): void {
     for (const subscription of this.detailSubscriptions.values()) subscription.unsubscribe()
@@ -129,8 +133,8 @@ export class UserSessions implements OnInit {
       delay
     )
   }
-  private load(query: UserSessionOwnerQuery, delay = 0): void {
-    if (!this.destroyRef.destroyed) this.queries.next({ query, delay })
+  private load(query: UserSessionOwnerQuery, delay = 0, force = false): void {
+    if (!this.destroyRef.destroyed) this.queries.next({ query, delay, force })
   }
   setSearch(value: string): void {
     this.search.set(value)
@@ -158,7 +162,7 @@ export class UserSessions implements OnInit {
     this.load({ ...query, offset: (page - 1) * (query.limit ?? 5) })
   }
   reload(): void {
-    this.load(this.owners.query())
+    this.load(this.owners.query(), 0, true)
   }
   toggle(userId: number, event: Event): void {
     const open = (event.target as HTMLDetailsElement).open
@@ -167,19 +171,21 @@ export class UserSessions implements OnInit {
     if (open) ids.add(userId)
     else ids.delete(userId)
     this.openIds.set(ids)
-    if (open) this.refreshDetail(userId)
+    if (open) this.refreshDetail(userId, false)
     else {
       this.detailSubscriptions.get(userId)?.unsubscribe()
       this.detailSubscriptions.delete(userId)
     }
   }
-  refreshDetail(userId: number): void {
+  refreshDetail(userId: number, force = true): void {
     if (this.destroyRef.destroyed || !this.openIds().has(userId)) return
-    this.detailSubscriptions.get(userId)?.unsubscribe()
-    this.detailSubscriptions.set(
-      userId,
-      this.sessions.loadDetails(userId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
-    )
+    const previous = this.detailSubscriptions.get(userId)
+    const subscription = this.sessions
+      .observeDetails(userId, force)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe()
+    this.detailSubscriptions.set(userId, subscription)
+    previous?.unsubscribe()
   }
   revoke(session: UserSession): void {
     if (

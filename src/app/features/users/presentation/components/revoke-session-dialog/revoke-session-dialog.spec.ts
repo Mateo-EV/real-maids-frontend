@@ -1,8 +1,11 @@
 import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
-import { Component, getDebugNode } from "@angular/core"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
+import { Component, getDebugNode, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { firstValueFrom, of, Subject, throwError, timer, map } from "rxjs"
+import { EMPTY, firstValueFrom, of, Subject, throwError, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserSessionError } from "../../../domain/errors/user-session.error"
 import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
@@ -38,6 +41,13 @@ describe("RevokeSessionDialog", () => {
     TestBed.configureTestingModule({
       imports: [TestHost],
       providers: [
+        {
+          provide: AuthStore,
+          useValue: {
+            session: signal(AuthSession.create("Test", "test@example.test", null, null, 1))
+          }
+        },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
         {
           provide: USER_SESSION_REPOSITORY,
           useValue: {

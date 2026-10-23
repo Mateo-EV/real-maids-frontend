@@ -56,7 +56,7 @@ describe("root-owned session owner queries", () => {
     expect(repository.getSessionCount).not.toHaveBeenCalled()
     expect(repository.getUserSessionsByUser).not.toHaveBeenCalled()
     subscription.unsubscribe()
-    expect(owners.result()).toBeUndefined()
+    expect(owners.result()).toBe(page)
   })
   it("normalizes full keys, shares same-key results/status and keeps different queries independent", () => {
     const { store, repository } = setup()
@@ -85,7 +85,7 @@ describe("root-owned session owner queries", () => {
     one.unsubscribe()
     two.unsubscribe()
     three.unsubscribe()
-    expect(Object.keys(store.ownerEntries())).toHaveLength(0)
+    expect(Object.keys(store.ownerEntries())).toHaveLength(1)
   })
   it("keeps a shared flight alive when one consumer switches or cancels, and disposes only inactive entries", () => {
     const { store, repository } = setup()
@@ -106,15 +106,15 @@ describe("root-owned session owner queries", () => {
     expect(other.observed).toBe(false)
     expect(Object.keys(store.ownerEntries())).toHaveLength(1)
     second.unsubscribe()
-    expect(selected.result()).toBeUndefined()
+    expect(selected.result()).toBe(page)
     for (let i = 0; i < 30; i++)
       store
         .observeOwners({ search: String(i) })
         .subscribe()
         .unsubscribe()
-    expect(Object.keys(store.ownerEntries())).toHaveLength(0)
+    expect(Object.keys(store.ownerEntries())).toHaveLength(20)
   })
-  it("always reads the server on new activity, without a TTL or polling", () => {
+  it("reads expired activity without polling and reuses renewed results", () => {
     vi.useFakeTimers()
     const { store, repository } = setup()
     const first = store.observeOwners({}).subscribe()
@@ -125,7 +125,7 @@ describe("root-owned session owner queries", () => {
     first.unsubscribe()
     second.unsubscribe()
     store.observeOwners({}).subscribe().unsubscribe()
-    expect(repository.getSessionOwners).toHaveBeenCalledTimes(3)
+    expect(repository.getSessionOwners).toHaveBeenCalledTimes(2)
   })
   it.each([
     [EMPTY, "INVALID_RESPONSE"],
@@ -188,9 +188,9 @@ describe("root-owned session owner queries", () => {
       repository.getSessionCount.mockReturnValueOnce(count as never)
       repository.getUserSessionsByUser.mockReturnValueOnce(detail as never)
       repository.revokeUserSession.mockReturnValueOnce(write)
-      const refreshing = store.observeOwners({}).subscribe()
-      store.loadSessionCount().subscribe()
-      store.loadDetails(42).subscribe()
+      const refreshing = store.observeOwners({}, 0, true).subscribe()
+      store.loadSessionCount(true).subscribe()
+      store.loadDetails(42, true).subscribe()
       store.revokeSession(42, 91).subscribe()
       if (kind === "expiry") {
         vi.setSystemTime(2000)
@@ -279,7 +279,7 @@ describe("root-owned session owner queries", () => {
     expect(selected.loaded()).toBe(true)
     expect(Object.keys(store.ownerEntries())).toHaveLength(1)
     activity.unsubscribe()
-    expect(store.ownerEntries()).toEqual({})
+    expect(Object.keys(store.ownerEntries())).toHaveLength(1)
   })
 
   it("dispatches no owner/count/detail reads or auth acquisition during SSR", () => {

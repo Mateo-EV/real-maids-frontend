@@ -84,6 +84,43 @@ describe("UserSessions server owners and disclosure details", () => {
     details.dispatchEvent(new Event("toggle"))
     return details
   }
+  it.each([false, true])(
+    "keeps verified detail visible during refresh and failure (empty=%s)",
+    empty => {
+      repository["getUserSessionsByUser"].mockReturnValueOnce(
+        of(Result.success(empty ? [] : sessions))
+      )
+      const { element, fixture, component } = setup()
+      open(element)
+      fixture.detectChanges()
+      const pending = new Subject<Result<UserSession[], UserSessionError>>()
+      repository["getUserSessionsByUser"].mockReturnValueOnce(pending)
+      component.refreshDetail(842)
+      fixture.detectChanges()
+      expect(element.textContent).toContain("Actualizando conexiones")
+      expect(element.querySelectorAll("article")).toHaveLength(empty ? 0 : 2)
+      if (empty) expect(element.textContent).toContain("Sin conexiones vigentes")
+      pending.next(Result.failure(new UserSessionError("NETWORK")))
+      pending.complete()
+      fixture.detectChanges()
+      expect(element.textContent).toContain("pueden estar desactualizadas")
+      expect(element.querySelectorAll("article")).toHaveLength(empty ? 0 : 2)
+      if (empty) expect(element.textContent).toContain("Sin conexiones vigentes")
+      Array.from(element.querySelectorAll<HTMLButtonElement>("button"))
+        .find(button => button.textContent?.includes("Reintentar conexiones"))!
+        .click()
+      expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(3)
+      expect(repository["revokeUserSession"]).not.toHaveBeenCalled()
+    }
+  )
+  it("shows owner refresh status without hiding summaries", () => {
+    const { element, fixture, component } = setup()
+    repository["getSessionOwners"].mockReturnValueOnce(new Subject())
+    component.reload()
+    fixture.detectChanges()
+    expect(element.textContent).toContain("Actualizando sesiones")
+    expect(element.querySelectorAll("summary")).toHaveLength(5)
+  })
   it("renders server summaries without initial per-owner or global-array reads; only explicit open loads detail", () => {
     const { element, fixture } = setup()
     expect(element.querySelectorAll("details")).toHaveLength(5)
@@ -97,6 +134,20 @@ describe("UserSessions server owners and disclosure details", () => {
     expect(element.textContent).toContain("Tu sesión actual")
     expect(element.textContent).toContain("Para cerrarla usa Salir")
     expect(element.querySelector("summary")?.textContent).toContain("9 sesiones")
+  })
+  it("reuses closed disclosure details before TTL but explicit refresh bypasses freshness", () => {
+    const { element, fixture, component } = setup()
+    const details = open(element)
+    fixture.detectChanges()
+    details.open = false
+    details.dispatchEvent(new Event("toggle"))
+    open(element)
+    fixture.detectChanges()
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledOnce()
+    component.refreshDetail(842)
+    expect(repository["getUserSessionsByUser"]).toHaveBeenCalledTimes(2)
+    component.reload()
+    expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
   })
   it("debounces name/email server search, resets page, and emits false presence rather than omitting it", async () => {
     vi.useFakeTimers()
@@ -118,7 +169,8 @@ describe("UserSessions server owners and disclosure details", () => {
         hasSessions: false
       })
       component.clearFilters()
-      expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({ offset: 0, limit: 5 })
+      expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(3)
+      expect(component.owners.query()).toEqual({ offset: 0, limit: 5 })
       expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
       fixture.destroy()
     } finally {
@@ -144,6 +196,8 @@ describe("UserSessions server owners and disclosure details", () => {
     open(element)
     fixture.detectChanges()
     expect(element.textContent).toContain("No pudimos cargar las conexiones")
+    expect(element.textContent).not.toContain("Sin conexiones vigentes")
+    expect(element.querySelectorAll("article")).toHaveLength(0)
     expect(element.querySelector("summary")?.textContent).toContain("9 sesiones")
     component.refreshDetail(842)
     fixture.detectChanges()
@@ -151,7 +205,7 @@ describe("UserSessions server owners and disclosure details", () => {
     expect(repository["getSessionOwners"]).toHaveBeenCalledOnce()
     expect(repository["revokeUserSession"]).not.toHaveBeenCalled()
   })
-  it("hides failed/unverified summaries, retries independently and cancels all owned reads on destroy", () => {
+  it("preserves verified summaries during refresh and cancels all owned reads on destroy", () => {
     const { element, fixture, component } = setup()
     const detail = new Subject(),
       summary = new Subject()
@@ -160,7 +214,8 @@ describe("UserSessions server owners and disclosure details", () => {
     repository["getSessionOwners"].mockReturnValue(summary)
     component.reload()
     fixture.detectChanges()
-    expect(element.querySelectorAll("summary")).toHaveLength(0)
+    expect(element.querySelectorAll("summary")).toHaveLength(5)
+    expect(component.owners.refreshing()).toBe(true)
     fixture.destroy()
     expect(detail.observed).toBe(false)
     expect(summary.observed).toBe(false)
@@ -218,7 +273,7 @@ describe("UserSessions server owners and disclosure details", () => {
     expect((await firstValueFrom(store.revokeSession(842, 72))).success).toBe(true)
     fixture.detectChanges()
     expect(element.textContent).toContain("No pudimos cargar los usuarios con sesiones")
-    expect(store.details()[842].loaded).toBe(false)
+    expect(store.details()[842].loaded).toBe(true)
     expect(store.details()[842].error?.code).toBe("NETWORK")
     expect(repository["revokeUserSession"]).toHaveBeenCalledOnce()
     expect(repository["getSessionOwners"]).toHaveBeenCalledTimes(2)
@@ -253,9 +308,9 @@ describe("UserSessions server owners and disclosure details", () => {
       expect(second.component.owners.query().search).toBeUndefined()
       first.fixture.destroy()
       expect(second.component.owners.loaded()).toBe(true)
-      expect(Object.keys(second.store.ownerEntries())).toHaveLength(1)
+      expect(Object.keys(second.store.ownerEntries())).toHaveLength(2)
       second.fixture.destroy()
-      expect(second.store.ownerEntries()).toEqual({})
+      expect(Object.keys(second.store.ownerEntries())).toHaveLength(2)
       expect(repository["getUserSessionsByUser"]).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()

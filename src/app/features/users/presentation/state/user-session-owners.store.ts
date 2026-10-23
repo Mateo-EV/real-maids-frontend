@@ -9,6 +9,8 @@ export interface SessionOwnersEntry {
   readonly result?: PaginationResponse<UserSessionOwner>
   readonly loading: boolean
   readonly loaded: boolean
+  readonly refreshing?: boolean
+  readonly expiresAt?: number
   readonly error?: UserSessionError
 }
 export function normalizeOwnersQuery(query: UserSessionOwnerQuery): UserSessionOwnerQuery {
@@ -36,6 +38,8 @@ export function selectSessionOwners(
     result: computed(() => entry()?.result),
     loading: computed(() => entry()?.loading ?? false),
     loaded: computed(() => entry()?.loaded ?? false),
+    refreshing: computed(() => entry()?.refreshing ?? false),
+    expiresAt: computed(() => entry()?.expiresAt ?? 0),
     error: computed(() => entry()?.error)
   }
 }
