@@ -1,6 +1,10 @@
+import { signal } from "@angular/core"
+import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { TestBed } from "@angular/core/testing"
 import { Subject } from "rxjs"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { GetAuditLogsUseCase } from "../../application/use-cases/get-audit-logs.use-case"
 import { Result } from "@/app/shared/utils/result"
 import { AuditPage } from "../../domain/models/audit-page"
@@ -19,6 +23,19 @@ const page = (total: number, globalTotal = 90): AuditPage => ({
   globalTotal
 })
 describe("Audit shared state", () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: AuthStore,
+          useValue: {
+            session: signal(AuthSession.create("Test", "test@example.test", null, null, 1))
+          }
+        },
+        { provide: ObserveAuthSessionUseCase, useValue: { execute: () => new Subject() } }
+      ]
+    })
+  })
   it("ignores stale successes/failures/finalizers and consumes real server totals", () => {
     const older = new Subject<Response>(),
       newer = new Subject<Response>()

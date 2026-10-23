@@ -71,7 +71,9 @@ describe("Audit viewer server queries and CSV", () => {
   function setup() {
     const reads = new Subject<Result<AuditPage, AuditLogError>>()
     const exports = new Subject<Result<Blob, AuditLogError>>()
-    const getAuditLogs = vi.fn((_query?: AuditQuery) => reads)
+    const getAuditLogs = vi.fn(
+      (_query?: AuditQuery): Observable<Result<AuditPage, AuditLogError>> => reads
+    )
     const exportAuditLogs = vi.fn((_filters?: AuditFilters) => exports)
     const download = vi.fn((_blob: Blob) => Result.success(undefined)),
       success = vi.fn()
@@ -133,6 +135,48 @@ describe("Audit viewer server queries and CSV", () => {
       success
     }
   }
+  it.each([0, 17])(
+    "retains verified audit results (%s) and pagination during refresh failure with retry",
+    total => {
+      const { fixture, viewer, reads, element, getAuditLogs } = setup()
+      reads.next(Result.success(page(total)))
+      reads.complete()
+      const pending = new Subject<Result<AuditPage, AuditLogError>>()
+      getAuditLogs.mockReturnValueOnce(pending)
+      viewer.retry()
+      fixture.detectChanges()
+      expect(element.textContent).toContain("Actualizando auditoría")
+      expect(element.querySelector("app-table-pagination")).not.toBeNull()
+      expect(element.querySelectorAll("[data-audit-row]")).toHaveLength(total ? 1 : 0)
+      if (!total) expect(element.textContent).toContain("Sin resultados")
+      pending.next(Result.failure(new AuditLogError("NETWORK")))
+      pending.complete()
+      fixture.detectChanges()
+      expect(element.textContent).toContain("pueden estar desactualizados")
+      expect(element.querySelector("app-table-pagination")).not.toBeNull()
+      expect(element.querySelectorAll("[data-audit-row]")).toHaveLength(total ? 1 : 0)
+      const retry = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
+        button => button.textContent?.trim() === "Reintentar"
+      )!
+      retry.click()
+      expect(getAuditLogs).toHaveBeenCalledTimes(3)
+    }
+  )
+
+  it("never renders an unverified empty audit result or another query's rows", () => {
+    const { fixture, viewer, reads, element, getAuditLogs } = setup()
+    fixture.detectChanges()
+    expect(element.textContent).not.toContain("Sin resultados")
+    reads.next(Result.success(page()))
+    reads.complete()
+    getAuditLogs.mockReturnValueOnce(of(Result.failure(new AuditLogError("NETWORK"))))
+    viewer.setEntity("sesion")
+    fixture.detectChanges()
+    expect(element.querySelector("[data-audit-row]")).toBeNull()
+    expect(element.querySelector("app-table-pagination")).toBeNull()
+    expect(element.textContent).not.toContain("Sin resultados")
+  })
+
   it("invalidates actor options on writes independently, preserves selection, and clears it on session loss", () => {
     const { viewer, fixture, getUsersPage, session, sessionChanges, users, status } = setup()
     viewer.selectActor("7")
@@ -531,6 +575,61 @@ describe("Audit viewer server queries and CSV", () => {
     fixture.destroy()
     expect(pending.observed).toBe(false)
     expect(TestBed.inject(AuditLogsStore).loading()).toBe(false)
+  })
+  it("checks freshness only on retained reactivation, preserving actor, filters, page and disclosure", () => {
+    const now = Date.now()
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now)
+    try {
+      const { fixture, viewer, reads, getAuditLogs } = setup()
+      reads.next(Result.success(page()))
+      reads.complete()
+      getAuditLogs.mockImplementation(
+        query => of(Result.success(page(17, query?.page ?? 0))) as never
+      )
+      viewer.selectActor("2")
+      viewer.setFrom("2026-09-01")
+      viewer.goToPage(2)
+      viewer.advancedOpen.set(true)
+      const calls = getAuditLogs.mock.calls.length
+      fixture.componentRef.setInput("active", false)
+      fixture.detectChanges()
+      fixture.componentRef.setInput("active", true)
+      fixture.detectChanges()
+      expect(getAuditLogs).toHaveBeenCalledTimes(calls)
+      fixture.componentRef.setInput("active", false)
+      fixture.detectChanges()
+      clock.mockReturnValue(now + 30000)
+      expect(getAuditLogs).toHaveBeenCalledTimes(calls)
+      fixture.componentRef.setInput("active", true)
+      fixture.detectChanges()
+      expect(getAuditLogs).toHaveBeenCalledTimes(calls + 1)
+      expect(viewer.selectedActor()?.id).toBe(2)
+      expect(viewer.filters()).toMatchObject({ userId: 2, fromUTC: "2026-09-01" })
+      expect(viewer.page()).toBe(2)
+      expect(viewer.advancedOpen()).toBe(true)
+      viewer.retry()
+      expect(getAuditLogs).toHaveBeenCalledTimes(calls + 2)
+      fixture.destroy()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+  it("selects root stale rows and refresh errors without a component result cache", () => {
+    const { fixture, viewer, reads, getAuditLogs } = setup()
+    reads.next(Result.success(page()))
+    reads.complete()
+    const refresh = new Subject<Result<AuditPage, AuditLogError>>()
+    getAuditLogs.mockReturnValue(refresh)
+    viewer.retry()
+    expect(viewer.store.items()).toEqual([log])
+    expect(viewer.store.refreshing()).toBe(true)
+    expect(viewer.store.loading()).toBe(false)
+    refresh.next(Result.failure(new AuditLogError("FORBIDDEN")))
+    refresh.complete()
+    expect(viewer.store.items()).toEqual([log])
+    expect(viewer.store.error()?.code).toBe("FORBIDDEN")
+    expect(viewer.store.refreshing()).toBe(false)
+    fixture.destroy()
   })
   it("opens the selected backend log", () => {
     const { fixture, element, reads } = setup()

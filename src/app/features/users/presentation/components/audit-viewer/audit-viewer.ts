@@ -5,8 +5,10 @@ import {
   DestroyRef,
   effect,
   inject,
+  input,
   OnInit,
   signal,
+  untracked,
   viewChild
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
@@ -81,7 +83,13 @@ export class AuditViewer implements OnInit {
   readonly actions = AUDIT_ACTIONS
   readonly filters = signal<AuditFilters>({})
   readonly page = signal(1)
-  readonly pageSize = 5
+  readonly active = input(true)
+  private initialized = false
+  private wasActive = true
+  private readonly effectiveSize = signal(5)
+  get pageSize(): number {
+    return this.effectiveSize()
+  }
   readonly pageCount = computed(() => Math.max(1, this.store.totalPages()))
   readonly rangeStart = computed(() =>
     this.store.total() ? (this.page() - 1) * this.pageSize + 1 : 0
@@ -146,7 +154,13 @@ export class AuditViewer implements OnInit {
   readonly activeActorOption = signal<string | null>(null)
   constructor() {
     effect(() => {
-      if (!this.users.sessionRevision()) return
+      const active = this.active()
+      const revisiting = active && !this.wasActive
+      this.wasActive = active
+      if (revisiting && this.initialized) untracked(() => this.read())
+    })
+    effect(() => {
+      if (!(this.users.sessionRevision() + this.store.sessionRevision())) return
       this.selectedActor.set(undefined)
       this.filters.update(filters => ({ ...filters, userId: undefined }))
     })
@@ -228,26 +242,35 @@ export class AuditViewer implements OnInit {
 
   ngOnInit(): void {
     this.loadActors(this.actors.query())
-    this.retry()
+    this.read()
+    this.initialized = true
   }
   retry(): void {
+    this.read(true)
+  }
+  private read(force = false, recovered = false): void {
     if (this.destroyRef.destroyed) return
     this.request?.unsubscribe()
     const request = new Subscription()
     this.request = request
     request.add(
       this.store
-        .load({
-          ...this.filters(),
-          page: this.page() - 1,
-          size: this.pageSize
-        })
+        .load(
+          {
+            ...this.filters(),
+            page: this.page() - 1,
+            size: this.pageSize
+          },
+          force
+        )
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(result => {
-          if (!this.destroyRef.destroyed && result.success && this.page() > this.pageCount()) {
+          if (this.destroyRef.destroyed || !result.success) return
+          this.effectiveSize.set(result.data.size)
+          if (!recovered && this.page() > this.pageCount()) {
             this.page.set(this.pageCount())
-            this.retry()
-          }
+            this.read(true, true)
+          } else this.page.set(result.data.page + 1)
         })
     )
   }
@@ -256,7 +279,7 @@ export class AuditViewer implements OnInit {
     this.exportError.set("")
     this.filters.set(filters)
     this.page.set(1)
-    this.retry()
+    this.read()
   }
   setDay(value: string): void {
     if (this.destroyRef.destroyed || this.exporting()) return
@@ -313,7 +336,7 @@ export class AuditViewer implements OnInit {
   goToPage(page: number): void {
     if (this.destroyRef.destroyed || this.store.loading() || !Number.isSafeInteger(page)) return
     this.page.set(Math.max(1, Math.min(page, this.pageCount())))
-    this.retry()
+    this.read()
   }
   showDetail(log: AuditLog): void {
     if (this.destroyRef.destroyed) return
