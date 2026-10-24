@@ -22,7 +22,7 @@
         data-audit-toolbar
       >
         <div hlmField class="min-w-0 w-full sm:flex-1">
-          <label hlmFieldLabel for="audit-actor">Usuario responsable</label>
+          <label hlmFieldLabel for="audit-actor" class="text-xs">Usuario responsable</label>
           <hlm-combobox
             [value]="selectedActor() ? '' + selectedActor()!.id : 'all'"
             [search]="filterModel().actorSearch"

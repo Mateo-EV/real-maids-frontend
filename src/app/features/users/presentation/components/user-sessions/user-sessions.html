@@ -10,8 +10,8 @@
         Abre un usuario para consultar sus conexiones del servidor.
       </p>
     </div>
-    <div class="catalog-filter-row">
-      <div hlmField class="catalog-filter-search">
+    <div class="catalog-filter-row flex gap-2">
+      <div hlmField class="catalog-filter-search w-fit">
         <label hlmFieldLabel class="text-xs" for="session-search">Buscar nombre o correo</label>
         <hlm-input-group>
           <input
@@ -24,21 +24,19 @@
           />
         </hlm-input-group>
       </div>
-      <div hlmField>
-        <label hlmFieldLabel for="session-presence">Sesiones</label>
+      <div hlmField class="w-fit">
+        <label hlmFieldLabel class="text-xs" for="session-presence">Sesiones</label>
         <hlm-native-select
           selectId="session-presence"
           [value]="presence()"
           (valueChange)="setPresence($event)"
+          class="w-fit"
         >
           <option value="all">Todos</option>
           <option value="with">Con sesiones</option>
           <option value="without">Sin sesiones</option>
         </hlm-native-select>
       </div>
-      <button hlmBtn variant="outline" type="button" (click)="clearFilters()">
-        Limpiar filtros
-      </button>
     </div>
   </div>
   @if (owners.loading()) {
