@@ -1,0 +1,32 @@
+name: CI - Front-End Angular
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'fix/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar-angular:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+      - name: Validar compilacion de Angular
+        run: npm run build
+      - name: Ejecutar lint (si existe)
+        run: npm run lint --if-present
+      - name: Ejecutar pruebas CI (si hay script configurado)
+        run: npm run test:ci --if-present
+
