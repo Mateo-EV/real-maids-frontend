@@ -286,6 +286,46 @@ describe("RolesStore", () => {
     expect(store.roles()).toEqual([role])
     expect(store.loading()).toBe(false)
   })
+  it.each(["replacement", "destruction"])(
+    "denies reentrant cache reads and dispatch during %s",
+    transition => {
+      list.execute.mockReturnValueOnce(of(Result.success([role])))
+      store.loadRoles().subscribe()
+      const pending = new Subject<Result<Role[], RoleError>>()
+      list.execute.mockReturnValue(pending)
+      const received = vi.fn()
+      const completed = vi.fn(() => {
+        store.loadRoles().subscribe(received)
+        store.loadRoles(true).subscribe(received)
+      })
+      store.loadRoles(true).subscribe({ complete: completed })
+      // A forced flight may have emitted verified data without completing yet.
+      pending.next(Result.success([role]))
+      if (transition === "replacement") {
+        const replacement = AuthSession.create("Other", "other@example.test")
+        auth.session.set(replacement)
+        changes.next(replacement)
+      } else TestBed.resetTestingModule()
+      expect(completed).toHaveBeenCalledTimes(1)
+      expect(received).not.toHaveBeenCalled()
+      expect(list.execute).toHaveBeenCalledTimes(2)
+      expect(pending.observed).toBe(false)
+      expect(store.roles()).toEqual([])
+      expect(store.loaded()).toBe(false)
+      expect(store.loading()).toBe(false)
+      if (transition === "replacement") {
+        list.execute.mockReturnValue(of(Result.success([])))
+        store.loadRoles().subscribe(received)
+        expect(list.execute).toHaveBeenCalledTimes(3)
+        expect(received).toHaveBeenCalledExactlyOnceWith(Result.success([]))
+        expect(store.loaded()).toBe(true)
+      } else {
+        store.loadRoles(true).subscribe(received)
+        expect(list.execute).toHaveBeenCalledTimes(2)
+        expect(received).not.toHaveBeenCalled()
+      }
+    }
+  )
   it("ignores stale loads after mutations and older overlapping loads", () => {
     const stale = new Subject<Result<Role[], RoleError>>()
     list.execute.mockReturnValue(stale)

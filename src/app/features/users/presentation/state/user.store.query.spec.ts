@@ -1,7 +1,7 @@
 import { signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { getState } from "@ngrx/signals"
-import { of, Subject } from "rxjs"
+import { Observable, of, Subject } from "rxjs"
 import { describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
@@ -23,7 +23,7 @@ function setup() {
   )
   const changes = new Subject<AuthSession | null>()
   const pending = new Subject<PageResult>()
-  const read = { execute: vi.fn((_query: UserListQuery) => pending) }
+  const read = { execute: vi.fn((_query: UserListQuery): Observable<PageResult> => pending) }
   const status = { execute: vi.fn(() => of(Result.success(undefined))) }
   TestBed.configureTestingModule({
     providers: [
@@ -37,6 +37,117 @@ function setup() {
 }
 
 describe("shared reactive query ownership", () => {
+  it("settles flags before delivering page success or failure to callers", () => {
+    const { store, pending } = setup()
+    const entry = store.selectQuery(signal({}))
+    const received = vi.fn(() => [entry.loading(), entry.refreshing()])
+    store.readPage({}).subscribe(received)
+    pending.next(Result.failure(new UserError("NETWORK")))
+    store.readPage({}).subscribe(received)
+    pending.next(Result.success(page))
+    store.readPage({}, true).subscribe(received)
+    pending.next(Result.success(page))
+    expect(received.mock.results.map(result => result.value)).toEqual([
+      [false, false],
+      [false, false],
+      [false, false]
+    ])
+  })
+  it("retains only same-query stale rows on expired revisit without renewing failed freshness", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    try {
+      const { store, pending, read } = setup()
+      const selection = store.selectQuery(signal({}))
+      store.readPage({}).subscribe()
+      pending.next(Result.success(page))
+      const expires = selection.expires()
+      now.mockReturnValue(121000)
+      const refresh = new Subject<PageResult>()
+      read.execute.mockReturnValueOnce(refresh)
+      const observer = store.observeQuery({}).subscribe()
+      expect(selection.result()).toBe(page)
+      expect(selection.refreshing()).toBe(true)
+      expect(store.selectQuery(signal({ search: "other" })).result()).toBeUndefined()
+      refresh.next(Result.failure(new UserError("NETWORK")))
+      expect(selection.result()).toBe(page)
+      expect(selection.expires()).toBe(0)
+      expect(selection.expires()).toBeLessThan(expires!)
+      expect(selection.error()?.code).toBe("NETWORK")
+      observer.unsubscribe()
+    } finally {
+      now.mockRestore()
+    }
+  })
+  it("joins forced page reads and retains cancellation ownership", () => {
+    const { store, pending, read } = setup()
+    const first = store.readPage({}).subscribe()
+    const forced = store.readPage({}, true).subscribe()
+    expect(read.execute).toHaveBeenCalledOnce()
+    first.unsubscribe()
+    expect(pending.observed).toBe(true)
+    forced.unsubscribe()
+    expect(pending.observed).toBe(false)
+    expect(store.entries()[userQueryKey({})]?.loading).toBe(false)
+  })
+  it("shares a synchronous mutation refresh and preserves effective pagination on failure", () => {
+    const { store, pending, read } = setup()
+    const query = { offset: 20, limit: 10 }
+    const effective = { ...page, offset: 10, limit: 5, total: 40 }
+    const left = store.observeQuery(query).subscribe()
+    const right = store.observeQuery(query).subscribe()
+    pending.next(Result.success(effective))
+    read.execute.mockImplementation(() => of(Result.success(effective)))
+    store.updateUserStatusById(1, false).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(2)
+    expect(read.execute).toHaveBeenLastCalledWith({ offset: 10, limit: 5 })
+    read.execute.mockReturnValueOnce(of(Result.failure(new UserError("NETWORK"))))
+    const retry = store.observeQuery(query, 0, true).subscribe()
+    expect(store.entries()[userQueryKey(query)]).toMatchObject({
+      query: { offset: 10, limit: 5 },
+      result: effective,
+      expires: 0,
+      error: { code: "NETWORK" }
+    })
+    retry.unsubscribe()
+    left.unsubscribe()
+    right.unsubscribe()
+  })
+  it("delivers one synchronous failed mutation refresh to all same-query observers", () => {
+    const { store, pending, read } = setup()
+    const left = store.observeQuery({}).subscribe()
+    const right = store.observeQuery({}).subscribe()
+    pending.next(Result.success(page))
+    read.execute.mockReturnValue(of(Result.failure(new UserError("NETWORK"))))
+    store.updateUserStatusById(1, false).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(2)
+    expect(store.entries()[userQueryKey({})]).toMatchObject({
+      result: page,
+      error: { code: "NETWORK" },
+      expires: 0
+    })
+    left.unsubscribe()
+    right.unsubscribe()
+  })
+  it("clamps an out-of-range page once using returned effective size", () => {
+    const { store, read } = setup()
+    read.execute.mockReturnValueOnce(
+      of(Result.success({ ...page, offset: 20, limit: 5, total: 7 }))
+    )
+    read.execute.mockReturnValueOnce(of(Result.success({ ...page, offset: 5, limit: 5, total: 7 })))
+    store.readPage({ offset: 40, limit: 10 }).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(2)
+    expect(read.execute).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
+    expect(store.entries()[userQueryKey({ offset: 40, limit: 10 })]?.query).toEqual({
+      offset: 5,
+      limit: 5
+    })
+    read.execute.mockReturnValue(of(Result.success({ ...page, offset: 20, limit: 5, total: 7 })))
+    store.readPage({ offset: 40, limit: 10 }, true).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(4)
+    expect(store.entries()[userQueryKey({ offset: 40, limit: 10 })]?.error?.code).toBe(
+      "INVALID_RESPONSE"
+    )
+  })
   it("publishes pending/error/result once in root state for same-query readonly projections", () => {
     const { store, read, pending } = setup()
     const left = store.selectQuery(signal<UserListQuery>({ search: " Ana " }))

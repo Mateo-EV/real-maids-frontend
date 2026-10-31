@@ -1,6 +1,6 @@
 import { PLATFORM_ID, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
-import { Subject } from "rxjs"
+import { Observable, Subject } from "rxjs"
 import { describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
@@ -11,7 +11,7 @@ function setup(platform = "browser") {
   const session = signal<AuthSession | null>(AuthSession.create("Tester", "tester@example.test"))
   const changes = new Subject<AuthSession | null>()
   const resolveAuth = vi.fn(() => ({ session }))
-  const observe = vi.fn(() => changes)
+  const observe = vi.fn<() => Observable<AuthSession | null>>(() => changes)
   const reset = vi.fn()
   TestBed.configureTestingModule({
     providers: [
@@ -31,7 +31,6 @@ describe("session read scope", () => {
     expect(resolveAuth).not.toHaveBeenCalled()
     expect(observe).not.toHaveBeenCalled()
   })
-
   it("acquires auth lazily and observes once without resetting the initial session", () => {
     const { scope, resolveAuth, observe, reset } = setup()
     expect(resolveAuth).not.toHaveBeenCalled()
@@ -41,7 +40,6 @@ describe("session read scope", () => {
     expect(observe).toHaveBeenCalledTimes(1)
     expect(reset).not.toHaveBeenCalled()
   })
-
   it("preserves same-session renewals and cancels and fences replacement and logout", () => {
     const { scope, session, changes, reset } = setup()
     scope.check()
@@ -64,7 +62,23 @@ describe("session read scope", () => {
     expect(reset).toHaveBeenCalledTimes(2)
     expect(cancelled).toHaveBeenCalledTimes(2)
   })
-
+  it("denies reentry during synchronous initial observation and reset", () => {
+    const { scope, session, observe, reset } = setup()
+    const admitted = vi.fn()
+    const replacement = AuthSession.create("Other", "other@example.test")
+    reset.mockImplementation(() => admitted(scope.check()))
+    observe.mockReturnValue(
+      new Observable(subscriber => {
+        session.set(replacement)
+        subscriber.next(replacement)
+        admitted(scope.check())
+      })
+    )
+    expect(scope.check()).toBe(true)
+    expect(reset).toHaveBeenCalledTimes(1)
+    expect(admitted.mock.calls).toEqual([[false], [false]])
+    expect(scope.check()).toBe(true)
+  })
   it("detects expiration on reads without polling", () => {
     const { scope, session, reset } = setup()
     const now = vi.spyOn(Date, "now").mockReturnValue(1000)
@@ -81,7 +95,6 @@ describe("session read scope", () => {
       now.mockRestore()
     }
   })
-
   it("unsubscribes observation, cancels and resets on destruction", () => {
     const { scope, changes, reset } = setup()
     scope.check()

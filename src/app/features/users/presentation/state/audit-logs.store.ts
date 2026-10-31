@@ -1,21 +1,12 @@
-import { isPlatformBrowser } from "@angular/common"
-import { computed, DestroyRef, inject, Injector, PLATFORM_ID } from "@angular/core"
+import { computed, inject } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
+import { defer, EMPTY, map, Observable, of, tap } from "rxjs"
+import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import {
-  catchError,
-  defer,
-  EMPTY,
-  finalize,
-  Observable,
-  of,
-  shareReplay,
-  Subject,
-  takeUntil,
-  tap
-} from "rxjs"
-import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
-import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
-import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+  createReadResource,
+  ReadResource,
+  ReadResourceState
+} from "@/app/shared/state/read-resource"
 import { Result } from "@/app/shared/utils/result"
 import { GetAuditLogsUseCase } from "../../application/use-cases/get-audit-logs.use-case"
 import { AuditLogError } from "../../domain/errors/audit-log.error"
@@ -81,27 +72,17 @@ export const AuditLogsStore = signalStore(
     }
   }),
   withMethods((store, query = inject(GetAuditLogsUseCase)) => {
-    const injector = inject(Injector),
-      destroyRef = inject(DestroyRef)
-    const browser = isPlatformBrowser(inject(PLATFORM_ID))
-    const flights = new Map<string, Observable<Response>>()
-    const cancelled = new Subject<void>()
-    let globalFlight: Observable<Response> | undefined
+    const resources = new Map<string, ReadResource<AuditPage | undefined, AuditLogError>>()
     let latest = 0,
       sequence = 0,
       globalSequence = 0,
-      generation = 0
-    let observing = false,
-      sessionKey: string | null = null
-    const identity = (session: AuthSession | null) =>
-      session && (session.expiresAt === null || session.expiresAt > Date.now())
-        ? JSON.stringify([session.id, session.email, session.expiresAt])
-        : null
-    const clear = () => {
-      generation++
+      globalRequest = 0
+    const scope = createSessionReadScope(() => {
       latest++
-      flights.clear()
-      globalFlight = undefined
+      const previous = [...resources.values()]
+      resources.clear()
+      previous.forEach(resource => resource.reset())
+      globalResource.reset()
       patchState(store, {
         entries: {},
         currentKey: "",
@@ -113,30 +94,16 @@ export const AuditLogsStore = signalStore(
         globalError: undefined,
         sessionRevision: store.sessionRevision() + 1
       })
-      cancelled.next()
-    }
-    const acceptSession = (session: AuthSession | null) => {
-      const key = identity(session)
-      if (key === sessionKey) return
-      sessionKey = key
-      clear()
-    }
-    const checkSession = () => {
-      if (!browser) return false
-      // Auth must be acquired before observing source changes (restoration can publish synchronously).
-      const auth = injector.get(AuthStore)
-      if (!observing) {
-        observing = true
-        sessionKey = identity(auth.session())
-        const subscription = injector
-          .get(ObserveAuthSessionUseCase)
-          .execute()
-          .subscribe(acceptSession)
-        destroyRef.onDestroy(() => subscription.unsubscribe())
-      } else acceptSession(auth.session())
-      return sessionKey !== null
-    }
-    destroyRef.onDestroy(clear)
+    })
+    const project = (
+      entry: AuditEntry
+    ): ReadResourceState<AuditPage | undefined, AuditLogError> => ({
+      data: entry.result,
+      loaded: entry.result !== undefined,
+      refreshing: entry.refreshing,
+      expires: entry.expires,
+      error: entry.error
+    })
     const update = (key: string, entry: AuditEntry) =>
       patchState(store, { entries: { ...store.entries(), [key]: entry } })
     const admit = (key: string) => {
@@ -144,14 +111,18 @@ export const AuditLogsStore = signalStore(
       const entries = { ...store.entries() }
       if (Object.keys(entries).length >= 20) {
         const oldest = Object.keys(entries).find(
-          candidate => candidate !== store.currentKey() && !flights.has(candidate)
+          candidate => candidate !== store.currentKey() && !resources.get(candidate)?.isPending()
         )
         if (!oldest) return false
         delete entries[oldest]
+        const resource = resources.get(oldest)
+        resources.delete(oldest)
+        resource?.reset()
       }
       patchState(store, { entries: { ...entries, [key]: emptyEntry } })
       return true
     }
+    // Global identity/order is a capability policy spanning distinct resources, not a cache rule.
     const acceptGlobal = (result: AuditPage, request: number) => {
       if (request < globalSequence) return
       globalSequence = request
@@ -162,89 +133,108 @@ export const AuditLogsStore = signalStore(
         globalError: undefined
       })
     }
+    const globalState = (): ReadResourceState<AuditPage | undefined, AuditLogError> => ({
+      data: store.globalResult(),
+      loaded: store.globalResult() !== undefined,
+      refreshing: store.globalRefreshing(),
+      expires: store.globalExpires(),
+      error: store.globalError()
+    })
+    const globalResource = createReadResource<AuditPage | undefined, AuditLogError>({
+      state: {
+        get: globalState,
+        update: update => {
+          const patch = update(globalState())
+          if (patch.data !== undefined) acceptGlobal(patch.data, globalRequest)
+          if (
+            "error" in patch &&
+            (patch.pendingReads !== undefined || globalRequest >= globalSequence)
+          )
+            patchState(store, { globalError: patch.error })
+          if (patch.pendingReads !== undefined)
+            patchState(store, {
+              globalLoading: patch.pendingReads > 0 && store.globalTotal() === null,
+              globalRefreshing: patch.pendingReads > 0 && store.globalTotal() !== null
+            })
+        }
+      },
+      initialData: () => undefined,
+      request: () => {
+        globalRequest = ++sequence
+        return query.execute({ page: 0, size: 1 })
+      },
+      normalizeError: () => new AuditLogError("UNEXPECTED"),
+      ttl,
+      forcePolicy: "join",
+      scope
+    })
+    function requestPage(input: AuditQuery) {
+      const request = ++latest,
+        globalRequest = ++sequence,
+        epoch = scope.generation()
+      return query.execute(input).pipe(
+        tap(result => {
+          if (epoch === scope.generation() && result.success && request === latest)
+            acceptGlobal(result.data, globalRequest)
+        })
+      )
+    }
+    function pageResource(key: string, input: AuditQuery) {
+      let resource = resources.get(key)
+      if (resource) return resource
+      resource = createReadResource<AuditPage | undefined, AuditLogError>({
+        state: {
+          get: () => project(store.entries()[key] ?? emptyEntry),
+          update: updateState => {
+            if (resources.get(key) !== resource || !store.entries()[key]) return
+            const entry = store.entries()[key],
+              patch = updateState(project(entry))
+            update(key, {
+              result: "data" in patch ? patch.data : entry.result,
+              loading:
+                patch.pendingReads !== undefined
+                  ? patch.pendingReads > 0 && entry.result === undefined
+                  : entry.loading,
+              refreshing: patch.refreshing ?? entry.refreshing,
+              error: "error" in patch ? patch.error : entry.error,
+              expires: patch.expires ?? entry.expires
+            })
+          }
+        },
+        initialData: () => undefined,
+        request: () => requestPage(input),
+        normalizeError: () => new AuditLogError("UNEXPECTED"),
+        ttl,
+        forcePolicy: "join",
+        scope
+      })
+      resources.set(key, resource)
+      return resource
+    }
+    const verified = (result: Result<AuditPage | undefined, AuditLogError>): Response =>
+      result.success
+        ? result.data === undefined
+          ? Result.failure(new AuditLogError("UNEXPECTED"))
+          : Result.success(result.data)
+        : Result.failure(result.error)
     return {
       load(params: AuditQuery, force = false): Observable<Response> {
         const input = { ...params },
           key = queryKey(input)
         return defer(() => {
-          if (!checkSession()) return EMPTY
+          if (!scope.check()) return EMPTY
           if (!admit(key)) return of(Result.failure(new AuditLogError("UNEXPECTED")))
           if (store.currentKey() !== key) {
             latest++
             patchState(store, { currentKey: key })
           }
-          const entry = store.entries()[key]
-          const existing = flights.get(key)
-          if (existing) return existing
-          if (!force && entry.result && Date.now() < entry.expires)
-            return of(Result.success(entry.result))
-          const request = ++latest,
-            globalRequest = ++sequence,
-            epoch = generation
-          update(key, {
-            ...entry,
-            loading: !entry.result,
-            refreshing: !!entry.result,
-            error: undefined
-          })
-          const flight = defer(() => query.execute(input)).pipe(
-            catchError(() => of(Result.failure(new AuditLogError("UNEXPECTED")))),
-            takeUntil(cancelled),
-            tap(result => {
-              if (epoch !== generation) return
-              const current = store.entries()[key]
-              if (result.success) {
-                update(key, {
-                  ...current,
-                  result: result.data,
-                  expires: Date.now() + ttl,
-                  error: undefined
-                })
-                if (request === latest) acceptGlobal(result.data, globalRequest)
-              } else update(key, { ...current, error: result.error })
-            }),
-            finalize(() => {
-              if (epoch !== generation) return
-              flights.delete(key)
-              update(key, { ...store.entries()[key], loading: false, refreshing: false })
-            }),
-            shareReplay({ bufferSize: 1, refCount: true })
-          )
-          flights.set(key, flight)
-          return flight
+          return pageResource(key, input)
+            .read(force, () => requestPage(input))
+            .pipe(map(verified))
         })
       },
       loadGlobalTotal(force = false): Observable<Response> {
-        return defer(() => {
-          if (!checkSession()) return EMPTY
-          if (globalFlight) return globalFlight
-          const cached = store.globalResult()
-          if (!force && cached && Date.now() < store.globalExpires())
-            return of(Result.success(cached))
-          const request = ++sequence,
-            epoch = generation
-          patchState(store, {
-            globalLoading: store.globalTotal() === null,
-            globalRefreshing: store.globalTotal() !== null,
-            globalError: undefined
-          })
-          globalFlight = defer(() => query.execute({ page: 0, size: 1 })).pipe(
-            catchError(() => of(Result.failure(new AuditLogError("UNEXPECTED")))),
-            takeUntil(cancelled),
-            tap(result => {
-              if (epoch !== generation) return
-              if (result.success) acceptGlobal(result.data, request)
-              else if (request >= globalSequence) patchState(store, { globalError: result.error })
-            }),
-            finalize(() => {
-              if (epoch !== generation) return
-              globalFlight = undefined
-              patchState(store, { globalLoading: false, globalRefreshing: false })
-            }),
-            shareReplay({ bufferSize: 1, refCount: true })
-          )
-          return globalFlight
-        })
+        return globalResource.read(force).pipe(map(verified))
       }
     }
   })

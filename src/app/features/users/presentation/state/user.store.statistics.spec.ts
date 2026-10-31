@@ -39,6 +39,22 @@ function setup() {
 
 describe("root-owned global statistics", () => {
   afterEach(() => vi.useRealTimers())
+  it("settles statistics flags before delivering failures and refreshed counts", () => {
+    const { store, pending } = setup()
+    const stats = store.selectStatistics()
+    const received = vi.fn(() => [stats.loading(), stats.refreshing()])
+    store.readStatistics().subscribe(received)
+    pending.next(Result.failure(new UserError("NETWORK")))
+    store.readStatistics().subscribe(received)
+    pending.next(Result.success(counts))
+    store.readStatistics(true).subscribe(received)
+    pending.next(Result.success(counts))
+    expect(received.mock.results.map(result => result.value)).toEqual([
+      [false, false],
+      [false, false],
+      [false, false]
+    ])
+  })
   it("checks the two-minute TTL on reads, never polls or renews freshness on cache access", () => {
     vi.useFakeTimers()
     vi.setSystemTime(1000)

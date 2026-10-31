@@ -1,6 +1,6 @@
 import { computed, inject } from "@angular/core"
-import { createSessionReadScope } from "./internal/session-read-scope"
-import { createReadResource } from "./internal/read-resource"
+import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import { createReadResource } from "@/app/shared/state/read-resource"
 
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import { catchError, defer, EMPTY, finalize, Observable, of, takeUntil, tap } from "rxjs"
@@ -54,7 +54,7 @@ export const RolesStore = signalStore(
             patchState(store, {
               roles: value.data,
               loaded: value.loaded,
-              _pendingReads: value.pendingReads,
+              _pendingReads: value.pendingReads ?? catalog.pendingReads,
               refreshing: value.refreshing,
               expires: value.expires,
               error: value.error

@@ -22,6 +22,24 @@ M02/RF02/HU02/P03 and RNF09/RNF10/RNF12 guide consumer-triggered caching, not fr
 
 Shared in-flight requests use ref-counted cancellation; inactive histories are bounded and active views protected. Logout, expiry or session replacement clears and fences old reads, while same-session renewal preserves them; SSR dispatches no reads. Background revalidation keeps verified same-query rows/counts (including empty/zero), with accessible status/error/retry rather than unrelated results or false zero. Cached permissions/sessions are presentation data, never an ACL or proof of revocation. Auth lifecycle/security decisions, all writes, raw CSV export, uncached audit detail and the authoritative in-memory CustomersStore are excluded. Live authenticated/CORS and Chrome/Edge/Firefox acceptance remain pending.
 
+### Composable store reads
+
+M02/RF02/HU02/P03 and RNF09/RNF10/RNF12 guide the separation of read mechanics from capability policy. The neutral [read resource](../src/app/shared/state/read-resource.ts) owns request sharing, success-only freshness, cancellation and obsolete-response fencing. Its typed adapter reads and patches the consuming SignalStore; it does not keep a second writable copy of the result. Forced-read joining versus replacement and invalidation cancellation are explicit policies, not a new common behavior imposed on consumers.
+
+The [session read scope](../src/app/features/auth/presentation/state/session-read-scope.ts) belongs to Auth, not shared state: it initializes Auth lazily in the browser and observes identity plus the fixed session deadline. Stores supply their reset callback; same-session access renewal does not clear cached data. RolesStore, RbacStore, AuditLogsStore, UserStore and UserSessionsStore use both helpers. UserStore retains query-keyed pages and independent statistics; its active observers share one lazy refresh batch per mutation, including synchronous failed responses. UserSessionsStore keeps owner-page, exact-count and per-user-detail resources separate, including their verification markers and post-mutation refresh batches. Cache keys, admission/history bounds, observer lifetimes and mutations remain capability-owned. Auth lifecycle and the authoritative CustomersStore are not read-resource caches.
+
+The read path is **consumer → store → read resource → use case → store adapter → readonly selector**. A fresh verified result is returned without HTTP; otherwise the resource coordinates a request. Only a successful current response renews freshness. An obsolete response cannot replace state, and cancellation is shared until the final subscriber leaves.
+
+| Owner | Responsibility kept outside the shared coordinator |
+| --- | --- |
+| Roles | Catalog changes and aggregate read/write loading. |
+| RBAC | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
+| Audit | Query identity, current-page projection and ordering between page-derived/global totals. |
+| Users | Query admission/history, effective pagination, statistics and mutation observer fan-out. |
+| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation. |
+
+A new cached read supplies a typed state adapter, request factory, error normalization, TTL and scope. `read()` checks admission/freshness; `invalidate()` makes verified data stale according to the consumer's cancellation policy; `reset()` cancels all flights and clears the read state. A registry may retain coordinators per key, but results stay only in the store. Do not use this mechanism to cache authentication decisions, writes or uncached exports.
+
 ### Shared catalog filter styling
 
 Users, Sessions, RBAC and Audit reuse the stateless opt-in `catalog-filter-row` / `catalog-filter-search` contract in [the global stylesheet](../src/styles.css), preserving the Users reference dimensions and search surface (M02/RF02/HU02/P03, RNF08/RNF09). Future catalog sections can follow [the usage guide](../README.md#filtros-de-catálogo-reutilizables) without copying feature overrides or introducing a wrapper component. Only opted-in rows receive the shared control heights and responsive search widths; labels, actions and bindings remain local, and Helm retains semantic borders/focus rings. Markup tests do not prove computed dimensions; rendered browser acceptance remains pending.

@@ -1,9 +1,9 @@
 import { EMPTY, Observable, Subject, of, throwError } from "rxjs"
 import { describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
-import { createReadResource, ReadResourceState } from "./read-resource"
+import { createReadResource, ReadResourceOptions, ReadResourceState } from "./read-resource"
 
-function setup() {
+function setup(policies: Partial<ReadResourceOptions<number[], string>> = {}) {
   let state: ReadResourceState<number[], string> = {
     data: [],
     loaded: false,
@@ -21,11 +21,7 @@ function setup() {
   const resource = createReadResource({
     state: {
       get: () => state,
-      update: (
-        update: (
-          state: ReadResourceState<number[], string>
-        ) => Partial<ReadResourceState<number[], string>>
-      ) => {
+      update: update => {
         state = { ...state, ...update(state) }
       }
     },
@@ -33,7 +29,8 @@ function setup() {
     request: () => source(),
     normalizeError: () => "unexpected",
     ttl: 100,
-    scope: { check: () => allowed, generation: () => generation, cancelled$: cancelled }
+    scope: { check: () => allowed, generation: () => generation, cancelled$: cancelled },
+    ...policies
   })
   return {
     resource,
@@ -52,8 +49,8 @@ function setup() {
 
 describe("single read resource", () => {
   it("defers, shares and ref-counts reads, settling the last cancellation", () => {
-    const h = setup()
-    const response = new Subject<Result<number[], string>>()
+    const h = setup(),
+      response = new Subject<Result<number[], string>>()
     h.source.mockReturnValue(response)
     const read = h.resource.read()
     expect(h.source).not.toHaveBeenCalled()
@@ -61,15 +58,16 @@ describe("single read resource", () => {
       b = h.resource.read().subscribe()
     expect(h.source).toHaveBeenCalledTimes(1)
     expect(h.state().pendingReads).toBe(1)
+    expect(h.resource.isPending()).toBe(true)
     a.unsubscribe()
     expect(response.observed).toBe(true)
     b.unsubscribe()
     expect(response.observed).toBe(false)
     expect(h.state().pendingReads).toBe(0)
+    expect(h.resource.isPending()).toBe(false)
     h.resource.read().subscribe().unsubscribe()
     expect(h.source).toHaveBeenCalledTimes(2)
   })
-
   it("renews TTL only on success and preserves stale data through failed refresh", () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1000)
     try {
@@ -103,7 +101,6 @@ describe("single read resource", () => {
       now.mockRestore()
     }
   })
-
   it("overlaps force reads while delivering stale results without committing stale errors", () => {
     const h = setup(),
       older = new Subject<Result<number[], string>>(),
@@ -122,7 +119,6 @@ describe("single read resource", () => {
     expect(received).toHaveBeenCalledWith(Result.failure("obsolete"))
     expect(h.state()).toMatchObject({ data: [2], error: undefined, pendingReads: 0 })
   })
-
   it("invalidates without cancelling old subscribers and permits an independent read", () => {
     const h = setup(),
       old = new Subject<Result<number[], string>>()
@@ -136,7 +132,6 @@ describe("single read resource", () => {
     expect(received).toHaveBeenCalledWith(Result.success([1]))
     expect(h.state().data).toEqual([2])
   })
-
   it("reset cancels all flights, fences reentrant old finalizers and restores read state", () => {
     const h = setup(),
       old = new Subject<Result<number[], string>>(),
@@ -151,13 +146,12 @@ describe("single read resource", () => {
     fresh.complete()
     expect(h.state()).toMatchObject({ data: [3], pendingReads: 0 })
   })
-
   it("does not let an obsolete finalizer stop the current refresh", () => {
     const h = setup()
     h.source.mockImplementationOnce(() => of(Result.success([1])))
     h.resource.read().subscribe()
-    const older = new Subject<Result<number[], string>>()
-    const newer = new Subject<Result<number[], string>>()
+    const older = new Subject<Result<number[], string>>(),
+      newer = new Subject<Result<number[], string>>()
     h.source.mockReturnValueOnce(older).mockReturnValueOnce(newer)
     h.resource.read(true).subscribe()
     h.resource.read(true).subscribe()
@@ -168,7 +162,6 @@ describe("single read resource", () => {
     newer.complete()
     expect(h.state()).toMatchObject({ data: [2], refreshing: false, pendingReads: 0 })
   })
-
   it("settles empty completion and synchronous throws without marking data verified", () => {
     const h = setup()
     h.source.mockReturnValueOnce(EMPTY).mockImplementationOnce(() => {
@@ -184,7 +177,6 @@ describe("single read resource", () => {
       error: "unexpected"
     })
   })
-
   it("guards dispatch and clears session-old reads", () => {
     const h = setup(),
       response = new Subject<Result<number[], string>>()
@@ -197,5 +189,106 @@ describe("single read resource", () => {
     h.deny()
     h.resource.read().subscribe()
     expect(h.source).toHaveBeenCalledTimes(1)
+  })
+  it("joins forced reads when configured, retaining ref-counted cancellation", () => {
+    const h = setup({ forcePolicy: "join" }),
+      response = new Subject<Result<number[], string>>()
+    h.source.mockReturnValue(response)
+    const a = h.resource.read().subscribe(),
+      b = h.resource.read(true).subscribe()
+    expect(h.source).toHaveBeenCalledTimes(1)
+    expect(h.resource.pendingReads).toBe(1)
+    a.unsubscribe()
+    expect(response.observed).toBe(true)
+    b.unsubscribe()
+    expect(h.resource.isPending()).toBe(false)
+  })
+  it("cancels invalidated flights but preserves verified stale data and reentrant reads", () => {
+    const h = setup({ cancelOnInvalidate: true })
+    h.source.mockReturnValueOnce(of(Result.success([1])))
+    h.resource.read().subscribe()
+    const old = new Subject<Result<number[], string>>(),
+      fresh = new Subject<Result<number[], string>>()
+    h.source.mockReturnValueOnce(old).mockReturnValueOnce(fresh)
+    h.resource.read(true).subscribe({ complete: () => h.resource.read().subscribe() })
+    h.resource.invalidate()
+    expect(old.observed).toBe(false)
+    expect(fresh.observed).toBe(true)
+    expect(h.state()).toMatchObject({
+      data: [1],
+      loaded: true,
+      expires: 0,
+      refreshing: true,
+      pendingReads: 1
+    })
+    fresh.next(Result.success([2]))
+    fresh.complete()
+    expect(h.resource.pendingReads).toBe(0)
+    expect(h.state().data).toEqual([2])
+  })
+  it("maps obsolete results for subscribers without committing them", () => {
+    const h = setup({ obsoleteResult: () => Result.failure("busy") }),
+      old = new Subject<Result<number[], string>>()
+    h.source.mockReturnValueOnce(old).mockReturnValueOnce(of(Result.success([2])))
+    const received = vi.fn()
+    h.resource.read().subscribe(received)
+    h.resource.read(true).subscribe()
+    old.next(Result.success([1]))
+    old.complete()
+    expect(received).toHaveBeenCalledWith(Result.failure("busy"))
+    expect(h.state()).toMatchObject({ data: [2], error: undefined })
+  })
+  it("cancels every overlapping flight on invalidation without leaving pending retention", () => {
+    const h = setup({ cancelOnInvalidate: true })
+    const older = new Subject<Result<number[], string>>(),
+      newer = new Subject<Result<number[], string>>()
+    h.source.mockReturnValueOnce(older).mockReturnValueOnce(newer)
+    h.resource.read().subscribe()
+    h.resource.read(true).subscribe()
+    expect(h.resource.pendingReads).toBe(2)
+    h.resource.invalidate()
+    expect(older.observed).toBe(false)
+    expect(newer.observed).toBe(false)
+    expect(h.resource.isPending()).toBe(false)
+    expect(h.state()).toMatchObject({ loaded: false, pendingReads: 0, expires: 0 })
+  })
+  it("owns flight counts even when the state adapter has no pending field", () => {
+    let entry = {
+      data: [],
+      loaded: false,
+      refreshing: false,
+      expires: 0,
+      error: undefined
+    } as Omit<ReadResourceState<number[], string>, "pendingReads">
+    const response = new Subject<Result<number[], string>>()
+    const h = setup({
+      state: {
+        get: () => entry,
+        update: update => {
+          const { pendingReads: _ignored, ...patch } = update(entry)
+          entry = { ...entry, ...patch }
+        }
+      },
+      request: () => response
+    })
+    const a = h.resource.read().subscribe(),
+      b = h.resource.read(true).subscribe()
+    expect(h.resource.pendingReads).toBe(2)
+    a.unsubscribe()
+    expect(h.resource.pendingReads).toBe(1)
+    b.unsubscribe()
+    expect(h.resource.isPending()).toBe(false)
+    expect(entry).not.toHaveProperty("pendingReads")
+  })
+  it("uses per-read factories without changing cache and sharing policy", () => {
+    const h = setup(),
+      factory = vi.fn(() => of(Result.success([4])))
+    const read = h.resource.read(false, factory)
+    expect(factory).not.toHaveBeenCalled()
+    read.subscribe()
+    h.resource.read().subscribe()
+    expect(h.state().data).toEqual([4])
+    expect(h.source).not.toHaveBeenCalled()
+    expect(factory).toHaveBeenCalledTimes(1)
   })
 })
