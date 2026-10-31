@@ -10,11 +10,13 @@ import { UserListQuery } from "../../domain/models/user-list-query"
 import { User } from "../../domain/entities/user.entity"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
-import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
-import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
-import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
-import { isPlatformBrowser } from "@angular/common"
-import { DestroyRef, inject, Injector, PLATFORM_ID, Signal } from "@angular/core"
+import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import {
+  createReadResource,
+  ReadResource,
+  ReadResourceState
+} from "@/app/shared/state/read-resource"
+import { DestroyRef, inject, Injector, Signal } from "@angular/core"
 import { selectUserQuery } from "./user-list.store"
 import { selectUserStatistics, UserStatisticsEntry } from "./user-statistics.store"
 import { GetUserStatisticsUseCase } from "../../application/use-cases/get-user-statistics.use-case"
@@ -34,7 +36,6 @@ import {
   shareReplay,
   Subject,
   take,
-  takeUntil,
   tap
 } from "rxjs"
 
@@ -100,7 +101,11 @@ export const UserStore = signalStore(
   withMethods(store => {
     const injector = inject(Injector),
       destroyRef = inject(DestroyRef)
-    const browser = isPlatformBrowser(inject(PLATFORM_ID))
+    const resources = new Map<
+      string,
+      ReadResource<PaginationResponse<User> | undefined, UserError>
+    >()
+    const isPending = (key: string) => resources.get(key)?.isPending() ?? false
     // Twenty query variants cover short navigation/search histories without an unbounded catalog.
     const active = new Map<string, number>()
     const updateEntry = (key: string, entry: UserQueryEntry) => {
@@ -108,31 +113,79 @@ export const UserStore = signalStore(
       // Active views are pinned; prune the oldest inactive variant, never a visible page.
       while (Object.keys(entries).length > 20) {
         const oldest = Object.keys(entries).find(
-          candidate => candidate !== key && !active.has(candidate) && !flights.has(candidate)
+          candidate => candidate !== key && !active.has(candidate) && !isPending(candidate)
         )
         if (!oldest) throw new Error("At most 20 distinct user queries can be active concurrently")
         delete entries[oldest]
+        resources.delete(oldest)
       }
       patchState(store, { entries })
     }
-    const flights = new Map<string, Observable<PageResult>>()
-    let statisticsFlight: Observable<StatisticsResult> | undefined
+    const normalizeError = (error: unknown) =>
+      error instanceof UserError ? error : new UserError("UNEXPECTED")
+    const resourceState = <T>(entry: {
+      result: T
+      refreshing: boolean
+      expires: number
+      error: UserError | undefined
+    }): ReadResourceState<T, UserError> => ({
+      data: entry.result,
+      loaded: entry.result !== undefined,
+      refreshing: entry.refreshing,
+      expires: entry.expires,
+      error: entry.error
+    })
     let mutationStatistics: Observable<StatisticsResult> | undefined
-    const cancelled = new Subject<void>()
+    // Event-local fan-out, not a second cache: failed synchronous reads must also be
+    // delivered once to every active observer, just like mutationStatistics below.
+    const mutationPages = new Map<string, Observable<PageResult>>()
     const invalidations = new Subject<"mutation" | "session">()
-    let generation = 0,
-      sessionGeneration = 0,
-      pending = 0,
-      observing = false,
-      sessionKey: string | null = null
-    const identity = (session: AuthSession | null) =>
-      session && (session.expiresAt === null || session.expiresAt > Date.now())
-        ? JSON.stringify([session.id, session.email, session.expiresAt])
-        : null
+    let pending = 0,
+      observing = false
+    const scope = createSessionReadScope(() => invalidate("session"))
+    const checkSession = () => {
+      observing = true
+      return scope.check()
+    }
+    const statisticsResource = createReadResource<UserStatistics | undefined, UserError>({
+      state: {
+        get: () => resourceState(store.statistics()),
+        update: update => {
+          const current = resourceState(store.statistics())
+          const patch = update(current)
+          const settled = "data" in patch || patch.error !== undefined
+          const next = { ...current, ...patch }
+          patchState(store, {
+            statistics: {
+              result: next.data,
+              loading:
+                !settled &&
+                (next.pendingReads ?? statisticsResource.pendingReads) > 0 &&
+                !next.loaded,
+              refreshing: !settled && next.refreshing,
+              expires: next.expires,
+              error: next.error
+            }
+          })
+        }
+      },
+      initialData: () => undefined,
+      request: () =>
+        defer(() => injector.get(GetUserStatisticsUseCase).execute()).pipe(
+          take(1),
+          defaultIfEmpty(Result.failure(new UserError("INVALID_RESPONSE")))
+        ),
+      normalizeError,
+      ttl: 120000,
+      scope,
+      forcePolicy: "join",
+      cancelOnInvalidate: true
+    })
     const invalidate = (reason: "mutation" | "session") => {
-      generation++
+      mutationPages.clear()
       if (reason === "session") {
-        sessionGeneration++
+        const previous = [...resources.values()]
+        resources.clear()
         pending = 0
         patchState(store, {
           entries: {},
@@ -141,20 +194,12 @@ export const UserStore = signalStore(
           loading: false,
           error: undefined
         })
+        previous.forEach(resource => resource.reset())
+        statisticsResource.reset()
       } else {
-        patchState(store, {
-          statistics: { ...store.statistics(), expires: 0, loading: false, refreshing: false },
-          entries: Object.fromEntries(
-            Object.entries(store.entries()).map(([key, entry]) => [
-              key,
-              { ...entry, expires: 0, loading: false, refreshing: false }
-            ])
-          )
-        })
+        resources.forEach(resource => resource.invalidate())
+        statisticsResource.invalidate()
       }
-      flights.clear()
-      statisticsFlight = undefined
-      cancelled.next()
       // One lazy mutation read shared even when the source completes/fails synchronously.
       // Only caller-owned observers subscribe; an inactive statistic never refreshes itself.
       mutationStatistics =
@@ -163,38 +208,10 @@ export const UserStore = signalStore(
           : undefined
       invalidations.next(reason)
     }
-    const acceptSession = (session: AuthSession | null) => {
-      const key = identity(session)
-      if (key === sessionKey) return
-      sessionKey = key
-      invalidate("session")
-    }
-    const checkSession = () => {
-      if (!browser) return false
-      const auth = injector.get(AuthStore)
-      if (!observing) {
-        observing = true
-        sessionKey = identity(auth.session())
-        const subscription = injector
-          .get(ObserveAuthSessionUseCase)
-          .execute()
-          .subscribe(acceptSession)
-        destroyRef.onDestroy(() => subscription.unsubscribe())
-      } else acceptSession(auth.session())
-      return sessionKey !== null
-    }
-    destroyRef.onDestroy(() => {
-      patchState(store, { entries: {}, statistics: emptyStatistics })
-      statisticsFlight = undefined
-      mutationStatistics = undefined
-      flights.clear()
-      cancelled.next()
-      cancelled.complete()
-      invalidations.complete()
-    })
+    destroyRef.onDestroy(() => invalidations.complete())
     const execute = <T>(request: () => Observable<Result<T, UserError>>) =>
       defer(() => {
-        const started = sessionGeneration
+        const started = scope.generation()
         pending++
         patchState(store, { loading: true, error: undefined })
         return defer(request).pipe(
@@ -203,7 +220,7 @@ export const UserStore = signalStore(
             of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
           ),
           finalize(() => {
-            if (started !== sessionGeneration) return
+            if (started !== scope.generation()) return
             pending--
             patchState(store, { loading: pending > 0 })
           })
@@ -214,11 +231,11 @@ export const UserStore = signalStore(
     ): Observable<Result<T, UserError>> =>
       defer(() => {
         if (observing) checkSession()
-        const started = sessionGeneration
+        const started = scope.generation()
         return execute(request).pipe(
           tap(result => {
             // An old session's dispatched write cannot roll back, but cannot affect the new view.
-            if (started !== sessionGeneration) return
+            if (started !== scope.generation()) return
             if (!result.success) patchState(store, { error: result.error })
             if (result.success || result.error.code === "PARTIAL_UPDATE") {
               patchState(store, { mutationRevision: store.mutationRevision() + 1 })
@@ -237,19 +254,15 @@ export const UserStore = signalStore(
         if (!checkSession()) return EMPTY
         const key = userQueryKey(snapshot),
           hit = store.entries()[key]
-        const existing = flights.get(key)
-        if (existing) return existing
-        if (!force && hit?.result && hit.expires > Date.now()) return of(Result.success(hit.result))
         if (
           !hit &&
           Object.keys(store.entries()).length >= 20 &&
           Object.keys(store.entries()).every(
-            candidate => active.has(candidate) || flights.has(candidate)
+            candidate => active.has(candidate) || isPending(candidate)
           )
         ) {
           throw new Error("At most 20 distinct user queries can be active concurrently")
         }
-        const started = generation
         const requestQuery = effective && hit ? hit.query : snapshot
         const request = (q: UserListQuery, mayClamp: boolean): Observable<PageResult> =>
           defer(() => injector.get(GetUsersPageUseCase).execute(q)).pipe(
@@ -265,101 +278,67 @@ export const UserStore = signalStore(
                 : of(Result.failure(new UserError("INVALID_RESPONSE")))
             })
           )
-        const flight: Observable<PageResult> = defer(() => {
+        if (!hit)
           updateEntry(key, {
-            query: hit?.query ?? snapshot,
-            result: hit?.result,
-            expires: hit?.expires ?? 0,
-            loading: !hit?.result,
-            refreshing: !!hit?.result,
+            query: snapshot,
+            result: undefined,
+            expires: 0,
+            loading: false,
+            refreshing: false,
             error: undefined
           })
-          return request(requestQuery, true)
-        }).pipe(
-          catchError(error =>
-            of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
-          ),
-          takeUntil(cancelled),
-          tap(result => {
-            if (started !== generation) return
-            const entry = store.entries()[key]!
-            updateEntry(
-              key,
-              result.success
-                ? {
-                    query: { ...snapshot, offset: result.data.offset, limit: result.data.limit },
-                    result: result.data,
-                    expires: Date.now() + 120000,
-                    loading: false,
+        let resource = resources.get(key)
+        if (!resource) {
+          const coordinator = createReadResource<PaginationResponse<User> | undefined, UserError>({
+            state: {
+              get: () =>
+                resourceState(
+                  store.entries()[key] ?? {
+                    result: undefined,
                     refreshing: false,
+                    expires: 0,
                     error: undefined
                   }
-                : { ...entry, loading: false, refreshing: false, error: result.error, expires: 0 }
-            )
-          }),
-          finalize(() => {
-            if (flights.get(key) !== flight) return
-            flights.delete(key)
-            const entry = store.entries()[key]
-            if (started === generation && entry)
-              updateEntry(key, { ...entry, loading: false, refreshing: false })
-          }),
-          shareReplay({ bufferSize: 1, refCount: true })
-        )
-        flights.set(key, flight)
-        return flight
+                ),
+              update: update => {
+                const entry = store.entries()[key]
+                // Clearing a session/evicting history must never be undone by teardown.
+                if (!entry || resources.get(key) !== coordinator) return
+                const patch = update(resourceState(entry))
+                const settled = "data" in patch || patch.error !== undefined
+                const next = { ...resourceState(entry), ...patch }
+                updateEntry(key, {
+                  query: patch.data
+                    ? { ...snapshot, offset: patch.data.offset, limit: patch.data.limit }
+                    : entry.query,
+                  result: next.data,
+                  loading:
+                    !settled && (next.pendingReads ?? coordinator.pendingReads) > 0 && !next.loaded,
+                  refreshing: !settled && next.refreshing,
+                  expires: patch.error ? 0 : next.expires,
+                  error: next.error
+                })
+              }
+            },
+            initialData: () => undefined,
+            request: () => request(snapshot, true),
+            normalizeError,
+            ttl: 120000,
+            scope,
+            forcePolicy: "join",
+            cancelOnInvalidate: true
+          })
+          resource = coordinator
+          resources.set(key, resource)
+        }
+        // Only the factory varies: the normalized cache identity remains unchanged.
+        return resource.read(force, () => request(requestQuery, true)) as Observable<PageResult>
       })
     }
     const readStatistics = (force = false): Observable<StatisticsResult> =>
       defer(() => {
         if (!checkSession()) return EMPTY
-        if (statisticsFlight) return statisticsFlight
-        const hit = store.statistics()
-        if (!force && hit.result && hit.expires > Date.now()) return of(Result.success(hit.result))
-        const started = generation
-        const flight: Observable<StatisticsResult> = defer(() => {
-          patchState(store, {
-            statistics: {
-              ...hit,
-              loading: !hit.result,
-              refreshing: !!hit.result,
-              error: undefined
-            }
-          })
-          return injector.get(GetUserStatisticsUseCase).execute()
-        }).pipe(
-          take(1),
-          defaultIfEmpty(Result.failure(new UserError("INVALID_RESPONSE"))),
-          catchError(error =>
-            of(Result.failure(error instanceof UserError ? error : new UserError("UNEXPECTED")))
-          ),
-          takeUntil(cancelled),
-          tap(result => {
-            if (started !== generation) return
-            patchState(store, {
-              statistics: result.success
-                ? {
-                    result: result.data,
-                    expires: Date.now() + 120000,
-                    loading: false,
-                    refreshing: false,
-                    error: undefined
-                  }
-                : { ...store.statistics(), loading: false, refreshing: false, error: result.error }
-            })
-          }),
-          finalize(() => {
-            if (statisticsFlight !== flight) return
-            statisticsFlight = undefined
-            if (started === generation)
-              patchState(store, {
-                statistics: { ...store.statistics(), loading: false, refreshing: false }
-              })
-          }),
-          shareReplay({ bufferSize: 1, refCount: true })
-        )
-        statisticsFlight = flight
-        return flight
+        return statisticsResource.read(force) as Observable<StatisticsResult>
       })
     return {
       selectStatistics: () => selectUserStatistics(store.statistics),
@@ -385,13 +364,13 @@ export const UserStore = signalStore(
           key = userQueryKey(snapshot)
         return defer(() => {
           // Auth observation can emit synchronously. Establish it before subscribing below.
-          checkSession()
+          const hasSession = checkSession()
           if (
             (!active.has(key) && active.size >= 20) ||
             (!store.entries()[key] &&
               Object.keys(store.entries()).length >= 20 &&
               Object.keys(store.entries()).every(
-                candidate => active.has(candidate) || flights.has(candidate)
+                candidate => active.has(candidate) || isPending(candidate)
               ))
           ) {
             throw new Error("At most 20 distinct user queries can be active concurrently")
@@ -400,8 +379,8 @@ export const UserStore = signalStore(
           const entry = store.entries()[key]
           if (
             delayMs > 0 &&
-            sessionKey !== null &&
-            !flights.has(key) &&
+            hasSession &&
+            !isPending(key) &&
             (force || !entry || entry.expires <= Date.now())
           ) {
             updateEntry(key, {
@@ -416,12 +395,22 @@ export const UserStore = signalStore(
           return merge(invalidations, of("initial" as const)).pipe(
             switchMap(reason => {
               if (reason === "session") return EMPTY
+              if (reason === "mutation") {
+                let batch = mutationPages.get(key)
+                if (!batch) {
+                  batch = readPage(snapshot, false, true).pipe(
+                    shareReplay({ bufferSize: 1, refCount: true })
+                  )
+                  mutationPages.set(key, batch)
+                }
+                return batch
+              }
               return (reason === "initial" && delayMs > 0 ? timer(delayMs) : of(0)).pipe(
                 switchMap(() =>
                   readPage(
                     snapshot,
                     reason === "initial" && force,
-                    reason === "mutation" || force || !!store.entries()[key]?.error
+                    force || !!store.entries()[key]?.error
                   )
                 )
               )
@@ -432,7 +421,7 @@ export const UserStore = signalStore(
               else {
                 active.delete(key)
                 const entry = store.entries()[key]
-                if (entry && !flights.has(key))
+                if (entry && !isPending(key))
                   updateEntry(key, { ...entry, loading: false, refreshing: false })
               }
             })

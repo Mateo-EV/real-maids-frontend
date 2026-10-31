@@ -12,13 +12,15 @@ Branch: `refactor/shared-store-read-resources`; delivery: feature-branch-chain (
 
 ## Tasks
 
-- T1 [S2,S4] delegated + parent integration — done (independent recheck PASS37; native review tracked in T5) — Extract helpers, add policy tests and preserve Roles behavior. Risk: item 4 (flight coordination). Commit: pending.
+- T1 [S2,S4] delegated + parent integration — done (independent recheck PASS37; native review tracked in T5) — Extract helpers, add policy tests and preserve Roles behavior. Risk: item 4 (flight coordination). Commit: `9597a0915fac1aa3ba4edb6cb1b90d0ad357dcf0` (native approved/acknowledged).
 - T2 [S1,S4] delegated — in_progress — Migrate RBAC/Audit read resources and session scope, preserving domain/retention/result policies. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
-- T3 [S1,S4] delegated + parent verification — in_progress (independent PASS42; commit/native/integration pending) — Migrate User read resources and session scope, preserving keyed admission/observers/statistics. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
+- T3 [S1,S4] delegated + parent verification — done (independent PASS42; full seam PASS1083; native routing tracked in T5) — Migrate User read resources and session scope, preserving keyed admission/observers/statistics. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
 - T4 [S1,S4] delegated + parent seam — in_progress (independent PASS47; commit/native/integration pending) — Migrate UserSessions read resources and scope, preserving owner/count/detail invalidation. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
 - T5 [S1-S4] inline — pending — Integrate documentation, run full tests/build/formatting, independent verification and applicable native reviews; explain the code. Commit: pending.
 
 ## Log
+
+- L15 Foundation9597a09 native high review-b2a0a7a0199a42a2 passed4 lenses; exact acknowledgement completed, authority burned. T2 independent PASS27 focused+22TTL tests. Parent full seam `npx --no-install ng test --watch=false` PASS79files/1083tests; `npx --no-install ng build` PASS, prerendered1route, existing initial620.53kB exceeds warning500kB. `git diff --check` PASS. No browser/live-backend acceptance claimed (no UI/transport changes). Unit native routing still pending for migrations.
 
 - L14 Original T1 blocker resolved: targeted independent recheck PASS3files/37tests in isolated candidate, no stale delivery/dispatch during init/replacement/destruction; legitimate replacement reads resume. T1 source/checks complete. Foundation work-unit commit comes first; native review takes only that committed range, ignoring parallel worktree edits.
 
