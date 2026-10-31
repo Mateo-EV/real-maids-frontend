@@ -14,11 +14,13 @@ Branch: `refactor/shared-store-read-resources`; delivery: feature-branch-chain (
 
 - T1 [S2,S4] delegated + parent integration — done (independent recheck PASS37; native review tracked in T5) — Extract helpers, add policy tests and preserve Roles behavior. Risk: item 4 (flight coordination). Commit: `9597a0915fac1aa3ba4edb6cb1b90d0ad357dcf0` (native approved/acknowledged).
 - T2 [S1,S4] delegated — in_progress — Migrate RBAC/Audit read resources and session scope, preserving domain/retention/result policies. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
-- T3 [S1,S4] delegated + parent verification — done (independent PASS42; full seam PASS1083; native routing tracked in T5) — Migrate User read resources and session scope, preserving keyed admission/observers/statistics. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
-- T4 [S1,S4] delegated + parent seam — in_progress (independent PASS47; commit/native/integration pending) — Migrate UserSessions read resources and scope, preserving owner/count/detail invalidation. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
+- T3 [S1,S4] delegated + parent verification — done (independent PASS42; full seam PASS1083; native routing tracked in T5) — Migrate User read resources and session scope, preserving keyed admission/observers/statistics. Risk: item 2 (session fencing), item 4 (concurrency). Commit: `be8b3a80e231a921a7548c387d831b5e6694c772` (native medium, reviewDue false).
+- T4 [S1,S4] delegated + parent seam — done (independent PASS47; full seam PASS1083; native routing tracked in T5) — Migrate UserSessions read resources and scope, preserving owner/count/detail invalidation. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
 - T5 [S1-S4] inline — pending — Integrate documentation, run full tests/build/formatting, independent verification and applicable native reviews; explain the code. Commit: pending.
 
 ## Log
+
+- L16 User unit `be8b3a80e231a921a7548c387d831b5e6694c772`,452 authored lines. Native assessment medium; concurrency escalation retains independent proof requirement (already PASS42), reviewDue=false/under_budget so no native START for this unit. Session unit next, keeping its tests/docs with behavior.
 
 - L15 Foundation9597a09 native high review-b2a0a7a0199a42a2 passed4 lenses; exact acknowledgement completed, authority burned. T2 independent PASS27 focused+22TTL tests. Parent full seam `npx --no-install ng test --watch=false` PASS79files/1083tests; `npx --no-install ng build` PASS, prerendered1route, existing initial620.53kB exceeds warning500kB. `git diff --check` PASS. No browser/live-backend acceptance claimed (no UI/transport changes). Unit native routing still pending for migrations.
 
