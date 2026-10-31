@@ -3,6 +3,7 @@ import {
   defer,
   EMPTY,
   finalize,
+  map,
   Observable,
   of,
   shareReplay,
@@ -16,14 +17,20 @@ import { Result } from "@/app/shared/utils/result"
 export interface ReadResourceState<T, E> {
   data: T
   loaded: boolean
-  /** Includes obsolete overlapping flights until they complete or lose their last subscriber. */
-  pendingReads: number
+  /** Optional adapter projection; flight accounting itself is owned by the resource. */
+  pendingReads?: number
   refreshing: boolean
   expires: number
   error: E | undefined
 }
 
-interface ReadResourceOptions<T, E> {
+export interface ReadScope {
+  check(): boolean
+  generation(): number
+  cancelled$: Observable<void>
+}
+
+export interface ReadResourceOptions<T, E> {
   state: {
     get(): ReadResourceState<T, E>
     update(update: (state: ReadResourceState<T, E>) => Partial<ReadResourceState<T, E>>): void
@@ -32,22 +39,39 @@ interface ReadResourceOptions<T, E> {
   request(): Observable<Result<T, E>>
   normalizeError(error: unknown): E
   ttl: number
-  scope: { check(): boolean; generation(): number; cancelled$: Observable<void> }
+  scope: ReadScope
+  /** Replace detaches older flights without cancelling them; join shares even forced reads. */
+  forcePolicy?: "join" | "replace"
+  cancelOnInvalidate?: boolean
+  obsoleteResult?(result: Result<T, E>): Result<T, E>
 }
 
-export function createReadResource<T, E>(options: ReadResourceOptions<T, E>) {
+export interface ReadResource<T, E> {
+  read(force?: boolean, request?: () => Observable<Result<T, E>>): Observable<Result<T, E>>
+  invalidate(): void
+  reset(): void
+  readonly pendingReads: number
+  isPending(): boolean
+}
+
+export function createReadResource<T, E>(options: ReadResourceOptions<T, E>): ReadResource<T, E> {
   const { state, scope } = options
   let revision = 0
   let epoch = 0
   let latest = 0
+  let pendingReads = 0
   let flight: Observable<Result<T, E>> | undefined
   let cancelled = new Subject<void>()
 
   return {
-    read(force = false): Observable<Result<T, E>> {
+    get pendingReads() {
+      return pendingReads
+    },
+    isPending: () => pendingReads > 0,
+    read(force = false, requestFactory = options.request): Observable<Result<T, E>> {
       return defer(() => {
         if (!scope.check()) return EMPTY
-        if (flight && !force) return flight
+        if (flight && (!force || options.forcePolicy === "join")) return flight
         const current = state.get()
         if (!force && current.loaded && current.expires > Date.now())
           return of(Result.success(current.data))
@@ -60,12 +84,13 @@ export function createReadResource<T, E>(options: ReadResourceOptions<T, E>) {
         const sameScope = () => requestEpoch === epoch && generation === scope.generation()
         const isCurrent = () => sameScope() && requestId === latest && requestRevision === revision
         const request = defer(() => {
+          pendingReads++
           state.update(value => ({
-            pendingReads: value.pendingReads + 1,
+            pendingReads,
             refreshing: value.loaded,
             error: undefined
           }))
-          return defer(options.request)
+          return defer(requestFactory)
         }).pipe(
           catchError((error: unknown) => of(Result.failure(options.normalizeError(error)))),
           tap(result => {
@@ -81,14 +106,18 @@ export function createReadResource<T, E>(options: ReadResourceOptions<T, E>) {
               error => state.update(() => ({ error }))
             )
           }),
+          map(result =>
+            !isCurrent() && options.obsoleteResult ? options.obsoleteResult(result) : result
+          ),
           takeUntil(scope.cancelled$),
           takeUntil(reset$),
           finalize(() => {
             if (!sameScope()) return
             const currentFlight = flight === request
             if (currentFlight) flight = undefined
-            state.update(value => ({
-              pendingReads: value.pendingReads - 1,
+            pendingReads--
+            state.update(() => ({
+              pendingReads,
               ...(currentFlight ? { refreshing: false } : {})
             }))
           }),
@@ -99,15 +128,27 @@ export function createReadResource<T, E>(options: ReadResourceOptions<T, E>) {
       })
     },
     invalidate() {
-      // Detach, do not cancel: existing subscribers still receive their own result.
       revision++
       flight = undefined
-      state.update(() => ({ expires: 0, refreshing: false }))
+      if (options.cancelOnInvalidate) {
+        epoch++
+        pendingReads = 0
+        const previous = cancelled
+        cancelled = new Subject<void>()
+        // Publish stale state before completing consumers, which may synchronously read again.
+        state.update(() => ({ expires: 0, refreshing: false, pendingReads: 0 }))
+        previous.next()
+        previous.complete()
+      } else {
+        // Detach, do not cancel: existing subscribers still receive their own result.
+        state.update(() => ({ expires: 0, refreshing: false }))
+      }
     },
     reset() {
       epoch++
       revision++
       flight = undefined
+      pendingReads = 0
       const previous = cancelled
       cancelled = new Subject<void>()
       // Reset before cancellation: completion callbacks may synchronously start a new read.
