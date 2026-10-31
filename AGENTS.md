@@ -2,15 +2,6 @@
 
 Mandatory guidance for coding agents and automation working on The Real Maids frontend.
 
-## Read first and establish evidence
-
-Read [README.md](README.md), [the product guide](docs/README.md), and this file before changing code or documentation. Then inspect the relevant `package.json`, `angular.json`, `components.json`, TypeScript configuration and source/tests.
-
-- Source, configuration and observed test results establish implementation status; installed dependencies, empty files, types and tokens do not establish completed features.
-- This file preserves the accepted technical constraints; the product guide preserves RF/RNF/HU/M/P intent, not implementation evidence.
-- Actual backend OpenAPI/Swagger establishes REST contracts; approved Figma designs establish visual references.
-- Do not silently change product scope or resolve open questions. Major changes to framework, UI, state, forms, SSR, test runner or cross-cutting architecture require an explicit human decision, recorded here as appropriate. No separate ADR process is required.
-
 ## Mandatory technical plan and human approval before changes
 
 Before writing or changing code, tests, configuration, dependencies, documentation or any other repository file, first inspect the relevant project context using read-only operations. Then present a **technical implementation plan in the conversation and stop for human review**. A request to implement something is not, by itself, approval of a plan the user has not yet seen. This approval gate applies even to seemingly small changes.
