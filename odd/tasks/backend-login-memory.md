@@ -4,7 +4,7 @@
 
 Connect the documented `POST /api/auth/login` without fabricating identity or expanding the backend contract. The user authorized available backend integration and explicitly selected memory-only JWT storage. Reload/closing the tab loses the session. No persistent credentials, permanent storage policy, remote logout, refresh, permission enforcement, user CRUD integration or role-ID inference is authorized.
 
-Traceability: M01/RF01/HU01/P01; M02 demo boundary; RNF01/RNF03/RNF09/RNF10/RNF12. Backend evidence and gaps: [contract analysis](../../docs/backend-users-iam-gaps.md).
+Traceability: M01/RF01/HU01/P01; M02 demo boundary; RNF01/RNF03/RNF09/RNF10/RNF12.
 
 ## Scope and constraints
 

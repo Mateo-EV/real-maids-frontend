@@ -40,7 +40,7 @@ npm run build
 npm test -- --watch=false
 ```
 
-El login de desarrollo usa la configuración pública `apiUrl: "http://localhost:8080"` en `src/environments/environment.ts`; requiere el backend y CORS para el origen del frontend. Producción sustituye ese archivo y deja `apiUrl: null`: login falla cerrado hasta configurar explícitamente un origen HTTPS aprobado, nunca usa localhost como respaldo. No guardes credenciales en estos archivos. Bearer se limita al origen API validado; nunca se adjunta a URLs ajenas. La decisión temporal aprobada es localStorage para ambos tokens; persistencia definitiva/cookies sigue abierta. Consulta los [contratos y brechas del backend](docs/backend-users-iam-gaps.md).
+El login de desarrollo usa la configuración pública `apiUrl: "http://localhost:8080"` en `src/environments/environment.ts`; requiere el backend y CORS para el origen del frontend. Producción sustituye ese archivo y deja `apiUrl: null`: login falla cerrado hasta configurar explícitamente un origen HTTPS aprobado, nunca usa localhost como respaldo. No guardes credenciales en estos archivos. Bearer se limita al origen API validado; nunca se adjunta a URLs ajenas. La decisión temporal aprobada es localStorage para ambos tokens; persistencia definitiva/cookies sigue abierta.
 
 Estos comandos instalan dependencias, inician el servidor local, compilan y ejecutan las pruebas unitarias, respectivamente. No hay targets de lint ni E2E configurados.
 

@@ -6,7 +6,7 @@ Integrate the updated backend contracts through feature HTTP sources and reposit
 
 The user explicitly approved temporary localStorage persistence for both access and refresh tokens. This supersedes the prior memory-only decision: reload may restore a session. localStorage is JavaScript-readable persistence and exposes both credentials to XSS; no cookies are documented or implicitly selected. Never put real credentials in commands, tests, logs, documentation or task records.
 
-Traceability: M01/RF01/HU01/P01; M02/RF02/HU02/P03; RNF01/RNF03/RNF09/RNF10/RNF12. Backend contract and outstanding issues: [IAM handoff](../../docs/backend-users-iam-gaps.md).
+Traceability: M01/RF01/HU01/P01; M02/RF02/HU02/P03; RNF01/RNF03/RNF09/RNF10/RNF12.
 
 ## Evidence and boundaries
 
