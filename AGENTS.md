@@ -2,21 +2,14 @@
 
 Mandatory guidance for coding agents and automation working on The Real Maids frontend.
 
-## Mandatory technical plan and human approval before changes
+## Read first and establish evidence
 
-Before writing or changing code, tests, configuration, dependencies, documentation or any other repository file, first inspect the relevant project context using read-only operations. Then present a **technical implementation plan in the conversation and stop for human review**. A request to implement something is not, by itself, approval of a plan the user has not yet seen. This approval gate applies even to seemingly small changes.
+Read [README.md](README.md), [the product guide](docs/README.md), and this file before changing code or documentation. Then inspect the relevant `package.json`, `angular.json`, `components.json`, TypeScript configuration and source/tests.
 
-The plan must be specific enough that the eventual diff is unsurprising. Include:
-
-1. **Current evidence and objective:** what the relevant code/configuration currently does, what problem will be addressed, and which existing product requirements or backend contracts apply. Separate verified findings from assumptions.
-2. **Proposed technical changes:** the concrete files, features, classes, functions, routes, stores, contracts or tests expected to be added or modified; what will change in each and how the pieces will interact. Explain relevant data flow and architectural decisions, not just a high-level task list.
-3. **Boundaries and impact:** what will deliberately remain unchanged, expected behavior/compatibility/security implications, dependencies and risks. Highlight any uncertainty or decision requiring the user's input; do not silently choose a new architecture or extend product scope.
-4. **Implementation and verification:** the intended order of work, tests and validation commands to run after implementation, and any limitations on what can currently be verified.
-5. **Approval request:** explicitly ask whether the user **approves the plan, wants it modified, or wants the work stopped**. Present the plan in the user's language when practical.
-
-**Do not implement until the user explicitly approves the latest proposed plan.** While awaiting that decision, limit work to non-mutating investigation and planning. Do not edit files, install dependencies, execute generators, run formatters or use other commands that can change repository contents; do not interpret silence, an unrelated response or a prior generic request as approval.
-
-If the user requests changes, revise the technical plan and ask for approval again; if they reject or pause it, do not implement. Once approved, execute only the approved scope. If new evidence requires a material deviation in files, behavior, architecture, dependencies or scope, explain the difference, provide an updated plan and **pause for renewed approval** before proceeding. At completion, report what changed versus the approved plan and the actual verification results.
+- Source, configuration and observed test results establish implementation status; installed dependencies, empty files, types and tokens do not establish completed features.
+- This file preserves the accepted technical constraints; the product guide preserves RF/RNF/HU/M/P intent, not implementation evidence.
+- Actual backend OpenAPI/Swagger establishes REST contracts; approved Figma designs establish visual references.
+- Do not silently change product scope or resolve open questions. Major changes to framework, UI, state, forms, SSR, test runner or cross-cutting architecture require an explicit human decision, recorded here as appropriate. No separate ADR process is required.
 
 ## Tools: discover availability, then use local fallback
 
