@@ -13,12 +13,14 @@ Branch: `refactor/shared-store-read-resources`; delivery: feature-branch-chain (
 ## Tasks
 
 - T1 [S2,S4] delegated + parent integration — done (independent recheck PASS37; native review tracked in T5) — Extract helpers, add policy tests and preserve Roles behavior. Risk: item 4 (flight coordination). Commit: `9597a0915fac1aa3ba4edb6cb1b90d0ad357dcf0` (native approved/acknowledged).
-- T2 [S1,S4] delegated — in_progress — Migrate RBAC/Audit read resources and session scope, preserving domain/retention/result policies. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
+- T2 [S1,S4] delegated — done (independent PASS27+22TTL; full seam PASS1083; native routing tracked in T5) — Migrate RBAC/Audit read resources and session scope, preserving domain/retention/result policies. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
 - T3 [S1,S4] delegated + parent verification — done (independent PASS42; full seam PASS1083; native routing tracked in T5) — Migrate User read resources and session scope, preserving keyed admission/observers/statistics. Risk: item 2 (session fencing), item 4 (concurrency). Commit: `be8b3a80e231a921a7548c387d831b5e6694c772` (native medium, reviewDue false).
-- T4 [S1,S4] delegated + parent seam — done (independent PASS47; full seam PASS1083; native routing tracked in T5) — Migrate UserSessions read resources and scope, preserving owner/count/detail invalidation. Risk: item 2 (session fencing), item 4 (concurrency). Commit: pending.
+- T4 [S1,S4] delegated + parent seam — done (independent PASS47; full seam PASS1083; native routing tracked in T5) — Migrate UserSessions read resources and scope, preserving owner/count/detail invalidation. Risk: item 2 (session fencing), item 4 (concurrency). Commit: `1706b7984857beed1b6b466c59690af4409b25bf` (native medium, reviewDue false).
 - T5 [S1-S4] inline — pending — Integrate documentation, run full tests/build/formatting, independent verification and applicable native reviews; explain the code. Commit: pending.
 
 ## Log
+
+- L17 Sessions unit `1706b7984857beed1b6b466c59690af4409b25bf`,795 authored lines; native medium reviewDue=false/under_budget, independent PASS47 already satisfies escalation. RBAC/Audit unit next; source implementation of all migrations complete and independent proof PASS. Parent docs now explain ownership and read path; no component/endpoints/provider/store-lifetime changes.
 
 - L16 User unit `be8b3a80e231a921a7548c387d831b5e6694c772`,452 authored lines. Native assessment medium; concurrency escalation retains independent proof requirement (already PASS42), reviewDue=false/under_budget so no native START for this unit. Session unit next, keeping its tests/docs with behavior.
 

@@ -26,7 +26,19 @@ Shared in-flight requests use ref-counted cancellation; inactive histories are b
 
 M02/RF02/HU02/P03 and RNF09/RNF10/RNF12 guide the separation of read mechanics from capability policy. The neutral [read resource](../src/app/shared/state/read-resource.ts) owns request sharing, success-only freshness, cancellation and obsolete-response fencing. Its typed adapter reads and patches the consuming SignalStore; it does not keep a second writable copy of the result. Forced-read joining versus replacement and invalidation cancellation are explicit policies, not a new common behavior imposed on consumers.
 
-The [session read scope](../src/app/features/auth/presentation/state/session-read-scope.ts) belongs to Auth, not shared state: it initializes Auth lazily in the browser and observes identity plus the fixed session deadline. Stores supply their reset callback; same-session access renewal does not clear cached data. Roles, UserStore and UserSessionsStore use both helpers. UserStore retains query-keyed pages and independent statistics; its active observers share one lazy refresh batch per mutation, including synchronous failed responses. UserSessionsStore keeps owner-page, exact-count and per-user-detail resources separate, including their verification markers and post-mutation refresh batches. Cache keys, admission/history bounds, observer lifetimes and mutations remain capability-owned. Auth lifecycle and the authoritative CustomersStore are not read-resource caches.
+The [session read scope](../src/app/features/auth/presentation/state/session-read-scope.ts) belongs to Auth, not shared state: it initializes Auth lazily in the browser and observes identity plus the fixed session deadline. Stores supply their reset callback; same-session access renewal does not clear cached data. RolesStore, RbacStore, AuditLogsStore, UserStore and UserSessionsStore use both helpers. UserStore retains query-keyed pages and independent statistics; its active observers share one lazy refresh batch per mutation, including synchronous failed responses. UserSessionsStore keeps owner-page, exact-count and per-user-detail resources separate, including their verification markers and post-mutation refresh batches. Cache keys, admission/history bounds, observer lifetimes and mutations remain capability-owned. Auth lifecycle and the authoritative CustomersStore are not read-resource caches.
+
+The read path is **consumer → store → read resource → use case → store adapter → readonly selector**. A fresh verified result is returned without HTTP; otherwise the resource coordinates a request. Only a successful current response renews freshness. An obsolete response cannot replace state, and cancellation is shared until the final subscriber leaves.
+
+| Owner | Responsibility kept outside the shared coordinator |
+| --- | --- |
+| Roles | Catalog changes and aggregate read/write loading. |
+| RBAC | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
+| Audit | Query identity, current-page projection and ordering between page-derived/global totals. |
+| Users | Query admission/history, effective pagination, statistics and mutation observer fan-out. |
+| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation. |
+
+A new cached read supplies a typed state adapter, request factory, error normalization, TTL and scope. `read()` checks admission/freshness; `invalidate()` makes verified data stale according to the consumer's cancellation policy; `reset()` cancels all flights and clears the read state. A registry may retain coordinators per key, but results stay only in the store. Do not use this mechanism to cache authentication decisions, writes or uncached exports.
 
 ### Shared catalog filter styling
 

@@ -1,22 +1,12 @@
-import { DestroyRef, inject, Injector, PLATFORM_ID } from "@angular/core"
-import { isPlatformBrowser } from "@angular/common"
+import { inject } from "@angular/core"
 import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
+import { catchError, defer, EMPTY, finalize, map, Observable, of, takeUntil, tap } from "rxjs"
+import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import {
-  catchError,
-  defer,
-  EMPTY,
-  finalize,
-  map,
-  Observable,
-  of,
-  shareReplay,
-  Subject,
-  takeUntil,
-  tap
-} from "rxjs"
-import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
-import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
-import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
+  createReadResource,
+  ReadResource,
+  ReadResourceState
+} from "@/app/shared/state/read-resource"
 import { Result } from "@/app/shared/utils/result"
 import { GetPermissionsUseCase } from "../../application/use-cases/get-permissions.use-case"
 import { GetRolePermissionsUseCase } from "../../application/use-cases/get-role-permissions.use-case"
@@ -63,129 +53,96 @@ export const RbacStore = signalStore(
       save = inject(SaveRolePermissionsUseCase),
       catalog = inject(GetPermissionsUseCase)
     ) => {
-      const injector = inject(Injector),
-        destroyRef = inject(DestroyRef)
-      const browser = isPlatformBrowser(inject(PLATFORM_ID)),
-        cancelled = new Subject<void>()
-      const revisions = new Map<number, number>(),
-        loads = new Map<string, number>(),
-        writes = new Set<number>()
-      const flights = new Map<string, Observable<unknown>>()
+      const assignments = new Map<
+        number,
+        ReadResource<PermissionAssignment | undefined, RbacError>
+      >()
+      const writes = new Set<number>()
       const retained = new Map<number, number>()
-      const activeReads = new Map<string, number>()
-      let pending = 0,
-        loadSequence = 0,
-        generation = 0,
-        observing = false,
-        sessionKey: string | null = null
-      const identity = (session: AuthSession | null) =>
-        session && (session.expiresAt === null || session.expiresAt > Date.now())
-          ? JSON.stringify([session.id, session.email, session.expiresAt])
-          : null
-      const clear = () => {
-        generation++
-        flights.clear()
-        activeReads.clear()
-        cancelled.next()
-        revisions.clear()
-        loads.clear()
+      let pendingWrites = 0
+      const scope = createSessionReadScope(() => {
+        const previous = [...assignments.values()]
+        assignments.clear()
         writes.clear()
         retained.clear()
+        pendingWrites = 0
+        previous.forEach(resource => resource.reset())
+        catalogResource.reset()
         patchState(store, { ...initialState, sessionRevision: store.sessionRevision() + 1 })
-      }
-      const acceptSession = (session: AuthSession | null) => {
-        const key = identity(session)
-        if (key === sessionKey) return
-        sessionKey = key
-        clear()
-      }
-      const checkSession = () => {
-        if (!browser) return false
-        const auth = injector.get(AuthStore)
-        if (!observing) {
-          observing = true
-          sessionKey = identity(auth.session())
-          const subscription = injector
-            .get(ObserveAuthSessionUseCase)
+      })
+      const updateLoading = () =>
+        patchState(store, {
+          loading:
+            pendingWrites > 0 ||
+            catalogResource.isPending() ||
+            [...assignments.values()].some(resource => resource.isPending())
+        })
+      const project = <T>(
+        entry: RbacReadEntry<T>
+      ): ReadResourceState<T | undefined, RbacError> => ({
+        data: entry.result,
+        loaded: entry.result !== undefined,
+        refreshing: entry.refreshing,
+        expires: entry.expires,
+        error: entry.error
+      })
+      // RBAC settles entry status on delivery, while aggregate loading counts every live read/write.
+      const apply = <T>(
+        entry: RbacReadEntry<T>,
+        patch: Partial<ReadResourceState<T | undefined, RbacError>>
+      ): RbacReadEntry<T> => ({
+        result: "data" in patch ? patch.data : entry.result,
+        loading:
+          patch.loaded !== undefined || patch.error !== undefined
+            ? false
+            : patch.refreshing !== undefined
+              ? (patch.pendingReads ?? 0) > 0 && entry.result === undefined
+              : entry.loading,
+        refreshing:
+          patch.loaded !== undefined || patch.error !== undefined
+            ? false
+            : (patch.refreshing ?? entry.refreshing),
+        error: "error" in patch ? patch.error : entry.error,
+        expires: patch.expires ?? entry.expires
+      })
+      const catalogResource = createReadResource<Permission[] | undefined, RbacError>({
+        state: {
+          get: () => project(store.catalogEntry()),
+          update: update => {
+            const entry = apply(store.catalogEntry(), update(project(store.catalogEntry())))
+            patchState(store, { catalogEntry: entry, catalog: entry.result ?? [] })
+            updateLoading()
+          }
+        },
+        initialData: () => undefined,
+        request: () =>
+          catalog
             .execute()
-            .subscribe(acceptSession)
-          destroyRef.onDestroy(() => subscription.unsubscribe())
-        } else acceptSession(auth.session())
-        return sessionKey !== null
-      }
-      destroyRef.onDestroy(clear)
+            .pipe(
+              map(result =>
+                result.success ? Result.success(result.data.map(p => ({ ...p }))) : result
+              )
+            ),
+        normalizeError: () => new RbacError("UNEXPECTED"),
+        obsoleteResult: () => Result.failure(new RbacError("BUSY")),
+        ttl: RBAC_READ_TTL_MS,
+        scope
+      })
       function execute<T>(request: () => Observable<Result<T, RbacError>>) {
         return defer(() => {
-          pending++
-          patchState(store, { loading: true })
+          const session = scope.generation()
+          pendingWrites++
+          updateLoading()
           return defer(request).pipe(
             catchError(() => of(Result.failure(new RbacError("UNEXPECTED")))),
-            takeUntil(cancelled),
+            takeUntil(scope.cancelled$),
             finalize(() => {
-              pending--
-              patchState(store, { loading: pending > 0 })
+              if (session !== scope.generation()) return
+              pendingWrites--
+              updateLoading()
             })
           )
         })
-      }
-      // This helper is local to RBAC's two read contracts, not a shared cache framework.
-      function read<T>(
-        key: string,
-        force: boolean,
-        entry: () => RbacReadEntry<T>,
-        update: (value: RbacReadEntry<T>) => void,
-        request: () => Observable<Result<T, RbacError>>,
-        current: () => boolean = () => true
-      ): Observable<Result<T, RbacError>> {
-        if (flights.has(key) && !force) return flights.get(key) as Observable<Result<T, RbacError>>
-        const previous = entry()
-        if (!force && previous.result !== undefined && previous.expires > Date.now())
-          return of(Result.success(previous.result))
-        // Never reuse a request identity after eviction and readmission.
-        const id = ++loadSequence,
-          session = generation
-        loads.set(key, id)
-        const valid = () => generation === session && loads.get(key) === id && current()
-        const flight = execute(() => {
-          activeReads.set(key, (activeReads.get(key) ?? 0) + 1)
-          update({
-            ...entry(),
-            loading: entry().result === undefined,
-            refreshing: entry().result !== undefined,
-            error: undefined
-          })
-          return request()
-        }).pipe(
-          map(result => (valid() ? result : Result.failure(new RbacError("BUSY")))),
-          tap(result => {
-            if (!valid()) return
-            update(
-              result.success
-                ? {
-                    result: result.data,
-                    loading: false,
-                    refreshing: false,
-                    error: undefined,
-                    expires: Date.now() + RBAC_READ_TTL_MS
-                  }
-                : { ...entry(), loading: false, refreshing: false, error: result.error }
-            )
-          }),
-          finalize(() => {
-            if (session === generation) {
-              const count = (activeReads.get(key) ?? 1) - 1
-              if (count > 0) activeReads.set(key, count)
-              else activeReads.delete(key)
-            }
-            if (flights.get(key) === flight) {
-              flights.delete(key)
-              if (valid()) update({ ...entry(), loading: false, refreshing: false })
-            }
-          }),
-          shareReplay({ bufferSize: 1, refCount: true })
-        )
-        flights.set(key, flight)
-        return flight
       }
       function updateAssignment(roleId: number, entry: RbacReadEntry<PermissionAssignment>) {
         patchState(store, state => ({
@@ -195,96 +152,96 @@ export const RbacStore = signalStore(
             : {})
         }))
       }
+      function assignmentResource(roleId: number) {
+        let resource = assignments.get(roleId)
+        if (resource) return resource
+        resource = createReadResource<PermissionAssignment | undefined, RbacError>({
+          state: {
+            get: () => project(store.assignmentEntries()[roleId] ?? emptyEntry()),
+            update: update => {
+              // Eviction/reset must not let an old coordinator reinsert a removed role.
+              if (assignments.get(roleId) !== resource) return
+              const entry = store.assignmentEntries()[roleId] ?? emptyEntry<PermissionAssignment>()
+              updateAssignment(roleId, apply(entry, update(project(entry))))
+              updateLoading()
+            }
+          },
+          initialData: () => undefined,
+          request: () =>
+            query
+              .execute(roleId)
+              .pipe(
+                map(result =>
+                  result.success
+                    ? result.data.roleId === roleId
+                      ? Result.success(copyAssignment(result.data))
+                      : Result.failure(new RbacError("INVALID_RESPONSE"))
+                    : result
+                )
+              ),
+          normalizeError: () => new RbacError("UNEXPECTED"),
+          obsoleteResult: () => Result.failure(new RbacError("BUSY")),
+          ttl: RBAC_READ_TTL_MS,
+          scope
+        })
+        assignments.set(roleId, resource)
+        return resource
+      }
       function admit(roleId: number) {
         if (store.assignmentEntries()[roleId]) return true
         const ids = Object.keys(store.assignmentEntries()).map(Number)
         if (ids.length < RBAC_ROLE_HISTORY_LIMIT) return true
         const oldest = ids.find(
-          id => !activeReads.has(String(id)) && !writes.has(id) && !retained.has(id)
+          id => !assignments.get(id)?.isPending() && !writes.has(id) && !retained.has(id)
         )
         if (oldest === undefined) return false
         const entries = { ...store.assignmentEntries() },
           matrices = { ...store.matrices() }
         delete entries[oldest]
         delete matrices[oldest]
-        revisions.delete(oldest)
-        loads.delete(String(oldest))
+        const resource = assignments.get(oldest)
+        assignments.delete(oldest)
         patchState(store, { assignmentEntries: entries, matrices })
+        resource?.reset()
         return true
       }
+      // Undefined is only the adapter's unverified state, never a successful public result.
+      const verified = <T>(result: Result<T | undefined, RbacError>): Result<T, RbacError> =>
+        result.success
+          ? result.data === undefined
+            ? Result.failure(new RbacError("INVALID_RESPONSE"))
+            : Result.success(result.data)
+          : Result.failure(result.error)
       return {
         retainRole(roleId: number) {
-          const session = generation
+          const session = scope.generation()
           retained.set(roleId, (retained.get(roleId) ?? 0) + 1)
           return () => {
-            if (session !== generation) return
+            if (session !== scope.generation()) return
             const count = (retained.get(roleId) ?? 1) - 1
             if (count > 0) retained.set(roleId, count)
             else retained.delete(roleId)
           }
         },
         loadCatalog(force = false) {
-          return defer(() => {
-            if (!checkSession()) return EMPTY
-            return read(
-              "catalog",
-              force,
-              () => store.catalogEntry(),
-              entry => patchState(store, { catalogEntry: entry, catalog: entry.result ?? [] }),
-              () =>
-                catalog
-                  .execute()
-                  .pipe(
-                    map(result =>
-                      result.success ? Result.success(result.data.map(p => ({ ...p }))) : result
-                    )
-                  )
-            )
-          })
+          return catalogResource.read(force).pipe(map(verified))
         },
         loadPermissions(roleId: number, force = false) {
           return defer(() => {
-            if (!checkSession()) return EMPTY
+            if (!scope.check()) return EMPTY
             if (writes.has(roleId) || !admit(roleId))
               return of(Result.failure(new RbacError("BUSY")))
-            const revision = revisions.get(roleId) ?? 0
-            return read(
-              String(roleId),
-              force,
-              () => store.assignmentEntries()[roleId] ?? emptyEntry(),
-              entry => updateAssignment(roleId, entry),
-              () =>
-                query
-                  .execute(roleId)
-                  .pipe(
-                    map(result =>
-                      result.success
-                        ? result.data.roleId === roleId
-                          ? Result.success(copyAssignment(result.data))
-                          : Result.failure(new RbacError("INVALID_RESPONSE"))
-                        : result
-                    )
-                  ),
-              () => (revisions.get(roleId) ?? 0) === revision
-            )
+            return assignmentResource(roleId).read(force).pipe(map(verified))
           })
         },
         savePermissionIds(roleId: number, ids: readonly number[]) {
           const snapshot = [...ids]
           return defer(() => {
-            if (!checkSession()) return EMPTY
+            if (!scope.check()) return EMPTY
             if (writes.has(roleId)) return of(Result.failure(new RbacError("BUSY")))
             writes.add(roleId)
-            const session = generation
-            revisions.set(roleId, (revisions.get(roleId) ?? 0) + 1)
-            flights.delete(String(roleId))
-            if (store.assignmentEntries()[roleId])
-              updateAssignment(roleId, {
-                ...store.assignmentEntries()[roleId],
-                expires: 0,
-                loading: false,
-                refreshing: false
-              })
+            const session = scope.generation()
+            assignments.get(roleId)?.invalidate()
             return execute(() => save.execute(roleId, snapshot)).pipe(
               map(result =>
                 result.success && result.data.roleId !== roleId
@@ -292,7 +249,7 @@ export const RbacStore = signalStore(
                   : result
               ),
               tap(result => {
-                if (session !== generation || !result.success) return
+                if (session !== scope.generation() || !result.success) return
                 // A confirmed write updates visible data but is not a successful cache read.
                 if (admit(roleId))
                   updateAssignment(roleId, {
@@ -301,11 +258,7 @@ export const RbacStore = signalStore(
                   })
               }),
               finalize(() => {
-                if (session === generation) {
-                  writes.delete(roleId)
-                  if (!store.assignmentEntries()[roleId] && !activeReads.has(String(roleId)))
-                    revisions.delete(roleId)
-                }
+                if (session === scope.generation()) writes.delete(roleId)
               })
             )
           })
