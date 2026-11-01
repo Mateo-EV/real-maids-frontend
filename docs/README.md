@@ -78,6 +78,30 @@ Desktop rows and mobile cards show backend actor, UTC timestamp, action, entity,
 
 This delivers read-only HTTP query/detail/export, not audit writes, a separate route, frontend durable persistence, security monitoring, immutability or actual hash/integrity verification. Navy primary actions and UTC deliberately remain instead of the screenshot's coral Save and UTC-5. Screenshot comparison and markup tests do not establish rendered fidelity; Chrome/Edge/Firefox visual, responsive, keyboard and actual download acceptance remain unrun.
 
+## Domain foundations by backend area
+
+The PDF/64-table SQL schema now has English-named domain coverage across all eleven backend areas. These are entities, explicit action/query parameters, typed errors and repository contracts, **not completed screens or integrations**. New repositories remain unwired. Existing auth/IAM behavior stays intact; the customer in-memory prototype is aligned with the new entity/parameter types without adding customer HTTP or UI.
+
+| Backend area | Feature and coverage reference |
+| --- | --- |
+| A — Security and access | Existing auth and [users domain](../src/app/features/users/domain/README.md); no credential hashes in frontend entities. |
+| B — Customers and acquisition | [customers](../src/app/features/customers/README.md) |
+| C — Services and pricing | [service-catalog](../src/app/features/service-catalog/README.md) |
+| D — Operations and scheduling | [operations](../src/app/features/operations/README.md) |
+| E — Field personnel and execution | [field-operations](../src/app/features/field-operations/README.md) |
+| F — Billing and collections | [billing](../src/app/features/billing/README.md) |
+| G — Customer support | [customer-support](../src/app/features/customer-support/README.md) |
+| H — Communications | [communications](../src/app/features/communications/README.md) |
+| I — Web content | [web-content](../src/app/features/web-content/README.md) |
+| J — Reports and configuration | [reports-settings](../src/app/features/reports-settings/README.md) |
+| K — Accounting integration | [quickbooks](../src/app/features/quickbooks/README.md) |
+
+Each reference maps its SQL tables to entities and distinguishes actual backend operation/response contracts from schema-derived **proposals**. SQL records and partial/redacted API projections are separate: missing response fields are never synthesized. Older SQL does not replace richer existing IAM contracts. Credentials, processor tokens and backend-only integration fields are excluded explicitly.
+
+New domain representations use numeric INT IDs, precision-safe strings for BIGINT IDs and DECIMAL values, calendar/time strings for DATE/TIME and `Date` for DATETIME. Nullable columns remain explicit `null`; only actual CHECK constraints close a value set. Factories materialize typed values like User; they do not validate unknown transport payloads or authorize operations. Future adapters must establish lossless transport, validation, server-owned financial rules and sanitized/public-only data before wiring these contracts.
+
+RNF09/RNF10/RNF12 guide the foundation. Existing M/RF/HU/P associations and missing dedicated traceability are recorded per area; no new functional requirements, navigation ACL, timezone configuration or delivered feature claims are inferred from tables or seed data. Backend-only QuickBooks responsibilities and all existing live/browser acceptance gaps remain unchanged.
+
 ## People and navigation
 
 Planned actors are administrators, administrative staff, field staff and customers. A “boss” or otherwise authorized supervisory profile appears in the plan, but its relation to formal roles and permissions is unresolved; do not equate it with administrator.

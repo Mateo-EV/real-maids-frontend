@@ -20,6 +20,10 @@ Aplicación web para coordinar los servicios de limpieza de The Real Maids: gest
 
 El resto de los módulos y el portal cliente son **alcance previsto**, no funcionalidades terminadas. Auth (T2), usuarios y catálogo de roles (T3) tienen adaptadores HTTP; RBAC (T4) tiene catálogo/asignaciones HTTP; sesiones IAM (T5) y auditoría (T6) tienen adaptadores HTTP, sin autorización frontend por rol, E2E ni CI/CD configurados; el despliegue productivo no está verificado. No se afirma un resultado actual de compilación o pruebas en esta documentación.
 
+## Base de dominio por área
+
+Las once áreas del diagrama y del SQL tienen modelos de dominio en inglés: entidades, parámetros, errores y contratos de repositorio. La [guía de cobertura](docs/README.md#domain-foundations-by-backend-area) enlaza el detalle de las 64 tablas y distingue operaciones confirmadas de propuestas para partes incompletas del backend. Esta base **no significa que existan pantallas, adaptadores HTTP o funcionalidades completas**. Auth/IAM conserva sus contratos actuales; el prototipo de clientes se alinea con el dominio sin agregar integración HTTP ni UI.
+
 ## Recorridos previstos
 
 - **Gestión interna:** cliente → solicitud de servicio → orden → programación y asignación → ejecución → seguimiento del pago.
