@@ -29,10 +29,8 @@ describe("DeleteCustomerUseCase", () => {
   it("delegates customer deletion to the repository", () => {
     vi.mocked(repository.delete).mockReturnValue(of(Result.success(undefined)))
 
-    useCase
-      .execute("customer-001")
-      .subscribe(result => expect(result).toMatchObject({ success: true }))
+    useCase.execute(1).subscribe(result => expect(result).toMatchObject({ success: true }))
 
-    expect(repository.delete).toHaveBeenCalledWith("customer-001")
+    expect(repository.delete).toHaveBeenCalledWith(1)
   })
 })

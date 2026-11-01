@@ -34,8 +34,8 @@ describe("GetCustomerByIdUseCase", () => {
       of(Result.failure(new CustomerError("CUSTOMER_NOT_FOUND")))
     )
 
-    useCase.execute("customer-404").subscribe(result => expect(result.success).toBe(false))
+    useCase.execute(404).subscribe(result => expect(result.success).toBe(false))
 
-    expect(repository.findById).toHaveBeenCalledWith("customer-404")
+    expect(repository.findById).toHaveBeenCalledWith(404)
   })
 })

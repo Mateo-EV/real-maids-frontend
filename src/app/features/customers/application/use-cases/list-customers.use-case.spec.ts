@@ -2,7 +2,7 @@ import { TestBed } from "@angular/core/testing"
 import { of } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
-import { Customer } from "../../domain/entities/customer.entity"
+import { customerFixture } from "../../domain/customer.fixture"
 import {
   CUSTOMER_REPOSITORY,
   CustomerRepository
@@ -30,7 +30,7 @@ describe("ListCustomersUseCase", () => {
   })
 
   it("delegates catalog lookup to the repository", () => {
-    const customers = [new Customer("customer-001", "María López", "maria.lopez@example.com")]
+    const customers = [customerFixture(1, "María López", "maria.lopez@example.com")]
     vi.mocked(repository.findAll).mockReturnValue(of(Result.success(customers)))
 
     useCase.execute().subscribe(result => {

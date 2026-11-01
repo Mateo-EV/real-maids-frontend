@@ -11,7 +11,7 @@ import {
 export class DeleteCustomerUseCase {
   private readonly customerRepository = inject<CustomerRepository>(CUSTOMER_REPOSITORY)
 
-  execute(id: string): Observable<Result<void, CustomerError>> {
+  execute(id: number): Observable<Result<void, CustomerError>> {
     return this.customerRepository.delete(id)
   }
 }

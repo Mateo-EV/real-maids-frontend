@@ -2,7 +2,7 @@ import { TestBed } from "@angular/core/testing"
 import { of } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Result } from "@/app/shared/utils/result"
-import { Customer } from "../../domain/entities/customer.entity"
+import { customerFixture } from "../../domain/customer.fixture"
 import {
   CUSTOMER_REPOSITORY,
   CustomerRepository
@@ -28,7 +28,7 @@ describe("UpdateCustomerUseCase", () => {
   })
 
   it("delegates customer updates to the repository", () => {
-    const customer = new Customer("customer-001", "María Torres", "maria@example.com")
+    const customer = customerFixture(1, "María Torres", "maria@example.com")
     vi.mocked(repository.update).mockReturnValue(of(Result.success(customer)))
 
     useCase

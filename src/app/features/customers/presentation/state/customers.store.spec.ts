@@ -8,6 +8,7 @@ import { GetCustomerByIdUseCase } from "../../application/use-cases/get-customer
 import { ListCustomersUseCase } from "../../application/use-cases/list-customers.use-case"
 import { UpdateCustomerUseCase } from "../../application/use-cases/update-customer.use-case"
 import { Customer } from "../../domain/entities/customer.entity"
+import { customerFixture, customerInput } from "../../domain/customer.fixture"
 import { CustomerError } from "../../domain/errors/customer.error"
 import type { Result as CustomerResult } from "@/app/shared/utils/result"
 import { CustomersStore } from "./customers.store"
@@ -76,8 +77,8 @@ describe("CustomersStore", () => {
   })
 
   it("keeps loading active for overlapping work and ignores a stale list after a mutation", () => {
-    const existing = new Customer("customer-001", "María López", "maria@example.com")
-    const created = new Customer("customer-002", "Ana Torres", "ana@example.com")
+    const existing = customerFixture(1, "María López", "maria@example.com")
+    const created = customerFixture(2, "Ana Torres", "ana@example.com")
     listCustomersUseCase.execute.mockReturnValue(of(Result.success([existing])))
     store.loadCustomers().subscribe()
 
@@ -88,7 +89,7 @@ describe("CustomersStore", () => {
     const createResponse = new Subject<CustomerResult<Customer, CustomerError>>()
     createCustomerUseCase.execute.mockReturnValue(createResponse)
     const createSubscription = store
-      .createCustomer({ name: created.name, email: created.email })
+      .createCustomer(customerInput(created.name, created.email))
       .subscribe()
 
     expect(store.loading()).toBe(true)
@@ -120,9 +121,9 @@ describe("CustomersStore", () => {
   })
 
   it("loads a customer and applies create, update, and delete results to presentation state", () => {
-    const customer = new Customer("customer-001", "María López", "maria@example.com")
-    const created = new Customer("customer-002", "Ana Torres", "ana@example.com")
-    const updated = new Customer("customer-001", "María Torres", "maria.torres@example.com")
+    const customer = customerFixture(1, "María López", "maria@example.com")
+    const created = customerFixture(2, "Ana Torres", "ana@example.com")
+    const updated = customerFixture(1, "María Torres", "maria.torres@example.com")
     listCustomersUseCase.execute.mockReturnValue(of(Result.success([customer])))
     store.loadCustomers().subscribe()
 
@@ -131,7 +132,7 @@ describe("CustomersStore", () => {
     expect(store.selectedCustomer()).toBe(customer)
 
     createCustomerUseCase.execute.mockReturnValue(of(Result.success(created)))
-    store.createCustomer({ name: created.name, email: created.email }).subscribe()
+    store.createCustomer(customerInput(created.name, created.email)).subscribe()
     expect(store.customers()).toEqual([customer, created])
     expect(store.successMessage()).toBe("Customer created successfully")
 
@@ -150,7 +151,7 @@ describe("CustomersStore", () => {
   it("clears feedback without changing catalog state", () => {
     const failure = new CustomerError("CUSTOMER_NOT_FOUND")
     getCustomerByIdUseCase.execute.mockReturnValue(of(Result.failure(failure)))
-    store.loadCustomer("missing").subscribe()
+    store.loadCustomer(404).subscribe()
 
     store.clearFeedback()
 

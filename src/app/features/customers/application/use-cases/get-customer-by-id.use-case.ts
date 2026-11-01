@@ -12,7 +12,7 @@ import {
 export class GetCustomerByIdUseCase {
   private readonly customerRepository = inject<CustomerRepository>(CUSTOMER_REPOSITORY)
 
-  execute(id: string): Observable<Result<Customer, CustomerError>> {
+  execute(id: number): Observable<Result<Customer, CustomerError>> {
     return this.customerRepository.findById(id)
   }
 }

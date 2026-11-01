@@ -18,6 +18,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
+import { customerInput } from "@/app/features/customers/domain/customer.fixture"
 import { AdminShell } from "@/app/experiences/admin/presentation/components/admin-shell/admin-shell"
 
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
@@ -269,11 +270,7 @@ describe("Application repository composition", () => {
   it("shares customer mutations between the root store and source", async () => {
     const store = TestBed.inject(CustomersStore)
     const created = firstValueFrom(
-      store.createCustomer({
-        name: "Demo customer",
-        email: "demo@example.com",
-        phone: "+1 555 010 1003"
-      })
+      store.createCustomer(customerInput("Demo customer", "demo@example.com", "+1 555 010 1003"))
     )
     await vi.runAllTimersAsync()
     const result = await created

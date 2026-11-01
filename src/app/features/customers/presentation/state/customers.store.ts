@@ -9,6 +9,7 @@ import { ListCustomersUseCase } from "../../application/use-cases/list-customers
 import { UpdateCustomerUseCase } from "../../application/use-cases/update-customer.use-case"
 import { Customer } from "../../domain/entities/customer.entity"
 import { CustomerError } from "../../domain/errors/customer.error"
+import { CreateCustomerParams, UpdateCustomerParams } from "../../domain/params/customer.params"
 
 interface CustomersState {
   readonly customers: readonly Customer[]
@@ -93,13 +94,13 @@ export const CustomersStore = signalStore(
             )
           })
         },
-        loadCustomer(id: string) {
+        loadCustomer(id: number) {
           return execute(
             () => getCustomerByIdUseCase.execute(id),
             selectedCustomer => patchState(store, { selectedCustomer })
           )
         },
-        createCustomer(customer: Omit<Customer, "id">) {
+        createCustomer(customer: CreateCustomerParams) {
           return execute(
             () => createCustomerUseCase.execute(customer),
             created => {
@@ -109,7 +110,7 @@ export const CustomersStore = signalStore(
             "Customer created successfully"
           )
         },
-        updateCustomer(customer: Customer) {
+        updateCustomer(customer: UpdateCustomerParams) {
           return execute(
             () => updateCustomerUseCase.execute(customer),
             updated => {
@@ -123,7 +124,7 @@ export const CustomersStore = signalStore(
             "Customer updated successfully"
           )
         },
-        deleteCustomer(id: string) {
+        deleteCustomer(id: number) {
           return execute(
             () => deleteCustomerUseCase.execute(id),
             () => {

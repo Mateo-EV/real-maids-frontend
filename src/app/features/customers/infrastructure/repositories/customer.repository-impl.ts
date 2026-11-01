@@ -1,5 +1,5 @@
 import { inject, Injectable } from "@angular/core"
-import { Customer } from "../../domain/entities/customer.entity"
+import { CreateCustomerParams, UpdateCustomerParams } from "../../domain/params/customer.params"
 import { CustomerRepository } from "../../domain/repositories/customer.repository"
 import { CustomerInMemorySource } from "../source/customer-in-memory.source"
 
@@ -11,19 +11,19 @@ export class CustomerRepositoryImpl implements CustomerRepository {
     return this.source.findAll()
   }
 
-  findById(id: string) {
+  findById(id: number) {
     return this.source.findById(id)
   }
 
-  create(customer: Omit<Customer, "id">) {
+  create(customer: CreateCustomerParams) {
     return this.source.create(customer)
   }
 
-  update(customer: Customer) {
+  update(customer: UpdateCustomerParams) {
     return this.source.update(customer)
   }
 
-  delete(id: string) {
+  delete(id: number) {
     return this.source.delete(id)
   }
 }

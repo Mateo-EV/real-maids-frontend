@@ -7,7 +7,7 @@ import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.re
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
-import { Customer } from "@/app/features/customers/domain/entities/customer.entity"
+import { customerFixture, customerInput } from "@/app/features/customers/domain/customer.fixture"
 import { USER_REPOSITORY } from "../../domain/repositories/user.repository"
 import { ROLE_REPOSITORY } from "../../domain/repositories/role.repository"
 import { Lang } from "../../domain/entities/user.entity"
@@ -169,18 +169,18 @@ describe("Cancellable in-memory execution boundaries", () => {
     const source = TestBed.inject(CustomerInMemorySource)
     const before = await settle(source.findAll())
     await cancelBeforeBoundary(
-      repository.create({ name: "Cancelled", email: "cancelled@example.com" }),
+      repository.create(customerInput("Cancelled", "cancelled@example.com")),
       150
     )
     await cancelBeforeBoundary(
-      repository.update(new Customer("customer-001", "Cancelled", "cancelled@example.com")),
+      repository.update(customerFixture(1, "Cancelled", "cancelled@example.com")),
       150
     )
-    await cancelBeforeBoundary(repository.delete("customer-002"), 150)
+    await cancelBeforeBoundary(repository.delete(2), 150)
     expect(await settle(source.findAll())).toEqual(before)
     expect(
-      await settle(repository.create({ name: "Completed", email: "completed@example.com" }))
-    ).toMatchObject({ success: true, data: { id: "customer-003" } })
+      await settle(repository.create(customerInput("Completed", "completed@example.com")))
+    ).toMatchObject({ success: true, data: { id: 3 } })
   })
 
   it("retains cancellable legacy demo user execution without mutations or ID allocation", async () => {
@@ -318,7 +318,7 @@ describe("Cancellable in-memory execution boundaries", () => {
       success: false,
       error: { code: "ROLE_NOT_FOUND" }
     })
-    expect(await settle(customers.delete("missing"))).toMatchObject({
+    expect(await settle(customers.delete(404))).toMatchObject({
       success: false,
       error: { code: "CUSTOMER_NOT_FOUND" }
     })

@@ -8,7 +8,7 @@ import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { AuthRepositoryImpl } from "@/app/features/auth/infrastructure/repositories/auth.repository-impl"
 import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { CustomerError } from "@/app/features/customers/domain/errors/customer.error"
-import { Customer } from "@/app/features/customers/domain/entities/customer.entity"
+import { customerFixture } from "@/app/features/customers/domain/customer.fixture"
 import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
 import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
 import { UserError } from "../../domain/errors/user.error"
@@ -82,7 +82,7 @@ describe("Infrastructure repository delegation", () => {
     const create = vi.spyOn(source, "create").mockReturnValue(response)
     const update = vi.spyOn(source, "update").mockReturnValue(response)
     const remove = vi.spyOn(source, "delete").mockReturnValue(response)
-    const customer = new Customer("customer-001", "Demo", "demo@example.com", "123")
+    const customer = customerFixture(1, "Demo", "demo@example.com", "123")
     expect(repository.findAll()).toBe(response)
     expect(repository.findById(customer.id)).toBe(response)
     expect(repository.create(customer)).toBe(response)
