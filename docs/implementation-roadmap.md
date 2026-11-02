@@ -20,13 +20,23 @@ Reference fields and schema are not migration instructions. Small differences sh
 
 | Area | Source-confirmed baseline | Remaining boundary |
 | --- | --- | --- |
-| Navigation/auth | [App routes](../src/app/app.routes.ts), [auth routes](../src/app/features/auth/auth.routes.ts) and [admin routes](../src/app/experiences/admin/admin.routes.ts) expose `/login`, protected `/admin` and `/admin/users`. | `/admin` temporarily redirects to users, not dashboard P02. Guards are not a role-navigation ACL. |
+| Navigation/auth | [App routes](../src/app/app.routes.ts), [auth routes](../src/app/features/auth/auth.routes.ts) and [admin routes](../src/app/experiences/admin/admin.routes.ts) expose `/login`, protected `/admin`, `/admin/users` and `/admin/customers`. | `/admin` temporarily redirects to users, not dashboard P02. Guards are not a role-navigation ACL. |
 | IAM | [Users route](../src/app/features/users/users.routes.ts) hosts user/RBAC/session/audit UI with HTTP integration, as detailed in the product guide. | Live authenticated backend/CORS, multi-tab auth and browser acceptance remain pending; the shell's demo notice is not integration proof. |
-| Customer capability | [Customers boundary](../src/app/features/customers/README.md) has HTTP sources, stateless actions and root stores for customers, properties, relations, acquisition and history. | No customer route or P04 UI; real integration/browser and database concurrency acceptance remain pending. |
+| Customer capability | [Customers boundary](../src/app/features/customers/README.md) has HTTP sources, stateless actions and root stores for customers, properties, relations, acquisition and history. | Read-only P04 list is connected at `/admin/customers` (WP1–WP2 implementation slice); WP3 connects create/edit/deactivate; WP3 manual/live/browser and database concurrency acceptance, plus WP4 detail/properties remain pending. |
 | Other capabilities | [Domain foundations](README.md#domain-foundations-by-backend-area) cover the remaining backend areas. Their READMEs distinguish source-confirmed backend operations from proposals. | Domain entities/contracts do not establish frontend HTTP adapters, stores, routes or delivered screens. |
-| Visual navigation | [Sidebar](../src/app/experiences/admin/presentation/components/admin-sidebar/admin-sidebar.ts) enables IAM only; Landing, CRM, RRHH, Cotizaciones and Programaciones are disabled. | Keep the existing layout; do not imply these buttons already open features. |
+| Visual navigation | [Sidebar](../src/app/experiences/admin/presentation/components/admin-sidebar/admin-sidebar.ts) enables IAM and **CRM**; CRM keeps its exact label, placement/icon/style and opens `/admin/customers`. Landing, RRHH, Cotizaciones and Programaciones remain disabled. | Keep the existing layout; do not imply these buttons already open features. |
 
-Reference observations supplied for this plan came from static routes/templates/API code and Flyway V1–V7 in the separate comparison project. They suggest workflows, not browser-tested behavior, approved contracts or official acceptance criteria. No application build or test pass is asserted by this documentation change.
+Reference observations supplied for this plan came from static routes/templates/API code and Flyway V1–V7 in the separate comparison project. They suggest workflows, not browser-tested behavior, approved contracts or official acceptance criteria. The WP1–WP2 implementation handoff records observed Angular test/build results; this roadmap does not equate them with live/backend or browser acceptance.
+
+## Bounded WP1–WP2 implementation evidence
+
+The approved first slice connects only the read-only customer list, not the full presentation journey or completed roadmap. Existing contract evidence is documented in the [customer boundary](../src/app/features/customers/README.md#customer-page-contract-s2s4): active-only `GET /api/clientes`, initial 0/20, server name/ID ordering and actual effective metadata. Official name/type/email/phone map directly to responsive table/cards; no reference fields, filters, ACL, counters or writes were imported. Backend authorization remains authoritative (`CLIENTE_LEER`); no role inference was added.
+
+Loading, verified empty, failed/retry and same-query stale states reuse existing Helm/theme patterns. The page selects the root query entry and owns cancelable observation subscriptions, with one bounded positive-total out-of-range correction retaining effective size. Response metadata is never locally rewritten. New navigation/retry resets the correction allowance, not every response. WP3 now connects editing using loaded record context; detail/property launchers stay deferred to WP4. WP2's broader detail-selection deliverable is not claimed.
+
+The exact visible sidebar label is **CRM**, not Clientes/Customers, with original General placement/icon/style. `/admin` still redirects to users and IAM behavior remains unchanged. Deterministic Angular page/store-contract/router/sidebar tests and configured suite/build are recorded in the handoff. Protected credential input, live authenticated requests/CORS/permission-denial acceptance and rendered Chrome/Edge/Firefox responsive/keyboard checks remain unavailable/pending; WP1/WP2 exits and the shared checklist are not marked complete.
+
+Current demonstration script: IAM → CRM → inspect active customer fields and actual range → next/previous → return to IAM. Verify loading/empty/error/stale retry with authorized non-sensitive records and record actual environment/evidence. WP3 now adds create/edit/deactivate launchers as documented below; detail/property steps remain future targets.
 
 ## Recommended next-week presentation target
 
@@ -70,6 +80,16 @@ Every package exits only when its own evidence and the shared completion checkli
 - **Acceptance/evidence:** preserve nullable replacement semantics, report only confirmed writes and refresh/invalidate server pages without guessing membership/totals. Deactivation can remove a row from the active-only listing; it must not become an inactive-search feature.
 - **Traceability:** M03/RF03/HU03/P04; RNF01/RNF08–RNF10/RNF12.
 - **Exit:** create/edit/deactivate are verified with backend and browser evidence. Reactivation is offered only for an authorized, legitimately loaded inactive detail; otherwise its discoverability remains pending, not solved by a new endpoint.
+
+#### Bounded WP3 delivery and evidence boundary
+
+The user authorized continuing after reporting WP2 manual acceptance: “ya lo comprobé y está correcto, continuemos con lo que sigue”. Preserve that reported acceptance; it does not establish exhaustive agent-observed browser/CORS checks. This task authorizes WP3 only, not the rest of the roadmap.
+
+Connected at CRM: Crear cliente, labeled Editar/Desactivar on desktop and mobile; Signal Forms name/type/email/phone, trimmed text, explicit null optional replacements, declarative limits/contact validation; selected-customer desired-false confirmation; guarded pending Cancel/Escape/outside dismissal and duplicate prevention. Actionable inline failure alerts retain drafts; only confirmed Result success produces an owner/session-fenced success toast. Users and CRM consume shared `CatalogFrame` for hierarchy, header/actions, responsive table/cards (64rem container breakpoint) and footer. Users navigation/KPIs stay outside and filters remain feature-owned; CRM invents neither filters nor KPIs. Both lazy routes use shared `provideCatalogToast()`, each owning HotToastService, ViewService and config together; global CSS in `angular.json` stays unchanged, with no root provider movement, root feedback consumer or direct Users-feature import. Model/API/store/session behavior and the exact CRM label remain unchanged. The reference guides functionality/content, not visual authority. No role-name ACL, delete, detail/properties, search/tags, inactive catalog or reactivation launcher.
+
+Existing store observers own one post-write refresh; the page never changes server rows/totals optimistically or duplicates reloads. Page/dialog subscriptions cancel on destruction/session end, fence stale completions and preserve same-session renewal; cancellation cannot undo dispatched server effects. Deterministic DOM/store-contract tests retain WP2 paging/recovery coverage and exercise WP3 mapping, validation, errors, pending dismissal and lifecycle fencing. Exact focused/full test and build evidence belongs to the implementation handoff, not an assumed pass here.
+
+Repeatable WP3 acceptance: IAM → CRM → create with invalid/valid fields → inspect confirmed success toast and server refresh → edit a loaded customer with blank contacts → confirm deactivation of that named customer → inspect active-only refresh → IAM. Use authorized non-sensitive records. Corrected WP3 visual/manual/live/backend and rendered browser/keyboard/responsive acceptance remain pending. WP4 and advanced gates remain unapproved; the shared checklist is intentionally not marked complete.
 
 ### WP4 — Customer detail and properties
 
@@ -159,7 +179,7 @@ Every package exits only when its own evidence and the shared completion checkli
 
 | Reference feature | Official equivalent / adaptation | Package | Status / dependency |
 | --- | --- | --- | --- |
-| CRM list/editor | Active-only customer pages/profile/status | WP2–WP3 | Pending UI; no tags/inactive search inferred. |
+| CRM list/editor | Active-only customer pages/profile/status | WP2–WP3 | List plus WP3 create/edit/deactivate source-connected; WP2 acceptance user-reported, WP3 manual/live/browser acceptance and WP4 detail pending. No tags/inactive search inferred. |
 | Customer properties | Official owner-scoped property model, `areaM2` | WP4 | Pending UI; retain sensitive-field permissions. |
 | Notes/email/call timeline | Official requests/orders/support history, not the same timeline | WP5 / WP12 | History pending UI; communications/tags need scope/contracts and missing traceability. |
 | Lead inbox/conversion | Lead pages, follow-ups and atomic customer linkage | WP6 | Pending UI; dedicated acquisition RF/HU missing. |
@@ -204,6 +224,6 @@ Official normal order states remain `Pendiente → Programada → En proceso →
 
 Open decisions are the final backend permission matrix/navigation, protected live acceptance access, approved customer-screen visual references, prioritization of oversight versus portals, dedicated acquisition/public-quote/tags/communications/billing traceability, direct customer request creation and every advanced gate above. Production HTTPS/hosting, permanent credential transport, i18n/timezone and E2E tooling remain unresolved, not chosen by this roadmap.
 
-**First future action:** approve a bounded WP1/WP2 customer-list task: confirm the current paged customer contract and permissions, sketch its loading/empty/error/stale states inside the existing admin shell, and define focused Angular tests plus backend/browser acceptance before writing route/UI code. If live access is unavailable, keep integration acceptance pending and label any prototype accordingly.
+**Next acceptance action:** verify WP3 create/edit/deactivate against the actual backend and in browsers once protected live access is available, preserving user-reported WP2 acceptance and the original visual shell/theme. Keep missing evidence pending, not replaced by fixtures or unit/build results. Scope WP4 separately before adding detail/property launchers.
 
 Writing this roadmap authorizes documentation only. It neither authorizes implementation of every reference capability nor changes the official model, scope, visual structure or business rules.

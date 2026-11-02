@@ -223,6 +223,36 @@ describe("UsersPage", () => {
     }
   }
 
+  it("adopts the shared frame without moving navigation, metrics or catalog controls", async () => {
+    const fixture = TestBed.createComponent(UsersPage)
+    fixture.detectChanges()
+    await vi.advanceTimersByTimeAsync(750)
+    fixture.detectChanges()
+    const root = fixture.nativeElement as HTMLElement
+    const frame = root.querySelector("app-catalog-frame.users-catalog")!
+    expect(frame).not.toBeNull()
+    expect(frame.querySelector('section[aria-labelledby="users-title"]')).not.toBeNull()
+    expect(frame.querySelector("header #new-user")).not.toBeNull()
+    expect(frame.querySelector("header #user-search")).not.toBeNull()
+    expect(frame.querySelector("[catalogDesktop] table")).not.toBeNull()
+    expect(frame.querySelector('ul[catalogMobile][aria-label="Usuarios"]')).not.toBeNull()
+    expect(frame.querySelector("footer app-table-pagination")).not.toBeNull()
+    expect(
+      frame.querySelector('footer app-table-pagination nav[aria-label="Paginación de usuarios"]')
+    ).not.toBeNull()
+    const sectionNavigation = root.querySelector('nav[aria-label="Secciones de administración"]')!
+    expect(sectionNavigation).not.toBeNull()
+    expect(sectionNavigation.querySelector("[data-users-tab]")).not.toBeNull()
+    expect(frame.contains(sectionNavigation)).toBe(false)
+    const metrics = root.querySelector('.catalog-metrics[aria-label="Resumen del catálogo"]')!
+    expect(metrics).not.toBeNull()
+    expect(metrics.querySelectorAll("article")).toHaveLength(4)
+    expect(frame.contains(metrics)).toBe(false)
+    expect(
+      frame.querySelector('nav[aria-label="Secciones de administración"], .catalog-metrics')
+    ).toBeNull()
+  })
+
   it("consults role TTL on page return and forces an explicit role retry", async () => {
     const read = vi.spyOn(TestBed.inject(ROLE_REPOSITORY), "getRoles")
     const first = await setup()
@@ -924,7 +954,24 @@ describe("UsersPage", () => {
   it("renders catalog copy and counts without duplicating shell identity or navigation", async () => {
     const { element } = await setup()
     expect(element.textContent).not.toContain("Actual identity")
-    expect(element.querySelector("header")).toBeNull()
+    expect(
+      element.querySelector(
+        "app-admin-shell, .status-header, header .brand-mark, header .session-controls, .session-avatar, #admin-language"
+      )
+    ).toBeNull()
+    expect(element.textContent).not.toContain("The Real Maids")
+    expect(element.textContent).not.toContain("Sistema seguro y activo")
+    expect(element.textContent).not.toContain("identity@example.test")
+    expect(element.querySelector('ng-icon[name="lucideLogOut"]')).toBeNull()
+    const catalogSection = element.querySelector(
+      'app-catalog-frame.users-catalog > section[aria-labelledby="users-title"]'
+    )!
+    expect(catalogSection).not.toBeNull()
+    const catalogHeader = catalogSection.querySelector(":scope > header")!
+    expect(Array.from(element.querySelectorAll("header"))).toEqual([catalogHeader])
+    expect(catalogHeader.querySelector("h1#users-title")?.textContent?.trim()).toBe(
+      "Catálogo de Usuarios del Sistema"
+    )
     expect(element.querySelector("app-admin-sidebar")).toBeNull()
     expect(element.textContent).toContain("48")
     expect(element.textContent).toContain("900 activos · 300 inactivos")

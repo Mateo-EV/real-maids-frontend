@@ -1,0 +1,180 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6"
+>
+  <app-catalog-frame
+    titleId="customers-title"
+    title="Catálogo de Clientes"
+    description="Gestión de clientes activos"
+    [busy]="list().loading || list().refreshing"
+  >
+    <div catalogControls class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+      <button hlmBtn size="sm" type="button" [disabled]="writePending() > 0" (click)="edit()">
+        <ng-icon name="lucidePlus" class="text-gold" aria-hidden="true" />Crear cliente
+      </button>
+    </div>
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando clientes…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando clientes…</p>
+    }
+    @if (list().error) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Clientes activos
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Nombre</th>
+                <th hlmTh scope="col">Tipo</th>
+                <th hlmTh scope="col">Correo</th>
+                <th hlmTh scope="col">Teléfono</th>
+                <th hlmTh scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (customer of rows(); track customer.id) {
+                <tr hlmTr>
+                  <td hlmTd class="font-semibold">{{ customer.name }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{
+                      customer.type === "residencial" ? "Residencial" : "Comercial"
+                    }}</span>
+                  </td>
+                  <td hlmTd>{{ customer.email ?? "No registrado" }}</td>
+                  <td hlmTd>{{ customer.phone ?? "No registrado" }}</td>
+                  <td hlmTd>
+                    <ng-container
+                      [ngTemplateOutlet]="customerActions"
+                      [ngTemplateOutletContext]="{ $implicit: customer }"
+                    />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Clientes activos">
+          @for (customer of rows(); track customer.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ customer.name }}</h2>
+                <span hlmBadge variant="outline">{{
+                  customer.type === "residencial" ? "Residencial" : "Comercial"
+                }}</span>
+              </div>
+              <dl class="my-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Correo</dt>
+                <dd class="break-all">{{ customer.email ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Teléfono</dt>
+                <dd class="break-words">{{ customer.phone ?? "No registrado" }}</dd>
+              </dl>
+              <ng-container
+                [ngTemplateOutlet]="customerActions"
+                [ngTemplateOutletContext]="{ $implicit: customer }"
+              />
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{
+                page.total === 0 ? "No hay clientes activos" : "Esta página ya no tiene registros"
+              }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "El servidor no devolvió clientes activos."
+                  : "El catálogo cambió. Selecciona otra página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !list().error) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} clientes
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de clientes"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>
+<ng-template #customerActions let-customer>
+  <div class="flex flex-wrap items-center gap-1">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      [attr.aria-label]="'Editar ' + customer.name"
+      title="Editar cliente"
+      [disabled]="writePending() > 0"
+      (click)="edit(customer)"
+    >
+      <ng-icon name="lucidePencil" aria-hidden="true" />
+    </button>
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      [attr.aria-label]="'Desactivar ' + customer.name"
+      title="Desactivar cliente"
+      [disabled]="writePending() > 0"
+      (click)="deactivate(customer)"
+    >
+      <ng-icon name="lucidePower" aria-hidden="true" />
+    </button>
+  </div>
+</ng-template>

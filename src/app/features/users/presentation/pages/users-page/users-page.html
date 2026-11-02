@@ -179,76 +179,68 @@
     } @else if (
       section() === "users" || (section() !== "audit" && (initializing() || loadError()))
     ) {
-      <section
-        class="users-catalog overflow-hidden rounded-xl border bg-card shadow-sm"
-        aria-labelledby="users-title"
-        [attr.aria-busy]="list.loading()"
+      <app-catalog-frame
+        class="users-catalog"
+        titleId="users-title"
+        title="Catálogo de Usuarios del Sistema"
+        description="Gestiona estados, roles y perfiles de usuario."
+        [busy]="list.loading()"
       >
-        <div class="flex flex-col gap-4 border-b p-4 xl:flex-row xl:items-end xl:justify-between">
-          <div class="xl:self-start">
-            <h1 id="users-title" class="text-lg font-bold tracking-tight text-primary">
-              Catálogo de Usuarios del Sistema
-            </h1>
-            <p class="mt-1 max-w-prose text-xs text-muted-foreground">
-              Gestiona estados, roles y perfiles de usuario.
-            </p>
+        <div catalogControls class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+          <div class="catalog-filter-search flex flex-col gap-1">
+            <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
+            <hlm-input-group>
+              <input
+                #searchInput
+                hlmInputGroupInput
+                id="user-search"
+                type="search"
+                placeholder="Buscar nombre o email…"
+                [value]="search()"
+                (input)="setSearch(searchInput.value)"
+              />
+              <hlm-input-group-addon>
+                <ng-icon name="lucideSearch" aria-hidden="true" />
+              </hlm-input-group-addon>
+            </hlm-input-group>
           </div>
-          <div class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
-            <div class="catalog-filter-search flex flex-col gap-1">
-              <label for="user-search" class="text-xs font-medium">Buscar nombre o correo</label>
-              <hlm-input-group>
-                <input
-                  #searchInput
-                  hlmInputGroupInput
-                  id="user-search"
-                  type="search"
-                  placeholder="Buscar nombre o email…"
-                  [value]="search()"
-                  (input)="setSearch(searchInput.value)"
-                />
-                <hlm-input-group-addon>
-                  <ng-icon name="lucideSearch" aria-hidden="true" />
-                </hlm-input-group-addon>
-              </hlm-input-group>
-            </div>
-            <div class="flex flex-col gap-1">
-              <label for="role-filter" class="text-xs font-medium">Rol</label>
-              <hlm-native-select
-                selectId="role-filter"
-                [value]="roleFilter()"
-                (valueChange)="setRoleFilter($event)"
-              >
-                <option value="">Todos los roles</option>
-                @for (role of roles.roles(); track role.id) {
-                  <option [value]="role.id">
-                    {{ role.name }}{{ role.isActive ? "" : " (inactivo)" }}
-                  </option>
-                }
-              </hlm-native-select>
-            </div>
-            <div class="flex flex-col gap-1">
-              <label for="status-filter" class="text-xs font-medium">Estado</label>
-              <hlm-native-select
-                selectId="status-filter"
-                [value]="statusFilter()"
-                (valueChange)="setStatusFilter($event)"
-              >
-                <option value="all">Todos</option>
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-              </hlm-native-select>
-            </div>
-            <button
-              id="new-user"
-              hlmBtn
-              size="sm"
-              type="button"
-              [disabled]="initializing() || loadError()"
-              (click)="editUser()"
+          <div class="flex flex-col gap-1">
+            <label for="role-filter" class="text-xs font-medium">Rol</label>
+            <hlm-native-select
+              selectId="role-filter"
+              [value]="roleFilter()"
+              (valueChange)="setRoleFilter($event)"
             >
-              <ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario
-            </button>
+              <option value="">Todos los roles</option>
+              @for (role of roles.roles(); track role.id) {
+                <option [value]="role.id">
+                  {{ role.name }}{{ role.isActive ? "" : " (inactivo)" }}
+                </option>
+              }
+            </hlm-native-select>
           </div>
+          <div class="flex flex-col gap-1">
+            <label for="status-filter" class="text-xs font-medium">Estado</label>
+            <hlm-native-select
+              selectId="status-filter"
+              [value]="statusFilter()"
+              (valueChange)="setStatusFilter($event)"
+            >
+              <option value="all">Todos</option>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </hlm-native-select>
+          </div>
+          <button
+            id="new-user"
+            hlmBtn
+            size="sm"
+            type="button"
+            [disabled]="initializing() || loadError()"
+            (click)="editUser()"
+          >
+            <ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario
+          </button>
         </div>
         @if (initializing()) {
           <p class="p-4 text-sm" role="status">Cargando roles…</p>
@@ -342,7 +334,7 @@
             </div>
           </div>
         } @else if (list.loaded()) {
-          <div hlmTableContainer class="hidden lg:block">
+          <div hlmTableContainer catalogDesktop>
             <table hlmTable>
               <caption class="sr-only">
                 Catálogo de usuarios: perfiles, roles, vínculos, estado y último acceso en UTC.
@@ -421,7 +413,7 @@
               </tbody>
             </table>
           </div>
-          <ul class="flex flex-col gap-4 p-4 lg:hidden" aria-label="Usuarios">
+          <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Usuarios">
             @for (user of visibleUsers(); track user.id) {
               <li class="rounded-xl border p-4" [class.text-muted-foreground]="!user.isActive">
                 <div class="flex items-center gap-3">
@@ -479,9 +471,7 @@
             }
           </ul>
         }
-        <div
-          class="flex flex-wrap items-center justify-between gap-3 border-t bg-background/50 px-4 py-3"
-        >
+        <ng-container catalogFooter>
           <p class="text-xs text-muted-foreground" role="status">
             @if (list.loaded()) {
               Mostrando {{ rangeStart() }} a {{ rangeEnd() }} de {{ list.result()?.total }} usuarios
@@ -497,8 +487,8 @@
             [disabled]="list.loading() || !list.loaded()"
             (pageSelected)="goToPage($event)"
           />
-        </div>
-      </section>
+        </ng-container>
+      </app-catalog-frame>
     }
     <!-- Retain visited views until page destruction. Hide the wrapper, not the styled host. -->
     <div

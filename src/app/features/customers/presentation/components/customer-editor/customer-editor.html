@@ -1,0 +1,114 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.customer ? "Editar cliente" : "Crear cliente" }}</h2>
+  <p hlmDialogDescription>
+    {{ context.customer ? context.customer.name : "Registra el perfil del cliente." }}
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Datos del cliente</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="customer-name">Nombre (obligatorio)</label>
+      <input
+        hlmInput
+        id="customer-name"
+        autocomplete="off"
+        aria-describedby="name-help name-errors"
+        [formField]="profile.name"
+      />
+      <p hlmFieldDescription id="name-help">
+        Hasta 150 caracteres. Se omiten los espacios al inicio y al final.
+      </p>
+      <div id="name-errors">
+        @if (profile.name().touched()) {
+          @for (error of profile.name().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="customer-type">Tipo (obligatorio)</label>
+      <hlm-native-select selectId="customer-type" [formField]="profile.type" class="w-full">
+        <option value="residencial">Residencial</option>
+        <option value="comercial">Comercial</option>
+      </hlm-native-select>
+      @if (profile.type().touched()) {
+        @for (error of profile.type().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="customer-email">Correo electrónico (opcional)</label>
+      <input
+        hlmInput
+        id="customer-email"
+        type="email"
+        autocomplete="off"
+        aria-describedby="email-help email-errors"
+        [formField]="profile.email"
+      />
+      <p hlmFieldDescription id="email-help">
+        Hasta 120 caracteres. Vacío guarda el dato sin registrar, también al editar.
+      </p>
+      <div id="email-errors">
+        @if (profile.email().touched()) {
+          @for (error of profile.email().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="customer-phone">Teléfono (opcional)</label>
+      <input
+        hlmInput
+        id="customer-phone"
+        type="tel"
+        autocomplete="off"
+        aria-describedby="phone-help phone-errors"
+        [formField]="profile.phone"
+      />
+      <p hlmFieldDescription id="phone-help">
+        De 7 a 30 caracteres: números, espacios, paréntesis y guiones; + solo al inicio. Vacío
+        guarda el dato sin registrar.
+      </p>
+      <div id="phone-errors">
+        @if (profile.phone().touched()) {
+          @for (error of profile.phone().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar cliente" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

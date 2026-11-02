@@ -19,6 +19,7 @@ import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/r
 import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
 import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
 import { ADMIN_ROUTES } from "./admin.routes"
+import { ListCustomersUseCase } from "@/app/features/customers/application/use-cases/list-customers.use-case"
 import { UserStore } from "@/app/features/users/presentation/state/user.store"
 
 @Component({ template: "Login destination" })
@@ -81,6 +82,14 @@ function setup(authenticated: boolean) {
 }
 
 describe("Admin users navigation", () => {
+  it("lazily composes customers while retaining the users entry redirect", async () => {
+    const children = ADMIN_ROUTES[0].children!
+    expect(children.find(route => route.path === "")?.redirectTo).toBe("users")
+    const customers = children.find(route => route.path === "customers")
+    expect(customers?.loadChildren).toBeDefined()
+    const { CUSTOMERS_ROUTES } = await import("../../features/customers/customers.routes")
+    expect(await customers!.loadChildren!()).toBe(CUSTOMERS_ROUTES)
+  })
   // jsdom lacks layout observation; these tests assert semantics, not rendered geometry.
   beforeEach(() =>
     vi.stubGlobal(
@@ -93,6 +102,50 @@ describe("Admin users navigation", () => {
     )
   )
   afterEach(() => vi.unstubAllGlobals())
+  it("protects customer deep links with the existing returnUrl contract", async () => {
+    const auth = setup(false)
+    await RouterTestingHarness.create("/admin/customers")
+    expect(auth.restoreSession).toHaveBeenCalled()
+    expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fcustomers")
+  })
+
+  it("opens the lazy customer list inside the unchanged shared shell through CRM", async () => {
+    setup(true)
+    const execute = vi.fn(() => of(Result.success({ items: [], total: 0, offset: 0, limit: 20 })))
+    TestBed.configureTestingModule({
+      providers: [{ provide: ListCustomersUseCase, useValue: { execute } }]
+    })
+    const harness = await RouterTestingHarness.create("/admin/customers")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    const element = harness.routeNativeElement!
+    expect(element.tagName.toLowerCase()).toBe("app-admin-shell")
+    expect(element.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
+    const shellHeaders = element.querySelectorAll(".shell-body > header")
+    expect(shellHeaders).toHaveLength(1)
+    expect(shellHeaders[0].querySelector(".brand-mark")?.textContent).toBe("RM")
+    expect(shellHeaders[0].querySelector(".session-controls")?.textContent).toContain(
+      "Demo Identity"
+    )
+    const catalogHeaders = element.querySelectorAll(
+      'app-customers-page app-catalog-frame section[aria-labelledby="customers-title"] > header'
+    )
+    expect(catalogHeaders).toHaveLength(1)
+    expect(catalogHeaders[0].querySelector("h1#customers-title")?.textContent?.trim()).toBe(
+      "Catálogo de Clientes"
+    )
+    expect(element.querySelector("app-customers-page")?.textContent).toContain(
+      "No hay clientes activos"
+    )
+    expect(execute).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
+    const crm = element.querySelector('a[href="/admin/customers"]')!
+    expect(crm.textContent?.trim()).toBe("CRM")
+    expect(crm.getAttribute("aria-current")).toBe("page")
+    expect(element.querySelector('a[href="/admin/users"]')?.hasAttribute("aria-current")).toBe(
+      false
+    )
+  })
+
   it("protects deep links using session restoration and the original returnUrl contract", async () => {
     const auth = setup(false)
     await RouterTestingHarness.create("/admin/users")
@@ -144,11 +197,23 @@ describe("Admin users navigation", () => {
     expect(TestBed.inject(Router).url).toBe("/admin/users")
     expect(harness.routeNativeElement?.textContent).toContain("Catálogo de Usuarios del Sistema")
     expect(harness.routeNativeElement?.tagName.toLowerCase()).toBe("app-admin-shell")
-    expect(harness.routeNativeElement?.querySelectorAll("header")).toHaveLength(1)
+    const shellHeaders = harness.routeNativeElement!.querySelectorAll(".shell-body > header")
+    expect(shellHeaders).toHaveLength(1)
+    expect(shellHeaders[0].querySelector(".brand-mark")?.textContent).toBe("RM")
+    expect(shellHeaders[0].querySelector(".session-controls")?.textContent).toContain(
+      "Demo Identity"
+    )
+    const catalogHeaders = harness.routeNativeElement!.querySelectorAll(
+      'app-users-page app-catalog-frame section[aria-labelledby="users-title"] > header'
+    )
+    expect(catalogHeaders).toHaveLength(1)
+    expect(catalogHeaders[0].querySelector("h1#users-title")?.textContent?.trim()).toBe(
+      "Catálogo de Usuarios del Sistema"
+    )
     expect(harness.routeNativeElement?.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
   })
 
-  it("groups the five unavailable modules separately from the sole IAM destination", async () => {
+  it("keeps CRM in General and IAM in Administration with four unavailable modules", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
     const sidebar = harness.routeNativeElement!.querySelector("app-admin-sidebar")!
@@ -159,10 +224,13 @@ describe("Admin users navigation", () => {
     expect(administration).not.toBeNull()
     expect(
       Array.from(general.querySelectorAll("button"), button => button.textContent?.trim())
-    ).toEqual(["Landing", "CRM", "RRHH", "Cotizaciones", "Programaciones"])
-    expect(general.querySelectorAll("a")).toHaveLength(0)
+    ).toEqual(["Landing", "RRHH", "Cotizaciones", "Programaciones"])
+    expect(general.querySelectorAll("a")).toHaveLength(1)
+    const crm = general.querySelector('a[href="/admin/customers"]')!
+    expect(crm.textContent?.trim()).toBe("CRM")
+    expect(crm.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
     expect(administration.querySelectorAll("button")).toHaveLength(0)
-    expect(nav.querySelectorAll("a")).toHaveLength(1)
+    expect(nav.querySelectorAll("a")).toHaveLength(2)
     const iam = administration.querySelector("a")!
     expect(iam.textContent?.trim()).toBe("IAM")
     expect(iam.getAttribute("aria-current")).toBe("page")
@@ -210,7 +278,7 @@ describe("Admin users navigation", () => {
     const element = harness.routeNativeElement!
     const nav = element.querySelector('nav[aria-label="Navegación administrativa"]')!
     expect(nav).not.toBeNull()
-    for (const label of ["Landing", "CRM", "RRHH", "Cotizaciones", "Programaciones"]) {
+    for (const label of ["Landing", "RRHH", "Cotizaciones", "Programaciones"]) {
       const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find(
         item => item.textContent?.trim() === label
       )!

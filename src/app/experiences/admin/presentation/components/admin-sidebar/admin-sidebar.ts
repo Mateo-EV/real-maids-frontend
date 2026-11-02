@@ -42,10 +42,27 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
             <ul hlmSidebarMenu class="module-menu">
               @for (module of placeholders; track module.label) {
                 <li hlmSidebarMenuItem>
-                  <button hlmSidebarMenuButton type="button" disabled class="module-button">
-                    <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
-                    <span>{{ module.label }}</span>
-                  </button>
+                  @if (module.label === "CRM") {
+                    <a
+                      hlmSidebarMenuButton
+                      class="module-button"
+                      routerLink="/admin/customers"
+                      routerLinkActive
+                      #crm="routerLinkActive"
+                      [isActive]="crm.isActive"
+                      ariaCurrentWhenActive="page"
+                      [closeMobileSidebarOnClick]="true"
+                    >
+                      <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
+                      <span>{{ module.label }}</span>
+                      <span class="active-dot" aria-hidden="true"></span>
+                    </a>
+                  } @else {
+                    <button hlmSidebarMenuButton type="button" disabled class="module-button">
+                      <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
+                      <span>{{ module.label }}</span>
+                    </button>
+                  }
                 </li>
               }
             </ul>

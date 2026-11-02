@@ -261,6 +261,46 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   }
 }
 
+/* Shared catalog rhythm, migrated from Users. Only projected catalog records opt in. */
+app-catalog-frame [hlmTable] {
+  font-size: 0.75rem;
+}
+app-catalog-frame [hlmTh] {
+  height: 2.5rem;
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+app-catalog-frame [hlmTh],
+app-catalog-frame [hlmTd] {
+  padding-inline: 0.75rem;
+}
+app-catalog-frame [hlmTd] {
+  padding-block: 0.625rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+app-catalog-frame [hlmTd]:first-child {
+  min-width: 12rem;
+}
+app-catalog-frame [hlmTd]:last-child {
+  min-width: 7rem;
+}
+app-catalog-frame [catalogDesktop] {
+  display: none;
+}
+app-catalog-frame [catalogMobile] {
+  display: flex;
+}
+/* Available catalog width, not viewport width, decides whether the table fits. */
+@container (width >= 64rem) {
+  app-catalog-frame [catalogDesktop] {
+    display: block;
+  }
+  app-catalog-frame [catalogMobile] {
+    display: none;
+  }
+}
+
 /* Shared Helm modal contract. Unlayered rules intentionally beat Helm utilities.
    Keep the header first, directly in content or an unpadded dynamic component host.
    One token controls actual overlay padding AND full-bleed margins; no clipping. */

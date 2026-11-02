@@ -1,7 +1,6 @@
 import { authGuard } from "@/app/features/auth/presentation/guards/auth.guard"
 import { Routes } from "@angular/router"
-import { ViewService } from "@ngneat/overview"
-import { HotToastService, provideHotToastConfig } from "@ngxpert/hot-toast"
+import { provideCatalogToast } from "@/app/shared/notifications/catalog-toast"
 
 export const USERS_ROUTES: Routes = [
   {
@@ -10,7 +9,7 @@ export const USERS_ROUTES: Routes = [
     canActivate: [authGuard],
     // Shadow both root services: ViewService creates the body overlay with its own injector.
     // The container and Users consumers must resolve the same route-owned toast instance.
-    providers: [HotToastService, ViewService, provideHotToastConfig()],
+    providers: provideCatalogToast(),
     loadComponent: () =>
       import("./presentation/pages/users-page/users-page").then(component => component.UsersPage)
   }

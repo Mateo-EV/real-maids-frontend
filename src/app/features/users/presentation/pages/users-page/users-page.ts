@@ -48,6 +48,7 @@ import {
 import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
+import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import {
   UserStatusContext,
   UserStatusDialog
@@ -78,6 +79,7 @@ import { AuditLogsStore } from "../../state/audit-logs.store"
     HlmAlertImports,
     HlmSpinnerImports,
     TablePagination,
+    CatalogFrame,
     UserSessions,
     RbacMatrix,
     AuditViewer
