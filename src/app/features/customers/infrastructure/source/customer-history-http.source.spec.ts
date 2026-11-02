@@ -130,7 +130,7 @@ describe("RF12 actual history projection", () => {
           userId: null,
           createdAt: date,
           updatedAt: null,
-          prospectId: null,
+          leadId: null,
           taxIdentification: null,
           systemOrigin: null,
           externalId: null,

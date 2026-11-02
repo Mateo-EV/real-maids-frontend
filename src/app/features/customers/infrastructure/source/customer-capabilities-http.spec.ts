@@ -31,7 +31,7 @@ const customer = {
 }
 const origin = { idOrigen: 1, nombre: "Referral", descripcion: "Detail", activo: false }
 const stage = { idEtapa: 2, nombre: "Contact", orden: -1, esFinal: false }
-const prospect = {
+const lead = {
   idProspecto: 3,
   idOrigen: 1,
   idEtapa: 2,
@@ -44,7 +44,7 @@ const prospect = {
   fechaRegistro: "2026-01-01T00:00:00Z",
   usuarioRegistro: 9
 }
-const prospectInput = {
+const leadInput = {
   originId: 1,
   stageId: 2,
   name: "Lead",
@@ -53,7 +53,7 @@ const prospectInput = {
   referenceAddress: "Reference",
   observation: "Note"
 }
-const prospectBody = {
+const leadBody = {
   idOrigen: 1,
   idEtapa: 2,
   nombre: "Lead",
@@ -195,13 +195,13 @@ describe("Customer supported HTTP operations", () => {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: null,
     registeredByUserId: 9,
-    prospectId: 3
+    leadId: 3
   }
   const mappedOrigin = { id: 1, name: "Referral", description: "Detail", isActive: false }
   const mappedStage = { id: 2, name: "Contact", order: -1, isFinal: false }
-  const mappedProspect = {
+  const mappedLead = {
     id: 3,
-    ...prospectInput,
+    ...leadInput,
     isConverted: false,
     registeredAt: new Date("2026-01-01T00:00:00Z"),
     registeredByUserId: 9
@@ -309,23 +309,16 @@ describe("Customer supported HTTP operations", () => {
       mappedStage
     )
   })
-  it("pins prospects, followup and server-current conversion without sending copied profile", async () => {
-    await check(acquisition.findProspect(3), "GET", "prospectos/3", null, prospect, mappedProspect)
+  it("pins leads, followup and server-current conversion without sending copied profile", async () => {
+    await check(acquisition.findLead(3), "GET", "prospectos/3", null, lead, mappedLead)
+    await check(acquisition.createLead(leadInput), "POST", "prospectos", leadBody, lead, mappedLead)
     await check(
-      acquisition.createProspect(prospectInput),
-      "POST",
-      "prospectos",
-      prospectBody,
-      prospect,
-      mappedProspect
-    )
-    await check(
-      acquisition.updateProspect({ id: 3, ...prospectInput }),
+      acquisition.updateLead({ id: 3, ...leadInput }),
       "PUT",
       "prospectos/3",
-      prospectBody,
-      prospect,
-      mappedProspect
+      leadBody,
+      lead,
+      mappedLead
     )
     const follow = {
       idSeguimiento: 8,
@@ -337,7 +330,7 @@ describe("Customer supported HTTP operations", () => {
     }
     const mapped = {
       id: 8,
-      prospectId: 3,
+      leadId: 3,
       userId: 9,
       stageId: 2,
       comment: null,
@@ -352,7 +345,7 @@ describe("Customer supported HTTP operations", () => {
       [mapped]
     )
     await check(
-      acquisition.addFollowUp({ prospectId: 3, stageId: 2, comment: null }),
+      acquisition.addFollowUp({ leadId: 3, stageId: 2, comment: null }),
       "POST",
       "prospectos/3/seguimientos",
       { idEtapa: 2, comentario: null },
@@ -361,7 +354,7 @@ describe("Customer supported HTTP operations", () => {
     )
     // An already-linked inactive customer is valid; the caller's type need not replace it.
     await check(
-      acquisition.convertProspect({ prospectId: 3, type: CustomerType.RESIDENTIAL }),
+      acquisition.convertLead({ leadId: 3, type: CustomerType.RESIDENTIAL }),
       "POST",
       "prospectos/3/conversion",
       { tipo: "residencial" },
@@ -370,15 +363,15 @@ describe("Customer supported HTTP operations", () => {
     )
   })
   it("maps aligned pagination and adopts actual effective size with documented max100", async () => {
-    const pending = firstValueFrom(acquisition.listProspects({ offset: 200, limit: 200 }))
+    const pending = firstValueFrom(acquisition.listLeads({ offset: 200, limit: 200 }))
     const request = http.expectOne(r => r.url.endsWith("/api/prospectos"))
     expect(request.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
     expect(request.request.params.get("pagina")).toBe("1")
     expect(request.request.params.get("tamanio")).toBe("200")
-    request.flush(wirePage([prospect], 101, 100, 1))
+    request.flush(wirePage([lead], 101, 100, 1))
     expect(await pending).toEqual({
       success: true,
-      data: { items: [mappedProspect], offset: 100, limit: 100, total: 101 }
+      data: { items: [mappedLead], offset: 100, limit: 100, total: 101 }
     })
   })
   it("pins contacts/preferences ownership, full PUT and null replacement", async () => {
@@ -507,8 +500,8 @@ describe("Customer supported HTTP operations", () => {
     const requests: Observable<unknown>[] = [
       customers.findById(0),
       customers.create({ name: " ", type: CustomerType.COMMERCIAL, email: null, phone: null }),
-      acquisition.listProspects({ offset: 1, limit: 20 }),
-      acquisition.findProspect(2 ** 40),
+      acquisition.listLeads({ offset: 1, limit: 20 }),
+      acquisition.findLead(2 ** 40),
       relations.createContact(7, { ...contactInput, email: "bad" }),
       properties.create(7, { ...propertyInput, areaM2: "1.001" }),
       properties.create(7, { ...propertyInput, doorCode: "x".repeat(31) })
@@ -537,14 +530,14 @@ describe("Customer supported HTTP operations", () => {
       [properties.findByCustomer(7), "clientes/7/propiedades", [{ ...property, areaM2: 1.001 }]],
       [properties.findByCustomer(7), "clientes/7/propiedades", [{ ...property, idCliente: 8 }]],
       [
-        acquisition.convertProspect({ prospectId: 3, type: CustomerType.COMMERCIAL }),
+        acquisition.convertLead({ leadId: 3, type: CustomerType.COMMERCIAL }),
         "prospectos/3/conversion",
         { ...customer, idProspecto: 4 }
       ],
       [
-        acquisition.listProspects({}),
+        acquisition.listLeads({}),
         "prospectos?pagina=0&tamanio=20",
-        { ...wirePage([prospect]), totalPaginas: 8 }
+        { ...wirePage([lead]), totalPaginas: 8 }
       ],
       [acquisition.listStages(), "catalogos/etapas-embudo", [{ ...stage, esFinal: null }]]
     ]

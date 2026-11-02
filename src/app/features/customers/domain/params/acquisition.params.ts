@@ -1,12 +1,12 @@
 import { CustomerType } from "../entities/customer.entity"
 
 /** Confirmed acquisition writes; identities and registration metadata are server-owned. */
-export interface CreateProspectOriginParams {
+export interface CreateLeadOriginParams {
   readonly name: string
   readonly description: string | null
   readonly isActive: boolean
 }
-export interface UpdateProspectOriginParams {
+export interface UpdateLeadOriginParams {
   readonly id: number
   readonly name: string
   readonly description: string | null
@@ -23,7 +23,7 @@ export interface UpdateFunnelStageParams {
   readonly order: number
   readonly isFinal: boolean
 }
-export interface CreateProspectParams {
+export interface CreateLeadParams {
   readonly originId: number
   readonly stageId: number
   readonly name: string
@@ -32,7 +32,7 @@ export interface CreateProspectParams {
   readonly referenceAddress: string | null
   readonly observation: string | null
 }
-export interface UpdateProspectParams {
+export interface UpdateLeadParams {
   readonly id: number
   readonly originId: number
   readonly stageId: number
@@ -42,14 +42,14 @@ export interface UpdateProspectParams {
   readonly referenceAddress: string | null
   readonly observation: string | null
 }
-/** Server copies the prospect's current profile; repeat returns the linked customer. */
-export interface ConvertProspectParams {
-  readonly prospectId: number
+/** Server copies the lead's current profile; repeat returns the linked customer. */
+export interface ConvertLeadParams {
+  readonly leadId: number
   readonly type: CustomerType
 }
 
-export interface CreateProspectFollowUpParams {
-  readonly prospectId: number
+export interface CreateLeadFollowUpParams {
+  readonly leadId: number
   readonly stageId: number
   readonly comment: string | null
 }

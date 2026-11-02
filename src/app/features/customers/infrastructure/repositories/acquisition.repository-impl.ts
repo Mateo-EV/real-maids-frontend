@@ -2,14 +2,14 @@ import { inject, Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { AcquisitionRepository } from "../../domain/repositories/acquisition.repository"
 import {
-  CreateProspectOriginParams,
-  UpdateProspectOriginParams,
+  CreateLeadOriginParams,
+  UpdateLeadOriginParams,
   CreateFunnelStageParams,
   UpdateFunnelStageParams,
-  CreateProspectParams,
-  UpdateProspectParams,
-  CreateProspectFollowUpParams,
-  ConvertProspectParams
+  CreateLeadParams,
+  UpdateLeadParams,
+  CreateLeadFollowUpParams,
+  ConvertLeadParams
 } from "../../domain/params/acquisition.params"
 import { AcquisitionHttpSource } from "../source/acquisition-http.source"
 
@@ -19,10 +19,10 @@ export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   listOrigins() {
     return this.source.listOrigins()
   }
-  createOrigin(params: CreateProspectOriginParams) {
+  createOrigin(params: CreateLeadOriginParams) {
     return this.source.createOrigin(params)
   }
-  updateOrigin(params: UpdateProspectOriginParams) {
+  updateOrigin(params: UpdateLeadOriginParams) {
     return this.source.updateOrigin(params)
   }
   listStages() {
@@ -34,25 +34,25 @@ export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   updateStage(params: UpdateFunnelStageParams) {
     return this.source.updateStage(params)
   }
-  listProspects(params: PaginationParams) {
-    return this.source.listProspects(params)
+  listLeads(params: PaginationParams) {
+    return this.source.listLeads(params)
   }
-  findProspect(id: number) {
-    return this.source.findProspect(id)
+  findLead(id: number) {
+    return this.source.findLead(id)
   }
-  createProspect(params: CreateProspectParams) {
-    return this.source.createProspect(params)
+  createLead(params: CreateLeadParams) {
+    return this.source.createLead(params)
   }
-  updateProspect(params: UpdateProspectParams) {
-    return this.source.updateProspect(params)
+  updateLead(params: UpdateLeadParams) {
+    return this.source.updateLead(params)
   }
-  listFollowUps(prospectId: number) {
-    return this.source.listFollowUps(prospectId)
+  listFollowUps(leadId: number) {
+    return this.source.listFollowUps(leadId)
   }
-  addFollowUp(params: CreateProspectFollowUpParams) {
+  addFollowUp(params: CreateLeadFollowUpParams) {
     return this.source.addFollowUp(params)
   }
-  convertProspect(params: ConvertProspectParams) {
-    return this.source.convertProspect(params)
+  convertLead(params: ConvertLeadParams) {
+    return this.source.convertLead(params)
   }
 }

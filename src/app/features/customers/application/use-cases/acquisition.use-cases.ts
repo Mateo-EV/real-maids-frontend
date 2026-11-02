@@ -2,34 +2,34 @@ import { inject, Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { ACQUISITION_REPOSITORY } from "../../domain/repositories/acquisition.repository"
 import {
-  CreateProspectOriginParams,
-  UpdateProspectOriginParams,
+  CreateLeadOriginParams,
+  UpdateLeadOriginParams,
   CreateFunnelStageParams,
   UpdateFunnelStageParams,
-  CreateProspectParams,
-  UpdateProspectParams,
-  CreateProspectFollowUpParams,
-  ConvertProspectParams
+  CreateLeadParams,
+  UpdateLeadParams,
+  CreateLeadFollowUpParams,
+  ConvertLeadParams
 } from "../../domain/params/acquisition.params"
 
 @Injectable({ providedIn: "root" })
-export class ListProspectOriginsUseCase {
+export class ListLeadOriginsUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
   execute() {
     return this.repository.listOrigins()
   }
 }
 @Injectable({ providedIn: "root" })
-export class CreateProspectOriginUseCase {
+export class CreateLeadOriginUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: CreateProspectOriginParams) {
+  execute(params: CreateLeadOriginParams) {
     return this.repository.createOrigin(params)
   }
 }
 @Injectable({ providedIn: "root" })
-export class UpdateProspectOriginUseCase {
+export class UpdateLeadOriginUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: UpdateProspectOriginParams) {
+  execute(params: UpdateLeadOriginParams) {
     return this.repository.updateOrigin(params)
   }
 }
@@ -55,51 +55,51 @@ export class UpdateFunnelStageUseCase {
   }
 }
 @Injectable({ providedIn: "root" })
-export class ListProspectsUseCase {
+export class ListLeadsUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
   execute(params: PaginationParams = {}) {
-    return this.repository.listProspects(params)
+    return this.repository.listLeads(params)
   }
 }
 @Injectable({ providedIn: "root" })
-export class GetProspectUseCase {
+export class GetLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
   execute(id: number) {
-    return this.repository.findProspect(id)
+    return this.repository.findLead(id)
   }
 }
 @Injectable({ providedIn: "root" })
-export class CreateProspectUseCase {
+export class CreateLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: CreateProspectParams) {
-    return this.repository.createProspect(params)
+  execute(params: CreateLeadParams) {
+    return this.repository.createLead(params)
   }
 }
 @Injectable({ providedIn: "root" })
-export class UpdateProspectUseCase {
+export class UpdateLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: UpdateProspectParams) {
-    return this.repository.updateProspect(params)
+  execute(params: UpdateLeadParams) {
+    return this.repository.updateLead(params)
   }
 }
 @Injectable({ providedIn: "root" })
-export class ListProspectFollowUpsUseCase {
+export class ListLeadFollowUpsUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(prospectId: number) {
-    return this.repository.listFollowUps(prospectId)
+  execute(leadId: number) {
+    return this.repository.listFollowUps(leadId)
   }
 }
 @Injectable({ providedIn: "root" })
-export class AddProspectFollowUpUseCase {
+export class AddLeadFollowUpUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: CreateProspectFollowUpParams) {
+  execute(params: CreateLeadFollowUpParams) {
     return this.repository.addFollowUp(params)
   }
 }
 @Injectable({ providedIn: "root" })
-export class ConvertProspectUseCase {
+export class ConvertLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: ConvertProspectParams) {
-    return this.repository.convertProspect(params)
+  execute(params: ConvertLeadParams) {
+    return this.repository.convertLead(params)
   }
 }

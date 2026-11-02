@@ -56,7 +56,7 @@ const cloneCustomer = (customer: Customer): Customer =>
       new Date(customer.createdAt),
       customer.updatedAt === null ? null : new Date(customer.updatedAt),
       customer.registeredByUserId,
-      customer.prospectId
+      customer.leadId
     )
   )
 
@@ -136,7 +136,7 @@ export class CustomerInMemorySource {
             existing.createdAt,
             new Date(),
             existing.registeredByUserId,
-            existing.prospectId
+            existing.leadId
           )
         )
         this.customers = this.customers.map(item => (item.id === updated.id ? updated : item))

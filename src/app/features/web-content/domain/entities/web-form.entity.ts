@@ -1,7 +1,7 @@
 export class WebForm {
   private constructor(
     public id: number,
-    public prospectId: number | null,
+    public leadId: number | null,
     public name: string,
     public email: string | null,
     public phone: string | null,
@@ -13,7 +13,7 @@ export class WebForm {
 
   static create(
     id: number,
-    prospectId: number | null,
+    leadId: number | null,
     name: string,
     email: string | null,
     phone: string | null,
@@ -22,16 +22,6 @@ export class WebForm {
     isProcessed: boolean,
     submittedAt: Date
   ): WebForm {
-    return new WebForm(
-      id,
-      prospectId,
-      name,
-      email,
-      phone,
-      message,
-      originIp,
-      isProcessed,
-      submittedAt
-    )
+    return new WebForm(id, leadId, name, email, phone, message, originIp, isProcessed, submittedAt)
   }
 }

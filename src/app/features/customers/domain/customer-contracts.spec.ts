@@ -20,7 +20,7 @@ import {
 } from "./repositories/customer-relations.repository"
 import { customerFixture, customerInput } from "./customer.fixture"
 import { CreatePropertyParams } from "./params/property.params"
-import { CreateProspectParams } from "./params/acquisition.params"
+import { CreateLeadParams } from "./params/acquisition.params"
 
 const failure = new CustomerError("FORBIDDEN")
 const failed = of(Result.failure(failure))
@@ -29,7 +29,7 @@ describe("Customer domain contracts", () => {
   it.each<CustomerErrorCode>([
     "CUSTOMER_NOT_FOUND",
     "PROPERTY_NOT_FOUND",
-    "PROSPECT_NOT_FOUND",
+    "LEAD_NOT_FOUND",
     "INVALID_INPUT",
     "CONFLICT",
     "FORBIDDEN",
@@ -127,19 +127,19 @@ describe("Customer domain contracts", () => {
       listStages: vi.fn(() => failed),
       createStage: vi.fn(() => failed),
       updateStage: vi.fn(() => failed),
-      listProspects: vi.fn(() => failed),
-      findProspect: vi.fn(() => failed),
-      createProspect: vi.fn(() => failed),
-      updateProspect: vi.fn(() => failed),
+      listLeads: vi.fn(() => failed),
+      findLead: vi.fn(() => failed),
+      createLead: vi.fn(() => failed),
+      updateLead: vi.fn(() => failed),
       listFollowUps: vi.fn(() => failed),
       addFollowUp: vi.fn(() => failed),
-      convertProspect: vi.fn(() => failed)
+      convertLead: vi.fn(() => failed)
     }
     TestBed.configureTestingModule({
       providers: [{ provide: ACQUISITION_REPOSITORY, useValue: repository }]
     })
     const injected = TestBed.inject(ACQUISITION_REPOSITORY)
-    const params: CreateProspectParams = {
+    const params: CreateLeadParams = {
       originId: 1,
       stageId: 2,
       name: "Lead",
@@ -148,16 +148,16 @@ describe("Customer domain contracts", () => {
       referenceAddress: null,
       observation: null
     }
-    expect(await firstValueFrom(injected.createProspect(params))).toEqual(Result.failure(failure))
-    expect(repository.createProspect).toHaveBeenCalledExactlyOnceWith(params)
-    expect(await firstValueFrom(injected.updateProspect({ id: 3, ...params }))).toEqual(
+    expect(await firstValueFrom(injected.createLead(params))).toEqual(Result.failure(failure))
+    expect(repository.createLead).toHaveBeenCalledExactlyOnceWith(params)
+    expect(await firstValueFrom(injected.updateLead({ id: 3, ...params }))).toEqual(
       Result.failure(failure)
     )
-    expect(await firstValueFrom(injected.listProspects({ offset: 20, limit: 10 }))).toEqual(
+    expect(await firstValueFrom(injected.listLeads({ offset: 20, limit: 10 }))).toEqual(
       Result.failure(failure)
     )
-    expect(repository.listProspects).toHaveBeenCalledExactlyOnceWith({ offset: 20, limit: 10 })
-    expect(await firstValueFrom(injected.findProspect(3))).toEqual(Result.failure(failure))
+    expect(repository.listLeads).toHaveBeenCalledExactlyOnceWith({ offset: 20, limit: 10 })
+    expect(await firstValueFrom(injected.findLead(3))).toEqual(Result.failure(failure))
     expect(await firstValueFrom(injected.listOrigins())).toEqual(Result.failure(failure))
     expect(
       await firstValueFrom(
@@ -178,7 +178,7 @@ describe("Customer domain contracts", () => {
     ).toEqual(Result.failure(failure))
     expect(await firstValueFrom(injected.listFollowUps(3))).toEqual(Result.failure(failure))
     expect(
-      await firstValueFrom(injected.addFollowUp({ prospectId: 3, stageId: 2, comment: null }))
+      await firstValueFrom(injected.addFollowUp({ leadId: 3, stageId: 2, comment: null }))
     ).toEqual(Result.failure(failure))
   })
 

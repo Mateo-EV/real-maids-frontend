@@ -1,14 +1,14 @@
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 
 export interface CreateQuoteParams {
-  prospectId: number | null
+  leadId: number | null
   customerId: number | null
   propertyId: number | null
   validUntil: string | null
   lines: CreateQuoteLineParams[]
 }
 export interface UpdateQuoteParams {
-  prospectId: number | null
+  leadId: number | null
   customerId: number | null
   propertyId: number | null
   validUntil: string | null

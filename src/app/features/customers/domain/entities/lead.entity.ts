@@ -1,4 +1,4 @@
-export class Prospect {
+export class Lead {
   private constructor(
     public readonly id: number,
     public readonly originId: number,
@@ -25,8 +25,8 @@ export class Prospect {
     isConverted: boolean,
     registeredAt: Date,
     registeredByUserId: number | null
-  ): Prospect {
-    return new Prospect(
+  ): Lead {
+    return new Lead(
       id,
       originId,
       stageId,

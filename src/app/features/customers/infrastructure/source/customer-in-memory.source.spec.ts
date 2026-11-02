@@ -41,7 +41,7 @@ describe("CustomerInMemorySource", () => {
         ...input,
         id: 3,
         userId: null,
-        prospectId: null,
+        leadId: null,
         taxIdentification: null,
         systemOrigin: null,
         externalId: null,
@@ -93,7 +93,7 @@ describe("CustomerInMemorySource", () => {
         phone: updated.phone,
         createdAt: updated.createdAt,
         userId: null,
-        prospectId: null
+        leadId: null
       }
     })
     if (!result.success) throw result.error

@@ -1,4 +1,4 @@
-export class ProspectOrigin {
+export class LeadOrigin {
   private constructor(
     public readonly id: number,
     public readonly name: string,
@@ -11,7 +11,7 @@ export class ProspectOrigin {
     name: string,
     description: string | null,
     isActive: boolean
-  ): ProspectOrigin {
-    return new ProspectOrigin(id, name, description, isActive)
+  ): LeadOrigin {
+    return new LeadOrigin(id, name, description, isActive)
   }
 }

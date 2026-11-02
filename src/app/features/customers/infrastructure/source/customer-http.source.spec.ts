@@ -45,7 +45,7 @@ describe("Customer real HTTP boundary", () => {
         {
           id: 7,
           userId: 11,
-          prospectId: 3,
+          leadId: 3,
           taxIdentification: "Tax",
           systemOrigin: "Legacy",
           externalId: "external-9",

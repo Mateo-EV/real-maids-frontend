@@ -60,7 +60,7 @@ describe("Customer composition root", () => {
     TestBed.configureTestingModule({ providers: appConfig.providers })
     const response = of(Result.failure(new CustomerError("FORBIDDEN")))
     const acquisition = vi
-      .spyOn(TestBed.inject(AcquisitionHttpSource), "listProspects")
+      .spyOn(TestBed.inject(AcquisitionHttpSource), "listLeads")
       .mockReturnValue(response)
     const status = vi
       .spyOn(TestBed.inject(CustomerHttpSource), "setStatus")
@@ -76,7 +76,7 @@ describe("Customer composition root", () => {
       .mockReturnValue(response)
     const page = { offset: 20, limit: 10 },
       desired = { customerId: 7, isActive: false }
-    expect(TestBed.inject(ACQUISITION_REPOSITORY).listProspects(page)).toBe(response)
+    expect(TestBed.inject(ACQUISITION_REPOSITORY).listLeads(page)).toBe(response)
     expect(acquisition).toHaveBeenCalledExactlyOnceWith(page)
     expect(TestBed.inject(CUSTOMER_CAPABILITIES_REPOSITORY).setStatus(desired)).toBe(response)
     expect(status).toHaveBeenCalledExactlyOnceWith(desired)

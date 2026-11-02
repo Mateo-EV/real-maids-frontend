@@ -43,10 +43,10 @@ describe("web content schema factories", () => {
     })
   })
 
-  it("preserves full and nullable web submissions without manufacturing prospect identity", () => {
+  it("preserves full and nullable web submissions without manufacturing lead identity", () => {
     expect(WebForm.create(4, null, "Visitor", null, null, null, null, false, timestamp)).toEqual({
       id: 4,
-      prospectId: null,
+      leadId: null,
       name: "Visitor",
       email: null,
       phone: null,
@@ -69,7 +69,7 @@ describe("web content schema factories", () => {
       )
     ).toEqual({
       id: 5,
-      prospectId: 6,
+      leadId: 6,
       name: "Visitor",
       email: "visitor@example.test",
       phone: "123",

@@ -40,11 +40,11 @@ export interface SubmitWebFormParams {
 }
 
 export interface ProcessWebFormParams {
-  prospectId: number | null
+  leadId: number | null
   isProcessed: boolean
 }
 
 export interface WebFormQuery extends PaginationParams {
   isProcessed?: boolean
-  prospectId?: number
+  leadId?: number
 }

@@ -53,7 +53,7 @@ factoryCase(
   ],
   [
     "id",
-    "prospectId",
+    "leadId",
     "customerId",
     "propertyId",
     "userId",

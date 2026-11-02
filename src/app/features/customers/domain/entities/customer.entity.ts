@@ -18,7 +18,7 @@ export class Customer {
     public readonly createdAt: Date,
     public readonly updatedAt: Date | null,
     public readonly registeredByUserId: number | null,
-    public readonly prospectId: number | null
+    public readonly leadId: number | null
   ) {}
 
   static create(
@@ -35,7 +35,7 @@ export class Customer {
     createdAt: Date,
     updatedAt: Date | null,
     registeredByUserId: number | null,
-    prospectId: number | null
+    leadId: number | null
   ): Customer {
     return new Customer(
       id,
@@ -51,7 +51,7 @@ export class Customer {
       createdAt,
       updatedAt,
       registeredByUserId,
-      prospectId
+      leadId
     )
   }
 }

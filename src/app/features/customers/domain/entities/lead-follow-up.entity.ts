@@ -1,7 +1,7 @@
-export class ProspectFollowUp {
+export class LeadFollowUp {
   private constructor(
     public readonly id: number,
-    public readonly prospectId: number,
+    public readonly leadId: number,
     public readonly userId: number,
     public readonly stageId: number,
     public readonly comment: string | null,
@@ -10,12 +10,12 @@ export class ProspectFollowUp {
 
   static create(
     id: number,
-    prospectId: number,
+    leadId: number,
     userId: number,
     stageId: number,
     comment: string | null,
     occurredAt: Date
-  ): ProspectFollowUp {
-    return new ProspectFollowUp(id, prospectId, userId, stageId, comment, occurredAt)
+  ): LeadFollowUp {
+    return new LeadFollowUp(id, leadId, userId, stageId, comment, occurredAt)
   }
 }

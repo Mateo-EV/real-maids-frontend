@@ -1,19 +1,19 @@
 import { Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
-import { ProspectOrigin } from "../../domain/entities/prospect-origin.entity"
+import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
 import { FunnelStage } from "../../domain/entities/funnel-stage.entity"
-import { Prospect } from "../../domain/entities/prospect.entity"
-import { ProspectFollowUp } from "../../domain/entities/prospect-follow-up.entity"
+import { Lead } from "../../domain/entities/lead.entity"
+import { LeadFollowUp } from "../../domain/entities/lead-follow-up.entity"
 import { CustomerType } from "../../domain/entities/customer.entity"
 import {
-  CreateProspectOriginParams,
-  UpdateProspectOriginParams,
+  CreateLeadOriginParams,
+  UpdateLeadOriginParams,
   CreateFunnelStageParams,
   UpdateFunnelStageParams,
-  CreateProspectParams,
-  UpdateProspectParams,
-  CreateProspectFollowUpParams,
-  ConvertProspectParams
+  CreateLeadParams,
+  UpdateLeadParams,
+  CreateLeadFollowUpParams,
+  ConvertLeadParams
 } from "../../domain/params/acquisition.params"
 import { customerTransport } from "./customer-http.transport"
 import { customerDto } from "./customer-http.source"
@@ -37,9 +37,9 @@ import {
   page
 } from "./customer-http.validation"
 
-export function originDto(v: unknown): ProspectOrigin {
+export function originDto(v: unknown): LeadOrigin {
   const p = record(v)
-  return ProspectOrigin.create(
+  return LeadOrigin.create(
     readId(p["idOrigen"]),
     text(p["nombre"], 60),
     nullableText(p["descripcion"], 150),
@@ -58,9 +58,9 @@ export function stageDto(v: unknown): FunnelStage {
     return invalid()
   return FunnelStage.create(readId(p["idEtapa"]), text(p["nombre"], 50), order, flag(p["esFinal"]))
 }
-export function prospectDto(v: unknown): Prospect {
+export function leadDto(v: unknown): Lead {
   const p = record(v)
-  return Prospect.create(
+  return Lead.create(
     readId(p["idProspecto"]),
     readId(p["idOrigen"]),
     readId(p["idEtapa"]),
@@ -74,19 +74,19 @@ export function prospectDto(v: unknown): Prospect {
     nullableId(p["usuarioRegistro"])
   )
 }
-function followUpDto(v: unknown, prospectId: number): ProspectFollowUp {
+function followUpDto(v: unknown, leadId: number): LeadFollowUp {
   const p = record(v)
-  if (p["idProspecto"] !== prospectId) return invalid()
-  return ProspectFollowUp.create(
+  if (p["idProspecto"] !== leadId) return invalid()
+  return LeadFollowUp.create(
     readId(p["idSeguimiento"]),
-    prospectId,
+    leadId,
     readId(p["idUsuario"]),
     readId(p["idEtapa"]),
     nullableText(p["comentario"]),
     date(p["fecha"])
   )
 }
-function originBody(p: CreateProspectOriginParams) {
+function originBody(p: CreateLeadOriginParams) {
   input(required(p.name, 60) && optional(p.description, 150) && typeof p.isActive === "boolean")
   return { nombre: p.name, descripcion: p.description, activo: p.isActive }
 }
@@ -100,7 +100,7 @@ function stageBody(p: CreateFunnelStageParams) {
   )
   return { nombre: p.name, orden: p.order, esFinal: p.isFinal }
 }
-function prospectBody(p: CreateProspectParams) {
+function leadBody(p: CreateLeadParams) {
   input(
     id(p.originId) &&
       id(p.stageId) &&
@@ -126,21 +126,21 @@ export class AcquisitionHttpSource {
   private readonly http = this.t.http
   private readonly origins = `${this.t.origin}/api/catalogos/origenes-prospecto`
   private readonly stages = `${this.t.origin}/api/catalogos/etapas-embudo`
-  private readonly prospects = `${this.t.origin}/api/prospectos`
+  private readonly leads = `${this.t.origin}/api/prospectos`
   listOrigins() {
     return this.t.request(
       () => this.http.get<unknown>(this.origins, { transferCache: false }),
       v => list(v, originDto)
     )
   }
-  createOrigin(params: CreateProspectOriginParams) {
+  createOrigin(params: CreateLeadOriginParams) {
     const p = { ...params }
     return this.t.request(
       () => this.http.post<unknown>(this.origins, originBody(p), { transferCache: false }),
       originDto
     )
   }
-  updateOrigin(params: UpdateProspectOriginParams) {
+  updateOrigin(params: UpdateLeadOriginParams) {
     const p = { ...params }
     return this.t.request(
       () => {
@@ -177,93 +177,93 @@ export class AcquisitionHttpSource {
       v => sameId(stageDto(v), p.id)
     )
   }
-  listProspects(params: PaginationParams) {
+  listLeads(params: PaginationParams) {
     const p = { ...params }
     return this.t.request(
       () =>
-        this.http.get<unknown>(this.prospects, {
+        this.http.get<unknown>(this.leads, {
           params: pagination(p.offset, p.limit),
           transferCache: false
         }),
-      v => page(v, prospectDto, (p.offset ?? 0) / (p.limit ?? 20), p.limit ?? 20),
-      "PROSPECT_NOT_FOUND"
+      v => page(v, leadDto, (p.offset ?? 0) / (p.limit ?? 20), p.limit ?? 20),
+      "LEAD_NOT_FOUND"
     )
   }
-  findProspect(prospectId: number) {
+  findLead(leadId: number) {
     return this.t.request(
       () => {
-        input(id(prospectId))
-        return this.http.get<unknown>(`${this.prospects}/${prospectId}`, { transferCache: false })
+        input(id(leadId))
+        return this.http.get<unknown>(`${this.leads}/${leadId}`, { transferCache: false })
       },
-      v => sameId(prospectDto(v), prospectId),
-      "PROSPECT_NOT_FOUND"
+      v => sameId(leadDto(v), leadId),
+      "LEAD_NOT_FOUND"
     )
   }
-  createProspect(params: CreateProspectParams) {
+  createLead(params: CreateLeadParams) {
     const p = { ...params }
     return this.t.request(
-      () => this.http.post<unknown>(this.prospects, prospectBody(p), { transferCache: false }),
-      prospectDto,
-      "PROSPECT_NOT_FOUND"
+      () => this.http.post<unknown>(this.leads, leadBody(p), { transferCache: false }),
+      leadDto,
+      "LEAD_NOT_FOUND"
     )
   }
-  updateProspect(params: UpdateProspectParams) {
+  updateLead(params: UpdateLeadParams) {
     const p = { ...params }
     return this.t.request(
       () => {
         input(id(p.id))
-        return this.http.put<unknown>(`${this.prospects}/${p.id}`, prospectBody(p), {
+        return this.http.put<unknown>(`${this.leads}/${p.id}`, leadBody(p), {
           transferCache: false
         })
       },
-      v => sameId(prospectDto(v), p.id),
-      "PROSPECT_NOT_FOUND"
+      v => sameId(leadDto(v), p.id),
+      "LEAD_NOT_FOUND"
     )
   }
-  listFollowUps(prospectId: number) {
+  listFollowUps(leadId: number) {
     return this.t.request(
       () => {
-        input(id(prospectId))
-        return this.http.get<unknown>(`${this.prospects}/${prospectId}/seguimientos`, {
+        input(id(leadId))
+        return this.http.get<unknown>(`${this.leads}/${leadId}/seguimientos`, {
           transferCache: false
         })
       },
-      v => list(v, item => followUpDto(item, prospectId)),
-      "PROSPECT_NOT_FOUND"
+      v => list(v, item => followUpDto(item, leadId)),
+      "LEAD_NOT_FOUND"
     )
   }
-  addFollowUp(params: CreateProspectFollowUpParams) {
+  addFollowUp(params: CreateLeadFollowUpParams) {
     const p = { ...params }
     return this.t.request(
       () => {
-        input(id(p.prospectId) && id(p.stageId) && optional(p.comment))
+        input(id(p.leadId) && id(p.stageId) && optional(p.comment))
         return this.http.post<unknown>(
-          `${this.prospects}/${p.prospectId}/seguimientos`,
+          `${this.leads}/${p.leadId}/seguimientos`,
           { idEtapa: p.stageId, comentario: p.comment },
           { transferCache: false }
         )
       },
-      v => followUpDto(v, p.prospectId),
-      "PROSPECT_NOT_FOUND"
+      v => followUpDto(v, p.leadId),
+      "LEAD_NOT_FOUND"
     )
   }
-  convertProspect(params: ConvertProspectParams) {
+  convertLead(params: ConvertLeadParams) {
     const p = { ...params }
     return this.t.request(
       () => {
-        input(id(p.prospectId) && Object.values(CustomerType).includes(p.type))
+        input(id(p.leadId) && Object.values(CustomerType).includes(p.type))
         return this.http.post<unknown>(
-          `${this.prospects}/${p.prospectId}/conversion`,
+          `${this.leads}/${p.leadId}/conversion`,
           { tipo: p.type },
           { transferCache: false }
         )
       },
       v => {
         const c = customerDto(v)
-        if (c.prospectId !== p.prospectId) invalid()
+        if (c.leadId !== p.leadId) invalid()
         return c
       },
-      "PROSPECT_NOT_FOUND"
+      "LEAD_NOT_FOUND"
     )
   }
 }

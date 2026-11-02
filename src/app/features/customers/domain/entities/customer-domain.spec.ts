@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { Customer, CustomerType } from "./customer.entity"
-import { ProspectOrigin } from "./prospect-origin.entity"
+import { LeadOrigin } from "./lead-origin.entity"
 import { FunnelStage } from "./funnel-stage.entity"
-import { Prospect } from "./prospect.entity"
-import { ProspectFollowUp } from "./prospect-follow-up.entity"
+import { Lead } from "./lead.entity"
+import { LeadFollowUp } from "./lead-follow-up.entity"
 import { CustomerContact } from "./customer-contact.entity"
 import { Property } from "./property.entity"
 import { CustomerPreference } from "./customer-preference.entity"
@@ -44,7 +44,7 @@ describe("Customer schema factories", () => {
       createdAt: date,
       updatedAt: null,
       registeredByUserId: null,
-      prospectId: null
+      leadId: null
     })
     expect(
       Customer.create(
@@ -77,11 +77,11 @@ describe("Customer schema factories", () => {
       createdAt: date,
       updatedAt: date,
       registeredByUserId: 4,
-      prospectId: 5
+      leadId: 5
     })
   })
   it("preserves catalog fields without closing extensible values", () => {
-    expect(ProspectOrigin.create(1, "Referral", null, false)).toEqual({
+    expect(LeadOrigin.create(1, "Referral", null, false)).toEqual({
       id: 1,
       name: "Referral",
       description: null,
@@ -94,8 +94,8 @@ describe("Customer schema factories", () => {
       isFinal: true
     })
   })
-  it("preserves prospect and follow-up relationships, dates and nullable fields", () => {
-    expect(Prospect.create(1, 2, 3, "Lead", null, null, null, null, false, date, null)).toEqual({
+  it("preserves lead and follow-up relationships, dates and nullable fields", () => {
+    expect(Lead.create(1, 2, 3, "Lead", null, null, null, null, false, date, null)).toEqual({
       id: 1,
       originId: 2,
       stageId: 3,
@@ -108,9 +108,9 @@ describe("Customer schema factories", () => {
       registeredAt: date,
       registeredByUserId: null
     })
-    expect(ProspectFollowUp.create(1, 2, 3, 4, null, date)).toEqual({
+    expect(LeadFollowUp.create(1, 2, 3, 4, null, date)).toEqual({
       id: 1,
-      prospectId: 2,
+      leadId: 2,
       userId: 3,
       stageId: 4,
       comment: null,
@@ -137,15 +137,15 @@ describe("Customer schema factories", () => {
       isActive: false
     })
   })
-  it("retains populated optional catalog, prospect, follow-up and relationship values", () => {
-    expect(ProspectOrigin.create(9, "Partner", "Description", true)).toEqual({
+  it("retains populated optional catalog, lead, follow-up and relationship values", () => {
+    expect(LeadOrigin.create(9, "Partner", "Description", true)).toEqual({
       id: 9,
       name: "Partner",
       description: "Description",
       isActive: true
     })
     expect(
-      Prospect.create(
+      Lead.create(
         10,
         9,
         8,
@@ -171,9 +171,9 @@ describe("Customer schema factories", () => {
       registeredAt: date,
       registeredByUserId: 7
     })
-    expect(ProspectFollowUp.create(11, 10, 7, 8, "Called", date)).toEqual({
+    expect(LeadFollowUp.create(11, 10, 7, 8, "Called", date)).toEqual({
       id: 11,
-      prospectId: 10,
+      leadId: 10,
       userId: 7,
       stageId: 8,
       comment: "Called",
@@ -208,7 +208,7 @@ describe("Customer schema factories", () => {
       detail: "Detail",
       isActive: true
     })
-    expect(ProspectFollowUp.create(1, 2, 3, 4, null, date).occurredAt.getTime()).toBe(
+    expect(LeadFollowUp.create(1, 2, 3, 4, null, date).occurredAt.getTime()).toBe(
       Date.parse("2026-03-01T12:34:56Z")
     )
     expect(

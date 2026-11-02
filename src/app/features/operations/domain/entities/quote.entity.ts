@@ -1,7 +1,7 @@
 export class Quote {
   private constructor(
     public id: number,
-    public prospectId: number | null,
+    public leadId: number | null,
     public customerId: number | null,
     public propertyId: number | null,
     public userId: number,
@@ -15,7 +15,7 @@ export class Quote {
 
   static create(
     id: number,
-    prospectId: number | null,
+    leadId: number | null,
     customerId: number | null,
     propertyId: number | null,
     userId: number,
@@ -28,7 +28,7 @@ export class Quote {
   ): Quote {
     return new Quote(
       id,
-      prospectId,
+      leadId,
       customerId,
       propertyId,
       userId,

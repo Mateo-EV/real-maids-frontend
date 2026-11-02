@@ -55,7 +55,7 @@ describe("web content domain boundary", () => {
       resolved.updateSectionContent(1, 2, { title: null }),
       resolved.submitWebForm(submission),
       resolved.getWebForms({ offset: 0, limit: 10, isProcessed: false }),
-      resolved.processWebForm(3, { prospectId: null, isProcessed: true })
+      resolved.processWebForm(3, { leadId: null, isProcessed: true })
     ]
     for (const operation of operations) {
       expect(await firstValueFrom(operation)).toEqual(Result.failure(error))
@@ -74,7 +74,7 @@ describe("web content domain boundary", () => {
     expectTypeOf<
       Extract<
         keyof SubmitWebFormParams,
-        "id" | "originIp" | "submittedAt" | "isProcessed" | "prospectId"
+        "id" | "originIp" | "submittedAt" | "isProcessed" | "leadId"
       >
     >().toEqualTypeOf<never>()
     expect(new WebContentError("CONFLICT", "Safe conflict").message).toBe("Safe conflict")

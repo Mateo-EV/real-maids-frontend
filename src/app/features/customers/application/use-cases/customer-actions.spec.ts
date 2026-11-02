@@ -24,17 +24,17 @@ import { UpdateCustomerUseCase } from "./update-customer.use-case"
 
 const origin = { name: "Origin", description: null, isActive: true }
 const stage = { name: "Stage", order: 1, isFinal: false }
-const prospect = {
+const lead = {
   originId: 1,
   stageId: 2,
-  name: "Prospect",
+  name: "Lead",
   email: null,
   phone: null,
   referenceAddress: null,
   observation: null
 }
-const follow = { prospectId: 3, stageId: 2, comment: null }
-const conversion = { prospectId: 3, type: CustomerType.RESIDENTIAL }
+const follow = { leadId: 3, stageId: 2, comment: null }
+const conversion = { leadId: 3, type: CustomerType.RESIDENTIAL }
 const contact = {
   name: "Contact",
   position: null,
@@ -93,20 +93,19 @@ const actions: Action[] = [
     token: ACQUISITION_REPOSITORY,
     method: "listOrigins",
     args: [],
-    invoke: () => TestBed.inject(acquisition.ListProspectOriginsUseCase).execute()
+    invoke: () => TestBed.inject(acquisition.ListLeadOriginsUseCase).execute()
   },
   {
     token: ACQUISITION_REPOSITORY,
     method: "createOrigin",
     args: [origin],
-    invoke: () => TestBed.inject(acquisition.CreateProspectOriginUseCase).execute(origin)
+    invoke: () => TestBed.inject(acquisition.CreateLeadOriginUseCase).execute(origin)
   },
   {
     token: ACQUISITION_REPOSITORY,
     method: "updateOrigin",
     args: [{ id: 1, ...origin }],
-    invoke: () =>
-      TestBed.inject(acquisition.UpdateProspectOriginUseCase).execute({ id: 1, ...origin })
+    invoke: () => TestBed.inject(acquisition.UpdateLeadOriginUseCase).execute({ id: 1, ...origin })
   },
   {
     token: ACQUISITION_REPOSITORY,
@@ -128,46 +127,45 @@ const actions: Action[] = [
   },
   {
     token: ACQUISITION_REPOSITORY,
-    method: "listProspects",
+    method: "listLeads",
     args: [{ offset: 20, limit: 10 }],
-    invoke: () =>
-      TestBed.inject(acquisition.ListProspectsUseCase).execute({ offset: 20, limit: 10 })
+    invoke: () => TestBed.inject(acquisition.ListLeadsUseCase).execute({ offset: 20, limit: 10 })
   },
   {
     token: ACQUISITION_REPOSITORY,
-    method: "findProspect",
+    method: "findLead",
     args: [3],
-    invoke: () => TestBed.inject(acquisition.GetProspectUseCase).execute(3)
+    invoke: () => TestBed.inject(acquisition.GetLeadUseCase).execute(3)
   },
   {
     token: ACQUISITION_REPOSITORY,
-    method: "createProspect",
-    args: [prospect],
-    invoke: () => TestBed.inject(acquisition.CreateProspectUseCase).execute(prospect)
+    method: "createLead",
+    args: [lead],
+    invoke: () => TestBed.inject(acquisition.CreateLeadUseCase).execute(lead)
   },
   {
     token: ACQUISITION_REPOSITORY,
-    method: "updateProspect",
-    args: [{ id: 3, ...prospect }],
-    invoke: () => TestBed.inject(acquisition.UpdateProspectUseCase).execute({ id: 3, ...prospect })
+    method: "updateLead",
+    args: [{ id: 3, ...lead }],
+    invoke: () => TestBed.inject(acquisition.UpdateLeadUseCase).execute({ id: 3, ...lead })
   },
   {
     token: ACQUISITION_REPOSITORY,
     method: "listFollowUps",
     args: [3],
-    invoke: () => TestBed.inject(acquisition.ListProspectFollowUpsUseCase).execute(3)
+    invoke: () => TestBed.inject(acquisition.ListLeadFollowUpsUseCase).execute(3)
   },
   {
     token: ACQUISITION_REPOSITORY,
     method: "addFollowUp",
     args: [follow],
-    invoke: () => TestBed.inject(acquisition.AddProspectFollowUpUseCase).execute(follow)
+    invoke: () => TestBed.inject(acquisition.AddLeadFollowUpUseCase).execute(follow)
   },
   {
     token: ACQUISITION_REPOSITORY,
-    method: "convertProspect",
+    method: "convertLead",
     args: [conversion],
-    invoke: () => TestBed.inject(acquisition.ConvertProspectUseCase).execute(conversion)
+    invoke: () => TestBed.inject(acquisition.ConvertLeadUseCase).execute(conversion)
   },
   {
     token: CUSTOMER_CAPABILITIES_REPOSITORY,

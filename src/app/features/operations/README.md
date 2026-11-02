@@ -19,6 +19,8 @@ Authoritative fields: `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.
 | `programacion`           | [ServiceSchedule](domain/entities/service-schedule.entity.ts)        |
 | `asignacion`             | [ServiceAssignment](domain/entities/service-assignment.entity.ts)    |
 
+Quote linkage uses Angular `leadId` for the SQL `id_prospecto` column; the backend/schema naming is unchanged.
+
 No assigned table/column is omitted from the schema entities. Source-system/external IDs remain nullable metadata. Request/order `updatedAt` is nullable even though SQL supplies an update default: a default is not NOT NULL. Actors and parent links remain primitive IDs; no cross-area entity imports exist.
 
 ## Confirmed backend capabilities
