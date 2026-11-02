@@ -67,8 +67,8 @@ interface Action {
 const actions: Action[] = [
   {
     token: CUSTOMER_REPOSITORY,
-    method: "findAll",
-    args: [],
+    method: "findPage",
+    args: [{}],
     invoke: () => TestBed.inject(ListCustomersUseCase).execute()
   },
   {

@@ -15,7 +15,7 @@ describe("CreateCustomerUseCase", () => {
 
   beforeEach(() => {
     repository = {
-      findAll: vi.fn(),
+      findPage: vi.fn(),
       findById: vi.fn(),
       create: vi.fn(),
       update: vi.fn()

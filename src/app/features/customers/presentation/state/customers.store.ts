@@ -2,6 +2,7 @@ import { computed, inject } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import { catchError, defer, finalize, Observable, of, takeUntil, tap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
+import { PaginationParams, NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CreateCustomerUseCase } from "../../application/use-cases/create-customer.use-case"
 import { SetCustomerStatusUseCase } from "../../application/use-cases/set-customer-status.use-case"
@@ -18,6 +19,10 @@ import {
 
 interface CustomersState {
   readonly customers: readonly Customer[]
+  readonly total: number | null
+  readonly offset: number | null
+  readonly limit: number | null
+  readonly currentQuery: NormalizedPagination | null
   readonly selectedCustomer: Customer | null
   readonly loaded: boolean
   readonly loading: boolean
@@ -26,6 +31,10 @@ interface CustomersState {
 }
 const initialState: CustomersState = {
   customers: [],
+  total: null,
+  offset: null,
+  limit: null,
+  currentQuery: null,
   selectedCustomer: null,
   loaded: false,
   loading: false,
@@ -38,8 +47,8 @@ const toCustomerError = (error: unknown) =>
 export const CustomersStore = signalStore(
   { providedIn: "root" },
   withState(initialState),
-  withComputed(({ customers, loading, loaded, error }) => ({
-    isEmpty: computed(() => loaded() && !loading() && error() === null && customers().length === 0)
+  withComputed(({ total, loading, loaded, error }) => ({
+    isEmpty: computed(() => loaded() && !loading() && error() === null && total() === 0)
   })),
   withMethods(
     (
@@ -54,11 +63,13 @@ export const CustomersStore = signalStore(
         revision = 0,
         latestList = 0,
         latestDetail = 0
+      let reloadQuery: NormalizedPagination | null = null
       const scope = createSessionReadScope(() => {
         pending = 0
         revision++
         latestList++
         latestDetail++
+        reloadQuery = null
         patchState(store, initialState)
       })
       const execute = <T>(
@@ -89,30 +100,50 @@ export const CustomersStore = signalStore(
             })
           )
         })
-      // Only confirmed server profiles alter the active-only list. Inactive detail
-      // remains available, and a subsequent list replaces this projection entirely.
+      // A confirmed write cannot establish sorted page membership or global totals.
+      // Retain the effective query for a caller-owned reload, but invalidate its data.
       const apply = (customer: Customer) => {
         revision++
-        const existing = store.customers().some(c => c.id === customer.id)
-        const customers = customer.isActive
-          ? existing
-            ? store.customers().map(c => (c.id === customer.id ? customer : c))
-            : [...store.customers(), customer]
-          : store.customers().filter(c => c.id !== customer.id)
         patchState(store, {
-          customers,
+          customers: [],
+          total: null,
+          offset: null,
+          limit: null,
+          currentQuery: reloadQuery,
+          loaded: false,
           selectedCustomer:
             store.selectedCustomer()?.id === customer.id ? customer : store.selectedCustomer()
         })
       }
       return {
-        loadCustomers() {
+        loadCustomers(query?: PaginationParams) {
+          const supplied = query === undefined ? undefined : { ...query }
           return defer(() => {
+            if (!scope.check()) return of(Result.failure(new CustomerError("UNAUTHENTICATED")))
+            const requested = supplied ?? reloadQuery ?? {}
             const requestId = ++latestList,
               start = revision
+            patchState(store, {
+              customers: [],
+              total: null,
+              offset: null,
+              limit: null,
+              currentQuery: null,
+              loaded: false
+            })
             return execute(
-              () => listCustomersUseCase.execute(),
-              customers => patchState(store, { customers, selectedCustomer: null, loaded: true }),
+              () => listCustomersUseCase.execute(requested),
+              page => {
+                reloadQuery = { offset: page.offset, limit: page.limit }
+                patchState(store, {
+                  customers: page.items,
+                  total: page.total,
+                  offset: page.offset,
+                  limit: page.limit,
+                  currentQuery: reloadQuery,
+                  loaded: true
+                })
+              },
               null,
               () => requestId === latestList && start === revision
             )

@@ -2,9 +2,10 @@ import { TestBed } from "@angular/core/testing"
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { firstValueFrom } from "rxjs"
-import { describe, it, expect } from "vitest"
+import { beforeEach, afterEach, describe, it, expect } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { CustomerRepositoryImpl } from "../repositories/customer.repository-impl"
+import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 
 export const customerDto = {
   idCliente: 7,
@@ -22,9 +23,22 @@ export const customerDto = {
   idExterno: "external-9",
   usuarioRegistro: 12
 }
+const wirePage = (
+  contenido: unknown[],
+  pagina = 0,
+  tamanio = 20,
+  totalElementos = contenido.length
+) => ({
+  contenido,
+  pagina,
+  tamanio,
+  totalElementos,
+  totalPaginas: Math.ceil(totalElementos / tamanio)
+})
 
 describe("Customer real HTTP boundary", () => {
-  it("reads the active-only unpaged server list and preserves real metadata", async () => {
+  let repository: CustomerRepositoryImpl, http: HttpTestingController
+  beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -32,29 +46,118 @@ describe("Customer real HTTP boundary", () => {
         { provide: API_URL, useValue: "http://localhost:8080" }
       ]
     })
-    const pending = firstValueFrom(TestBed.inject(CustomerRepositoryImpl).findAll())
-    const http = TestBed.inject(HttpTestingController)
-    const request = http.expectOne("http://localhost:8080/api/clientes")
+    repository = TestBed.inject(CustomerRepositoryImpl)
+    http = TestBed.inject(HttpTestingController)
+  })
+  afterEach(() => http.verify())
+
+  it("reads the active-only server page and preserves every item's real extended metadata", async () => {
+    const pending = firstValueFrom(repository.findPage())
+    const request = http.expectOne("http://localhost:8080/api/clientes?pagina=0&tamanio=20")
     expect(request.request.method).toBe("GET")
-    expect(request.request.params.keys()).toEqual([])
+    expect(request.request.params.keys()).toEqual(["pagina", "tamanio"])
     expect(request.request.transferCache).toBe(false)
-    request.flush([customerDto])
-    expect(await pending).toMatchObject({
-      success: true,
-      data: [
-        {
-          id: 7,
-          userId: 11,
-          leadId: 3,
-          taxIdentification: "Tax",
-          systemOrigin: "Legacy",
-          externalId: "external-9",
-          registeredByUserId: 12,
+    const second = {
+      ...customerDto,
+      idCliente: 8,
+      nombre: "Second",
+      idProspecto: null,
+      idUsuario: null,
+      correo: "second@example.test",
+      telefono: "+1 555 010 1001"
+    }
+    request.flush(wirePage([customerDto, second]))
+    const result = await pending
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data).toEqual({
+        total: 2,
+        offset: 0,
+        limit: 20,
+        items: [customerDto, second].map(c => ({
+          id: c.idCliente,
+          name: c.nombre,
+          type: c.tipo,
+          email: c.correo,
+          phone: c.telefono,
+          isActive: c.activo,
+          userId: c.idUsuario,
+          leadId: c.idProspecto,
+          taxIdentification: c.identificacionFiscal,
+          systemOrigin: c.sistemaOrigen,
+          externalId: c.idExterno,
+          registeredByUserId: c.usuarioRegistro,
           updatedAt: null,
           createdAt: new Date("2026-01-01T17:00:00Z")
+        }))
+      })
+  })
+
+  it.each([
+    { query: { offset: 400, limit: 200 }, number: 2, size: 100, total: 201, items: [customerDto] },
+    { query: { offset: 40, limit: 20 }, number: 2, size: 20, total: 1, items: [] },
+    { query: {}, number: 0, size: 20, total: 0, items: [] }
+  ])(
+    "adopts effective metadata without slicing or clamping out-of-range pages: $query",
+    async ({ query, number, size, total, items }) => {
+      const pending = firstValueFrom(repository.findPage(query))
+      const request = http.expectOne(
+        `http://localhost:8080/api/clientes?pagina=${number}&tamanio=${query.limit ?? 20}`
+      )
+      expect(request.request.method).toBe("GET")
+      expect(request.request.transferCache).toBe(false)
+      request.flush(wirePage(items, number, size, total))
+      expect(await pending).toMatchObject({
+        success: true,
+        data: {
+          items: items.map(c => expect.objectContaining({ id: c.idCliente })),
+          offset: number * size,
+          limit: size,
+          total
         }
-      ]
+      })
+    }
+  )
+
+  it.each<PaginationParams>([
+    { offset: -1 },
+    { offset: 1, limit: 20 },
+    { limit: 0 },
+    { limit: -1 },
+    { offset: Number.MAX_SAFE_INTEGER + 1 },
+    { limit: 1.5 },
+    { limit: 2147483648 },
+    { offset: 2147483648, limit: 1 },
+    { offset: NaN },
+    { limit: Infinity }
+  ])("rejects invalid query before HTTP: %j", async query => {
+    expect(await firstValueFrom(repository.findPage(query))).toMatchObject({
+      success: false,
+      error: { code: "INVALID_INPUT" }
     })
-    http.verify()
+    http.expectNone(() => true)
+  })
+
+  it.each(
+    [
+      [customerDto],
+      wirePage([customerDto, customerDto]),
+      wirePage([{ ...customerDto, activo: false }]),
+      { ...wirePage([customerDto]), contenido: null },
+      { ...wirePage([customerDto]), pagina: 1 },
+      { ...wirePage([customerDto]), tamanio: 101 },
+      { ...wirePage([customerDto]), tamanio: 0 },
+      { ...wirePage([customerDto]), totalElementos: -1 },
+      { ...wirePage([customerDto]), totalElementos: Number.MAX_SAFE_INTEGER + 1 },
+      { ...wirePage([customerDto]), totalPaginas: 2 },
+      { ...wirePage([customerDto]), totalElementos: 2 },
+      wirePage([{ ...customerDto, idProspecto: undefined }])
+    ].map(dto => ({ dto }))
+  )("rejects old arrays and malformed pages without exposing data: %j", async ({ dto }) => {
+    const pending = firstValueFrom(repository.findPage())
+    http.expectOne("http://localhost:8080/api/clientes?pagina=0&tamanio=20").flush(dto)
+    const result = await pending
+    expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+    expect(result).not.toHaveProperty("data")
   })
 })

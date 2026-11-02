@@ -298,7 +298,9 @@ describe("Application repository composition", () => {
       usuarioRegistro: 7
     })
     expect(await pending).toMatchObject({ success: true, data: { id: 70 } })
-    expect(store.customers()).toMatchObject([{ id: 70 }])
+    expect(store.customers()).toEqual([])
+    expect(store.total()).toBeNull()
+    expect(store.loaded()).toBe(false)
     expect(TestBed.inject(CustomersStore)).toBe(store)
     http.verify()
   })

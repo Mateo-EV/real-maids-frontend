@@ -1,4 +1,5 @@
 import { Injectable } from "@angular/core"
+import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { Customer, CustomerType } from "../../domain/entities/customer.entity"
 import {
   CreateCustomerParams,
@@ -17,7 +18,8 @@ import {
   date,
   nullableDate,
   sameId,
-  list,
+  page,
+  pagination,
   input,
   id,
   required,
@@ -62,12 +64,18 @@ export class CustomerHttpSource {
   private readonly transport = customerTransport()
   private readonly http = this.transport.http
   private readonly url = `${this.transport.origin}/api/clientes`
-  findAll() {
+  findPage(query: PaginationParams = {}) {
+    const { offset, limit } = query
     return this.transport.request(
-      () => this.http.get<unknown>(this.url, { transferCache: false }),
+      () =>
+        this.http.get<unknown>(this.url, {
+          params: pagination(offset, limit),
+          transferCache: false
+        }),
       v => {
-        const customers = list(v, customerDto)
-        if (customers.some(c => !c.isActive)) invalid()
+        const requested = pagination(offset, limit)
+        const customers = page(v, customerDto, requested.pagina, requested.tamanio)
+        if (customers.items.some(c => !c.isActive)) invalid()
         return customers
       },
       "CUSTOMER_NOT_FOUND"

@@ -1,4 +1,5 @@
 import { inject, Injectable } from "@angular/core"
+import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { CreateCustomerParams, UpdateCustomerParams } from "../../domain/params/customer.params"
 import { CustomerRepository } from "../../domain/repositories/customer.repository"
 import { CustomerHttpSource } from "../source/customer-http.source"
@@ -7,8 +8,8 @@ import { CustomerHttpSource } from "../source/customer-http.source"
 export class CustomerRepositoryImpl implements CustomerRepository {
   private readonly source = inject(CustomerHttpSource)
 
-  findAll() {
-    return this.source.findAll()
+  findPage(query: PaginationParams = {}) {
+    return this.source.findPage(query)
   }
 
   findById(id: number) {

@@ -5,10 +5,13 @@ import { Customer } from "../entities/customer.entity"
 import { Result } from "@/app/shared/utils/result"
 import { CreateCustomerParams, UpdateCustomerParams } from "../params/customer.params"
 
-/** Active-only unpaged catalog and profile actions. Status is a separate capability. */
+import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+
+/** Active-only server pages and profile actions. Status is a separate capability. */
 export interface CustomerRepository {
   findById(id: number): Observable<Result<Customer, CustomerError>>
-  findAll(): Observable<Result<readonly Customer[], CustomerError>>
+  findPage(query: PaginationParams): Observable<Result<PaginationResponse<Customer>, CustomerError>>
   create(customer: CreateCustomerParams): Observable<Result<Customer, CustomerError>>
   update(customer: UpdateCustomerParams): Observable<Result<Customer, CustomerError>>
 }

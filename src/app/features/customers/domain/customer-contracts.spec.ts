@@ -48,7 +48,9 @@ describe("Customer domain contracts", () => {
     const customer = customerFixture(17, "Nullable", null, null)
     const response = of(Result.success(customer))
     const repository: CustomerRepository = {
-      findAll: vi.fn(() => of(Result.success([customer]))),
+      findPage: vi.fn(() =>
+        of(Result.success({ items: [customer], total: 1, offset: 0, limit: 20 }))
+      ),
       findById: vi.fn(() => response),
       create: vi.fn(() => response),
       update: vi.fn(() => response)
@@ -65,7 +67,9 @@ describe("Customer domain contracts", () => {
     )
     expect(repository.update).toHaveBeenCalledExactlyOnceWith({ id: 17, ...input })
     expect(await firstValueFrom(injected.findById(17))).toEqual(Result.success(customer))
-    expect(await firstValueFrom(injected.findAll())).toEqual(Result.success([customer]))
+    expect(await firstValueFrom(injected.findPage({}))).toEqual(
+      Result.success({ items: [customer], total: 1, offset: 0, limit: 20 })
+    )
   })
 
   it("keeps confirmed account/status operations separate from the wired CRUD contract", async () => {

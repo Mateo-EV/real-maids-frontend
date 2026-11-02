@@ -517,8 +517,12 @@ describe("Customer supported HTTP operations", () => {
   it("rejects malformed DTOs, wrong IDs/owners, duplicate lists, impossible pages and conversion links", async () => {
     const cases: [Observable<unknown>, string, object][] = [
       [customers.findById(7), "clientes/7", { ...customer, idCliente: 8 }],
-      [customers.findAll(), "clientes", [customer, customer]],
-      [customers.findAll(), "clientes", [{ ...customer, activo: false }]],
+      [customers.findPage(), "clientes?pagina=0&tamanio=20", wirePage([customer, customer])],
+      [
+        customers.findPage(),
+        "clientes?pagina=0&tamanio=20",
+        wirePage([{ ...customer, activo: false }])
+      ],
       [customers.findById(7), "clientes/7", { ...customer, usuarioRegistro: undefined }],
       [customers.findById(7), "clientes/7", { ...customer, fechaCreacion: "2026-02-30T00:00:00Z" }],
       [relations.listContacts(7), "clientes/7/contactos", [{ ...contact, idCliente: 8 }]],
@@ -571,7 +575,7 @@ describe("Customer HTTP platform/configuration safety", () => {
   ])("fails closed origin=%s platform=%s", async (origin, platform) => {
     setup(origin, platform!)
     const sources: Observable<unknown>[] = [
-      TestBed.inject(CustomerHttpSource).findAll(),
+      TestBed.inject(CustomerHttpSource).findPage(),
       TestBed.inject(AcquisitionHttpSource).listOrigins(),
       TestBed.inject(PropertyHttpSource).findByCustomer(7),
       TestBed.inject(CustomerRelationsHttpSource).listContacts(7)
