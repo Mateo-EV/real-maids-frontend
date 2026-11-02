@@ -1,4 +1,6 @@
-/** Proposed acquisition contracts, not confirmed HTTP request DTOs. */
+import { CustomerType } from "../entities/customer.entity"
+
+/** Confirmed acquisition writes; identities and registration metadata are server-owned. */
 export interface CreateProspectOriginParams {
   readonly name: string
   readonly description: string | null
@@ -40,6 +42,12 @@ export interface UpdateProspectParams {
   readonly referenceAddress: string | null
   readonly observation: string | null
 }
+/** Server copies the prospect's current profile; repeat returns the linked customer. */
+export interface ConvertProspectParams {
+  readonly prospectId: number
+  readonly type: CustomerType
+}
+
 export interface CreateProspectFollowUpParams {
   readonly prospectId: number
   readonly stageId: number

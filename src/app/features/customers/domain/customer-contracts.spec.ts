@@ -44,15 +44,14 @@ describe("Customer domain contracts", () => {
     expect(error.message).not.toContain("password")
   })
 
-  it("keeps the five-operation demo repository injectable and nullable create/update inputs explicit", async () => {
+  it("keeps the profile repository injectable and nullable create/update inputs explicit", async () => {
     const customer = customerFixture(17, "Nullable", null, null)
     const response = of(Result.success(customer))
     const repository: CustomerRepository = {
       findAll: vi.fn(() => of(Result.success([customer]))),
       findById: vi.fn(() => response),
       create: vi.fn(() => response),
-      update: vi.fn(() => response),
-      delete: vi.fn(() => of(Result.success(undefined)))
+      update: vi.fn(() => response)
     }
     TestBed.configureTestingModule({
       providers: [{ provide: CUSTOMER_REPOSITORY, useValue: repository }]
@@ -67,7 +66,6 @@ describe("Customer domain contracts", () => {
     expect(repository.update).toHaveBeenCalledExactlyOnceWith({ id: 17, ...input })
     expect(await firstValueFrom(injected.findById(17))).toEqual(Result.success(customer))
     expect(await firstValueFrom(injected.findAll())).toEqual(Result.success([customer]))
-    expect(await firstValueFrom(injected.delete(17))).toEqual(Result.success(undefined))
   })
 
   it("keeps confirmed account/status operations separate from the wired CRUD contract", async () => {
@@ -121,7 +119,7 @@ describe("Customer domain contracts", () => {
     expect(await firstValueFrom(injected.setStatus(7, 3, false))).toEqual(Result.failure(failure))
   })
 
-  it("keeps proposed acquisition operations typed without an implementation or conversion transition", async () => {
+  it("keeps acquisition operations typed without inferred transitions", async () => {
     const repository: AcquisitionRepository = {
       listOrigins: vi.fn(() => failed),
       createOrigin: vi.fn(() => failed),
@@ -134,7 +132,8 @@ describe("Customer domain contracts", () => {
       createProspect: vi.fn(() => failed),
       updateProspect: vi.fn(() => failed),
       listFollowUps: vi.fn(() => failed),
-      addFollowUp: vi.fn(() => failed)
+      addFollowUp: vi.fn(() => failed),
+      convertProspect: vi.fn(() => failed)
     }
     TestBed.configureTestingModule({
       providers: [{ provide: ACQUISITION_REPOSITORY, useValue: repository }]
@@ -183,7 +182,7 @@ describe("Customer domain contracts", () => {
     ).toEqual(Result.failure(failure))
   })
 
-  it("owns proposed contacts/preferences through customer IDs and permits general preferences", async () => {
+  it("owns contacts/preferences through customer IDs and permits general preferences", async () => {
     const repository: CustomerRelationsRepository = {
       listContacts: vi.fn(() => failed),
       createContact: vi.fn(() => failed),

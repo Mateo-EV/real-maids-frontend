@@ -22,6 +22,17 @@ import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/r
 import { RBAC_REPOSITORY } from "@/app/features/users/domain/repositories/rbac.repository"
 import { RbacRepositoryImpl } from "@/app/features/users/infrastructure/repositories/rbac.repository-impl"
 
+import { ACQUISITION_REPOSITORY } from "@/app/features/customers/domain/repositories/acquisition.repository"
+import { AcquisitionRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/acquisition.repository-impl"
+import { CUSTOMER_CAPABILITIES_REPOSITORY } from "@/app/features/customers/domain/repositories/customer-capabilities.repository"
+import { CustomerCapabilitiesRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-capabilities.repository-impl"
+import { CUSTOMER_RELATIONS_REPOSITORY } from "@/app/features/customers/domain/repositories/customer-relations.repository"
+import { CustomerRelationsRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-relations.repository-impl"
+import { PROPERTY_REPOSITORY } from "@/app/features/customers/domain/repositories/property.repository"
+import { PropertyRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/property.repository-impl"
+import { CUSTOMER_HISTORY_REPOSITORY } from "@/app/features/customers/domain/repositories/customer-history.repository"
+import { CustomerHistoryRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-history.repository-impl"
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -31,6 +42,11 @@ export const appConfig: ApplicationConfig = {
     { provide: API_URL, useValue: environment.apiUrl },
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
+    { useExisting: AcquisitionRepositoryImpl, provide: ACQUISITION_REPOSITORY },
+    { useExisting: CustomerCapabilitiesRepositoryImpl, provide: CUSTOMER_CAPABILITIES_REPOSITORY },
+    { useExisting: CustomerRelationsRepositoryImpl, provide: CUSTOMER_RELATIONS_REPOSITORY },
+    { useExisting: PropertyRepositoryImpl, provide: PROPERTY_REPOSITORY },
+    { useExisting: CustomerHistoryRepositoryImpl, provide: CUSTOMER_HISTORY_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },
     { useExisting: RoleRepositoryImpl, provide: ROLE_REPOSITORY },
     { useExisting: AuditLogRepositoryImpl, provide: AUDIT_LOG_REPOSITORY },

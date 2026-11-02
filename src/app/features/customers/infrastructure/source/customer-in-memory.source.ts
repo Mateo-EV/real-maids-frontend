@@ -60,6 +60,7 @@ const cloneCustomer = (customer: Customer): Customer =>
     )
   )
 
+/** Unwired legacy test/demo fixture only; never an HTTP fallback or production repository. */
 @Injectable({ providedIn: "root" })
 export class CustomerInMemorySource {
   private customers = DEMO_CUSTOMERS.map(cloneCustomer)

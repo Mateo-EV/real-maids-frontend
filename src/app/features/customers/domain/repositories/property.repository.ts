@@ -5,7 +5,7 @@ import { Property } from "../entities/property.entity"
 import { CustomerError } from "../errors/customer.error"
 import { CreatePropertyParams, UpdatePropertyParams } from "../params/property.params"
 
-/** Confirmed PropiedadController operations; no implementation is wired. */
+/** Confirmed customer-scoped PropiedadController operations. */
 export interface PropertyRepository {
   findByCustomer(customerId: number): Observable<Result<readonly Property[], CustomerError>>
   create(

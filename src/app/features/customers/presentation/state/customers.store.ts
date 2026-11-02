@@ -1,15 +1,20 @@
 import { computed, inject } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
-import { catchError, defer, finalize, Observable, of, tap } from "rxjs"
+import { catchError, defer, finalize, Observable, of, takeUntil, tap } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
+import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CreateCustomerUseCase } from "../../application/use-cases/create-customer.use-case"
-import { DeleteCustomerUseCase } from "../../application/use-cases/delete-customer.use-case"
+import { SetCustomerStatusUseCase } from "../../application/use-cases/set-customer-status.use-case"
 import { GetCustomerByIdUseCase } from "../../application/use-cases/get-customer-by-id.use-case"
 import { ListCustomersUseCase } from "../../application/use-cases/list-customers.use-case"
 import { UpdateCustomerUseCase } from "../../application/use-cases/update-customer.use-case"
 import { Customer } from "../../domain/entities/customer.entity"
 import { CustomerError } from "../../domain/errors/customer.error"
-import { CreateCustomerParams, UpdateCustomerParams } from "../../domain/params/customer.params"
+import {
+  CreateCustomerParams,
+  UpdateCustomerParams,
+  SetCustomerStatusParams
+} from "../../domain/params/customer.params"
 
 interface CustomersState {
   readonly customers: readonly Customer[]
@@ -19,7 +24,6 @@ interface CustomersState {
   readonly error: CustomerError | null
   readonly successMessage: string | null
 }
-
 const initialState: CustomersState = {
   customers: [],
   selectedCustomer: null,
@@ -28,8 +32,7 @@ const initialState: CustomersState = {
   error: null,
   successMessage: null
 }
-
-const toCustomerError = (error: unknown): CustomerError =>
+const toCustomerError = (error: unknown) =>
   error instanceof CustomerError ? error : new CustomerError("UNEXPECTED")
 
 export const CustomersStore = signalStore(
@@ -45,100 +48,110 @@ export const CustomersStore = signalStore(
       getCustomerByIdUseCase = inject(GetCustomerByIdUseCase),
       createCustomerUseCase = inject(CreateCustomerUseCase),
       updateCustomerUseCase = inject(UpdateCustomerUseCase),
-      deleteCustomerUseCase = inject(DeleteCustomerUseCase)
+      setCustomerStatusUseCase = inject(SetCustomerStatusUseCase)
     ) => {
-      let pendingRequests = 0
-      let catalogRevision = 0
-      let latestListRequest = 0
-
+      let pending = 0,
+        revision = 0,
+        latestList = 0,
+        latestDetail = 0
+      const scope = createSessionReadScope(() => {
+        pending = 0
+        revision++
+        latestList++
+        latestDetail++
+        patchState(store, initialState)
+      })
       const execute = <T>(
         request: () => Observable<Result<T, CustomerError>>,
-        onSuccess: (data: T) => void,
-        successMessage: string | null = null
+        success: (data: T) => void,
+        message: string | null = null,
+        current: () => boolean = () => true
       ): Observable<Result<T, CustomerError>> =>
         defer(() => {
-          pendingRequests += 1
+          if (!scope.check()) return of(Result.failure(new CustomerError("UNAUTHENTICATED")))
+          const generation = scope.generation()
+          pending++
           patchState(store, { loading: true, error: null, successMessage: null })
-
           return defer(request).pipe(
-            catchError((error: unknown) => of(Result.failure(toCustomerError(error)))),
+            takeUntil(scope.cancelled$),
+            catchError(error => of(Result.failure(toCustomerError(error)))),
             tap(result => {
+              if (!scope.check() || generation !== scope.generation() || !current()) return
               if (result.success) {
-                onSuccess(result.data)
-                patchState(store, { error: null, successMessage })
-              } else {
-                patchState(store, { error: result.error, successMessage: null })
-              }
+                success(result.data)
+                patchState(store, { error: null, successMessage: message })
+              } else patchState(store, { error: result.error, successMessage: null })
+            }),
+            finalize(() => {
+              if (generation !== scope.generation()) return
+              pending--
+              patchState(store, { loading: pending > 0 })
             })
           )
-        }).pipe(
-          finalize(() => {
-            pendingRequests -= 1
-            patchState(store, { loading: pendingRequests > 0 })
-          })
-        )
-
+        })
+      // Only confirmed server profiles alter the active-only list. Inactive detail
+      // remains available, and a subsequent list replaces this projection entirely.
+      const apply = (customer: Customer) => {
+        revision++
+        const existing = store.customers().some(c => c.id === customer.id)
+        const customers = customer.isActive
+          ? existing
+            ? store.customers().map(c => (c.id === customer.id ? customer : c))
+            : [...store.customers(), customer]
+          : store.customers().filter(c => c.id !== customer.id)
+        patchState(store, {
+          customers,
+          selectedCustomer:
+            store.selectedCustomer()?.id === customer.id ? customer : store.selectedCustomer()
+        })
+      }
       return {
         loadCustomers() {
           return defer(() => {
-            const requestId = ++latestListRequest
-            const revisionAtStart = catalogRevision
-
+            const requestId = ++latestList,
+              start = revision
             return execute(
               () => listCustomersUseCase.execute(),
-              customers => {
-                if (requestId !== latestListRequest || revisionAtStart !== catalogRevision) return
-
-                patchState(store, { customers, selectedCustomer: null, loaded: true })
-              }
+              customers => patchState(store, { customers, selectedCustomer: null, loaded: true }),
+              null,
+              () => requestId === latestList && start === revision
             )
           })
         },
         loadCustomer(id: number) {
-          return execute(
-            () => getCustomerByIdUseCase.execute(id),
-            selectedCustomer => patchState(store, { selectedCustomer })
-          )
+          return defer(() => {
+            const requestId = ++latestDetail
+            return execute(
+              () => getCustomerByIdUseCase.execute(id),
+              selectedCustomer => patchState(store, { selectedCustomer }),
+              null,
+              () => requestId === latestDetail
+            )
+          })
         },
-        createCustomer(customer: CreateCustomerParams) {
+        createCustomer(params: CreateCustomerParams) {
           return execute(
-            () => createCustomerUseCase.execute(customer),
-            created => {
-              catalogRevision += 1
-              patchState(store, { customers: [...store.customers(), created] })
-            },
+            () => createCustomerUseCase.execute(params),
+            apply,
             "Customer created successfully"
           )
         },
-        updateCustomer(customer: UpdateCustomerParams) {
+        updateCustomer(params: UpdateCustomerParams) {
           return execute(
-            () => updateCustomerUseCase.execute(customer),
-            updated => {
-              catalogRevision += 1
-              patchState(store, {
-                customers: store.customers().map(item => (item.id === updated.id ? updated : item)),
-                selectedCustomer:
-                  store.selectedCustomer()?.id === updated.id ? updated : store.selectedCustomer()
-              })
-            },
+            () => updateCustomerUseCase.execute(params),
+            apply,
             "Customer updated successfully"
           )
         },
-        deleteCustomer(id: number) {
+        setCustomerStatus(params: SetCustomerStatusParams) {
           return execute(
-            () => deleteCustomerUseCase.execute(id),
-            () => {
-              catalogRevision += 1
-              patchState(store, {
-                customers: store.customers().filter(customer => customer.id !== id),
-                selectedCustomer:
-                  store.selectedCustomer()?.id === id ? null : store.selectedCustomer()
-              })
-            },
-            "Customer deleted successfully"
+            () => setCustomerStatusUseCase.execute(params),
+            apply,
+            "Customer status updated successfully"
           )
         },
         clearFeedback() {
+          scope.check()
           patchState(store, { error: null, successMessage: null })
         }
       }

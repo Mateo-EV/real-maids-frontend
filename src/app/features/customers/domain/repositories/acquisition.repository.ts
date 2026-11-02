@@ -3,6 +3,7 @@ import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+import { Customer } from "../entities/customer.entity"
 import { ProspectOrigin } from "../entities/prospect-origin.entity"
 import { FunnelStage } from "../entities/funnel-stage.entity"
 import { Prospect } from "../entities/prospect.entity"
@@ -15,11 +16,13 @@ import {
   UpdateFunnelStageParams,
   CreateProspectParams,
   UpdateProspectParams,
-  CreateProspectFollowUpParams
+  CreateProspectFollowUpParams,
+  ConvertProspectParams
 } from "../params/acquisition.params"
 
-/** Proposed acquisition aggregate, without guessed conversions or stage transition rules. */
+/** Confirmed acquisition actions; no inferred funnel transitions. */
 export interface AcquisitionRepository {
+  convertProspect(params: ConvertProspectParams): Observable<Result<Customer, CustomerError>>
   listOrigins(): Observable<Result<readonly ProspectOrigin[], CustomerError>>
   createOrigin(
     params: CreateProspectOriginParams

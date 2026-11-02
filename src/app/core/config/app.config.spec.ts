@@ -267,22 +267,39 @@ describe("Application repository composition", () => {
     expect(TestBed.inject(AuthStore)).toBe(store)
   })
 
-  it("shares customer mutations between the root store and source", async () => {
+  it("connects the root customer store to authenticated HTTP, never its demo fixture", async () => {
+    await establishHttpAuth()
     const store = TestBed.inject(CustomersStore)
-    const created = firstValueFrom(
-      store.createCustomer(customerInput("Demo customer", "demo@example.com", "+1 555 010 1003"))
-    )
-    await vi.runAllTimersAsync()
-    const result = await created
-    expect(result.success).toBe(true)
-    if (!result.success) throw new Error("Expected successful customer creation")
-
-    const found = firstValueFrom(TestBed.inject(CustomerInMemorySource).findById(result.data.id))
-    await vi.runAllTimersAsync()
-    const sourceResult = await found
-    expect(sourceResult.success).toBe(true)
-    if (!sourceResult.success) throw new Error("Expected customer in root source")
-    expect(sourceResult.data).toEqual(result.data)
+    const pending = firstValueFrom(store.createCustomer(customerInput("HTTP customer")))
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne("http://localhost:8080/api/clientes")
+    expect(request.request.method).toBe("POST")
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(request.request.body).toEqual({
+      nombre: "HTTP customer",
+      tipo: "residencial",
+      correo: null,
+      telefono: null
+    })
+    request.flush({
+      idCliente: 70,
+      nombre: "HTTP customer",
+      tipo: "residencial",
+      correo: null,
+      telefono: null,
+      activo: true,
+      idUsuario: null,
+      fechaCreacion: "2026-01-01T00:00:00Z",
+      fechaActualizacion: null,
+      idProspecto: null,
+      identificacionFiscal: null,
+      sistemaOrigen: null,
+      idExterno: null,
+      usuarioRegistro: 7
+    })
+    expect(await pending).toMatchObject({ success: true, data: { id: 70 } })
+    expect(store.customers()).toMatchObject([{ id: 70 }])
     expect(TestBed.inject(CustomersStore)).toBe(store)
+    http.verify()
   })
 })

@@ -11,7 +11,7 @@ import {
   UpdateCustomerPreferenceParams
 } from "../params/customer-relations.params"
 
-/** Proposed customer-owned contacts/preferences, not available endpoints. */
+/** Confirmed customer-owned contacts/preferences; nullable fields are replaced on PUT. */
 export interface CustomerRelationsRepository {
   listContacts(customerId: number): Observable<Result<readonly CustomerContact[], CustomerError>>
   createContact(

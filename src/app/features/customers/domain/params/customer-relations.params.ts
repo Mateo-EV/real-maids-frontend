@@ -1,4 +1,4 @@
-/** Proposed contact/preference capabilities. Owners are explicit repository arguments. */
+/** Confirmed contact/preference writes. Owners are explicit repository arguments. */
 export interface CreateCustomerContactParams {
   readonly name: string
   readonly position: string | null

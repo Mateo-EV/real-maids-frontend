@@ -10,7 +10,7 @@ import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-h
 import { CustomerError } from "@/app/features/customers/domain/errors/customer.error"
 import { customerFixture } from "@/app/features/customers/domain/customer.fixture"
 import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
-import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
+import { CustomerHttpSource } from "@/app/features/customers/infrastructure/source/customer-http.source"
 import { UserError } from "../../domain/errors/user.error"
 import { RoleError } from "../../domain/errors/role.error"
 import { Lang } from "../../domain/entities/user.entity"
@@ -74,25 +74,23 @@ describe("Infrastructure repository delegation", () => {
   })
 
   it("delegates all customer operations without mapping or swallowing failures", () => {
-    const source = TestBed.inject(CustomerInMemorySource)
+    TestBed.configureTestingModule({ providers: appConfig.providers })
+    const source = TestBed.inject(CustomerHttpSource)
     const repository = TestBed.inject(CustomerRepositoryImpl)
     const response = of(Result.failure(new CustomerError("CUSTOMER_NOT_FOUND")))
     const all = vi.spyOn(source, "findAll").mockReturnValue(response)
     const read = vi.spyOn(source, "findById").mockReturnValue(response)
     const create = vi.spyOn(source, "create").mockReturnValue(response)
     const update = vi.spyOn(source, "update").mockReturnValue(response)
-    const remove = vi.spyOn(source, "delete").mockReturnValue(response)
     const customer = customerFixture(1, "Demo", "demo@example.com", "123")
     expect(repository.findAll()).toBe(response)
     expect(repository.findById(customer.id)).toBe(response)
     expect(repository.create(customer)).toBe(response)
     expect(repository.update(customer)).toBe(response)
-    expect(repository.delete(customer.id)).toBe(response)
     expect(all).toHaveBeenCalledExactlyOnceWith()
     expect(read).toHaveBeenCalledExactlyOnceWith(customer.id)
     expect(create).toHaveBeenCalledExactlyOnceWith(customer)
     expect(update).toHaveBeenCalledExactlyOnceWith(customer)
-    expect(remove).toHaveBeenCalledExactlyOnceWith(customer.id)
   })
 
   it("delegates every user operation preserving fields and the exact observable", () => {

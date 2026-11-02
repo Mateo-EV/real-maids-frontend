@@ -164,8 +164,8 @@ describe("Cancellable in-memory execution boundaries", () => {
     })
   }
 
-  it("cancels customer create/update/delete without mutations or ID allocation", async () => {
-    const repository = TestBed.inject(CUSTOMER_REPOSITORY)
+  it("retains legacy unwired customer fixture cancellation before effects or ID allocation", async () => {
+    const repository = TestBed.inject(CustomerInMemorySource)
     const source = TestBed.inject(CustomerInMemorySource)
     const before = await settle(source.findAll())
     await cancelBeforeBoundary(
@@ -306,7 +306,7 @@ describe("Cancellable in-memory execution boundaries", () => {
   it("retains delayed legacy demo validation and domain failure Results", async () => {
     const users = TestBed.inject(UserInMemorySource)
     const roles = TestBed.inject(RoleInMemorySource)
-    const customers = TestBed.inject(CUSTOMER_REPOSITORY)
+    const customers = TestBed.inject(CustomerInMemorySource)
     await cancelBeforeBoundary(users.updateUserStatusById(99, true), 250)
     await cancelBeforeBoundary(users.updateUserById(99, userInput), 250)
     await cancelBeforeBoundary(roles.deleteRoleById(99), 250)
