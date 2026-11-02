@@ -83,8 +83,15 @@ describe("Customer feature routes", () => {
     expect(harness.routeNativeElement!.textContent).not.toContain("Cliente creado correctamente")
     open.mock.results[0].value.close()
   })
-  it("owns a protected empty-path lazy list without write/detail routes or local store providers", async () => {
-    expect(CUSTOMERS_ROUTES).toHaveLength(1)
+  it("owns protected lazy list and read-only detail routes without local store providers", async () => {
+    expect(CUSTOMERS_ROUTES).toHaveLength(2)
+    const detail = CUSTOMERS_ROUTES[1]
+    expect(detail.path).toBe(":id")
+    expect(detail.canActivate).toEqual([authGuard])
+    expect(detail.providers).toBeDefined()
+    const { CustomerDetailPage } =
+      await import("./presentation/pages/customer-detail-page/customer-detail-page")
+    expect(await detail.loadComponent!()).toBe(CustomerDetailPage)
     const route = CUSTOMERS_ROUTES[0]
     expect(route.path).toBe("")
     expect(route.canActivate).toEqual([authGuard])

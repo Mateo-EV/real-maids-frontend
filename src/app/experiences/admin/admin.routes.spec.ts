@@ -109,6 +109,14 @@ describe("Admin users navigation", () => {
     expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fcustomers")
   })
 
+  it("protects read-only customer detail deep links including paging context", async () => {
+    setup(false)
+    await RouterTestingHarness.create("/admin/customers/7?offset=10&limit=5")
+    expect(TestBed.inject(Router).url).toBe(
+      "/login?returnUrl=%2Fadmin%2Fcustomers%2F7%3Foffset%3D10%26limit%3D5"
+    )
+  })
+
   it("opens the lazy customer list inside the unchanged shared shell through CRM", async () => {
     setup(true)
     const execute = vi.fn(() => of(Result.success({ items: [], total: 0, offset: 0, limit: 20 })))

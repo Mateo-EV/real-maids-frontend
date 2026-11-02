@@ -7,6 +7,8 @@ import {
   OnInit,
   signal
 } from "@angular/core"
+import { ActivatedRoute, RouterLink } from "@angular/router"
+import { customerPageContext } from "./customer-page-context"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { Subject, switchMap } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -35,6 +37,7 @@ import { CustomerStatusDialog } from "../../components/customer-status-dialog/cu
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HlmButtonImports,
+    RouterLink,
     NgTemplateOutlet,
     NgIcon,
     CatalogFrame,
@@ -59,7 +62,9 @@ export class CustomersPage implements OnInit {
     this.dialog?.close()
   })
 
-  private readonly requestedQuery = signal<NormalizedPagination>({ offset: 0, limit: 20 })
+  private readonly requestedQuery = signal<NormalizedPagination>(
+    customerPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
+  )
   readonly list = computed(() => this.customers.selectQuery(this.requestedQuery()))
   readonly result = computed(() => this.list().result)
   readonly rows = computed(() => this.result()?.items ?? [])

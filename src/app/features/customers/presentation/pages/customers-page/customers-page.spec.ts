@@ -1,6 +1,6 @@
 import { TestBed } from "@angular/core/testing"
 import { PLATFORM_ID } from "@angular/core"
-import { provideRouter } from "@angular/router"
+import { ActivatedRoute, convertToParamMap, provideRouter } from "@angular/router"
 import { BehaviorSubject, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -20,7 +20,7 @@ const row = customerFixture(7, "Cliente de prueba", "client@example.test", "555 
 const page = (items: Customer[] = [row], total = 45, offset = 0, limit = 20): PageResult =>
   Result.success({ items, total, offset, limit })
 
-function setup(server = false) {
+function setup(server = false, query: Record<string, string | undefined> = {}) {
   const requests: Subject<PageResult>[] = []
   const execute = vi.fn(() => {
     const response = new Subject<PageResult>()
@@ -34,6 +34,10 @@ function setup(server = false) {
     imports: [CustomersPage],
     providers: [
       provideRouter([]),
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap(query) } }
+      },
       { provide: ListCustomersUseCase, useValue: { execute } },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
@@ -67,6 +71,25 @@ function setup(server = false) {
 afterEach(() => vi.restoreAllMocks())
 
 describe("CustomersPage read-only server list", () => {
+  it("restores validated list paging from navigation context before its first read", () => {
+    const s = setup(false, { offset: "30", limit: "5" })
+    expect(s.execute).toHaveBeenCalledExactlyOnceWith({ offset: 30, limit: 5 })
+  })
+  it.each([
+    { offset: "1", limit: "20" },
+    { offset: "-20", limit: "20" },
+    { offset: "0", limit: "0" },
+    { offset: "0", limit: "2147483648" },
+    { offset: "9007199254740992", limit: "1" },
+    { offset: "4294967296", limit: "1" },
+    { offset: "abc", limit: "5" },
+    { offset: "20" },
+    { limit: "5" },
+    { offset: "0", limit: "1e2" }
+  ])("defaults malformed context %o to 0/20 before HTTP", query => {
+    const s = setup(false, query)
+    expect(s.execute).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
+  })
   it("uses the shared catalog hierarchy and container-responsive records", async () => {
     const s = setup()
     await s.respond(page())

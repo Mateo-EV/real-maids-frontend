@@ -152,6 +152,15 @@
 </main>
 <ng-template #customerActions let-customer>
   <div class="flex flex-wrap items-center gap-1">
+    <a
+      hlmBtn
+      variant="outline"
+      size="sm"
+      [routerLink]="['/admin/customers', customer.id]"
+      [queryParams]="list().query"
+      [attr.aria-label]="'Ver detalle de ' + customer.name"
+      >Ver detalle</a
+    >
     <button
       hlmBtn
       type="button"

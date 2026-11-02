@@ -1,0 +1,205 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.property ? "Editar propiedad" : "Nueva propiedad" }}</h2>
+  <p hlmDialogDescription>Cliente: {{ context.customerName }} · ID {{ context.customerId }}</p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <p hlmFieldDescription id="property-help">
+    Los campos opcionales vacíos se guardan sin registrar, también al editar. Se omiten espacios al
+    inicio y al final.
+  </p>
+  <fieldset
+    hlmFieldSet
+    class="grid min-w-0 gap-3.5 sm:grid-cols-2"
+    [disabled]="profile().submitting()"
+    aria-describedby="property-help"
+  >
+    <legend hlmFieldLegend class="sr-only">Datos de la propiedad</legend>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="property-address">Dirección (obligatoria)</label>
+      <input
+        hlmInput
+        id="property-address"
+        autocomplete="off"
+        aria-describedby="address-errors"
+        [formField]="profile.address"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.address, id: 'address-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-alias">Alias (opcional)</label>
+      <input
+        hlmInput
+        id="property-alias"
+        autocomplete="off"
+        aria-describedby="alias-errors"
+        [formField]="profile.alias"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.alias, id: 'alias-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-city">Ciudad (opcional)</label>
+      <input
+        hlmInput
+        id="property-city"
+        autocomplete="off"
+        aria-describedby="city-errors"
+        [formField]="profile.city"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.city, id: 'city-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-region">Región (opcional)</label>
+      <input
+        hlmInput
+        id="property-region"
+        autocomplete="off"
+        aria-describedby="region-errors"
+        [formField]="profile.region"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.region, id: 'region-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-postalCode">Código postal (opcional)</label>
+      <input
+        hlmInput
+        id="property-postalCode"
+        autocomplete="off"
+        aria-describedby="postal-errors"
+        [formField]="profile.postalCode"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.postalCode, id: 'postal-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-areaM2">Superficie en m² (opcional)</label>
+      <input
+        hlmInput
+        id="property-areaM2"
+        inputmode="decimal"
+        autocomplete="off"
+        aria-describedby="area-help area-errors"
+        [formField]="profile.areaM2"
+      />
+      <p hlmFieldDescription id="area-help">1–999999.99 m², hasta dos decimales con punto.</p>
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.areaM2, id: 'area-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-roomCount">Habitaciones (opcional, 0–200)</label>
+      <input
+        hlmInput
+        id="property-roomCount"
+        inputmode="numeric"
+        autocomplete="off"
+        aria-describedby="rooms-errors"
+        [formField]="profile.roomCount"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.roomCount, id: 'rooms-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="property-bathroomCount">Baños (opcional, 0–100)</label>
+      <input
+        hlmInput
+        id="property-bathroomCount"
+        inputmode="numeric"
+        autocomplete="off"
+        aria-describedby="baths-errors"
+        [formField]="profile.bathroomCount"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.bathroomCount, id: 'baths-errors' }"
+      />
+    </div>
+    <div hlmField orientation="horizontal" class="items-center gap-2">
+      <hlm-checkbox inputId="property-hasPets" [formField]="profile.hasPets" />
+      <label hlmFieldLabel for="property-hasPets">Tiene mascotas</label>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="property-accessInstructions"
+        >Instrucciones de acceso (opcional)</label
+      >
+      <textarea
+        hlmTextarea
+        id="property-accessInstructions"
+        autocomplete="off"
+        aria-describedby="access-errors"
+        [formField]="profile.accessInstructions"
+      ></textarea>
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.accessInstructions, id: 'access-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="property-doorCode">Código de acceso (opcional)</label>
+      <input
+        hlmInput
+        id="property-doorCode"
+        autocomplete="off"
+        aria-describedby="door-errors"
+        [formField]="profile.doorCode"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.doorCode, id: 'door-errors' }"
+      />
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar propiedad" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
+<ng-template #errors let-field="field" let-id="id">
+  <div [id]="id">
+    @if (field().touched()) {
+      @for (error of field().errors(); track error.kind) {
+        <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+      }
+    }
+  </div>
+</ng-template>
