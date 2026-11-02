@@ -2,6 +2,8 @@
 
 The Real Maids frontend is a responsive web application for managing cleaning services internally and giving customers a portal to follow their requests and services and contact customer support. This guide preserves the functional plan; it does not certify implemented features. See [the Spanish project overview](../README.md) for onboarding and current status, and [agent instructions](../AGENTS.md) for technical, security and quality rules.
 
+For the proposed delivery sequence, presentation target and reference-adaptation gates, see the [implementation roadmap](implementation-roadmap.md). It preserves the official model and existing visual structure; it does not authorize implementation or certify planned features.
+
 ## Current delivery boundary
 
 P01 (M01/RF01/HU01) retains `/login` prerendering with an accessible neutral loading screen, without constructing login fields or protected content. The browser reveals only the selected route after session restoration and the first successful navigation, deferred until after the initial hydration-compatible render. Redirect and superseded-navigation cancellations keep the gate closed; terminal navigation failures show an accessible retry action. Once revealed, later navigation and logout do not close the gate again. Auth contracts, guards, storage, store lifetimes and route render modes are unchanged. Unit/router checks and prerender inspection do not certify real authenticated timing or Chrome/Edge/Firefox visual, keyboard and responsive acceptance; those remain pending.
