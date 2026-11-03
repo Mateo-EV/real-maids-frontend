@@ -9,6 +9,8 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { Subject, switchMap } from "rxjs"
+import { ActivatedRoute, RouterLink } from "@angular/router"
+import { leadPageContext } from "./lead-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
@@ -26,6 +28,7 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
   selector: "app-leads-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     CrmCatalogNavigation,
     CatalogFrame,
     TablePagination,
@@ -41,7 +44,9 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
 export class LeadsPage implements OnInit {
   private readonly acquisition = inject(CustomerAcquisitionStore)
   private readonly destroyRef = inject(DestroyRef)
-  private readonly requestedQuery = signal<NormalizedPagination>({ offset: 0, limit: 20 })
+  private readonly requestedQuery = signal<NormalizedPagination>(
+    leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
+  )
   private readonly selection = computed(() => this.acquisition.selectLeads(this.requestedQuery()))
   readonly list = computed(() => this.selection()())
   readonly result = computed(() => this.list().data)

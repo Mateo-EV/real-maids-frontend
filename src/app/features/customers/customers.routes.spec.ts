@@ -84,14 +84,21 @@ describe("Customer feature routes", () => {
     open.mock.results[0].value.close()
   })
   it("owns protected lazy list and read-only detail routes without local store providers", async () => {
-    expect(CUSTOMERS_ROUTES).toHaveLength(3)
+    expect(CUSTOMERS_ROUTES).toHaveLength(4)
     const leads = CUSTOMERS_ROUTES[1]
     expect(leads.path).toBe("leads")
     expect(leads.canActivate).toEqual([authGuard])
     expect(leads.providers).toBeDefined()
     const { LeadsPage } = await import("./presentation/pages/leads-page/leads-page")
     expect(await leads.loadComponent!()).toBe(LeadsPage)
-    const detail = CUSTOMERS_ROUTES[2]
+    const leadDetail = CUSTOMERS_ROUTES[2]
+    expect(leadDetail.path).toBe("leads/:id")
+    expect(leadDetail.canActivate).toEqual([authGuard])
+    expect(leadDetail.providers).toBeDefined()
+    const { LeadDetailPage } =
+      await import("./presentation/pages/lead-detail-page/lead-detail-page")
+    expect(await leadDetail.loadComponent!()).toBe(LeadDetailPage)
+    const detail = CUSTOMERS_ROUTES[3]
     expect(detail.path).toBe(":id")
     expect(detail.canActivate).toEqual([authGuard])
     expect(detail.providers).toBeDefined()

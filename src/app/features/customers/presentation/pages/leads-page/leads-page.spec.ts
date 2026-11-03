@@ -92,7 +92,7 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.element.textContent).not.toMatch(/Crear|Editar|Convertir|Seguimiento|Ver detalle/)
   })
 
-  it("renders actual lead fields and converted state in container-responsive records without dead links", async () => {
+  it("renders actual lead fields and converted state in container-responsive records with working detail links", async () => {
     const s = setup()
     await s.respond(page([row, lead(8, "Convertido real", true)]))
     const frame = s.element.querySelector("app-catalog-frame")!
@@ -111,7 +111,11 @@ describe("LeadsPage read-only inbox", () => {
       expect(records.textContent).toContain("No convertido")
       expect(records.textContent).toContain("11")
       expect(records.textContent).toContain("12")
-      expect(records.querySelector("a, button")).toBeNull()
+      expect(records.querySelectorAll("a")).toHaveLength(2)
+      expect(records.querySelector("a")?.getAttribute("href")).toBe(
+        "/admin/customers/leads/7?offset=0&limit=20"
+      )
+      expect(records.querySelector("button")).toBeNull()
     }
     expect(frame.querySelector("th")?.textContent).toBe("Nombre")
     expect(frame.textContent).toContain("Origen (ID)")

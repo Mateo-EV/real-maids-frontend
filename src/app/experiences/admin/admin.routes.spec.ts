@@ -117,6 +117,14 @@ describe("Admin users navigation", () => {
     expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fcustomers%2Fleads")
   })
 
+  it("protects lead detail deep links including independent lead paging context", async () => {
+    setup(false)
+    await RouterTestingHarness.create("/admin/customers/leads/7?offset=10&limit=5")
+    expect(TestBed.inject(Router).url).toBe(
+      "/login?returnUrl=%2Fadmin%2Fcustomers%2Fleads%2F7%3Foffset%3D10%26limit%3D5"
+    )
+  })
+
   it("protects read-only customer detail deep links including paging context", async () => {
     setup(false)
     await RouterTestingHarness.create("/admin/customers/7?offset=10&limit=5")
