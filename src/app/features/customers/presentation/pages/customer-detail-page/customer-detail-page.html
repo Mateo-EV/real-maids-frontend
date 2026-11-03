@@ -185,11 +185,40 @@
     </app-catalog-frame>
   }
   @for (owner of customer() ? [customer()!] : []; track owner.id) {
-    <app-customer-contacts [customer]="owner" [ownerChanged$]="ownerChanged$" />
+    <app-customer-contacts
+      [customer]="owner"
+      [ownerChanged$]="ownerChanged$"
+      (confirmedWrite)="refreshHistory()"
+    />
     <app-customer-preferences
       [customer]="owner"
       [ownerChanged$]="ownerChanged$"
       [propertyRead]="propertyRead()"
+      (confirmedWrite)="refreshHistory()"
     />
+    <app-catalog-frame
+      titleId="customer-history-title"
+      title="Historial oficial"
+      description="Solicitudes, órdenes y atención al cliente · Solo lectura"
+    >
+      <details
+        #historyDisclosure
+        class="p-4"
+        (toggle)="toggleHistory(owner.id, $event)"
+        [open]="historyOpen()"
+      >
+        <summary
+          class="cursor-pointer rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Historial · Abrir consulta reciente
+        </summary>
+        @if (historyOpen()) {
+          <app-customer-history-panel [customerId]="owner.id" [ownerChanged$]="ownerChanged$" />
+        }
+      </details>
+      <p catalogFooter class="text-xs text-muted-foreground">
+        CRM · Consulta por sección, sin total combinado
+      </p>
+    </app-catalog-frame>
   }
 </main>

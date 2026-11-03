@@ -1,0 +1,153 @@
+@let read = history();
+<div class="mt-4 flex flex-col gap-5" [attr.aria-busy]="!!read.pendingReads">
+  @if (read.pendingReads) {
+    <p role="status">
+      <hlm-spinner />{{ read.loaded ? "Actualizando historial…" : "Cargando historial…" }}
+    </p>
+  }
+  @if (read.error) {
+    <div hlmAlert variant="destructive" role="alert">
+      <h3 hlmAlertTitle>No se pudo consultar el historial.</h3>
+      <p hlmAlertDescription>Puede no estar disponible para tu sesión. Reintenta la consulta.</p>
+      @if (read.loaded) {
+        <p hlmAlertDescription>Los datos pueden estar desactualizados.</p>
+      }
+    </div>
+    <button
+      hlmBtn
+      variant="outline"
+      size="sm"
+      [disabled]="!!read.pendingReads"
+      (click)="load(true)"
+    >
+      Reintentar historial
+    </button>
+  }
+  @if (read.loaded && read.data; as data) {
+    <p class="text-sm text-muted-foreground">
+      Muestra reciente devuelta por el servidor, hasta 20 registros por sección. Los totales son
+      independientes; esta vista no permite recorrer el historial completo.
+    </p>
+    <section aria-labelledby="history-requests-title">
+      <h3 id="history-requests-title" class="font-semibold">Solicitudes de servicio</h3>
+      <p class="mb-3 text-sm text-muted-foreground tabular-nums">
+        Registros {{ range(data.requests) }}
+      </p>
+      <ul class="grid gap-3 lg:grid-cols-2">
+        @for (item of data.requests.items; track item.id) {
+          <li class="min-w-0 rounded-xl border p-4 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="font-semibold">Solicitud #{{ item.id }}</h4>
+              <span hlmBadge variant="outline">{{ item.status }}</span>
+            </div>
+            <p class="mt-2 break-words">{{ item.serviceType }} · {{ item.property }}</p>
+            <p class="mt-2 whitespace-pre-wrap break-words">
+              {{ item.description ?? "No registrado" }}
+            </p>
+            <dl class="mt-3 grid gap-2 text-muted-foreground">
+              <div>
+                <dt class="inline">Fecha deseada:</dt>
+                <dd class="inline">{{ item.desiredDate ?? "No registrado" }}</dd>
+              </div>
+              <div>
+                <dt class="inline">Registro (UTC):</dt>
+                <dd class="inline">{{ item.registeredAt.toISOString() }}</dd>
+              </div>
+            </dl>
+          </li>
+        } @empty {
+          <li hlmEmpty>
+            <div hlmEmptyHeader>
+              <h4 hlmEmptyTitle>No se devolvieron registros de solicitudes.</h4>
+              <p hlmEmptyDescription>
+                El resultado no establece permisos ni ausencia de todo el historial.
+              </p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+    <section aria-labelledby="history-orders-title">
+      <h3 id="history-orders-title" class="font-semibold">Órdenes de servicio</h3>
+      <p class="mb-3 text-sm text-muted-foreground tabular-nums">
+        Registros {{ range(data.orders) }}
+      </p>
+      <ul class="grid gap-3 lg:grid-cols-2">
+        @for (item of data.orders.items; track item.id) {
+          <li class="min-w-0 rounded-xl border p-4 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="break-words font-semibold">{{ item.code }} · #{{ item.id }}</h4>
+              <span hlmBadge variant="outline">{{ item.statusName }}</span>
+            </div>
+            <p class="mt-2 break-words">
+              {{ item.serviceType ?? "No registrado" }} · {{ item.property }}
+            </p>
+            <p class="mt-2 whitespace-pre-wrap break-words">
+              {{ item.observation ?? "No registrado" }}
+            </p>
+            <dl class="mt-3 grid gap-2 text-muted-foreground">
+              <div>
+                <dt class="inline">Importe estimado:</dt>
+                <dd class="inline tabular-nums">{{ item.estimatedAmount ?? "No registrado" }}</dd>
+              </div>
+              <div>
+                <dt class="inline">Creación (UTC):</dt>
+                <dd class="inline">{{ item.createdAt.toISOString() }}</dd>
+              </div>
+            </dl>
+          </li>
+        } @empty {
+          <li hlmEmpty>
+            <div hlmEmptyHeader>
+              <h4 hlmEmptyTitle>No se devolvieron registros de órdenes.</h4>
+              <p hlmEmptyDescription>
+                El resultado no establece permisos ni ausencia de todo el historial.
+              </p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+    <section aria-labelledby="history-support-title">
+      <h3 id="history-support-title" class="font-semibold">Atención al cliente</h3>
+      <p class="mb-3 text-sm text-muted-foreground tabular-nums">
+        Registros {{ range(data.support) }}
+      </p>
+      <ul class="grid gap-3 lg:grid-cols-2">
+        @for (item of data.support.items; track item.id) {
+          <li class="min-w-0 rounded-xl border p-4 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="break-words font-semibold">{{ item.subject }} · #{{ item.id }}</h4>
+              <span hlmBadge variant="outline">{{ item.statusName }}</span>
+            </div>
+            <p class="mt-2 break-words">{{ item.type }}</p>
+            <p class="mt-2 whitespace-pre-wrap break-words">{{ item.description }}</p>
+            <dl class="mt-3 grid gap-2 text-muted-foreground">
+              <div>
+                <dt class="inline">Orden:</dt>
+                <dd class="inline">{{ item.orderCode ?? "No registrado" }}</dd>
+              </div>
+              <div>
+                <dt class="inline">Registro (UTC):</dt>
+                <dd class="inline">{{ item.registeredAt.toISOString() }}</dd>
+              </div>
+              <div>
+                <dt class="inline">Cierre (UTC):</dt>
+                <dd class="inline">{{ item.closedAt?.toISOString() ?? "No registrado" }}</dd>
+              </div>
+            </dl>
+          </li>
+        } @empty {
+          <li hlmEmpty>
+            <div hlmEmptyHeader>
+              <h4 hlmEmptyTitle>No se devolvieron registros de atención.</h4>
+              <p hlmEmptyDescription>
+                El resultado no establece permisos ni ausencia de todo el historial.
+              </p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>

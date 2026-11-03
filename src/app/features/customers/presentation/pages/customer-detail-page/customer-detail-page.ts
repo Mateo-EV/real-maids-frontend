@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  viewChild,
   computed,
   inject,
   signal
@@ -35,6 +37,7 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { PropertyEditor } from "../../components/property-editor/property-editor"
 import { PropertyStatusDialog } from "../../components/property-status-dialog/property-status-dialog"
+import { CustomerHistoryPanel } from "../../components/customer-history/customer-history-panel"
 import { CustomerContacts } from "../../components/customer-contacts/customer-contacts"
 import { CustomerPreferences } from "../../components/customer-preferences/customer-preferences"
 
@@ -50,7 +53,8 @@ import { CustomerPreferences } from "../../components/customer-preferences/custo
     HlmEmptyImports,
     HlmSpinnerImports,
     CustomerContacts,
-    CustomerPreferences
+    CustomerPreferences,
+    CustomerHistoryPanel
   ],
   templateUrl: "./customer-detail-page.html"
 })
@@ -67,6 +71,8 @@ export class CustomerDetailPage {
   readonly writePending = computed(() => this.properties.pendingWrites() > 0)
   private readonly scope = createSessionReadScope(() => {
     this.openProperties.set(new Set())
+    this.historyOpen.set(false)
+    this.historyPanel()?.stop()
     this.dialog?.close()
   })
   readonly id = signal<number | null>(null)
@@ -79,6 +85,10 @@ export class CustomerDetailPage {
   readonly propertyRead = computed(() =>
     this.customer()?.id === this.id() ? this.properties.selectProperties(this.id()!) : undefined
   )
+  readonly historyOpen = signal(false)
+  private readonly historyPanel = viewChild(CustomerHistoryPanel)
+  private readonly historyDisclosure =
+    viewChild<ElementRef<HTMLDetailsElement>>("historyDisclosure")
   readonly openProperties = signal<ReadonlySet<number>>(new Set())
   private readonly customerRetries = new Subject<boolean>()
   private readonly propertyRetries = new Subject<boolean>()
@@ -116,6 +126,7 @@ export class CustomerDetailPage {
           const valid =
             /^\d+$/.test(raw ?? "") && Number.isSafeInteger(id) && id > 0 && id <= 2147483647
           this.ownerChanged.next()
+          this.historyOpen.set(false)
           this.dialog?.close()
           this.id.set(valid ? id : null)
           this.openProperties.set(new Set())
@@ -181,6 +192,7 @@ export class CustomerDetailPage {
           )
           // Unlike CustomersStore observers, property reads are finite: revalidate exactly once.
           if (current()) this.propertyRetries.next(true)
+          if (current()) this.refreshHistory()
         }
       },
       showCloseButton: false,
@@ -224,12 +236,37 @@ export class CustomerDetailPage {
             isActive ? "Propiedad activada correctamente." : "Propiedad desactivada correctamente."
           )
           if (current()) this.propertyRetries.next(true)
+          if (current()) this.refreshHistory()
         }
       },
       showCloseButton: false,
       disableClose: true,
       contentClass: "sm:max-w-lg max-h-[90dvh] overflow-y-auto"
     })
+  }
+
+  toggleHistory(ownerId: number, event: Event): void {
+    const target = event.target as HTMLDetailsElement
+    if (
+      ownerId !== this.id() ||
+      this.customer()?.id !== ownerId ||
+      target !== this.historyDisclosure()?.nativeElement ||
+      !target.isConnected ||
+      !this.scope.check()
+    )
+      return
+    if (!target.open) this.historyPanel()?.stop()
+    this.historyOpen.set(target.open)
+  }
+  refreshHistory(): void {
+    if (
+      this.historyOpen() &&
+      this.historyDisclosure()?.nativeElement.open &&
+      this.customer()?.id === this.id() &&
+      !this.destroyRef.destroyed &&
+      this.scope.check()
+    )
+      this.historyPanel()?.load(true)
   }
 
   retryCustomer(): void {

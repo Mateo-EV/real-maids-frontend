@@ -5,7 +5,8 @@ import {
   OnInit,
   computed,
   inject,
-  input
+  input,
+  output
 } from "@angular/core"
 import { NgTemplateOutlet } from "@angular/common"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
@@ -43,6 +44,7 @@ import { OwnerPropertyRead, preferencePropertyChoices } from "./preference-prope
   templateUrl: "./customer-preferences.html"
 })
 export class CustomerPreferences implements OnInit {
+  readonly confirmedWrite = output<void>()
   readonly customer = input.required<Customer>()
   readonly ownerChanged$ = input.required<Observable<void>>()
   readonly propertyRead = input<OwnerPropertyRead>()
@@ -123,6 +125,7 @@ export class CustomerPreferences implements OnInit {
           )
           // Finite relations reads invalidate on writes but do not auto-refetch.
           if (current()) this.load(true)
+          if (current()) this.confirmedWrite.emit()
         }
       },
       showCloseButton: false,

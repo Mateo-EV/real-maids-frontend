@@ -5,7 +5,8 @@ import {
   OnInit,
   computed,
   inject,
-  input
+  input,
+  output
 } from "@angular/core"
 import { NgTemplateOutlet } from "@angular/common"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
@@ -42,6 +43,7 @@ import { ContactEditor } from "../contact-editor/contact-editor"
   templateUrl: "./customer-contacts.html"
 })
 export class CustomerContacts implements OnInit {
+  readonly confirmedWrite = output<void>()
   readonly customer = input.required<Customer>()
   readonly ownerChanged$ = input.required<Observable<void>>()
   private readonly relations = inject(CustomerRelationsStore)
@@ -111,6 +113,7 @@ export class CustomerContacts implements OnInit {
           )
           // Relations reads are finite; confirmed writes invalidate but do not observe/refetch.
           if (current()) this.load(true)
+          if (current()) this.confirmedWrite.emit()
         }
       },
       showCloseButton: false,
