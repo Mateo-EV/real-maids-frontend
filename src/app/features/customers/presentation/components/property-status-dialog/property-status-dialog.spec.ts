@@ -21,6 +21,7 @@ import {
   SetPropertyStatusUseCase
 } from "../../../application/use-cases/property.use-cases"
 import { CustomerHistoryStore } from "../../state/customer-history.store"
+import { CustomerRelationsStore } from "../../state/customer-relations.store"
 import { CustomerDetailPage } from "../../pages/customer-detail-page/customer-detail-page"
 
 const property = (active: boolean, owner = 7) =>
@@ -69,6 +70,17 @@ async function setup(active = false, owner = 7) {
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       { provide: HotToastService, useValue: { success } },
       { provide: CustomerHistoryStore, useValue: { invalidateCustomer } },
+      {
+        provide: CustomerRelationsStore,
+        useValue: {
+          selectContacts: () => ({ data: [], loaded: true, pendingReads: 0 }),
+          loadContacts: () => of(Result.success([])),
+          pendingContactWrites: () => 0,
+          selectPreferences: () => ({ data: [], loaded: true, pendingReads: 0 }),
+          loadPreferences: () => of(Result.success([])),
+          pendingPreferenceWrites: () => 0
+        }
+      },
       {
         provide: GetCustomerByIdUseCase,
         useValue: {

@@ -35,6 +35,8 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { PropertyEditor } from "../../components/property-editor/property-editor"
 import { PropertyStatusDialog } from "../../components/property-status-dialog/property-status-dialog"
+import { CustomerContacts } from "../../components/customer-contacts/customer-contacts"
+import { CustomerPreferences } from "../../components/customer-preferences/customer-preferences"
 
 @Component({
   selector: "app-customer-detail-page",
@@ -46,7 +48,9 @@ import { PropertyStatusDialog } from "../../components/property-status-dialog/pr
     HlmBadgeImports,
     HlmAlertImports,
     HlmEmptyImports,
-    HlmSpinnerImports
+    HlmSpinnerImports,
+    CustomerContacts,
+    CustomerPreferences
   ],
   templateUrl: "./customer-detail-page.html"
 })
@@ -59,6 +63,7 @@ export class CustomerDetailPage {
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   private readonly ownerChanged = new Subject<void>()
+  readonly ownerChanged$ = this.ownerChanged.asObservable()
   readonly writePending = computed(() => this.properties.pendingWrites() > 0)
   private readonly scope = createSessionReadScope(() => {
     this.openProperties.set(new Set())

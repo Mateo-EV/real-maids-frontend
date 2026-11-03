@@ -22,6 +22,7 @@ import {
   UpdatePropertyUseCase
 } from "../../../application/use-cases/property.use-cases"
 import { CustomersStore } from "../../state/customers.store"
+import { CustomerRelationsStore } from "../../state/customer-relations.store"
 
 const customer = customerFixture(7, "Cliente siete")
 const property = Property.create(
@@ -75,6 +76,17 @@ async function setup(url = "/admin/customers/7", server = false) {
       { provide: GetCustomerByIdUseCase, useValue: { execute: get } },
       { provide: ListCustomersUseCase, useValue: { execute: list } },
       { provide: ListCustomerPropertiesUseCase, useValue: { execute: listProperties } },
+      {
+        provide: CustomerRelationsStore,
+        useValue: {
+          selectContacts: () => ({ data: [], loaded: true, pendingReads: 0 }),
+          loadContacts: () => of(Result.success([])),
+          pendingContactWrites: () => 0,
+          selectPreferences: () => ({ data: [], loaded: true, pendingReads: 0 }),
+          loadPreferences: () => of(Result.success([])),
+          pendingPreferenceWrites: () => 0
+        }
+      },
       ...[CreatePropertyUseCase, UpdatePropertyUseCase, SetPropertyStatusUseCase].map(provide => ({
         provide,
         useValue: { execute: vi.fn() }

@@ -1,0 +1,126 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.contact ? "Editar contacto" : "Nuevo contacto" }}</h2>
+  <p hlmDialogDescription>
+    Cliente: {{ context.customerName }} · ID {{ context.customerId }}
+    @if (context.contact; as contact) {
+      <span class="block">Contacto: {{ contact.name }} · ID {{ contact.id }}</span>
+    }
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <p hlmFieldDescription id="contact-help">
+    Se omiten espacios al inicio y al final. Los opcionales vacíos se guardan como no registrados,
+    también al editar.
+  </p>
+  <fieldset
+    hlmFieldSet
+    class="grid min-w-0 gap-3.5 sm:grid-cols-2"
+    [disabled]="profile().submitting()"
+    aria-describedby="contact-help"
+  >
+    <legend hlmFieldLegend class="sr-only">Datos del contacto</legend>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="contact-name">Nombre (obligatorio, máximo 120)</label>
+      <input
+        hlmInput
+        id="contact-name"
+        autocomplete="off"
+        aria-describedby="contact-name-errors"
+        [formField]="profile.name"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.name, id: 'contact-name-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="contact-position">Cargo (opcional, máximo 80)</label>
+      <input
+        hlmInput
+        id="contact-position"
+        autocomplete="off"
+        aria-describedby="contact-position-errors"
+        [formField]="profile.position"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.position, id: 'contact-position-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="contact-email">Correo (opcional, máximo 120)</label>
+      <input
+        hlmInput
+        id="contact-email"
+        inputmode="email"
+        autocomplete="off"
+        aria-describedby="contact-email-errors"
+        [formField]="profile.email"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.email, id: 'contact-email-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+      <label hlmFieldLabel for="contact-phone">Teléfono (opcional, máximo 30)</label>
+      <input
+        hlmInput
+        id="contact-phone"
+        inputmode="tel"
+        autocomplete="off"
+        aria-describedby="contact-phone-errors"
+        [formField]="profile.phone"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.phone, id: 'contact-phone-errors' }"
+      />
+    </div>
+    <div hlmField orientation="horizontal" class="items-center gap-2">
+      <hlm-checkbox inputId="contact-isPrimary" [formField]="profile.isPrimary" />
+      <label hlmFieldLabel for="contact-isPrimary">Contacto principal</label>
+    </div>
+    <div hlmField orientation="horizontal" class="items-center gap-2">
+      <hlm-checkbox inputId="contact-isActive" [formField]="profile.isActive" />
+      <label hlmFieldLabel for="contact-isActive">Contacto activo</label>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar contacto" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
+<ng-template #errors let-field="field" let-id="id">
+  <div [id]="id">
+    @if (field().touched()) {
+      @for (error of field().errors(); track error.kind) {
+        <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+      }
+    }
+  </div>
+</ng-template>

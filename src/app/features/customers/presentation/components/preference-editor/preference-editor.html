@@ -1,0 +1,133 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.preference ? "Editar preferencia" : "Nueva preferencia" }}</h2>
+  <p hlmDialogDescription>
+    Cliente: {{ context.customerName }} · ID {{ context.customerId }}
+    @if (context.preference; as preference) {
+      <span class="block">Preferencia ID {{ preference.id }}</span>
+    }
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Datos de la preferencia</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="preference-propertyId">Alcance</label>
+      @for (choices of [context.choices()]; track choices) {
+        <hlm-native-select
+          selectId="preference-propertyId"
+          [formField]="profile.propertyId"
+          aria-describedby="preference-scope-help preference-propertyId-errors"
+        >
+          @if (unknownScope()) {
+            <option hlmNativeSelectOption [value]="model().propertyId" selected disabled>
+              Propiedad ID {{ model().propertyId }} · Sin verificar
+            </option>
+          }
+          <option
+            hlmNativeSelectOption
+            value="general"
+            [selected]="model().propertyId === 'general'"
+          >
+            Todo el cliente
+          </option>
+          @for (property of context.choices().items; track property.id) {
+            <option
+              hlmNativeSelectOption
+              [value]="'' + property.id"
+              [selected]="model().propertyId === '' + property.id"
+            >
+              {{ property.label }}
+            </option>
+          }
+        </hlm-native-select>
+      }
+      <p hlmFieldDescription id="preference-scope-help">{{ context.choices().message }}</p>
+      @if (unknownScope()) {
+        <p hlmFieldDescription>
+          La asociación se conserva sin modificar. Para guardar, elige una propiedad verificada o
+          cambia explícitamente a Todo el cliente.
+        </p>
+      }
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{
+          field: profile.propertyId,
+          id: 'preference-propertyId-errors'
+        }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="preference-type">Tipo (obligatorio, máximo 50)</label>
+      <input
+        hlmInput
+        id="preference-type"
+        autocomplete="off"
+        aria-describedby="preference-type-errors"
+        [formField]="profile.type"
+      />
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.type, id: 'preference-type-errors' }"
+      />
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="preference-detail">Detalle (obligatorio)</label>
+      <textarea
+        hlmTextarea
+        id="preference-detail"
+        rows="4"
+        aria-describedby="preference-detail-errors"
+        [formField]="profile.detail"
+      ></textarea>
+      <ng-container
+        [ngTemplateOutlet]="errors"
+        [ngTemplateOutletContext]="{ field: profile.detail, id: 'preference-detail-errors' }"
+      />
+    </div>
+    <div hlmField orientation="horizontal" class="items-center gap-2">
+      <hlm-checkbox inputId="preference-isActive" [formField]="profile.isActive" />
+      <label hlmFieldLabel for="preference-isActive">Preferencia activa</label>
+    </div>
+    <p hlmFieldDescription>
+      Se omiten espacios al inicio y al final. Guardar reemplaza todos estos campos, también al
+      editar.
+    </p>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar preferencia" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
+<ng-template #errors let-field="field" let-id="id">
+  <div [id]="id">
+    @if (field().touched()) {
+      @for (error of field().errors(); track error.kind) {
+        <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+      }
+    }
+  </div>
+</ng-template>

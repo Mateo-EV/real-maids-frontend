@@ -184,4 +184,12 @@
       </p>
     </app-catalog-frame>
   }
+  @for (owner of customer() ? [customer()!] : []; track owner.id) {
+    <app-customer-contacts [customer]="owner" [ownerChanged$]="ownerChanged$" />
+    <app-customer-preferences
+      [customer]="owner"
+      [ownerChanged$]="ownerChanged$"
+      [propertyRead]="propertyRead()"
+    />
+  }
 </main>
