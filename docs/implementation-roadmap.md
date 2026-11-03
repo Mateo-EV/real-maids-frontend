@@ -186,6 +186,14 @@ Deterministic public UI tests with real stores cover lazy reads, fresh/expired/i
 - **Traceability:** M03/RF03/HU03 supplies customer context; dedicated acquisition/public-quote RF/HU is missing and must be recorded before implementation; RNF09/RNF10/RNF12.
 - **Exit:** backend/browser evidence covers normal, repeated, forbidden and failed conversion. Public quote generation remains separately gated.
 
+#### First bounded WP6 slice — authorized read-only inbox
+
+The explicit continuation “sin revision continua con el siguiente wp”, followed by “Review the delivered subagent output and continue.” authorizes only the paged read-only lead inbox and minimal reusable Clientes/Prospectos catalog navigation. M03/RF03/HU03 supplies customer context, not a dedicated acquisition requirement: the missing acquisition/public-quote RF/HU remains recorded, with no invented identifiers. Lead detail/editor, follow-ups, conversion, catalog administration and public quote/pricing/landing remain later, separately bounded slices. This does not accept WP4/WP5 or complete WP6.
+
+The [connected inbox](../src/app/features/customers/presentation/pages/leads-page/leads-page.ts) at `/admin/customers/leads` precedes dynamic customer `:id`. It reuses the existing root acquisition store and shared CatalogFrame/pagination, initial offset 0/limit 20, actual effective metadata, 30000ms success TTL and consumer-owned cancellation/session/SSR protection. The feature-local navigation has two real consumers: customer list and lead list. Same-query verified rows remain during refreshing/errors; unrelated queries show no borrowed rows. Positive-total empty out-of-range responses allow one corrective read per navigation/retry using the effective limit, never a loop or response rewrite. Origin/stage IDs are explicit IDs, not inferred catalog names; no extra catalog reads, search/status filters, fake KPIs, linked-customer IDs or dead detail links. Preserve the exact CRM sidebar label, IAM/default redirect and official theme. Independent live/backend/CORS and Chrome/Edge/Firefox keyboard/responsive acceptance remain pending.
+
+Repeatable pending acceptance: CRM → Prospectos → inspect actual fields, conversion labels and range → next/previous → Clientes → IAM. Exercise verified empty, initial failure/retry, same-query stale refresh and bounded recovery with authorized non-sensitive data. Deterministic router/DOM/real-store tests are technical evidence only, not live authorization/CORS or rendered browser acceptance; exact test/build observations belong to the handoff. Keep the WP6 exit and shared checklist open.
+
 ### WP7 — Manual internal service journey and calendar
 
 - **Goal:** connect internal request → order → manual scheduling/assignment, not an automatic scheduling engine.
@@ -251,7 +259,7 @@ Deterministic public UI tests with real stores cover lazy reads, fresh/expired/i
 | Customer properties | Official owner-scoped property model, `areaM2` | WP4 | Owner list/detail, property create/edit and desired-status confirmation source-connected; full WP4 and independent sensitive-field permission/redaction/live/browser proof pending. |
 | Contacts/preferences | Official owner contacts and scoped preferences | WP5 | Contacts and general/property-scoped preferences list/create/edit source-connected on detail; independent relation live/browser proof pending; read-only history is connected by the final bounded slice. |
 | Notes/email/call timeline | Official requests/orders/support history, not the same timeline | WP5 / WP12 | Read-only official history source-connected, without module restriction markers; independent live/browser/security proof pending. Communications/tags need scope/contracts and missing traceability. |
-| Lead inbox/conversion | Lead pages, follow-ups and atomic customer linkage | WP6 | Pending UI; dedicated acquisition RF/HU missing. |
+| Lead inbox/conversion | Lead pages, follow-ups and atomic customer linkage | WP6 | Read-only paged inbox and Clientes/Prospectos navigation source-connected; detail/editor/follow-ups/conversion remain planned. Dedicated acquisition RF/HU and independent live/browser proof remain missing. |
 | Public quote | Quote/web-form/catalog foundations, not a ready public pricing API | WP12 | Gated; public-quote/landing RF/HU missing. |
 | Day/week/month agenda | Official manual schedule/team assignment and date-range agenda | WP7 | Domain only; crew/package/type filters require actual support. |
 | Recurring customer schedule/block moves | Contracts/frequencies/schedules as foundations, not recurrence logic | WP12 | Gated automation, conflicts and mutation semantics. |

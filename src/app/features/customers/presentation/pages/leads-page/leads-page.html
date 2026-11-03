@@ -1,0 +1,143 @@
+<app-crm-catalog-navigation />
+<main
+  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6"
+>
+  <app-catalog-frame
+    titleId="leads-title"
+    title="Bandeja de Prospectos"
+    description="Consulta de prospectos registrados"
+    [busy]="list().loading || list().refreshing"
+  >
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando prospectos…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando prospectos…</p>
+    }
+    @if (list().error) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Prospectos registrados
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Nombre</th>
+                <th hlmTh scope="col">Correo</th>
+                <th hlmTh scope="col">Teléfono</th>
+                <th hlmTh scope="col">Origen (ID)</th>
+                <th hlmTh scope="col">Etapa (ID)</th>
+                <th hlmTh scope="col">Conversión</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (lead of rows(); track lead.id) {
+                <tr hlmTr>
+                  <td hlmTd class="font-semibold">{{ lead.name }}</td>
+                  <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
+                  <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
+                  <td hlmTd>{{ lead.originId }}</td>
+                  <td hlmTd>{{ lead.stageId }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{
+                      lead.isConverted ? "Convertido" : "No convertido"
+                    }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Prospectos registrados">
+          @for (lead of rows(); track lead.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ lead.name }}</h2>
+                <span hlmBadge variant="outline">{{
+                  lead.isConverted ? "Convertido" : "No convertido"
+                }}</span>
+              </div>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Correo</dt>
+                <dd class="break-all">{{ lead.email ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Teléfono</dt>
+                <dd class="break-words">{{ lead.phone ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Origen (ID)</dt>
+                <dd>{{ lead.originId }}</dd>
+                <dt class="text-muted-foreground">Etapa (ID)</dt>
+                <dd>{{ lead.stageId }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{ page.total === 0 ? "No hay prospectos" : "Esta página ya no tiene registros" }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "El servidor no devolvió prospectos."
+                  : "El catálogo cambió. Selecciona otra página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !list().error) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} prospectos
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de prospectos"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>

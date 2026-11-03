@@ -21,6 +21,8 @@ import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repo
 import { ADMIN_ROUTES } from "./admin.routes"
 import { ListCustomersUseCase } from "@/app/features/customers/application/use-cases/list-customers.use-case"
 import { UserStore } from "@/app/features/users/presentation/state/user.store"
+import { ListLeadsUseCase } from "@/app/features/customers/application/use-cases/acquisition.use-cases"
+import { GetCustomerByIdUseCase } from "@/app/features/customers/application/use-cases/get-customer-by-id.use-case"
 
 @Component({ template: "Login destination" })
 class LoginDestination {}
@@ -109,6 +111,12 @@ describe("Admin users navigation", () => {
     expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fcustomers")
   })
 
+  it("protects the static lead inbox deep link with the existing returnUrl", async () => {
+    setup(false)
+    await RouterTestingHarness.create("/admin/customers/leads")
+    expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fcustomers%2Fleads")
+  })
+
   it("protects read-only customer detail deep links including paging context", async () => {
     setup(false)
     await RouterTestingHarness.create("/admin/customers/7?offset=10&limit=5")
@@ -152,6 +160,42 @@ describe("Admin users navigation", () => {
     expect(element.querySelector('a[href="/admin/users"]')?.hasAttribute("aria-current")).toBe(
       false
     )
+  })
+
+  it("opens the static inbox before customer :id, preserving CRM and switching between real catalog consumers", async () => {
+    setup(true)
+    const leads = vi.fn(() => of(Result.success({ items: [], total: 0, offset: 0, limit: 20 })))
+    const customers = vi.fn(() => of(Result.success({ items: [], total: 0, offset: 0, limit: 20 })))
+    const detail = vi.fn()
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ListLeadsUseCase, useValue: { execute: leads } },
+        { provide: ListCustomersUseCase, useValue: { execute: customers } },
+        { provide: GetCustomerByIdUseCase, useValue: { execute: detail } }
+      ]
+    })
+    const harness = await RouterTestingHarness.create("/admin/customers/leads")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    const element = harness.routeNativeElement!
+    expect(element.querySelector("app-leads-page app-crm-catalog-navigation")).not.toBeNull()
+    expect(element.querySelector("app-customer-detail-page")).toBeNull()
+    expect(detail).not.toHaveBeenCalled()
+    expect(leads).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
+    const sidebar = element.querySelector("app-admin-sidebar")!
+    expect(sidebar.querySelector('a[href="/admin/customers"]')?.textContent?.trim()).toBe("CRM")
+    expect(sidebar.querySelectorAll("a")).toHaveLength(2)
+    const nav = element.querySelector("app-crm-catalog-navigation")!
+    expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("Prospectos")
+    nav.querySelector<HTMLAnchorElement>('a[href="/admin/customers"]')!.click()
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    expect(TestBed.inject(Router).url).toBe("/admin/customers")
+    expect(element.querySelector("app-customers-page app-crm-catalog-navigation")).not.toBeNull()
+    expect(customers).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
+    expect(
+      element.querySelector('app-crm-catalog-navigation [aria-current="page"]')?.textContent?.trim()
+    ).toBe("Clientes")
   })
 
   it("protects deep links using session restoration and the original returnUrl contract", async () => {

@@ -31,11 +31,13 @@ import { createSessionReadScope } from "@/app/features/auth/presentation/state/s
 import { Customer } from "../../../domain/entities/customer.entity"
 import { CustomerEditor } from "../../components/customer-editor/customer-editor"
 import { CustomerStatusDialog } from "../../components/customer-status-dialog/customer-status-dialog"
+import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/crm-catalog-navigation"
 
 @Component({
   selector: "app-customers-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CrmCatalogNavigation,
     HlmButtonImports,
     RouterLink,
     NgTemplateOutlet,

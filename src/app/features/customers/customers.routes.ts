@@ -14,6 +14,14 @@ export const CUSTOMERS_ROUTES: Routes = [
       )
   },
   {
+    path: "leads",
+    title: "Prospectos | The Real Maids",
+    canActivate: [authGuard],
+    providers: provideCatalogToast(),
+    loadComponent: () =>
+      import("./presentation/pages/leads-page/leads-page").then(component => component.LeadsPage)
+  },
+  {
     path: ":id",
     title: "Detalle del cliente | The Real Maids",
     canActivate: [authGuard],
