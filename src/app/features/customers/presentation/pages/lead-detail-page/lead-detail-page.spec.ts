@@ -1,4 +1,10 @@
-import { PLATFORM_ID } from "@angular/core"
+import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
+import { getDebugNode, PLATFORM_ID } from "@angular/core"
+import { LeadEditor } from "../../components/lead-editor/lead-editor"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { LeadOrigin } from "../../../domain/entities/lead-origin.entity"
+import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
@@ -36,7 +42,14 @@ const lead = (
     null
   )
 
-async function setup(url = "/admin/customers/leads/7", server = false) {
+async function setup(url = "/admin/customers/leads/7", server = false, editing = false) {
+  const writeResponse = new Subject<DetailResult>()
+  const update = vi.fn(() => writeResponse),
+    success = vi.fn()
+  const origins = new Subject<Result<readonly LeadOrigin[], CustomerError>>()
+  const stages = new Subject<Result<readonly FunnelStage[], CustomerError>>()
+  const readOrigins = vi.fn(() => origins),
+    readStages = vi.fn(() => stages)
   const requests: Subject<DetailResult>[] = []
   const execute = vi.fn(() => {
     const response = new Subject<DetailResult>()
@@ -77,10 +90,22 @@ async function setup(url = "/admin/customers/leads/7", server = false) {
         Actions.CreateLeadUseCase,
         Actions.UpdateLeadUseCase
       ].map(provide => ({ provide, useValue: { execute: forbiddenAction } })),
+      ...(editing
+        ? [
+            { provide: Actions.UpdateLeadUseCase, useValue: { execute: update } },
+            { provide: Actions.ListLeadOriginsUseCase, useValue: { execute: readOrigins } },
+            { provide: Actions.ListFunnelStagesUseCase, useValue: { execute: readStages } }
+          ]
+        : []),
       ...(server ? [{ provide: PLATFORM_ID, useValue: "server" }] : [])
     ]
   })
   const harness = await RouterTestingHarness.create(url)
+  if (editing)
+    vi.spyOn(
+      harness.routeDebugElement!.injector.get(HotToastService),
+      "success"
+    ).mockImplementation(success)
   const settle = async () => {
     harness.detectChanges()
     await harness.fixture.whenStable()
@@ -113,7 +138,14 @@ async function setup(url = "/admin/customers/leads/7", server = false) {
     click,
     settle,
     forbiddenAction,
-    customers
+    customers,
+    update,
+    success,
+    writeResponse,
+    origins,
+    stages,
+    readOrigins,
+    readStages
   }
 }
 afterEach(() => vi.restoreAllMocks())
@@ -138,9 +170,7 @@ describe("Lead read-only detail and independent return context", () => {
     ])
       expect(s.element().textContent).toContain(text)
     expect(s.element().querySelector("b, a[href='https://example.test'], input, select")).toBeNull()
-    expect(s.element().textContent).not.toMatch(
-      /Cliente vinculado|Editar|Convertir|Seguimiento|Crear/
-    )
+    expect(s.element().textContent).not.toMatch(/Cliente vinculado|Convertir|Seguimiento|Crear/)
     expect(s.forbiddenAction).not.toHaveBeenCalled()
     expect(s.list).not.toHaveBeenCalled()
     expect(s.customers).not.toHaveBeenCalled()
@@ -394,5 +424,363 @@ describe("Lead read-only detail and independent return context", () => {
     expect(s.list).toHaveBeenLastCalledWith({ offset: 10, limit: 5 })
     expect(s.list).toHaveBeenCalledTimes(2)
     expect(s.forbiddenAction).not.toHaveBeenCalled()
+  })
+})
+
+async function editSetup(server = false, record = lead()) {
+  const s = await setup("/admin/customers/leads/7?offset=10&limit=5", server, true)
+  const dialog = () => document.querySelector<HTMLElement>("app-lead-editor")!
+  const clickDialog = async (text: string) => {
+    const button = [...dialog().querySelectorAll<HTMLButtonElement>("button")].find(
+      b => b.textContent?.trim() === text
+    )
+    expect(button, text).toBeDefined()
+    button!.click()
+    await s.settle()
+  }
+  const fill = async (field: string, value: string) => {
+    const control = dialog().querySelector<HTMLInputElement | HTMLSelectElement>(`#lead-${field}`)!
+    control.value = value
+    control.dispatchEvent(
+      new Event(control.tagName === "SELECT" ? "change" : "input", { bubbles: true })
+    )
+    control.dispatchEvent(new Event("blur"))
+    await s.settle()
+  }
+  const submit = async () => {
+    dialog()
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await s.settle()
+  }
+  const catalogs = async (originId = 11, stageId = 12) => {
+    s.origins.next(Result.success([LeadOrigin.create(originId, "Origen real", null, false)]))
+    s.stages.next(Result.success([FunnelStage.create(stageId, "Etapa real", 9, true)]))
+    await s.settle()
+  }
+  const open = async () => {
+    await s.respond(Result.success(record))
+    await s.click("Editar prospecto")
+  }
+  const overlay = () => getDebugNode(dialog())!.injector.get(CdkDialogRef).overlayRef
+  return { ...s, dialog, clickDialog, fill, submit, catalogs, open, overlay }
+}
+
+describe("WP6 editing a legitimately loaded lead", () => {
+  it("offers edit only for verified matching detail; preserves converted records and prefills all writable values", async () => {
+    const record = Lead.create(
+      7,
+      11,
+      12,
+      "Nombre cargado",
+      "lead@example.test",
+      "ext. A",
+      "Dirección",
+      "Observación",
+      true,
+      new Date(0),
+      15
+    )
+    const s = await editSetup(false, record)
+    expect(s.element().textContent).not.toContain("Editar prospecto")
+    expect(s.readOrigins).not.toHaveBeenCalled()
+    await s.open()
+    expect(s.element().querySelector("app-catalog-frame header")?.textContent).toContain(
+      "Editar prospecto"
+    )
+    await s.click("Editar prospecto")
+    expect(document.querySelectorAll("app-lead-editor")).toHaveLength(1)
+    expect(s.dialog().textContent).toContain("Nombre cargado")
+    expect(s.dialog().textContent).toContain("ID 7")
+    await s.catalogs()
+    for (const [field, value] of Object.entries({
+      originId: "11",
+      stageId: "12",
+      name: record.name,
+      email: record.email,
+      phone: record.phone,
+      referenceAddress: record.referenceAddress,
+      observation: record.observation
+    }))
+      expect(s.dialog().querySelector<HTMLInputElement>(`#lead-${field}`)!.value).toBe(value)
+    expect(
+      s.dialog().querySelector("#lead-isConverted, #lead-registeredAt, #lead-registeredByUserId")
+    ).toBeNull()
+    expect(s.update).not.toHaveBeenCalled()
+  })
+
+  it("captures fixed ID and full trimmed/null replacement; confirmed success alone revalidates active detail/inbox exactly once", async () => {
+    const s = await editSetup()
+    const inbox = TestBed.inject(CustomerAcquisitionStore)
+      .observeLeads({ offset: 10, limit: 5 })
+      .subscribe()
+    s.listRequests[0].next(Result.success({ items: [lead()], total: 45, offset: 10, limit: 5 }))
+    await s.open()
+    await s.catalogs()
+    for (const [field, value] of Object.entries({
+      name: " Nuevo ",
+      email: " ",
+      phone: " ext. A ",
+      referenceAddress: " ",
+      observation: " <b>literal</b> "
+    }))
+      await s.fill(field, value)
+    // Refreshing the same detail cannot replace the captured editor draft or target.
+    const refresh = TestBed.inject(CustomerAcquisitionStore).loadLead(7, true).subscribe()
+    await s.respond(Result.success(lead(7, "Otro")))
+    await s.submit()
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 12,
+      name: "Nuevo",
+      email: null,
+      phone: "ext. A",
+      referenceAddress: null,
+      observation: "<b>literal</b>"
+    })
+    expect(s.success).not.toHaveBeenCalled()
+    expect(s.execute).toHaveBeenCalledTimes(2)
+    s.writeResponse.next(Result.success(lead()))
+    await s.settle()
+    expect(s.success).toHaveBeenCalledExactlyOnceWith("Prospecto actualizado correctamente.")
+    expect(s.execute).toHaveBeenCalledTimes(3)
+    expect(s.list).toHaveBeenCalledTimes(2)
+    expect(s.list).toHaveBeenLastCalledWith({ offset: 10, limit: 5 })
+    await s.respond(Result.failure(new CustomerError("NETWORK")))
+    expect(s.element().textContent).toContain("desactualizados")
+    expect(s.update).toHaveBeenCalledTimes(1)
+    expect(s.element().querySelector("a")?.getAttribute("href")).toBe(
+      "/admin/customers/leads?offset=10&limit=5"
+    )
+    refresh.unsubscribe()
+    inbox.unsubscribe()
+  })
+
+  it("keeps missing loaded association IDs visible and blocks dispatch until explicit verified choices", async () => {
+    const s = await editSetup()
+    await s.open()
+    await s.catalogs(21, 22)
+    for (const [field, id] of [
+      ["originId", "11"],
+      ["stageId", "12"]
+    ])
+      expect(s.dialog().querySelector<HTMLSelectElement>(`#lead-${field}`)!.value).toBe(id)
+    expect(s.dialog().textContent).toContain("ID 11 · No disponible")
+    expect(s.dialog().textContent).toContain("ID 12 · No disponible")
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+    await s.fill("originId", "21")
+    await s.fill("stageId", "22")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledOnce()
+    expect(s.update.mock.calls[0]).toEqual([
+      {
+        id: 7,
+        originId: 21,
+        stageId: 22,
+        name: "Prospecto 7",
+        email: null,
+        phone: null,
+        referenceAddress: null,
+        observation: "<b>Texto literal</b>\nhttps://example.test"
+      }
+    ])
+  })
+
+  it("preserves draft and choices on catalog failure, requires explicit verified retry", async () => {
+    const s = await editSetup()
+    await s.open()
+    await s.catalogs()
+    await s.fill("name", "Borrador")
+    await s.clickDialog("Actualizar orígenes")
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+    s.origins.next(Result.failure(new CustomerError("NETWORK")))
+    await s.settle()
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+    expect(s.dialog().querySelector<HTMLInputElement>("#lead-name")!.value).toBe("Borrador")
+    expect(s.dialog().querySelector<HTMLSelectElement>("#lead-originId")!.value).toBe("11")
+    await s.clickDialog("Reintentar orígenes")
+    s.origins.next(Result.success([LeadOrigin.create(11, "Origen real", null, false)]))
+    await s.settle()
+    await s.submit()
+    expect(s.update).toHaveBeenCalledOnce()
+  })
+
+  it.each(["FORBIDDEN", "NETWORK", "INVALID_RESPONSE", "CONFLICT"] as const)(
+    "keeps safe %s failure inline and retries only explicitly",
+    async code => {
+      const s = await editSetup()
+      await s.open()
+      await s.catalogs()
+      await s.fill("name", " Borrador ")
+      await s.submit()
+      s.writeResponse.next(Result.failure(new CustomerError(code)))
+      await s.settle()
+      expect(s.dialog().querySelector('[role="alert"]')).not.toBeNull()
+      expect(s.dialog().querySelector<HTMLInputElement>("#lead-name")!.value).toBe(" Borrador ")
+      expect(s.success).not.toHaveBeenCalled()
+      expect(s.execute).toHaveBeenCalledTimes(1)
+      expect(s.update).toHaveBeenCalledTimes(1)
+      await s.submit()
+      expect(s.update).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it("blocks pending dismissal and duplicates, then permits idle cancellation", async () => {
+    const s = await editSetup()
+    await s.open()
+    await s.catalogs()
+    const editor = s.dialog()
+    const save = vi.spyOn(getDebugNode(editor)!.componentInstance as LeadEditor, "save")
+    await s.submit()
+    const pending = save.mock.results[0].value as Promise<boolean>
+    const overlay = s.overlay()
+    expect(
+      [...editor.querySelectorAll<HTMLButtonElement>("button")].find(
+        b => b.textContent?.trim() === "Cancelar"
+      )!.disabled
+    ).toBe(true)
+    ;(overlay.keydownEvents() as Subject<KeyboardEvent>).next(
+      new KeyboardEvent("keydown", { key: "Escape" })
+    )
+    ;(overlay.backdropClick() as Subject<MouseEvent>).next(new MouseEvent("click"))
+    ;(overlay.outsidePointerEvents() as Subject<MouseEvent>).next(new MouseEvent("click"))
+    await s.submit()
+    expect(s.dialog()).toBe(editor)
+    expect(s.update).toHaveBeenCalledOnce()
+    s.writeResponse.next(Result.failure(new CustomerError("NETWORK")))
+    await pending
+    await s.settle()
+    expect(s.dialog().querySelector('[role="alert"]')).not.toBeNull()
+    expect(
+      [...editor.querySelectorAll<HTMLButtonElement>("button")].find(
+        b => b.textContent?.trim() === "Cancelar"
+      )!.disabled
+    ).toBe(false)
+    const dialogRef = getDebugNode(editor)!.injector.get(BrnDialogRef)
+    await s.clickDialog("Cancelar")
+    expect(dialogRef.open).toBe(false)
+    editor
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await s.settle()
+    expect(s.update).toHaveBeenCalledTimes(1)
+    expect(s.success).not.toHaveBeenCalled()
+  })
+
+  it.each(["route", "logout", "replacement", "destruction"])(
+    "cancels pending write synchronously and fences feedback on %s",
+    async change => {
+      const s = await editSetup()
+      await s.open()
+      await s.catalogs()
+      await s.submit()
+      expect(s.writeResponse.observed).toBe(true)
+      if (change === "route") await s.harness.navigateByUrl("/admin/customers/leads/8")
+      else if (change === "destruction") s.harness.fixture.destroy()
+      else
+        s.session.next(
+          change === "logout"
+            ? null
+            : AuthSession.create("Other", "other@example.test", null, Date.now() + 600000, 8)
+        )
+      expect(s.writeResponse.observed).toBe(false)
+      s.writeResponse.next(Result.success(lead()))
+      if (change !== "destruction") await s.settle()
+      expect(s.success).not.toHaveBeenCalled()
+      expect(s.update).toHaveBeenCalledTimes(1)
+      if (change === "route") expect(s.element().textContent).not.toContain("Prospecto 7")
+    }
+  )
+
+  it("cancels catalog reads on route replacement before the new record is loaded", async () => {
+    const s = await editSetup()
+    await s.open()
+    expect(s.origins.observed).toBe(true)
+    await s.harness.navigateByUrl("/admin/customers/leads/8")
+    expect(s.origins.observed).toBe(false)
+    expect(s.stages.observed).toBe(false)
+    await s.settle()
+    expect(s.element().textContent).not.toContain("Editar prospecto")
+  })
+
+  it("preserves same-session renewal and fences post-Result route changes", async () => {
+    const s = await editSetup()
+    await s.open()
+    await s.catalogs()
+    await s.fill("name", "Borrador")
+    const current = s.session.value!
+    s.session.next(
+      AuthSession.create(current.name, current.email, current.role, current.expiresAt, current.id)
+    )
+    await s.settle()
+    expect(s.dialog().querySelector<HTMLInputElement>("#lead-name")!.value).toBe("Borrador")
+    await s.submit()
+    expect(s.writeResponse.observed).toBe(true)
+    s.writeResponse.next(Result.success(lead()))
+    s.session.next(null)
+    await s.settle()
+    expect(s.success).not.toHaveBeenCalled()
+  })
+
+  it.each(["escape", "backdrop", "outside"])(
+    "fences closing-animation submission after idle %s",
+    async dismissal => {
+      const s = await editSetup()
+      await s.open()
+      await s.catalogs()
+      const editor = s.dialog(),
+        overlay = s.overlay()
+      if (dismissal === "escape")
+        (overlay.keydownEvents() as Subject<KeyboardEvent>).next(
+          new KeyboardEvent("keydown", { key: "Escape" })
+        )
+      else if (dismissal === "backdrop")
+        (overlay.backdropClick() as Subject<MouseEvent>).next(new MouseEvent("click"))
+      else (overlay.outsidePointerEvents() as Subject<MouseEvent>).next(new MouseEvent("click"))
+      editor
+        .querySelector("form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+      await s.settle()
+      expect(s.update).not.toHaveBeenCalled()
+      expect(s.success).not.toHaveBeenCalled()
+    }
+  )
+
+  it("keeps pending edits through same-session renewal and confirms success normally", async () => {
+    const s = await editSetup()
+    await s.open()
+    await s.catalogs()
+    await s.submit()
+    const current = s.session.value!
+    s.session.next(
+      AuthSession.create(current.name, current.email, current.role, current.expiresAt, current.id)
+    )
+    expect(s.writeResponse.observed).toBe(true)
+    s.writeResponse.next(Result.success(lead()))
+    await s.settle()
+    expect(s.success).toHaveBeenCalledExactlyOnceWith("Prospecto actualizado correctamente.")
+    expect(s.execute).toHaveBeenCalledTimes(2)
+  })
+
+  it("hides mismatched unverified detail and never offers an editor for it", async () => {
+    const s = await editSetup()
+    await s.respond(Result.success(lead(8)))
+    expect(s.element().textContent).not.toContain("Editar prospecto")
+    expect(s.element().textContent).not.toContain("Prospecto 8")
+    expect(s.readOrigins).not.toHaveBeenCalled()
+    expect(s.update).not.toHaveBeenCalled()
+  })
+
+  it("does not expose edit or dispatch catalogs/writes in SSR", async () => {
+    const s = await editSetup(true)
+    expect(s.element().textContent).not.toContain("Editar prospecto")
+    expect(s.update).not.toHaveBeenCalled()
+    expect(s.readOrigins).not.toHaveBeenCalled()
+    expect(s.readStages).not.toHaveBeenCalled()
   })
 })

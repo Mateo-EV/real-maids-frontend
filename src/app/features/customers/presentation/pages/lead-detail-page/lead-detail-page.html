@@ -15,6 +15,11 @@
     description="Información registrada del prospecto"
     [busy]="!!detail()?.loading || !!detail()?.refreshing"
   >
+    @if (lead()) {
+      <button catalogControls hlmBtn type="button" [disabled]="writing()" (click)="edit()">
+        Editar prospecto
+      </button>
+    }
     @if (id() === null) {
       <div class="p-5" hlmAlert variant="destructive" role="alert">
         <h2 hlmAlertTitle>Identificador de prospecto inválido</h2>

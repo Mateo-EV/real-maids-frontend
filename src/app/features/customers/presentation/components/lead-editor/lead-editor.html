@@ -1,7 +1,12 @@
 <hlm-dialog-header>
-  <h2 hlmDialogTitle>Crear prospecto</h2>
+  <h2 hlmDialogTitle>{{ target ? "Editar prospecto" : "Crear prospecto" }}</h2>
   <p hlmDialogDescription>
-    Registra los datos del prospecto. Selecciona origen y etapa del catálogo.
+    @if (target) {
+      {{ target.name }} · ID {{ target.id }}. Actualiza los datos del prospecto.
+    } @else {
+      Registra los datos del prospecto.
+    }
+    Selecciona origen y etapa del catálogo.
   </p>
 </hlm-dialog-header>
 <form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
@@ -24,12 +29,14 @@
         >
           <option value="">Selecciona {{ catalog.label.toLowerCase() }}</option>
           @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
-            <option [value]="model()[catalog.key]">
+            <option [value]="model()[catalog.key]" [selected]="true">
               ID {{ model()[catalog.key] }} · No disponible en el catálogo actual
             </option>
           }
           @for (option of catalog.options; track option.id) {
-            <option [value]="'' + option.id">{{ option.label }}</option>
+            <option [value]="'' + option.id" [selected]="model()[catalog.key] === '' + option.id">
+              {{ option.label }}
+            </option>
           }
         </hlm-native-select>
         <div [id]="catalog.key + '-status'">

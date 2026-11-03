@@ -9,7 +9,8 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { form, FormField, FormRoot, submit, validate } from "@angular/forms/signals"
-import { firstValueFrom, Observable, takeUntil } from "rxjs"
+import { EMPTY, firstValueFrom, Observable, takeUntil } from "rxjs"
+import { Lead } from "../../../domain/entities/lead.entity"
 import { BrnDialogRef, injectBrnDialogContext } from "@spartan-ng/brain/dialog"
 import { HlmDialogImports } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -27,6 +28,8 @@ import {
 
 export interface LeadEditorContext {
   owner: DestroyRef
+  lead?: Lead
+  ownerChanged$?: Observable<void>
   current: () => boolean
   onSaved: () => void
 }
@@ -53,14 +56,16 @@ export class LeadEditor implements OnInit {
   private readonly destroyRef = inject(DestroyRef)
   private readonly acquisition = inject(CustomerAcquisitionStore)
   readonly error = signal("")
+  readonly target = this.context.lead
+  private readonly ownerChanged$ = this.context.ownerChanged$ ?? EMPTY
   readonly model = signal({
-    originId: "",
-    stageId: "",
-    name: "",
-    email: "",
-    phone: "",
-    referenceAddress: "",
-    observation: ""
+    originId: this.target ? String(this.target.originId) : "",
+    stageId: this.target ? String(this.target.stageId) : "",
+    name: this.target?.name ?? "",
+    email: this.target?.email ?? "",
+    phone: this.target?.phone ?? "",
+    referenceAddress: this.target?.referenceAddress ?? "",
+    observation: this.target?.observation ?? ""
   })
   readonly textFields = [
     { key: "name", label: "Nombre (obligatorio)", help: "Hasta 120 caracteres.", type: "text" },
@@ -170,6 +175,7 @@ export class LeadEditor implements OnInit {
       key === "originId" ? this.acquisition.loadOrigins(force) : this.acquisition.loadStages(force)
     read
       .pipe(
+        takeUntil(this.ownerChanged$),
         takeUntil(this.lifecycle.cancelled$),
         takeUntilDestroyed(this.destroyRef),
         takeUntilDestroyed(this.context.owner)
@@ -189,22 +195,25 @@ export class LeadEditor implements OnInit {
       )
         return
       try {
+        const payload = {
+          originId: Number(v.originId),
+          stageId: Number(v.stageId),
+          name: v.name.trim(),
+          email: v.email.trim() || null,
+          phone: v.phone.trim() || null,
+          referenceAddress: v.referenceAddress.trim() || null,
+          observation: v.observation.trim() || null
+        }
+        const write = this.target
+          ? this.acquisition.updateLead({ id: this.target.id, ...payload })
+          : this.acquisition.createLead(payload)
         const result = await firstValueFrom(
-          this.acquisition
-            .createLead({
-              originId: Number(v.originId),
-              stageId: Number(v.stageId),
-              name: v.name.trim(),
-              email: v.email.trim() || null,
-              phone: v.phone.trim() || null,
-              referenceAddress: v.referenceAddress.trim() || null,
-              observation: v.observation.trim() || null
-            })
-            .pipe(
-              takeUntil(this.lifecycle.cancelled$),
-              takeUntilDestroyed(this.destroyRef),
-              takeUntilDestroyed(this.context.owner)
-            ),
+          write.pipe(
+            takeUntil(this.ownerChanged$),
+            takeUntil(this.lifecycle.cancelled$),
+            takeUntilDestroyed(this.destroyRef),
+            takeUntilDestroyed(this.context.owner)
+          ),
           { defaultValue: undefined }
         )
         if (!this.current() || !result) return
