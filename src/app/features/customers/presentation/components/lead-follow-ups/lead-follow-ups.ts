@@ -8,7 +8,11 @@ import {
   input
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { Observable, Subscription, takeUntil } from "rxjs"
+import { Observable, Subject, Subscription, takeUntil } from "rxjs"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { LeadFollowUpEditor } from "../lead-follow-up-editor/lead-follow-up-editor"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -38,6 +42,11 @@ export class LeadFollowUps implements OnInit {
   readonly current = input.required<() => boolean>()
   private readonly store = inject(CustomerAcquisitionStore)
   private readonly destroyRef = inject(DestroyRef)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private dialog: BrnDialogRef | undefined
+  private readonly stopped = new Subject<void>()
+  readonly writing = this.store.writing
   private readonly scope = createSessionReadScope(() => this.stop())
   private read: Subscription | undefined
   private ended = false
@@ -47,6 +56,7 @@ export class LeadFollowUps implements OnInit {
 
   ngOnInit(): void {
     this.owner = this.leadId()
+    this.destroyRef.onDestroy(() => this.stop())
     this.ownerChanged$()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.stop())
@@ -55,20 +65,52 @@ export class LeadFollowUps implements OnInit {
     this.load()
   }
   stop(): void {
+    if (this.ended) return
     this.ended = true
+    this.stopped.next()
     this.read?.unsubscribe()
+    this.dialog?.close()
   }
-  load(force = false): void {
+  private isCurrent(): boolean {
+    return (
+      !this.ended &&
+      !this.destroyRef.destroyed &&
+      this.owner === this.leadId() &&
+      this.current()() &&
+      this.scope.check() &&
+      this.generation === this.scope.generation()
+    )
+  }
+  register(): void {
+    const entry = this.store.selectLead(this.owner)(),
+      lead = entry.data
     if (
-      this.ended ||
-      this.destroyRef.destroyed ||
-      this.owner !== this.leadId() ||
-      !this.current()() ||
-      !this.scope.check() ||
-      this.generation !== this.scope.generation() ||
-      (force && this.entry().pendingReads)
+      !this.isCurrent() ||
+      !entry.loaded ||
+      lead?.id !== this.owner ||
+      this.writing() ||
+      this.dialog?.open
     )
       return
+    const current = () => this.isCurrent() && !!this.dialog?.open
+    this.dialog = this.dialogs.open(LeadFollowUpEditor, {
+      context: {
+        lead,
+        owner: this.destroyRef,
+        stopped$: this.stopped.asObservable(),
+        current,
+        onSaved: () => {
+          if (current()) this.toast.success("Seguimiento registrado correctamente.")
+          // Root observation already revalidates the list after confirmed invalidation.
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      contentClass: "sm:max-w-lg"
+    })
+  }
+  load(force = false): void {
+    if (!this.isCurrent() || (force && this.entry().pendingReads)) return
     this.read?.unsubscribe()
     this.read = this.store
       .observeFollowUps(this.owner, force)

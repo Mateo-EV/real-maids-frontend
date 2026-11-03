@@ -99,7 +99,9 @@ async function setup(server = false, url = "/admin/customers/leads/7?offset=10&l
     await settle()
   }
   const retry = async () => {
-    const button = panel().querySelector<HTMLButtonElement>("button")!
+    const button = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(
+      button => button.textContent?.trim() === "Reintentar seguimientos"
+    )!
     expect(button).not.toBeNull()
     button.click()
     await settle()
@@ -154,7 +156,8 @@ describe("T4 on-demand read-only follow-ups with real root store", () => {
       expect(layout.querySelectorAll("[data-comment]")[2].textContent?.trim()).toBe("")
     }
     expect(s.panel().querySelector("b, a, input, select")).toBeNull()
-    expect(s.root().textContent).not.toMatch(/Añadir|Registrar seguimiento|Convertir/)
+    expect(s.root().textContent).not.toMatch(/Añadir|Convertir/)
+    expect(s.panel().textContent).toContain("Registrar seguimiento")
     expect(s.root().textContent).toContain("Editar prospecto")
     expect(s.root().querySelector("a")?.getAttribute("href")).toBe(
       "/admin/customers/leads?offset=10&limit=5"

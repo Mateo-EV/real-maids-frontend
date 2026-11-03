@@ -1,0 +1,104 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Registrar seguimiento</h2>
+  <p hlmDialogDescription>
+    {{ context.lead.name }} · ID {{ context.lead.id }}. Registra una etapa y un comentario opcional,
+    sin cambiar la etapa del prospecto.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el registro</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Datos del seguimiento</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="follow-up-stageId">Etapa (obligatorio)</label>
+      <hlm-native-select
+        selectId="follow-up-stageId"
+        [formField]="profile.stageId"
+        aria-describedby="follow-up-stage-status follow-up-stage-errors"
+        class="w-full"
+      >
+        <option value="">Selecciona etapa</option>
+        @if (model().stageId && !hasChoice(model().stageId)) {
+          <option [value]="model().stageId" [selected]="true">
+            ID {{ model().stageId }} · No disponible en el catálogo actual
+          </option>
+        }
+        @for (stage of stages().data ?? []; track stage.id) {
+          <option [value]="'' + stage.id" [selected]="model().stageId === '' + stage.id">
+            {{ stage.name }} · ID {{ stage.id }}{{ stage.isFinal ? " · Final" : "" }}
+          </option>
+        }
+      </hlm-native-select>
+      <div id="follow-up-stage-status">
+        @if (stages().pendingReads) {
+          <p role="status">{{ stages().loaded ? "Actualizando etapas…" : "Cargando etapas…" }}</p>
+        }
+        @if (stages().error) {
+          <div hlmAlert variant="destructive" role="alert">
+            <p hlmAlertTitle>No se pudieron cargar las etapas.</p>
+            <p hlmAlertDescription>
+              Reintenta para verificar las opciones. Tu borrador se conserva.
+            </p>
+          </div>
+        } @else if (stages().loaded && !stages().data?.length) {
+          <p role="status">No hay etapas en el catálogo recibido.</p>
+        }
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          [disabled]="!!stages().pendingReads"
+          (click)="loadStages(true)"
+        >
+          {{ stages().error ? "Reintentar" : "Actualizar" }} etapas
+        </button>
+      </div>
+      <div id="follow-up-stage-errors">
+        @if (profile.stageId().touched()) {
+          @for (error of profile.stageId().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="follow-up-comment">Comentario (opcional)</label>
+      <textarea
+        hlmTextarea
+        id="follow-up-comment"
+        [formField]="profile.comment"
+        aria-describedby="follow-up-comment-help"
+      ></textarea>
+      <p hlmFieldDescription id="follow-up-comment-help">
+        Texto libre. Se omiten espacios al inicio y al final; vacío se guarda sin registrar.
+      </p>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar seguimiento" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

@@ -1,9 +1,12 @@
 <app-catalog-frame
   titleId="lead-follow-ups-title"
   title="Seguimientos"
-  description="Registros del prospecto · Solo lectura"
+  description="Consulta y registro de seguimientos del prospecto"
   [busy]="!!entry().pendingReads"
 >
+  <button catalogControls hlmBtn type="button" [disabled]="writing()" (click)="register()">
+    Registrar seguimiento
+  </button>
   @if (entry(); as read) {
     @if (read.pendingReads) {
       <p role="status" class="flex items-center gap-2 p-4">
