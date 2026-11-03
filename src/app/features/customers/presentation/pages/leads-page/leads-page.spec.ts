@@ -1,4 +1,5 @@
 import { PLATFORM_ID } from "@angular/core"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { BehaviorSubject, Subject } from "rxjs"
@@ -47,6 +48,7 @@ function setup(server = false) {
     imports: [LeadsPage],
     providers: [
       provideRouter([]),
+      { provide: HotToastService, useValue: { success: vi.fn() } },
       { provide: ListLeadsUseCase, useValue: { execute } },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
@@ -89,7 +91,10 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.element.textContent).toContain("No hay prospectos")
     expect(s.element.querySelector("app-crm-catalog-navigation")).not.toBeNull()
     expect(s.element.querySelector("input, select, app-catalog-frame a")).toBeNull()
-    expect(s.element.textContent).not.toMatch(/Crear|Editar|Convertir|Seguimiento|Ver detalle/)
+    expect(
+      s.element.querySelector("app-catalog-frame header [catalogControls]")?.textContent
+    ).toContain("Crear prospecto")
+    expect(s.element.textContent).not.toMatch(/Editar|Convertir|Seguimiento|Ver detalle/)
   })
 
   it("renders actual lead fields and converted state in container-responsive records with working detail links", async () => {

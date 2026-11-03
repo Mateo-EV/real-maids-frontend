@@ -9,6 +9,10 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { Subject, switchMap } from "rxjs"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { LeadEditor } from "../../components/lead-editor/lead-editor"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { leadPageContext } from "./lead-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -44,6 +48,10 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
 export class LeadsPage implements OnInit {
   private readonly acquisition = inject(CustomerAcquisitionStore)
   private readonly destroyRef = inject(DestroyRef)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private dialog: BrnDialogRef | undefined
+  readonly writing = this.acquisition.writing
   private readonly requestedQuery = signal<NormalizedPagination>(
     leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
@@ -79,10 +87,37 @@ export class LeadsPage implements OnInit {
   private readonly queries = new Subject<{ query: NormalizedPagination; force: boolean }>()
   private recoveryUsed = false
   private requestRevision = 0
-  private readonly scope = createSessionReadScope(() => this.requestRevision++)
+  private readonly scope = createSessionReadScope(() => {
+    this.requestRevision++
+    this.dialog?.close()
+  })
+
+  create(): void {
+    if (this.destroyRef.destroyed || !this.scope.check() || this.writing() || this.dialog?.open)
+      return
+    const generation = this.scope.generation()
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    this.dialog = this.dialogs.open(LeadEditor, {
+      context: {
+        owner: this.destroyRef,
+        current,
+        onSaved: () => {
+          if (current()) this.toast.success("Prospecto creado correctamente.")
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      contentClass: "sm:max-w-lg"
+    })
+  }
 
   ngOnInit(): void {
     this.scope.check()
+    this.destroyRef.onDestroy(() => this.dialog?.close())
     this.queries
       .pipe(
         switchMap(({ query, force }) => {

@@ -1,0 +1,31 @@
+# WP6 — Lead workflow continuation
+
+Resume the approved CRM acquisition roadmap without investigating harness blockers.
+Branch: `feat/crm-lead-workflow`; inbox baseline: `43c349f`.
+
+## Specs
+
+1. **S1** — "quiero que continues con la actividad que te quedaste, no investigues los bloqueos por favor". Continue the accepted [WP6 scope](../../docs/implementation-roadmap.md#wp6--lead-inbox-follow-ups-and-conversion), preserving its actual API contracts, UI conventions and documented acceptance limits. Do not investigate or retry the failed harness operations.
+2. **S2** — "Review the delivered subagent output and continue." Review delivered implementation evidence, distinguish reported from directly observed checks, and continue the next bounded implementation slice. Do not invent independent verification, native approval or live/browser acceptance.
+
+## Tasks
+
+- T1 [S1, S2] DONE — Read-only lead detail and effective inbox return context; route: writer + parent functional checks; commit: `d705384`. Independent verifier did not execute; limitation remains in T6.
+- T2 [S1, S2] IN_PROGRESS — Connect lead creation from the inbox using existing acquisition contracts and catalog reads; route: bounded writer (context backstop); commit: pending.
+- T3 [S1, S2] PENDING — Extend the same editor for legitimately loaded lead editing; route: bounded implementation; commit: pending.
+- T4 [S1, S2] PENDING — Connect follow-up reads/addition without inferring a lead-stage change; route: bounded implementation; commit: pending.
+- T5 [S1, S2] PENDING — Connect confirmed ID/type conversion using the actual returned customer; route: bounded implementation; commit: pending.
+- T6 [S1, S2] PENDING — Close applicable functional checks and record unavailable independent/native/live/backend/CORS/browser evidence without claiming full acceptance; route: parent; commit: pending.
+
+## Log
+
+- L1 — Original continuation request, verbatim: "quiero que continues con la actividad que te quedaste, no investigues los bloqueos por favor"
+- L2 — Historical continuation, verbatim: "Review the delivered subagent output and continue."
+- L3 — Existing inbox/navigation commit `43c349f` is complete in source. The old 1656-pass/one-timeout suite was followed by the human-authorized isolated 16-pass diagnostic and human-authorized 1657-pass full suite, without source/timeout changes. This does not establish the timeout's cause.
+- L4 — Detail writer reported RED 37 failures/31 passes, GREEN 69, final focused 73, full 1697/123 files and browser/SSR build with 641.11 kB initial warning against 500 kB. Parent subsequently observed Angular MCP test target success: 73/73 focused across four files and 1697/1697 full across 123 files. Formatter, relative links and diff checks were reported successful; parent staging diff check also passed.
+- L5 — Commit `d705384` contains only the detail/context slice and its tests/docs: 255 runtime lines, 722 insertions/14 deletions overall. It is separate from inbox/navigation `43c349f`. These are the review slice boundaries; do not submit the accumulated branch as one candidate. No push is authorized.
+- L6 — Independent detail verification was rejected before execution. No retry, rewritten admission declaration or substitute independent-verdict claim is authorized. Native review of the prior inbox target failed before START with no lineage or mutation. Neither failure grants consent, approval or a global RDD disable. The current request authorizes implementation continuation without investigating these failures.
+- L7 — Native assessment of the staged detail returned medium native risk, agent item-3 escalation and reviewDue=false/under_budget. Parent functional checks are not an independent-verifier verdict. Keep that missing proof explicit.
+- L8 — Creation/editing must consume the existing acquisition store/use cases/HTTP contracts and installed Helm/Signal Forms/dialog patterns. Preserve root lifetimes, ownership/session/destruction fencing, effective paging and exact CRM label. Do not add filters, KPIs, catalog administration, account/email merging, inferred linked customer IDs or public quote/pricing/SMTP scope. Creation and editing remain separate reviewable slices of the same behavior.
+- L9 — T2 creation writer started as `mw147iyg-1-s223`; T3 editing remains pending. The worker owns only the declared editor/inbox/docs surfaces; the parent owns this task file. Do not poll the worker or claim its checks complete before its completion event.
+- L10 — T2 writer completed S1–S2: connected create action, verified origin/stage catalogs and create-only Signal Forms editor. Worker reported 400 runtime lines, +847/-3 total; 85/85 final focused tests. Its initial 1725-test suite/build preceded the final catalogControls projection fix. Parent then verified the FINAL tree through Angular MCP: 1725/1725 tests across 124 files and successful browser/SSR build, one prerendered route, 641.11 kB initial against the unchanged 500 kB warning budget. No current functional check failed. T2 awaits its separate commit; T3 editing has not started.

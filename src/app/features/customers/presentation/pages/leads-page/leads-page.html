@@ -8,6 +8,9 @@
     description="Consulta de prospectos registrados"
     [busy]="list().loading || list().refreshing"
   >
+    <button catalogControls hlmBtn type="button" [disabled]="writing()" (click)="create()">
+      Crear prospecto
+    </button>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando prospectos…
