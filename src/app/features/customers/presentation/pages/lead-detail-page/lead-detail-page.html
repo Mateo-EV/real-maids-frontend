@@ -79,4 +79,24 @@
       }
     }
   </app-catalog-frame>
+  @for (owner of lead() ? [lead()!] : []; track owner.id) {
+    <details
+      #followUpsDisclosure
+      [open]="followUpsOpen()"
+      (toggle)="toggleFollowUps(owner.id, $event)"
+    >
+      <summary
+        class="cursor-pointer rounded-sm p-4 font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        Seguimientos · Abrir consulta
+      </summary>
+      @if (followUpsOpen()) {
+        <app-lead-follow-ups
+          [leadId]="owner.id"
+          [ownerChanged$]="ownerChanged$"
+          [current]="followUpsCurrent"
+        />
+      }
+    </details>
+  }
 </main>

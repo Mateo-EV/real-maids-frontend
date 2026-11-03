@@ -170,7 +170,7 @@ describe("Lead read-only detail and independent return context", () => {
     ])
       expect(s.element().textContent).toContain(text)
     expect(s.element().querySelector("b, a[href='https://example.test'], input, select")).toBeNull()
-    expect(s.element().textContent).not.toMatch(/Cliente vinculado|Convertir|Seguimiento|Crear/)
+    expect(s.element().textContent).not.toMatch(/Cliente vinculado|Convertir|Crear/)
     expect(s.forbiddenAction).not.toHaveBeenCalled()
     expect(s.list).not.toHaveBeenCalled()
     expect(s.customers).not.toHaveBeenCalled()

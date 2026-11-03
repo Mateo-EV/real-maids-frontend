@@ -3,8 +3,10 @@ import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
-  signal
+  signal,
+  viewChild
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, RouterLink } from "@angular/router"
@@ -21,6 +23,7 @@ import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { LeadEditor } from "../../components/lead-editor/lead-editor"
+import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
 
 @Component({
   selector: "app-lead-detail-page",
@@ -31,7 +34,8 @@ import { LeadEditor } from "../../components/lead-editor/lead-editor"
     HlmButtonImports,
     HlmAlertImports,
     HlmSpinnerImports,
-    HlmBadgeImports
+    HlmBadgeImports,
+    LeadFollowUps
   ],
   templateUrl: "./lead-detail-page.html"
 })
@@ -43,8 +47,23 @@ export class LeadDetailPage {
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   private readonly ownerChanged = new Subject<void>()
+  readonly ownerChanged$ = this.ownerChanged.asObservable()
   private ownerRevision = 0
-  private readonly scope = createSessionReadScope(() => this.dialog?.close())
+  readonly followUpsOpen = signal(false)
+  private readonly followUpsPanel = viewChild(LeadFollowUps)
+  private readonly followUpsDisclosure =
+    viewChild<ElementRef<HTMLDetailsElement>>("followUpsDisclosure")
+  private readonly scope = createSessionReadScope(() => {
+    this.followUpsOpen.set(false)
+    this.followUpsPanel()?.stop()
+    this.dialog?.close()
+  })
+  readonly followUpsCurrent = () =>
+    !this.destroyRef.destroyed &&
+    this.followUpsOpen() &&
+    !!this.followUpsDisclosure()?.nativeElement.open &&
+    this.lead()?.id === this.id() &&
+    this.scope.check()
   readonly writing = this.acquisition.writing
   readonly id = signal<number | null>(null)
   private readonly params = signal(this.route.snapshot.queryParamMap)
@@ -108,6 +127,7 @@ export class LeadDetailPage {
           // Cancel the captured editor before selecting any replacement owner's data.
           this.ownerRevision++
           this.ownerChanged.next()
+          this.followUpsOpen.set(false)
           this.dialog?.close()
           this.id.set(id)
           // Route replacement releases the old observer; root state owns TTL/session/SSR fencing.
@@ -158,6 +178,21 @@ export class LeadDetailPage {
       disableClose: true,
       contentClass: "sm:max-w-lg"
     })
+  }
+
+  toggleFollowUps(ownerId: number, event: Event): void {
+    const target = event.target as HTMLDetailsElement
+    if (
+      this.destroyRef.destroyed ||
+      ownerId !== this.id() ||
+      this.lead()?.id !== ownerId ||
+      target !== this.followUpsDisclosure()?.nativeElement ||
+      !target.isConnected ||
+      !this.scope.check()
+    )
+      return
+    if (!target.open) this.followUpsPanel()?.stop()
+    this.followUpsOpen.set(target.open)
   }
 
   retry(): void {

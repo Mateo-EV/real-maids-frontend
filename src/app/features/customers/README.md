@@ -169,6 +169,14 @@ OwnerChanged$ cancels synchronously before replacement route selection; captured
 
 M03/RF03/HU03 remains context; dedicated acquisition RF/HU is missing. Pending acceptance: CRM → Prospectos → loaded detail → Editar prospecto → invalid/valid save/catalog retry → generic confirmed feedback and one revalidation → effective back link. Follow-ups/conversion/catalog administration/public quote/pricing/landing/SMTP are not delivered here. Technical checks do not replace unexecuted independent detail verification/native prior inbox review, live backend/CORS/authorization or Chrome/Edge/Firefox keyboard/responsive proof. Full WP6 and independent WP4/WP5 acceptance remain pending.
 
+## Connected read-only lead follow-ups (fifth bounded WP6 slice)
+
+T4/S1–S2 is consultation only after editing boundary `f4634af`, not the accumulated branch. Verified matching detail opens a native Seguimientos disclosure to mount LeadFollowUps. Existing root observeFollowUps/selectFollowUps own the unpaged list from GET `/api/prospectos/{id}/seguimientos`, success-only 30000ms TTL, sharing and session/SSR fencing. Closing destroys/cancels only the consumer; reopening checks freshness and explicit retry forces a read. Same-owner verified rows remain during refreshing/failure with visible updating/stale/error feedback, without removing the profile/edit action. OwnerChanged$ cancels before replacement route selection; keyed views, DestroyRef/session scope and actual native open/current-disclosure checks fence queued events/retry and detached owners. Same-session renewal preserves work.
+
+Table/cards preserve server order and actual LeadFollowUp.id/stageId/userId/occurredAt/comment: UTC ISO dates, plain text, null as unregistered and empty comment unchanged. No catalog/person/customer lookups, invented names, global totals/pagination, communications timeline or implied lead-stage mutation. Root/store/source/use-case/domain/auth/config contracts remain unchanged. Registration T7 and conversion T5 are later work, not dead controls in this slice. M03/RF03/HU03 is context; dedicated acquisition RF/HU is still missing (RNF09/RNF10/RNF12).
+
+Pending acceptance: CRM → Prospectos → verified detail → open/close/reopen Seguimientos → error/retry → effective back link, with authorized non-sensitive records. Public RouterHarness/DOM tests use the real root store; technical evidence does not replace unavailable independent/native review, live backend/CORS/authorization or Chrome/Edge/Firefox keyboard/responsive proof. Full WP6 and independent WP4/WP5 acceptance remain pending.
+
 ## Types and write semantics
 
 Angular uses `Lead`, `LeadOrigin`, `LeadFollowUp` and `leadId` internally, including quote and web-form links. Sources translate the unchanged Spanish `idProspecto`, `/api/prospectos` and `/api/catalogos/origenes-prospecto` wire contract; backend/SQL names are not renamed. Customer pagination does not change those Lead wire boundaries.
