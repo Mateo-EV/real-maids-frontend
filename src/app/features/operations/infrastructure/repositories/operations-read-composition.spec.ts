@@ -1,0 +1,252 @@
+import { provideHttpClient } from "@angular/common/http"
+import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
+import { PLATFORM_ID } from "@angular/core"
+import { TestBed } from "@angular/core/testing"
+import { firstValueFrom, Observable } from "rxjs"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { API_URL } from "@/app/core/tokens/api-url.token"
+import { Result } from "@/app/shared/utils/result"
+import {
+  GetServiceRequestByIdUseCase,
+  ListServiceRequestsUseCase
+} from "../../application/use-cases/service-request-read.use-cases"
+import { OperationsError } from "../../domain/errors/operations.error"
+import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
+import {
+  OPERATIONS_REPOSITORY,
+  OperationsRepository
+} from "../../domain/repositories/operations.repository"
+import { provideOperationsRequestReads } from "../../operations.providers"
+import { ServiceRequestsHttpSource } from "../source/service-requests-http.source"
+import { OperationsRepositoryImpl } from "./operations.repository-impl"
+
+const url = "https://api.example.test/api/solicitudes"
+const dto = {
+  idSolicitud: 17,
+  idCliente: 8,
+  cliente: "Cliente autorizado",
+  idPropiedad: 31,
+  propiedad: "Oficina",
+  idTipoServicio: 4,
+  tipoServicio: "Limpieza",
+  descripcion: "  Texto literal  ",
+  fechaDeseada: "2026-03-03",
+  estado: "registrada",
+  registradoPor: "Operadora",
+  fechaRegistro: "2026-03-01T23:30:00-05:00",
+  fechaActualizacion: null
+}
+const summary: ServiceRequestSummary = {
+  id: 17,
+  customerId: 8,
+  customerName: "Cliente autorizado",
+  propertyId: 31,
+  propertyName: "Oficina",
+  serviceTypeId: 4,
+  serviceTypeName: "Limpieza",
+  description: "  Texto literal  ",
+  desiredDate: "2026-03-03",
+  status: "registrada",
+  registeredByName: "Operadora",
+  registeredAt: new Date("2026-03-02T04:30:00Z"),
+  updatedAt: null
+}
+
+describe("Operations request read public composition", () => {
+  let http: HttpTestingController
+  let repository: OperationsRepository
+  let list: ListServiceRequestsUseCase
+  let detail: GetServiceRequestByIdUseCase
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PLATFORM_ID, useValue: "browser" },
+        { provide: API_URL, useValue: "https://api.example.test" },
+        provideOperationsRequestReads()
+      ]
+    })
+    http = TestBed.inject(HttpTestingController)
+    repository = TestBed.inject(OPERATIONS_REPOSITORY)
+    list = TestBed.inject(ListServiceRequestsUseCase)
+    detail = TestBed.inject(GetServiceRequestByIdUseCase)
+  })
+
+  afterEach(() => http.verify())
+
+  function read(kind: "list" | "detail"): Observable<Result<unknown, OperationsError>> {
+    return kind === "list" ? list.execute({}) : detail.execute(17)
+  }
+
+  it("aliases the token to the root implementation, not the root HTTP source", () => {
+    expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+    expect(repository).not.toBe(TestBed.inject(ServiceRequestsHttpSource))
+    expect(TestBed.inject(ListServiceRequestsUseCase)).toBe(list)
+    expect(TestBed.inject(GetServiceRequestByIdUseCase)).toBe(detail)
+    http.expectNone(() => true)
+  })
+
+  it("forwards the complete list query and preserves server scope, order and effective paging", async () => {
+    const pending = firstValueFrom(
+      list.execute({
+        offset: 400,
+        limit: 200,
+        customerId: 99,
+        status: "registrada",
+        from: "2026-03-01",
+        until: "2026-03-02"
+      })
+    )
+    const req = http.expectOne(r => r.url === url)
+    expect(req.request.method).toBe("GET")
+    expect(req.request.transferCache).toBe(false)
+    expect(
+      Object.fromEntries(req.request.params.keys().map(key => [key, req.request.params.get(key)]))
+    ).toEqual({
+      pagina: "2",
+      tamanio: "200",
+      idCliente: "99",
+      estado: "registrada",
+      desde: "2026-03-01",
+      hasta: "2026-03-02"
+    })
+    req.flush({
+      contenido: [{ ...dto, idSolicitud: 18 }, dto],
+      pagina: 2,
+      tamanio: 100,
+      totalElementos: 202,
+      totalPaginas: 3
+    })
+    expect(await pending).toEqual(
+      Result.success({
+        items: [{ ...summary, id: 18 }, summary],
+        total: 202,
+        offset: 200,
+        limit: 100
+      })
+    )
+    http.expectNone(() => true)
+  })
+
+  it("forwards the detail ID and returns the source's validated projection", async () => {
+    const pending = firstValueFrom(detail.execute(17))
+    const req = http.expectOne(`${url}/17`)
+    expect(req.request.method).toBe("GET")
+    expect(req.request.transferCache).toBe(false)
+    expect(req.request.params.keys()).toEqual([])
+    req.flush(dto)
+    expect(await pending).toEqual(Result.success(summary))
+  })
+
+  it("preserves detail identity validation instead of accepting another target", async () => {
+    const pending = firstValueFrom(detail.execute(17))
+    http.expectOne(`${url}/17`).flush({ ...dto, idSolicitud: 18 })
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
+
+  it.each(["list", "detail"] as const)(
+    "forwards a safe %s HTTP failure Result without retry",
+    async kind => {
+      const pending = firstValueFrom(read(kind))
+      const req = http.expectOne(r => r.url === (kind === "list" ? url : `${url}/17`))
+      expect(req.request.method).toBe("GET")
+      req.flush({ mensaje: "PRIVATE DETAIL" }, { status: 403, statusText: "Forbidden" })
+      const result = await pending
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: "FORBIDDEN", message: "No se pudo consultar la solicitud de servicio." }
+      })
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["list", "detail"] as const)("keeps %s cold and forwards consumer cancellation", kind => {
+    const observable = read(kind)
+    http.expectNone(() => true)
+    let delivered = false
+    const subscription = observable.subscribe(() => {
+      delivered = true
+    })
+    try {
+      const req = http.expectOne(r => r.url === (kind === "list" ? url : `${url}/17`))
+      expect(req.request.method).toBe("GET")
+      subscription.unsubscribe()
+      expect(req.cancelled).toBe(true)
+      expect(delivered).toBe(false)
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
+
+  it("keeps every non-request-read method explicitly UNSUPPORTED with zero HTTP", async () => {
+    const request = { propertyId: 31, serviceTypeId: 4, description: null, desiredDate: null }
+    const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
+    const line = {
+      serviceTypeId: 4,
+      additionalServiceId: null,
+      description: null,
+      quantity: 1,
+      unitPrice: "10.00"
+    }
+    const contract = {
+      propertyId: 31,
+      serviceTypeId: 4,
+      frequencyId: 1,
+      rateId: 1,
+      preferredDay: null,
+      preferredTime: null,
+      validFrom: "2026-03-03",
+      validUntil: null,
+      isActive: true
+    }
+    const status = { name: "Estado", sortOrder: 1, isFinal: false }
+    const reason = { name: "Motivo", description: null, isActive: true }
+    const operations: Observable<Result<unknown, OperationsError>>[] = [
+      repository.createRequest({ ...request, customerId: 8 }),
+      repository.updateRequest(17, request),
+      repository.cancelRequest(17, { reason: "Cancelación explícita" }),
+      repository.getOrders({}),
+      repository.getOrder(5),
+      repository.createOrder({ requestId: 17, estimatedAmount: null, observation: null }),
+      repository.updateOrder(5, { estimatedAmount: null, observation: null }),
+      repository.changeOrderStatus(5, { status: "PROGRAMADA", observation: null }),
+      repository.scheduleOrder(5, {
+        date: "2026-03-03",
+        startTime: "09:00",
+        endTime: null,
+        reasonId: null
+      }),
+      repository.replaceAssignments(5, { assignments: [] }),
+      repository.getAgenda({ from: "2026-03-01", until: "2026-03-02" }),
+      repository.getActiveReschedulingReasons(),
+      repository.getQuotes({}),
+      repository.getQuote(5),
+      repository.createQuote({ ...quote, lines: [line] }),
+      repository.updateQuote(5, quote),
+      repository.getQuoteLines(5),
+      repository.createQuoteLine(5, line),
+      repository.updateQuoteLine(5, 6, line),
+      repository.getContracts({}),
+      repository.getContract(5),
+      repository.createContract({ ...contract, customerId: 8 }),
+      repository.updateContract(5, contract),
+      repository.getOrderStatuses(),
+      repository.createOrderStatus(status),
+      repository.updateOrderStatus(5, status),
+      repository.getReschedulingReasons(),
+      repository.createReschedulingReason(reason),
+      repository.updateReschedulingReason(5, reason)
+    ]
+    for (const operation of operations) {
+      const result = await firstValueFrom(operation)
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: "UNSUPPORTED", message: "Operación no disponible." }
+      })
+      if (!result.success) expect(result.error).toBeInstanceOf(OperationsError)
+      http.expectNone(() => true)
+    }
+  })
+})

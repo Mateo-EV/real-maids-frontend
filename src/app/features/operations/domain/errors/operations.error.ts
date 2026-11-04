@@ -8,6 +8,7 @@ export type OperationsErrorCode =
   | "UNCONFIGURED"
   | "UNAUTHENTICATED"
   | "INVALID_RESPONSE"
+  | "UNSUPPORTED"
 
 export class OperationsError extends Error {
   constructor(
