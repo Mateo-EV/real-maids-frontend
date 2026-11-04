@@ -43,6 +43,11 @@ import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/r
 import { UserSessionInMemorySource } from "@/app/features/users/infrastructure/source/user-session-in-memory.source"
 import { GetSessionCountUseCase } from "@/app/features/users/application/use-cases/get-session-count.use-case"
 
+import { FIELD_OPERATIONS_REPOSITORY } from "@/app/features/field-operations/domain/repositories/field-operations.repository"
+import { FieldOperationsRepositoryImpl } from "@/app/features/field-operations/infrastructure/repositories/field-operations.repository-impl"
+import { FieldStaffHttpSource } from "@/app/features/field-operations/infrastructure/source/field-staff-http.source"
+import { FieldStaffStore } from "@/app/features/field-operations/presentation/state/field-staff.store"
+
 async function settle<T>(stream: Observable<T>): Promise<T> {
   const pending = firstValueFrom(stream)
   await vi.runAllTimersAsync()
@@ -114,6 +119,32 @@ describe("Application repository composition", () => {
   it("aliases the customer token to the root implementation instance", () => {
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).not.toBe(TestBed.inject(CustomerInMemorySource))
+  })
+
+  it("composes singleton staff reads through the existing authenticated HTTP transport", async () => {
+    const repository = TestBed.inject(FIELD_OPERATIONS_REPOSITORY, null)
+    expect(repository).toBe(TestBed.inject(FieldOperationsRepositoryImpl))
+    expect(repository).not.toBe(TestBed.inject(FieldStaffHttpSource))
+    await establishHttpAuth()
+    const store = TestBed.inject(FieldStaffStore)
+    const pending = firstValueFrom(store.readStaff({ offset: 0, limit: 20, isActive: false }))
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne(r => r.url === "http://localhost:8080/api/personal")
+    expect(request.request.method).toBe("GET")
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(request.request.params.get("pagina")).toBe("0")
+    expect(request.request.params.get("tamanio")).toBe("20")
+    expect(request.request.params.get("activo")).toBe("false")
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { items: [], total: 0, offset: 0, limit: 20 }
+    })
+    expect(TestBed.inject(FieldStaffStore)).toBe(store)
+    expect(TestBed.inject(AuthStore)).toBe(TestBed.inject(AuthStore))
+    expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
+    http.verify()
   })
 
   it("aliases the user token to the root implementation instance", () => {

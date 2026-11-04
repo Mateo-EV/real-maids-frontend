@@ -33,6 +33,8 @@ import { PropertyRepositoryImpl } from "@/app/features/customers/infrastructure/
 import { CUSTOMER_HISTORY_REPOSITORY } from "@/app/features/customers/domain/repositories/customer-history.repository"
 import { CustomerHistoryRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-history.repository-impl"
 
+import { provideFieldOperationsReads } from "@/app/features/field-operations/field-operations.providers"
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -40,6 +42,7 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(),
     provideHttpClient(withInterceptors([authInterceptor])),
     { provide: API_URL, useValue: environment.apiUrl },
+    provideFieldOperationsReads(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: AcquisitionRepositoryImpl, provide: ACQUISITION_REPOSITORY },
