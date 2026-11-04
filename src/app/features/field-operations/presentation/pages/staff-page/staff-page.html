@@ -1,0 +1,196 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <app-catalog-frame
+    titleId="staff-title"
+    title="Personal de campo"
+    description="Consulta de personal registrado y sus fichas"
+    [busy]="list().loading || list().refreshing"
+  >
+    <a
+      catalogControls
+      hlmBtn
+      variant="outline"
+      routerLink="/admin/staff/me"
+      [queryParams]="paging()"
+      [state]="returnState()"
+      >Mi ficha</a
+    >
+    <div class="catalog-filter-row flex flex-wrap items-end gap-3 border-b p-4">
+      <div class="catalog-filter-search flex flex-col gap-2">
+        <label hlmLabel for="staff-search">Buscar por nombre o documento</label>
+        <input
+          hlmInput
+          id="staff-search"
+          type="search"
+          [value]="searchDraft()"
+          (input)="search($event)"
+          autocomplete="off"
+        />
+      </div>
+      <div class="flex flex-col gap-2">
+        <label hlmLabel for="staff-active">Estado</label>
+        <hlm-native-select
+          selectId="staff-active"
+          [value]="active() === null ? 'all' : active() ? 'true' : 'false'"
+          (valueChange)="filterActive($event)"
+        >
+          <option hlmNativeSelectOption value="all">Todos</option>
+          <option hlmNativeSelectOption value="true">Activos</option>
+          <option hlmNativeSelectOption value="false">Inactivos</option>
+        </hlm-native-select>
+      </div>
+    </div>
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando personal…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando personal…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Personal registrado
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Nombre</th>
+                <th hlmTh scope="col">Documento</th>
+                <th hlmTh scope="col">Correo</th>
+                <th hlmTh scope="col">Teléfono</th>
+                <th hlmTh scope="col">Idioma</th>
+                <th hlmTh scope="col">Estado</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (person of rows(); track person.id) {
+                <tr hlmTr>
+                  <td hlmTd>
+                    <a
+                      hlmBtn
+                      variant="link"
+                      class="h-auto max-w-full text-left whitespace-normal break-words"
+                      [routerLink]="['/admin/staff', person.id]"
+                      [queryParams]="paging()"
+                      [state]="returnState()"
+                      [attr.aria-label]="'Ver ficha de ' + person.name"
+                      >{{ person.name }}</a
+                    >
+                  </td>
+                  <td hlmTd>{{ person.document }}</td>
+                  <td hlmTd class="break-all">{{ person.email ?? "No registrado" }}</td>
+                  <td hlmTd>{{ person.phone ?? "No registrado" }}</td>
+                  <td hlmTd>{{ person.language }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{
+                      person.isActive ? "Activo" : "Inactivo"
+                    }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Personal registrado">
+          @for (person of rows(); track person.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">
+                  <a
+                    hlmBtn
+                    variant="link"
+                    class="h-auto max-w-full text-left whitespace-normal break-words"
+                    [routerLink]="['/admin/staff', person.id]"
+                    [queryParams]="paging()"
+                    [state]="returnState()"
+                    [attr.aria-label]="'Ver ficha de ' + person.name"
+                    >{{ person.name }}</a
+                  >
+                </h2>
+                <span hlmBadge variant="outline">{{
+                  person.isActive ? "Activo" : "Inactivo"
+                }}</span>
+              </div>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Documento</dt>
+                <dd class="break-words">{{ person.document }}</dd>
+                <dt class="text-muted-foreground">Correo</dt>
+                <dd class="break-all">{{ person.email ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Teléfono</dt>
+                <dd class="break-words">{{ person.phone ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Idioma</dt>
+                <dd>{{ person.language }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{ page.total === 0 ? "No hay personal" : "Esta página ya no tiene registros" }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "El servidor no devolvió personal para esta consulta."
+                  : "El catálogo cambió. Selecciona otra página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de personal"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>
