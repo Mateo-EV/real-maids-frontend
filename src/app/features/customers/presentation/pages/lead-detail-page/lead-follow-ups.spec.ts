@@ -156,7 +156,10 @@ describe("T4 on-demand read-only follow-ups with real root store", () => {
       expect(layout.querySelectorAll("[data-comment]")[2].textContent?.trim()).toBe("")
     }
     expect(s.panel().querySelector("b, a, input, select")).toBeNull()
-    expect(s.root().textContent).not.toMatch(/Añadir|Convertir/)
+    expect(s.panel().textContent).not.toMatch(/Añadir|Convertir/)
+    expect(s.root().querySelector("app-catalog-frame header")?.textContent).toContain(
+      "Convertir a cliente"
+    )
     expect(s.panel().textContent).toContain("Registrar seguimiento")
     expect(s.root().textContent).toContain("Editar prospecto")
     expect(s.root().querySelector("a")?.getAttribute("href")).toBe(

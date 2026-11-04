@@ -9,6 +9,8 @@ import {
   viewChild
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
+import { Dialog } from "@angular/cdk/dialog"
+import { LeadConversionDialog } from "../../components/lead-conversion-dialog/lead-conversion-dialog"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { distinctUntilChanged, EMPTY, map, startWith, Subject, switchMap } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -44,6 +46,8 @@ export class LeadDetailPage {
   private readonly destroyRef = inject(DestroyRef)
   private readonly acquisition = inject(CustomerAcquisitionStore)
   private readonly dialogs = inject(HlmDialogService)
+  private readonly overlays = inject(Dialog)
+  readonly convertedCustomerId = signal<number | null>(null)
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   private readonly ownerChanged = new Subject<void>()
@@ -54,6 +58,7 @@ export class LeadDetailPage {
   private readonly followUpsDisclosure =
     viewChild<ElementRef<HTMLDetailsElement>>("followUpsDisclosure")
   private readonly scope = createSessionReadScope(() => {
+    this.convertedCustomerId.set(null)
     this.followUpsOpen.set(false)
     this.followUpsPanel()?.stop()
     this.dialog?.close()
@@ -61,6 +66,7 @@ export class LeadDetailPage {
   readonly followUpsCurrent = () =>
     !this.destroyRef.destroyed &&
     this.followUpsOpen() &&
+    !this.dialog?.open &&
     !!this.followUpsDisclosure()?.nativeElement.open &&
     this.lead()?.id === this.id() &&
     this.scope.check()
@@ -126,6 +132,7 @@ export class LeadDetailPage {
         switchMap(id => {
           // Cancel the captured editor before selecting any replacement owner's data.
           this.ownerRevision++
+          this.convertedCustomerId.set(null)
           this.ownerChanged.next()
           this.followUpsOpen.set(false)
           this.dialog?.close()
@@ -172,6 +179,48 @@ export class LeadDetailPage {
         onSaved: () => {
           if (current()) this.toast.success("Prospecto actualizado correctamente.")
           // Existing root observers revalidate detail and active inboxes; do not reload twice.
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      contentClass: "sm:max-w-lg"
+    })
+  }
+
+  convert(): void {
+    const lead = this.lead()
+    if (
+      !lead ||
+      lead.id !== this.id() ||
+      !this.scope.check() ||
+      this.destroyRef.destroyed ||
+      this.writing() ||
+      this.dialog?.open ||
+      this.overlays.openDialogs.length
+    )
+      return
+    const leadId = lead.id,
+      generation = this.scope.generation(),
+      revision = this.ownerRevision
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      revision === this.ownerRevision &&
+      this.id() === leadId &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    this.dialog = this.dialogs.open(LeadConversionDialog, {
+      context: {
+        leadId,
+        name: lead.name,
+        owner: this.destroyRef,
+        ownerChanged$: this.ownerChanged$,
+        current,
+        onConfirmed: (customerId: number) => {
+          if (!current()) return
+          this.toast.success("Conversión confirmada.")
+          if (current()) this.convertedCustomerId.set(customerId)
+          // Root observers own invalidation/refetches. No copied profile or optimistic flag.
         }
       },
       showCloseButton: false,

@@ -16,9 +16,26 @@
     [busy]="!!detail()?.loading || !!detail()?.refreshing"
   >
     @if (lead()) {
-      <button catalogControls hlmBtn type="button" [disabled]="writing()" (click)="edit()">
-        Editar prospecto
-      </button>
+      <div catalogControls class="flex flex-wrap gap-2">
+        <button hlmBtn type="button" variant="outline" [disabled]="writing()" (click)="edit()">
+          Editar prospecto
+        </button>
+        <button hlmBtn type="button" [disabled]="writing()" (click)="convert()">
+          Convertir a cliente
+        </button>
+      </div>
+    }
+    @if (convertedCustomerId(); as customerId) {
+      <div class="flex flex-wrap items-center gap-3 px-5 py-3" role="status">
+        <p>Conversión confirmada.</p>
+        <a
+          hlmBtn
+          variant="outline"
+          data-converted-customer
+          [routerLink]="['/admin/customers', customerId]"
+          >Ver cliente · ID {{ customerId }}</a
+        >
+      </div>
     }
     @if (id() === null) {
       <div class="p-5" hlmAlert variant="destructive" role="alert">

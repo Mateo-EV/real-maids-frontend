@@ -150,6 +150,16 @@ Pendiente bloquea duplicados y Cancelar/Escape/exterior. Errores seguros conserv
 
 Recorrido pendiente: CRM → Prospectos → detalle → abrir Seguimientos → Registrar seguimiento → validar/guardar → comprobar toast y revalidación → reintentar error de lectura sin repetir registro. M03/RF03/HU03 aporta contexto; falta RF/HU específico de captación. Conversión T5, administración de catálogos y aceptación independiente/backend/CORS/autorización/Chrome/Edge/Firefox teclado/responsive siguen pendientes; pruebas técnicas no sustituyen revisión independiente/nativa no ejecutada ni aceptan WP6/WP4/WP5 completos.
 
+## Séptima entrega WP6: conversión confirmada de prospectos
+
+T5/S1–S2 conecta «Convertir a cliente» en el encabezado del detalle verificado, conservando Editar y el retorno a la página efectiva. Es un candidato separado tras el registro de seguimientos `5780626`, no una revisión acumulada. El diálogo captura nombre/ID, exige elegir Residencial o Comercial sin valor inicial y confirma explícitamente. Envía únicamente leadId/type mediante el contrato existente; el backend usa los datos actuales guardados. No copia contactos, crea cuentas, fusiona correos, cambia etapas ni parchea el indicador de conversión.
+
+Un prospecto convertido permite repetir la solicitud explícita: el backend devuelve el cliente vinculado, cuyo tipo almacenado puede diferir del solicitado. No se promete un registro nuevo ni cambio de tipo. Solo Result exitoso validado emite «Conversión confirmada.» y muestra un enlace al ID real devuelto, sin trasladar la paginación de prospectos ni navegar automáticamente. No hay lookup de cliente ni caché de perfil; el ID efímero se limpia/protege al cambiar propietario/sesión/destruir.
+
+Pendiente bloquea duplicados y Cancelar/Escape/exterior. Los errores seguros conservan tipo y contexto; un fallo de red no prueba ausencia de efectos y el reintento es explícito. El lifecycle existente protege también el cierre animado; renovar la misma sesión conserva trabajo y SSR no despacha. El store ya revalida observadores afectados, sin recargas duplicadas, filas/totales optimistas ni repetir POST tras errores de lectura. Cancelar no revierte solicitudes enviadas.
+
+Recorrido pendiente: CRM → Prospectos → detalle → Convertir a cliente → elegir tipo/confirmar → comprobar feedback/enlace al cliente real → repetir, denegar o fallar sin perder contexto. M03/RF03/HU03 aporta contexto; falta RF/HU específico de captación (RNF09/RNF10/RNF12). La conexión en fuente y pruebas técnicas no sustituyen revisión independiente/nativa no ejecutada ni aceptación live/backend/CORS/autorización/conversión repetida y Chrome/Edge/Firefox teclado/responsive. WP6 y aceptación independiente WP4/WP5 siguen pendientes; administración de catálogos/cotización pública/precios/SMTP no se añaden.
+
 ## Filtros de catálogo reutilizables
 
 Usuarios, Sesiones, RBAC y Auditoría optan al contrato CSS sin estado de `src/styles.css` (M02/RF02/HU02/P03, RNF08/RNF09). En futuras secciones, añade `catalog-filter-row` a la fila de filtros y `catalog-filter-search` al hijo directo que contiene la etiqueta y el grupo Helm de búsqueda. Conserva el layout flex, las etiquetas, las acciones y los bindings en cada pantalla; no hace falta un componente wrapper.

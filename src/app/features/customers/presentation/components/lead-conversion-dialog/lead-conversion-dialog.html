@@ -1,0 +1,63 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Confirmar conversión</h2>
+  <p hlmDialogDescription>{{ context.name }} · ID {{ context.leadId }}</p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
+  <p class="text-sm leading-relaxed" id="conversion-help">
+    El servidor usa los datos actuales guardados del prospecto. Si ya fue convertido, devuelve el
+    cliente vinculado; elegir otro tipo no cambia el tipo de ese cliente. No se crea una cuenta ni
+    se fusionan correos. Cancelar no revierte una solicitud ya enviada.
+  </p>
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se pudo confirmar la conversión</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Tipo de cliente</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="conversion-type">Tipo de cliente (obligatorio)</label>
+      <hlm-native-select
+        selectId="conversion-type"
+        [formField]="profile.type"
+        aria-describedby="conversion-help conversion-errors"
+        class="w-full"
+      >
+        <option value="">Selecciona tipo</option>
+        @for (type of types; track type.value) {
+          <option [value]="type.value">{{ type.label }}</option>
+        }
+      </hlm-native-select>
+      <div id="conversion-errors">
+        @if (profile.type().touched()) {
+          @for (error of profile.type().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Confirmando" />
+      }
+      {{ profile().submitting() ? "Confirmando…" : "Confirmar conversión" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
