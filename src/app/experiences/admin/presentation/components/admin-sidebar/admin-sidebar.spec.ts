@@ -12,6 +12,101 @@ class Destination {}
 
 afterEach(() => vi.unstubAllGlobals())
 
+// WP7 T4 / S1,S3: RRHH navigation with the historical CRM contract preserved below.
+describe("AdminSidebar RRHH navigation", () => {
+  it("links RRHH in its existing General position and keeps it active for staff descendants without changing IAM, CRM or unavailable modules", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
+    TestBed.configureTestingModule({
+      imports: [AdminSidebar],
+      providers: [
+        HlmSidebarService,
+        provideRouter([
+          { path: "admin/staff", component: Destination },
+          { path: "admin/staff/me", component: Destination },
+          { path: "admin/staff/:id", component: Destination },
+          { path: "admin/customers", component: Destination },
+          { path: "admin/users", component: Destination }
+        ])
+      ]
+    })
+    const fixture = TestBed.createComponent(AdminSidebar)
+    fixture.detectChanges()
+    await fixture.whenStable()
+    const element = fixture.nativeElement as HTMLElement
+    const general = element.querySelector('[role="group"][aria-label="General"]')!
+    const administration = element.querySelector('[role="group"][aria-label="Administración"]')!
+    const rrhh = general.querySelector<HTMLAnchorElement>('a[href="/admin/staff"]')
+    // The intended first failure is the absent public link, not a null dereference.
+    expect(rrhh, "Missing RRHH anchor to /admin/staff").not.toBeNull()
+    expect(rrhh!.textContent?.trim()).toBe("RRHH")
+    expect(rrhh!.classList.contains("module-button")).toBe(true)
+    expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Landing",
+      "CRM",
+      "RRHH",
+      "Cotizaciones",
+      "Programaciones"
+    ])
+    const icon = fixture.debugElement
+      .queryAll(By.directive(NgIcon))
+      .find(node => rrhh!.contains(node.nativeElement))!
+    expect((icon.componentInstance as NgIcon).name()).toBe("lucideUsersRound")
+    expect(icon.nativeElement.getAttribute("aria-hidden")).toBe("true")
+    const crm = general.querySelector<HTMLAnchorElement>('a[href="/admin/customers"]')!
+    const iam = administration.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')!
+    expect(crm.textContent?.trim()).toBe("CRM")
+    expect(iam.textContent?.trim()).toBe("IAM")
+    expect(element.querySelectorAll("nav a")).toHaveLength(3)
+    const router = TestBed.inject(Router)
+    rrhh!.click()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    expect(router.url).toBe("/admin/staff")
+    for (const url of ["/admin/staff", "/admin/staff/me", "/admin/staff/7"]) {
+      await router.navigateByUrl(url)
+      await fixture.whenStable()
+      fixture.detectChanges()
+      expect(rrhh!.getAttribute("aria-current")).toBe("page")
+      expect(rrhh!.querySelector('.active-dot[aria-hidden="true"]')).not.toBeNull()
+      expect(crm.hasAttribute("aria-current")).toBe(false)
+      expect(iam.hasAttribute("aria-current")).toBe(false)
+    }
+    for (const [url, active] of [
+      ["/admin/users", iam],
+      ["/admin/customers", crm]
+    ] as const) {
+      await router.navigateByUrl(url)
+      await fixture.whenStable()
+      fixture.detectChanges()
+      expect(active.getAttribute("aria-current")).toBe("page")
+      expect(rrhh!.hasAttribute("aria-current")).toBe(false)
+    }
+    expect(general.querySelectorAll("button[disabled]")).toHaveLength(3)
+    for (const label of ["Landing", "Cotizaciones", "Programaciones"]) {
+      const button = Array.from(general.querySelectorAll<HTMLButtonElement>("button")).find(
+        item => item.textContent?.trim() === label
+      )
+      expect(button, label).toBeDefined()
+      expect(button!.disabled).toBe(true)
+      expect(button!.hasAttribute("routerLink")).toBe(false)
+      expect(button!.hasAttribute("href")).toBe(false)
+      expect(
+        Array.from(general.querySelectorAll("a")).some(link => link.textContent?.trim() === label)
+      ).toBe(false)
+      button!.click()
+      await fixture.whenStable()
+      expect(router.url).toBe("/admin/customers")
+    }
+  })
+})
+
 describe("AdminSidebar CRM navigation", () => {
   it("retains the exact CRM label, placement and icon, and preserves IAM", async () => {
     vi.stubGlobal(
@@ -59,6 +154,6 @@ describe("AdminSidebar CRM navigation", () => {
     fixture.detectChanges()
     expect(iam.getAttribute("aria-current")).toBe("page")
     expect(crm.hasAttribute("aria-current")).toBe(false)
-    expect(general.querySelectorAll("button[disabled]")).toHaveLength(4)
+    expect(general.querySelectorAll("button[disabled]")).toHaveLength(3)
   })
 })

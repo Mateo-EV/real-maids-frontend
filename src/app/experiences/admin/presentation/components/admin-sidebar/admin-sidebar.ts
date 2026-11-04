@@ -57,6 +57,21 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
                       <span>{{ module.label }}</span>
                       <span class="active-dot" aria-hidden="true"></span>
                     </a>
+                  } @else if (module.label === "RRHH") {
+                    <a
+                      hlmSidebarMenuButton
+                      class="module-button"
+                      routerLink="/admin/staff"
+                      routerLinkActive
+                      #rrhh="routerLinkActive"
+                      [isActive]="rrhh.isActive"
+                      ariaCurrentWhenActive="page"
+                      [closeMobileSidebarOnClick]="true"
+                    >
+                      <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
+                      <span>{{ module.label }}</span>
+                      <span class="active-dot" aria-hidden="true"></span>
+                    </a>
                   } @else {
                     <button hlmSidebarMenuButton type="button" disabled class="module-button">
                       <ng-icon [name]="module.icon" size="18" aria-hidden="true" />

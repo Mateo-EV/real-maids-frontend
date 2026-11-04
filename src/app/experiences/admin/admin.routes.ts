@@ -23,6 +23,13 @@ export const ADMIN_ROUTES: Routes = [
           import("../../features/customers/customers.routes").then(
             routes => routes.CUSTOMERS_ROUTES
           )
+      },
+      {
+        path: "staff",
+        loadChildren: () =>
+          import("../../features/field-operations/field-operations.routes").then(
+            routes => routes.FIELD_OPERATIONS_ROUTES
+          )
       }
     ]
   }
