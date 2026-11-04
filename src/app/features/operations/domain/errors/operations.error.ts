@@ -1,5 +1,13 @@
 export type OperationsErrorCode =
-  "NOT_FOUND" | "FORBIDDEN" | "CONFLICT" | "INVALID_DATA" | "UNAVAILABLE" | "UNKNOWN"
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "CONFLICT"
+  | "INVALID_DATA"
+  | "UNAVAILABLE"
+  | "UNKNOWN"
+  | "UNCONFIGURED"
+  | "UNAUTHENTICATED"
+  | "INVALID_RESPONSE"
 
 export class OperationsError extends Error {
   constructor(

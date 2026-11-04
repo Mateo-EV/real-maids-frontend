@@ -1,6 +1,18 @@
-# Operations domain — area D
+# Operations — area D
 
-Domain-only coverage of requests, quotes, contracts, orders, scheduling and assignments (M04/M05/M07/M08, RF04–RF06/RF08–RF09, HU04–HU06/HU08–HU09; RNF09/RNF10/RNF12). All ten assigned SQL tables are represented. Existing backend capabilities are distinguished from proposed contracts; no application actions, HTTP adapters, routes, stores, UI, providers or dependencies are added.
+Domain coverage of requests, quotes, contracts, orders, scheduling and assignments (M04/M05/M07/M08, RF04–RF06/RF08–RF09, HU04–HU06/HU08–HU09; RNF09/RNF10/RNF12). All ten assigned SQL tables are represented. WP7 T5 adds request list/detail HTTP transport only; application actions, repository implementation/composition binding, routes, stores, UI and dependency changes remain absent. Backend capabilities are not evidence of a finished frontend workflow.
+
+## WP7 T5 — Request-read HTTP boundary
+
+The root-provided [ServiceRequestsHttpSource](infrastructure/source/service-requests-http.source.ts) implements cold list/detail GETs for M04/RF04/HU04/P05 (RNF09/RNF10/RNF12). It is not yet connected to an application repository or consumer.
+
+- `GET /api/solicitudes` maps optional customer/state/registration-calendar filters and shared offset/limit to `idCliente/estado/desde/hasta/pagina/tamanio`, default 0/20. Requested sizes above 100 remain transportable; validated effective server metadata determines the returned offset/limit/total. Preserve server order without slicing or fabricated totals. Server own-scope may override a requested customer filter; the adapter neither invents an authenticated customer ID nor rejects those legitimate returned IDs.
+- `GET /api/solicitudes/{id}` validates positive int32 input and exact returned request identity. Unknown DTOs, pages, IDs, required fields, nullable/empty text, real calendars and explicit-offset instants are validated by the [feature-local decoder](infrastructure/source/service-requests-http.validation.ts). Desired dates stay calendar strings; registration/update instants map to Date, registrar names remain names rather than fabricated user IDs. No business timezone or browser-derived today is selected.
+- Existing API-origin validation/auth interceptor policy is reused unchanged; SSR/unconfigured reads dispatch nothing, transfer cache is disabled, unsubscribe cancels and repeated subscriptions remain uncached. No retries, raw backend messages, credentials, demo fallback or storage policy is added. Safe typed failures include invalid/malformed success responses, including successful-status transport parse errors.
+
+No request create/update/cancel, order/schedule/team/agenda, quote/contract or catalog-administration adapter is implemented. Repository methods remain contracts until their explicit implementation; no root composition, presentation freshness policy, navigation or consumer is claimed by this slice.
+
+Observed technical evidence: parent RED compiled with six expected failures/two passes; a later public successful-status parsing regression failed with UNKNOWN instead of INVALID_RESPONSE, then the local mapping fix passed **32/32** tests across the HTTP and existing domain-contract specs. Production browser/server build passed with one prerendered route, warning 646.28/500 kB. This is focused transport evidence, not a new full-suite run, live backend/CORS/permission/redaction or browser acceptance. Full T5/WP7 remain pending.
 
 ## Schema coverage
 
@@ -39,7 +51,7 @@ The abbreviated request DTO locators above expand to `src/main/java/utp/edud/pe/
 
 [OperationsRepository](domain/repositories/operations.repository.ts) marks confirmed methods separately. Its [read projections](domain/models/operations-read.models.ts) preserve response information without fabricating SQL fields absent from DTOs: request responses provide registrar names rather than user IDs; history lacks row IDs/status IDs; schedules provide reason/registrar names rather than their IDs; order responses expose status codes and contextual customer/service-type names rather than the complete SQL order. Schema entities are therefore **not directly hydratable from those responses**. The order property projection is area-owned and uses primitive customer IDs, avoiding a domain dependency loop.
 
-Read queries extend shared `PaginationParams` and return shared `PaginationResponse<T>`. A future adapter must map pagination and Spanish wire fields; no duplicate page type or transport mapping is introduced here. Confirmed date filters are request registration days and order scheduled days, respectively. Agenda uses a list, not a guessed paged response.
+Read queries extend shared `PaginationParams` and return shared `PaginationResponse<T>`. Request transport now maps pagination and Spanish wire fields without a duplicate page type; the other capabilities still await adapters. Confirmed date filters are request registration days and order scheduled days, respectively. Agenda uses a list, not a guessed paged response.
 
 ## Proposed domain contracts and write boundaries
 
@@ -47,7 +59,7 @@ Quote/list/detail/create/update, quote-line reads/create/update, contract/list/d
 
 [Explicit params](domain/params/operations.params.ts) exclude generated IDs, quote/contract numbers, order codes, totals/subtotals, actor IDs, history entries and identity timestamps. Proposed quote create accepts line input; line subtotal and quote totals remain server-derived. Contract customer identity cannot be changed by update. Confirmed order creation accepts request ID only plus estimated amount/observation, never arbitrary initial state/property/contract. Order update is restricted to amount/observation. Scheduling cannot set `isCurrent`, history or registrar; assignment replacement cannot supply SQL assignment IDs, crew IDs or timestamps. There is no standalone create/update-history param because history is server-generated by actions. No unsupported deletion, conversion or reopening rule is invented.
 
-Status/role values are open strings under S6, not enums inferred from SQL seeds or Java DTO enums. Current backend request values include `EN_PROCESO`/`COMPLETADA`/`PAGADO`/`CANCELADA`, assignment roles `RESPONSABLE`/`APOYO`; backend validation and authorization remain authoritative. This foundation does not implement a state machine, scheduling conflict checks or role-derived ACL. Existing IAM contracts remain untouched.
+Status/role values are open strings under S6, not enums inferred from SQL seeds or Java DTO enums. The confirmed request adapter validates `registrada`/`atendida`/`cancelada`; order values include `EN_PROCESO`/`COMPLETADA`/`PAGADO`/`CANCELADA`, assignment roles `RESPONSABLE`/`APOYO`; backend validation and authorization remain authoritative. This foundation does not implement a state machine, scheduling conflict checks or role-derived ACL. Existing IAM contracts remain untouched.
 
 [OperationsError](domain/errors/operations.error.ts) supplies a typed Error subclass with proposed safe categories, not a promised backend error format. All methods return `Observable<Result<T, OperationsError>>` through shared Result. `OPERATIONS_REPOSITORY` is a typed InjectionToken only, without a provider/implementation.
 
@@ -59,4 +71,4 @@ No password/session hashes, encrypted QuickBooks credentials or processor token 
 
 ## Verification surface
 
-[Factory tests](domain/operations.spec.ts) check every field and nullable column of all ten entities, exact decimal bytes, leap-day DATE/TIME strings, nondefault flags/custom catalog strings and Date reference preservation. [Contract tests](domain/operations-contracts.spec.ts) check feature errors, token resolution, Result failures for every capability, shared-page success/metadata, empty assignment replacement and compile-time generated-field/write restrictions. No live API, build, browser or full integration acceptance is claimed here.
+[Factory tests](domain/operations.spec.ts) check every field and nullable column of all ten entities, exact decimal bytes, leap-day DATE/TIME strings, nondefault flags/custom catalog strings and Date reference preservation. [Contract tests](domain/operations-contracts.spec.ts) check feature errors, token resolution, Result failures for every capability, shared-page success/metadata, empty assignment replacement and compile-time generated-field/write restrictions. The [HTTP boundary tests](infrastructure/source/service-requests-http.source.spec.ts) add request transport evidence described above. No live API, browser or full integration acceptance is claimed.
