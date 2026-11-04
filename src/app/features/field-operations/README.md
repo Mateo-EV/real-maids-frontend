@@ -1,13 +1,15 @@
 # Field operations — area E
 
-WP7 T3 (staff half, S1/S3) adds a read-only HTTP transport boundary for M06/RF07/HU07/P07 (RNF09/RNF10/RNF12). All seven assigned SQL tables remain represented in domain. Staff capabilities are source-confirmed; crew/execution contracts remain proposals. No routed UI, navigation, upload adapter or dependency is added. T4 consumer/root integration remains pending; this is not full HR CRUD or WP7 completion.
+WP7 T3 (staff half, S1/S3) adds a read-only HTTP/application boundary for M06/RF07/HU07/P07 (RNF09/RNF10/RNF12). All seven assigned SQL tables remain represented in domain. Staff capabilities are source-confirmed; crew/execution contracts remain proposals. No routed UI, navigation, upload adapter or dependency is added. T4 consumer/root integration remains pending; this is not full HR CRUD or WP7 completion.
 
-## Staff HTTP transport (WP7 T3)
+## Staff read boundary (WP7 T3)
 
-- Root `FieldStaffHttpSource` reads only `GET /api/personal`, `/api/personal/{id}` and `/api/personal/me`. Listing sends optional trimmed name/document `busqueda`, optional boolean `activo`, default page0/size20, with aligned safe int32 paging. Returned page/effective size/total are validated and adopted without local slicing.
-- Unknown DTOs, unique/target/caller IDs, nullable fields, business calendar/clock text and offset creation instants are validated. Own profile checks the existing session observation when available; staff IDs are not user IDs. Empty weekly slots mean no weekly restriction, never free booking slots or scheduling authority.
-- SSR sends no staff request or session observation; transfer cache is disabled. API_URL/auth policy are reused; safe errors never expose raw backend messages. No retries, fallback, storage, frontend ACL or operational timezone are introduced.
-- Repository/application/provider and root presentation state follow in separate commits. No root composition, cached state or UI is claimed by this transport commit. HTTP tests cover mapping, invalid DTOs/paging, target/caller consistency, safe failures and SSR.
+- `FieldStaffHttpSource` reads only `GET /api/personal`, `/api/personal/{id}` and `/api/personal/me`. Listing sends optional trimmed `busqueda` (name/document, not email), preserves `activo=false`, and defaults to `pagina=0&tamanio=20`. Aligned safe offset/limit values map to int32 wire page/size; the backend caps effective size at 100. Strict page validation adopts returned page × effective size and total, including consistent out-of-range empty pages, without downloads of every page, slicing or invented totals.
+- The source validates unknown DTOs, unique IDs, target/caller identity when available, required fields, nullable contacts/account/calendar date, offset-bearing creation instant and embedded weekly slots. `/me` uses the existing application session observation, not an extra auth request or staff-ID/user-ID equivalence. Local calendar/clock strings preserve supplied precision and order. Empty availability means **no weekly restriction**, not unavailable, free bookings or scheduling authority.
+- `FieldOperationsRepositoryImpl` implements the complete existing interface and injects the root source. All confirmed writes and proposed crew/execution/upload operations return typed `UNSUPPORTED` with zero HTTP. Safe transport errors never expose backend text or infer a frontend ACL; hidden-other-record 404 remains `NOT_FOUND`.
+- `provideFieldOperationsReads()` returns `EnvironmentProviders`, binding the repository token with `useExisting`. The parent must install it at the root alongside the existing HTTP/auth composition. It provides no HTTP client and is not installed in application configuration yet. Named stateless `GetFieldStaffUseCase`, `GetFieldStaffByIdUseCase` and `GetMyStaffProfileUseCase` expose `execute()`.
+
+HTTP and use-case/provider tests cover DTO/paging failures, effective metadata, unsupported operations, provider identity and source SSR behavior. Root state/cache/session tests are the next separate slice. Exact observed runner results belong to the implementation handoff. Live backend/CORS/authorization, browser/native review and T4 consumer acceptance are not established. Confirmed backend writes are still not frontend-wired.
 
 ## Schema coverage
 
@@ -44,7 +46,7 @@ Crew list/detail/create/update; crew-member list/create/update under a crew ID; 
 
 [Explicit params](domain/params/field-operations.params.ts) exclude generated row IDs, created/uploaded/checklist-recorded timestamps and source-system identity metadata. Confirmed staff create/update accepts only profile input; status, linked account and availability have dedicated operations. Crew-member updates do not move the member to another staff identity. Work-log start/end Date values are proposed execution input, not generated identity timestamps. Checklist creation identifies a task; completion/comment updates leave its recorded timestamp server-owned. Evidence creation accepts an already obtained file URL, moment, description and nullable staff ID; no upload endpoint is implied. Evidence update changes only moment/description, not identity/file ownership.
 
-[FieldOperationsError](domain/errors/field-operations.error.ts) retains its existing typed categories and adds `UNSUPPORTED`, `UNCONFIGURED`, `UNAUTHENTICATED` and `INVALID_RESPONSE` for the implemented read transport. Every method uses shared `Observable<Result<T, FieldOperationsError>>`; repository/provider composition is added in the next application slice; this transport alone does not bind the token.
+[FieldOperationsError](domain/errors/field-operations.error.ts) retains its existing typed categories and adds `UNSUPPORTED`, `UNCONFIGURED`, `UNAUTHENTICATED` and `INVALID_RESPONSE` for the implemented read transport. Every method uses shared `Observable<Result<T, FieldOperationsError>>`; `FIELD_OPERATIONS_REPOSITORY` is explicitly aliased to the separate root implementation by the opt-in provider above.
 
 ## Types and security
 
