@@ -1,0 +1,121 @@
+<main
+  class="mx-auto flex w-full max-w-6xl flex-col gap-5 bg-background px-4 py-6 text-foreground sm:px-6"
+>
+  <a
+    hlmBtn
+    variant="outline"
+    class="self-start"
+    routerLink="/admin/staff"
+    [queryParams]="backContext()"
+    [state]="backState()"
+    >Volver a personal</a
+  >
+  <app-catalog-frame
+    titleId="staff-detail-title"
+    [title]="staff()?.name ?? 'Perfil de personal'"
+    description="Perfil registrado y restricciones semanales. La programación se confirma en el servidor."
+    [busy]="busy()"
+  >
+    @if (staff()) {
+      <div catalogControls>
+        <button hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="retry()">
+          Actualizar perfil
+        </button>
+      </div>
+    }
+    @if (invalid()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive">
+          <h2 hlmAlertTitle>Identificador de personal inválido</h2>
+          <p hlmAlertDescription>Vuelve al listado y selecciona un registro de personal.</p>
+        </div>
+      </div>
+    } @else {
+      @if (detail()?.loading) {
+        <div role="status" class="flex min-h-48 items-center justify-center gap-3">
+          <hlm-spinner />Cargando perfil…
+        </div>
+      }
+      @if (detail()?.refreshing) {
+        <p role="status" class="px-5 py-3 text-sm text-muted-foreground">Actualizando perfil…</p>
+      }
+      @if (error()) {
+        <div class="p-5">
+          <div hlmAlert variant="destructive">
+            <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+            <div hlmAlertDescription>
+              @if (staff()) {
+                <p>Los datos pueden estar desactualizados.</p>
+              }
+            </div>
+          </div>
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            class="mt-4"
+            [disabled]="busy()"
+            (click)="retry()"
+          >
+            Reintentar
+          </button>
+        </div>
+      }
+      @if (staff(); as person) {
+        <div class="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
+          <span hlmBadge variant="outline" class="self-start">{{
+            person.isActive ? "Activo" : "Inactivo"
+          }}</span>
+          <dl class="grid min-w-0 gap-x-8 gap-y-5 sm:grid-cols-2">
+            @for (field of fields(); track field[0]) {
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ field[0] }}</dt>
+                <dd class="mt-1 break-words text-sm whitespace-pre-wrap">
+                  {{ field[1] ?? "No registrado" }}
+                </dd>
+              </div>
+            }
+          </dl>
+          <section aria-labelledby="staff-weekly-title" class="min-w-0">
+            <h2 id="staff-weekly-title" class="text-sm font-semibold">Disponibilidad semanal</h2>
+            <p class="mt-1 max-w-prose text-xs text-muted-foreground">
+              Horarios semanales registrados; no confirman espacios libres para reservas.
+            </p>
+            @if (person.availability.length) {
+              <ol class="mt-4 grid gap-3 sm:grid-cols-2">
+                @for (slot of person.availability; track $index) {
+                  <li class="min-w-0 rounded-lg border p-4">
+                    <h3 class="text-sm font-semibold">{{ slot.weekday }}</h3>
+                    <dl class="mt-2 grid gap-2 text-sm">
+                      <div>
+                        <dt class="text-xs text-muted-foreground">Inicio</dt>
+                        <dd class="break-words tabular-nums">{{ slot.startTime }}</dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs text-muted-foreground">Fin</dt>
+                        <dd class="break-words tabular-nums">{{ slot.endTime }}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                }
+              </ol>
+            } @else {
+              <div hlmEmpty class="mt-4">
+                <div hlmEmptyHeader>
+                  <h3 hlmEmptyTitle>Sin restricción semanal registrada</h3>
+                  <p hlmEmptyDescription>
+                    La asignación y los conflictos de horario se validan en el servidor.
+                  </p>
+                </div>
+              </div>
+            }
+          </section>
+        </div>
+      } @else if (!detail()?.loading && !error()) {
+        <p role="status" class="p-5 text-sm text-muted-foreground">
+          No hay un perfil verificado para esta sesión.
+        </p>
+      }
+    }
+  </app-catalog-frame>
+</main>

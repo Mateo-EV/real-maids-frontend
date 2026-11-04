@@ -14,6 +14,12 @@ WP7 T3 (staff half, S1/S3) adds a read-only HTTP/application/root-state boundary
 
 HTTP, use-case/provider and public store tests cover DTO/paging failures, effective metadata, unsupported operations, freshness, stale data, sharing/cancellation and session/SSR boundaries. Exact observed runner results belong to the implementation handoff. Live backend/CORS/authorization, browser/native review and T4 consumer acceptance are not established. Confirmed backend writes are still not frontend-wired.
 
+## WP7 T4 profile consumer — route integration pending
+
+[StaffDetailPage](presentation/pages/staff-detail-page/staff-detail-page.ts) is a read-only, still-unrouted consumer of the existing root store. Explicit own-profile route metadata selects `/api/personal/me`; numeric targets use validated positive int32 IDs. Invalid IDs issue no reads, and an own-profile 404 never falls back to a guessed staff ID. Contact/profile fields remain literal, nullable absence stays explicit, calendar/time strings preserve backend semantics and creation instants are labeled UTC. Weekly slots retain order/precision; an empty list means no recorded weekly restriction, not free bookings or authorization.
+
+Consumer-owned observations cancel on route/destruction/session replacement; same-session renewal preserves work. Same-ID stale refresh/errors remain visible with GET-only retry. Explicit return context uses validated effective page/size plus owner-bound navigation controls, never search text in the URL. The [profile tests](presentation/pages/staff-detail-page/staff-detail-page.spec.ts) and [lifecycle tests](presentation/pages/staff-detail-page/staff-detail-page.lifecycle.spec.ts) passed 24/24 in the isolated worktree before exact parent adoption. That is focused technical evidence, not root-route, live backend/CORS, authorization/redaction or browser acceptance. Directory/root navigation and aggregate T4 verification remain pending.
+
 ## Schema coverage
 
 Authoritative field evidence: `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, areas E1/E2. Each entity has a private positional constructor/static `create()` following User and only materializes supplied values.
