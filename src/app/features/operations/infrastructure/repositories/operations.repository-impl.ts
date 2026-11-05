@@ -17,7 +17,8 @@ export class OperationsRepositoryImpl implements OperationsRepository {
 
   // Confirmed capabilities remain unwired until their separate implementation slices.
   createRequest: OperationsRepository["createRequest"] = params => this.source.createRequest(params)
-  updateRequest: OperationsRepository["updateRequest"] = unsupported
+  updateRequest: OperationsRepository["updateRequest"] = (id, params) =>
+    this.source.updateRequest(id, params)
   cancelRequest: OperationsRepository["cancelRequest"] = unsupported
   getOrders: OperationsRepository["getOrders"] = unsupported
   getOrder: OperationsRepository["getOrder"] = unsupported

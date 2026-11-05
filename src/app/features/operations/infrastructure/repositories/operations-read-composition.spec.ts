@@ -10,7 +10,10 @@ import {
   GetServiceRequestByIdUseCase,
   ListServiceRequestsUseCase
 } from "../../application/use-cases/service-request-read.use-cases"
-import { CreateServiceRequestUseCase } from "../../application/use-cases/service-request-write.use-cases"
+import {
+  CreateServiceRequestUseCase,
+  UpdateServiceRequestUseCase
+} from "../../application/use-cases/service-request-write.use-cases"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
@@ -246,8 +249,75 @@ describe("Operations request read public composition", () => {
     http.expectNone(() => true)
   })
 
-  it("keeps the remaining28 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
-    const request = { propertyId: 31, serviceTypeId: 4, description: null, desiredDate: null }
+  it("forwards update through the stateless action/root repository with exactly four wire fields", async () => {
+    const update = TestBed.inject(UpdateServiceRequestUseCase)
+    expect(TestBed.inject(UpdateServiceRequestUseCase)).toBe(update)
+    const operation = update.execute(17, {
+      propertyId: 31,
+      serviceTypeId: 4,
+      description: dto.descripcion,
+      desiredDate: dto.fechaDeseada
+    })
+    http.expectNone(() => true)
+    const pending = firstValueFrom(operation)
+    const request = http.expectOne(`${url}/17`)
+    expect(request.request.method).toBe("PUT")
+    expect(request.request.transferCache).toBe(false)
+    expect(request.request.params.keys()).toEqual([])
+    expect(request.request.body).toEqual({
+      idPropiedad: 31,
+      idTipoServicio: 4,
+      descripcion: dto.descripcion,
+      fechaDeseada: dto.fechaDeseada
+    })
+    request.flush(dto)
+    expect(await pending).toEqual(Result.success(summary))
+    expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+    http.expectNone(() => true)
+  })
+
+  it("forwards a safe update failure without PUT replay or synthetic success", async () => {
+    const pending = firstValueFrom(
+      TestBed.inject(UpdateServiceRequestUseCase).execute(17, {
+        propertyId: 31,
+        serviceTypeId: 4,
+        description: null,
+        desiredDate: null
+      })
+    )
+    const request = http.expectOne(`${url}/17`)
+    expect(request.request.method).toBe("PUT")
+    request.flush({ mensaje: "PRIVATE" }, { status: 409, statusText: "Conflict" })
+    expect(await pending).toMatchObject({
+      success: false,
+      error: { code: "CONFLICT", message: "No se pudo actualizar la solicitud de servicio." }
+    })
+    http.expectNone(() => true)
+  })
+
+  it("keeps update cold and forwards caller cancellation through the composition boundary", () => {
+    const operation = TestBed.inject(UpdateServiceRequestUseCase).execute(17, {
+      propertyId: 31,
+      serviceTypeId: 4,
+      description: null,
+      desiredDate: null
+    })
+    http.expectNone(() => true)
+    let delivered = false
+    const subscription = operation.subscribe(() => (delivered = true))
+    try {
+      const request = http.expectOne(`${url}/17`)
+      expect(request.request.method).toBe("PUT")
+      subscription.unsubscribe()
+      expect(request.cancelled).toBe(true)
+      expect(delivered).toBe(false)
+      http.expectNone(() => true)
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
+
+  it("keeps the remaining27 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
       serviceTypeId: 4,
@@ -270,7 +340,6 @@ describe("Operations request read public composition", () => {
     const status = { name: "Estado", sortOrder: 1, isFinal: false }
     const reason = { name: "Motivo", description: null, isActive: true }
     const operations: Observable<Result<unknown, OperationsError>>[] = [
-      repository.updateRequest(17, request),
       repository.cancelRequest(17, { reason: "Cancelación explícita" }),
       repository.getOrders({}),
       repository.getOrder(5),

@@ -10,7 +10,8 @@ import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
   CreateServiceRequestParams,
-  ServiceRequestQuery
+  ServiceRequestQuery,
+  UpdateServiceRequestParams
 } from "../../domain/params/operations.params"
 import { createRequestBody } from "./service-requests-create.validation"
 import {
@@ -21,6 +22,7 @@ import {
   requestPage,
   requestPagination
 } from "./service-requests-http.validation"
+import { updateRequestBody } from "./service-requests-update.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceRequestsHttpSource {
@@ -63,6 +65,39 @@ export class ServiceRequestsHttpSource {
           ? result
           : Result.failure(
               new OperationsError(result.error.code, "No se pudo crear la solicitud de servicio.")
+            )
+      )
+    )
+  }
+
+  updateRequest(
+    id: number,
+    params: UpdateServiceRequestParams
+  ): Observable<Result<ServiceRequestSummary, OperationsError>> {
+    const snapshot = { ...params }
+    return this.request(() => {
+      if (!positiveId(id)) throw failure("INVALID_DATA")
+      const body = updateRequestBody(snapshot)
+      return this.http.put<unknown>(`${this.url}/${id}`, body, { transferCache: false }).pipe(
+        map(value => {
+          const result = requestDto(value, id)
+          if (
+            result.propertyId !== body.idPropiedad ||
+            result.serviceTypeId !== body.idTipoServicio
+          )
+            throw failure("INVALID_RESPONSE")
+          return result
+        })
+      )
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(
+                result.error.code,
+                "No se pudo actualizar la solicitud de servicio."
+              )
             )
       )
     )
