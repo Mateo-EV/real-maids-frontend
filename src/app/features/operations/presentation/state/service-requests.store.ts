@@ -1,18 +1,26 @@
-import { inject, Injector } from "@angular/core"
-import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
+import { computed, inject, Injector } from "@angular/core"
+import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import {
-  concat,
+  catchError,
   defaultIfEmpty,
   defer,
   EMPTY,
   finalize,
-  NEVER,
+  filter,
+  map,
+  merge,
   Observable,
   of,
   take,
-  takeUntil
+  takeUntil,
+  shareReplay,
+  Subject,
+  switchMap,
+  tap
 } from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import { CustomerHistoryStore } from "@/app/features/customers/presentation/state/customer-history.store"
+import { CreateServiceRequestUseCase } from "../../application/use-cases/service-request-write.use-cases"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import {
   createReadResource,
@@ -26,7 +34,10 @@ import {
 } from "../../application/use-cases/service-request-read.use-cases"
 import { OperationsError, OperationsErrorCode } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
-import { ServiceRequestQuery } from "../../domain/params/operations.params"
+import {
+  CreateServiceRequestParams,
+  ServiceRequestQuery
+} from "../../domain/params/operations.params"
 
 export interface ServiceRequestsReadEntry<T> {
   readonly result: T | undefined
@@ -109,6 +120,7 @@ const resourceState = <T>(
   expires: entry.expires
 })
 const initialState = {
+  _pendingWrites: 0,
   _pages: {} as Entries<Page>,
   _details: {} as Entries<ServiceRequestSummary>
 }
@@ -116,6 +128,7 @@ const initialState = {
 export const ServiceRequestsStore = signalStore(
   { providedIn: "root" },
   withState(initialState),
+  withComputed(store => ({ writing: computed(() => store._pendingWrites() > 0) })),
   withMethods(store => {
     const injector = inject(Injector)
     const resets: (() => void)[] = []
@@ -127,6 +140,7 @@ export const ServiceRequestsStore = signalStore(
     function registry<T>(get: () => Entries<T>, set: (entries: Entries<T>) => void) {
       const resources = new Map<string, ReadResource<T | undefined, OperationsError>>()
       const active = new Map<string, number>()
+      const refreshes = new Subject<Map<string, Observable<Result<T, OperationsError>>>>()
       resets.push(() => {
         const previous = [...resources.values()]
         resources.clear()
@@ -196,6 +210,26 @@ export const ServiceRequestsStore = signalStore(
           return resource.read(force) as Observable<Result<T, OperationsError>>
         })
       return {
+        invalidate(predicate: (key: string) => boolean = () => true) {
+          const generation = scope.generation()
+          const current = () => scope.check() && generation === scope.generation()
+          const keys = [...resources.keys()].filter(predicate)
+          for (const key of keys) {
+            if (!current()) return
+            resources.get(key)?.invalidate()
+          }
+          const batch = new Map<string, Observable<Result<T, OperationsError>>>()
+          for (const key of keys) {
+            if (!current()) return
+            const resource = resources.get(key)
+            if (active.has(key) && resource) {
+              // Forced reads call the T-valued request; undefined is only the unloaded state.
+              const refresh = resource.read(true) as Observable<Result<T, OperationsError>>
+              batch.set(key, refresh.pipe(shareReplay({ bufferSize: 1, refCount: true })))
+            }
+          }
+          if (current()) refreshes.next(batch)
+        },
         select: (key: string) => get()[key] ?? empty<T>(),
         observe: (
           key: string,
@@ -206,7 +240,14 @@ export const ServiceRequestsStore = signalStore(
             if (!scope.check()) return EMPTY
             if (!admit(key)) return failure<T>("UNAVAILABLE")
             active.set(key, (active.get(key) ?? 0) + 1)
-            return concat(read(key, request, force), NEVER).pipe(
+            return merge(
+              refreshes.pipe(
+                map(batch => batch.get(key)),
+                filter(value => value !== undefined)
+              ),
+              of(read(key, request, force))
+            ).pipe(
+              switchMap(request => request),
               takeUntil(scope.cancelled$),
               finalize(() => {
                 const count = (active.get(key) ?? 1) - 1
@@ -226,6 +267,40 @@ export const ServiceRequestsStore = signalStore(
       entries => patchState(store, { _details: entries })
     )
     return {
+      createRequest(
+        params: CreateServiceRequestParams
+      ): Observable<Result<ServiceRequestSummary, OperationsError>> {
+        const snapshot = { ...params }
+        const writeError = (code: OperationsErrorCode) =>
+          new OperationsError(code, "No se pudo crear la solicitud de servicio.")
+        return defer(() => {
+          if (!scope.check()) return EMPTY
+          if (store._pendingWrites()) return of(Result.failure(writeError("CONFLICT")))
+          const generation = scope.generation()
+          const current = () => scope.check() && generation === scope.generation()
+          patchState(store, { _pendingWrites: store._pendingWrites() + 1 })
+          return defer(() => injector.get(CreateServiceRequestUseCase).execute(snapshot)).pipe(
+            take(1),
+            defaultIfEmpty(Result.failure(writeError("INVALID_RESPONSE"))),
+            catchError((error: unknown) =>
+              of(Result.failure(error instanceof OperationsError ? error : writeError("UNKNOWN")))
+            ),
+            tap(result => {
+              if (!result.success || !current()) return
+              pages.invalidate()
+              if (!current()) return
+              details.invalidate(key => key === String(result.data.id))
+              if (!current()) return
+              injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
+            }),
+            takeUntil(scope.cancelled$),
+            finalize(() => {
+              if (generation === scope.generation())
+                patchState(store, { _pendingWrites: store._pendingWrites() - 1 })
+            })
+          )
+        })
+      },
       selectRequests(query: ServiceRequestQuery = {}): ServiceRequestsReadEntry<Page> {
         const snapshot = normalize(query)
         return snapshot ? pages.select(queryKey(snapshot)) : empty<Page>()
