@@ -22,6 +22,14 @@ The existing shared read-resource/session-scope pattern supplies 30000ms success
 
 [State tests](presentation/state/service-requests.store.spec.ts) first compiled with 13 expected failures/two passes; the final candidate passed **76/76** Operations tests across five files and browser/SSR build with one prerendered route (646.28/500 kB warning). This is not a new app-wide full-suite run or backend/browser acceptance. No root application binding, route/UI consumer, write action or unused future invalidation API is added.
 
+### Approved consumer navigation (not yet routed)
+
+The user selected the new sidebar label `Operaciones` for the internal request → order → agenda workflow; other module entries remain unchanged. The first bounded consumer slice is read-only request list/detail, not quote/pricing or full P05 acceptance. No sidebar link, application provider installation or UI route is delivered by the helpers alone.
+
+[Navigation helpers](presentation/navigation/service-request-page-context.ts) use zero-based URL `page`/`size` and shared offset=`page * size`/limit internally. Positive decimal int32 route IDs include leading zeros; malformed/duplicate/incomplete/overflow context defaults both fields to 0/20. Serialization checks safe aligned offset/limit, emits only numeric page/size and uses actual returned effective metadata. Requested sizes above 100 are not clamped by URL parsing; response-size caps belong to the transport. Existing staff/lead helpers and URL contracts are unchanged; no personal filters, credentials, roles or session identifiers are serialized.
+
+[Helper tests](presentation/navigation/service-request-page-context.spec.ts) first compiled with eight expected failures/49 passes; the completed candidate passed **133/133** Operations tests across six files and browser/SSR build with one prerendered route. The current initial-bundle warning is 646.36/500 kB. This is technical helper evidence, not UI/live/backend/browser acceptance.
+
 ## Schema coverage
 
 Authoritative fields: `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, area D. Each class below has its own named entity file, with private positional constructors/static `create()` following User. Factories only materialize values; they do not calculate totals, enforce transitions or infer identities.
