@@ -8,7 +8,11 @@ import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
-import { ServiceRequestQuery } from "../../domain/params/operations.params"
+import {
+  CreateServiceRequestParams,
+  ServiceRequestQuery
+} from "../../domain/params/operations.params"
+import { createRequestBody } from "./service-requests-create.validation"
 import {
   failure,
   positiveId,
@@ -33,6 +37,35 @@ export class ServiceRequestsHttpSource {
         catchError((error: unknown) => of(Result.failure(requestError(error))))
       )
     })
+  }
+
+  createRequest(
+    params: CreateServiceRequestParams
+  ): Observable<Result<ServiceRequestSummary, OperationsError>> {
+    const snapshot = { ...params }
+    return this.request(() => {
+      const body = createRequestBody(snapshot)
+      return this.http.post<unknown>(this.url, body, { transferCache: false }).pipe(
+        map(value => {
+          const result = requestDto(value)
+          if (
+            result.customerId !== body.idCliente ||
+            result.propertyId !== body.idPropiedad ||
+            result.serviceTypeId !== body.idTipoServicio
+          )
+            throw failure("INVALID_RESPONSE")
+          return result
+        })
+      )
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(result.error.code, "No se pudo crear la solicitud de servicio.")
+            )
+      )
+    )
   }
 
   getRequests(
