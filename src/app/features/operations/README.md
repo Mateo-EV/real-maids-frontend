@@ -1,6 +1,6 @@
 # Operations — area D
 
-Domain coverage of requests, quotes, contracts, orders, scheduling and assignments (M04/M05/M07/M08, RF04–RF06/RF08–RF09, HU04–HU06/HU08–HU09; RNF09/RNF10/RNF12). All ten assigned SQL tables are represented. WP7 T5 adds request list/detail HTTP transport, a repository implementation, two application actions and opt-in composition. A root presentation read store is also implemented. Routes, UI, root installation and dependency changes remain absent. Backend capabilities are not evidence of a finished frontend workflow.
+Domain coverage of requests, quotes, contracts, orders, scheduling and assignments (M04/M05/M07/M08, RF04–RF06/RF08–RF09, HU04–HU06/HU08–HU09; RNF09/RNF10/RNF12). All ten assigned SQL tables are represented. WP7 T5 adds request list/detail HTTP transport, a repository implementation, two application actions and opt-in composition. A root presentation read store is also implemented. A standalone read-only request inbox is implemented; routed UI, root installation and dependency changes remain absent. Request detail is checkpointed in a separate subsequent slice. Backend capabilities are not evidence of a finished frontend workflow.
 
 ## WP7 T5 — Request-read HTTP boundary
 
@@ -29,6 +29,12 @@ The user selected the new sidebar label `Operaciones` for the internal request �
 [Navigation helpers](presentation/navigation/service-request-page-context.ts) use zero-based URL `page`/`size` and shared offset=`page * size`/limit internally. Positive decimal int32 route IDs include leading zeros; malformed/duplicate/incomplete/overflow context defaults both fields to 0/20. Serialization checks safe aligned offset/limit, emits only numeric page/size and uses actual returned effective metadata. Requested sizes above 100 are not clamped by URL parsing; response-size caps belong to the transport. Existing staff/lead helpers and URL contracts are unchanged; no personal filters, credentials, roles or session identifiers are serialized.
 
 [Helper tests](presentation/navigation/service-request-page-context.spec.ts) first compiled with eight expected failures/49 passes; the completed candidate passed **133/133** Operations tests across six files and browser/SSR build with one prerendered route. The current initial-bundle warning is 646.36/500 kB. This is technical helper evidence, not UI/live/backend/browser acceptance.
+
+### Standalone request inbox (unrouted)
+
+[ServiceRequestsPage](presentation/pages/service-requests-page/service-requests-page.ts) observes/selects the existing root store with local paging controls and consumer-owned cancellation. It reuses CatalogFrame/Helm responsive table/cards and global theme: initial validated 0/20, actual server order/effective metadata and explicit detail-link page/size, no automatic duplicate read after a server-size change. Verified same-query stale data remains visible with updating/error/retry feedback; unrelated-query rows are hidden. One generation/revision/destruction-fenced out-of-range recovery is allowed per navigation/retry, without rewriting the stored page or fabricating totals. Session renewal preserves work; replacement clears old scope, and component teardown never destroys unrelated root observers. SSR/guest dispatch no reads.
+
+[Inbox public tests](presentation/pages/service-requests-page/service-requests-page.spec.ts) observed RED15 failures/two passes, then GREEN **17/17** without weakening assertions. They cover effective navigation, safe text/null dates, cache refresh/errors, bounded recovery and lifecycle fences through actual store/HTTP/Router composition. No filters, KPIs, lookups, quote/pricing, role ACL or write controls are added. The implementation is not yet a production route/sidebar destination; links target the separately delivered detail leaf. Root/guard/toast integration and full T5 remain pending. Deterministic DOM evidence does not certify live backend/CORS, browser keyboard/responsive/AXE or backend authorization acceptance.
 
 ## Schema coverage
 
