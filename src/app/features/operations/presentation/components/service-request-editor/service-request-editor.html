@@ -1,7 +1,13 @@
 <hlm-dialog-header>
-  <h2 hlmDialogTitle>Crear solicitud</h2>
+  <h2 hlmDialogTitle>{{ editing ? "Editar solicitud" : "Crear solicitud" }}</h2>
   <p hlmDialogDescription>
-    Selecciona un cliente, su propiedad activa y un tipo de servicio del catálogo.
+    @if (editing) {
+      Solicitud ID {{ editing.id }} · Cliente: {{ editing.customerName }} · ID
+      {{ editing.customerId }}. El cliente no cambia. Puedes conservar las referencias originales;
+      para cambiarlas selecciona opciones activas verificadas.
+    } @else {
+      Selecciona un cliente, su propiedad activa y un tipo de servicio del catálogo.
+    }
   </p>
 </hlm-dialog-header>
 <form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
@@ -57,12 +63,17 @@
                 Reintenta para verificar las opciones. Tu borrador se conserva.
               </p>
             </div>
-          } @else if (catalog.loaded && !catalog.options.length) {
+          } @else if (
+            catalog.loaded &&
+            (editing
+              ? !(catalog.key === "propertyId" ? propertyOptions().length : typeOptions().length)
+              : !catalog.options.length)
+          ) {
             <p role="status">
               No hay {{ catalog.name }}{{ catalog.key === "propertyId" ? " activas" : "" }} en el
               catálogo recibido.
             </p>
-          } @else if (catalog.key === "propertyId" && !selectedCustomer()) {
+          } @else if (catalog.key === "propertyId" && !selectedCustomer() && !editing) {
             <p hlmFieldDescription>Selecciona primero un cliente activo verificado.</p>
           }
           <button
@@ -71,7 +82,9 @@
             variant="outline"
             size="sm"
             [disabled]="
-              pending() || catalog.busy || (catalog.key === 'propertyId' && !selectedCustomer())
+              pending() ||
+              catalog.busy ||
+              (catalog.key === 'propertyId' && !selectedCustomer() && !editing)
             "
             (click)="loadCatalog(catalog.key)"
           >
@@ -153,7 +166,7 @@
       @if (pending()) {
         <hlm-spinner aria-label="Guardando" />
       }
-      {{ pending() ? "Guardando…" : "Crear solicitud" }}
+      {{ pending() ? "Guardando…" : editing ? "Guardar cambios" : "Crear solicitud" }}
     </button>
   </hlm-dialog-footer>
 </form>

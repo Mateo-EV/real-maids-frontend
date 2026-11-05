@@ -8,6 +8,11 @@
     [busy]="!!detail()?.loading || !!detail()?.refreshing"
   >
     <div catalogControls class="flex flex-wrap gap-2">
+      @if (request()?.status === "registrada") {
+        <button hlmBtn type="button" [disabled]="writing()" (click)="edit()">
+          Editar solicitud
+        </button>
+      }
       <a
         hlmBtn
         variant="outline"

@@ -4,6 +4,7 @@ import { Component, PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { BehaviorSubject, Subscription } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -57,6 +58,7 @@ async function setup(
       provideHttpClientTesting(),
       { provide: PLATFORM_ID, useValue: options.server ? "server" : "browser" },
       { provide: API_URL, useValue: "https://api.example.test" },
+      { provide: HotToastService, useValue: { success: vi.fn() } },
       { provide: AuthStore, useFactory: authFactory },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: observeSession } }
     ]
@@ -133,7 +135,7 @@ afterEach(() => {
 // T5 S1/S3: bounded request reads; S4: explicit future Operaciones URL context.
 // The local route deliberately does not certify root integration or guard wiring.
 describe("WP7 T5 S1-S4 read-only request detail consumer", () => {
-  it("reads one matching request and renders all supplied context without lookups or write controls", async () => {
+  it("reads one matching request and renders all supplied context without lookups or unrelated write controls", async () => {
     const app = await setup()
     expect(app.text()).toMatch(/cargando solicitud/i)
     expect(app.text()).not.toContain("No registrado")
@@ -159,7 +161,7 @@ describe("WP7 T5 S1-S4 read-only request detail consumer", () => {
     expect(app.text()).toMatch(/registrada/i)
     expect(app.text()).not.toContain("Session caller")
     expect(app.element().querySelector("form, input, select, textarea")).toBeNull()
-    expect(app.text()).not.toMatch(/editar solicitud|cancelar solicitud|crear orden|cotizar/i)
+    expect(app.text()).not.toMatch(/cancelar solicitud|crear orden|cotizar/i)
     expect(app.element().querySelector('a[href*="/customers"], a[href*="/orders"]')).toBeNull()
     app.http.expectNone(() => true)
   })

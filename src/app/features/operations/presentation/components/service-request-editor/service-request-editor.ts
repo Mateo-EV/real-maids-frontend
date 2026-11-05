@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { disabled, form, FormField, FormRoot, submit, validate } from "@angular/forms/signals"
-import { catchError, EMPTY, firstValueFrom, Subject, switchMap, takeUntil } from "rxjs"
+import { catchError, EMPTY, firstValueFrom, Observable, Subject, switchMap, takeUntil } from "rxjs"
 import { BrnDialogRef, injectBrnDialogContext } from "@spartan-ng/brain/dialog"
 import { HlmDialogImports } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -19,11 +19,14 @@ import { TablePagination } from "@/app/shared/components/table-pagination/table-
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
 import { OperationsErrorCode } from "../../../domain/errors/operations.error"
+import { ServiceRequestSummary } from "../../../domain/models/operations-read.models"
 
 export interface ServiceRequestEditorContext {
   owner: DestroyRef
   current: () => boolean
   onSaved: () => void
+  request?: ServiceRequestSummary
+  ownerChanged$?: Observable<void>
 }
 const positiveId = (value: string) => /^[1-9]\d*$/.test(value) && Number(value) <= 2147483647
 const calendar = (value: string) => {
@@ -53,6 +56,9 @@ const calendar = (value: string) => {
 })
 export class ServiceRequestEditor implements OnInit {
   readonly context = injectBrnDialogContext<ServiceRequestEditorContext>()
+  // The detail consumer captures a legitimately loaded request once. Catalog
+  // refreshes never rewrite its owner or the original-reference exception.
+  readonly editing = this.context.request ? { ...this.context.request } : undefined
   private readonly dialog = inject(BrnDialogRef)
   private readonly destroyRef = inject(DestroyRef)
   private readonly customers = inject(CustomersStore)
@@ -74,11 +80,11 @@ export class ServiceRequestEditor implements OnInit {
   private readonly typeAdmissionError = signal(false)
   readonly error = signal("")
   readonly model = signal({
-    customerId: "",
-    propertyId: "",
-    serviceTypeId: "",
-    description: "",
-    desiredDate: ""
+    customerId: this.editing ? String(this.editing.customerId) : "",
+    propertyId: this.editing ? String(this.editing.propertyId) : "",
+    serviceTypeId: this.editing ? String(this.editing.serviceTypeId) : "",
+    description: this.editing?.description ?? "",
+    desiredDate: this.editing?.desiredDate ?? ""
   })
   readonly customerEntry = computed(() => this.customers.selectQuery(this.requested()))
   readonly customerPage = computed(() => this.customerEntry().result)
@@ -108,7 +114,7 @@ export class ServiceRequestEditor implements OnInit {
     () => !!this.customerEntry().error || this.customerAdmissionError()
   )
   readonly propertyEntry = computed(() =>
-    this.properties.selectProperties(this.selectedCustomer()?.id ?? 0)
+    this.properties.selectProperties(this.editing?.customerId ?? this.selectedCustomer()?.id ?? 0)
   )
   readonly propertyBusy = computed(
     () => (this.propertyEntry().pendingReads ?? 0) > 0 || this.propertyEntry().refreshing
@@ -119,7 +125,10 @@ export class ServiceRequestEditor implements OnInit {
   readonly propertyOptions = computed(
     () =>
       this.propertyEntry()
-        .data?.filter(p => p.isActive && p.customerId === this.selectedCustomer()?.id)
+        .data?.filter(
+          p =>
+            p.isActive && p.customerId === (this.editing?.customerId ?? this.selectedCustomer()?.id)
+        )
         .map(p => ({ id: p.id, label: `${p.alias ?? "Sin alias"} · ${p.address} · ID ${p.id}` })) ??
       []
   )
@@ -132,21 +141,48 @@ export class ServiceRequestEditor implements OnInit {
     () => this.typeEntry().data?.map(t => ({ id: t.id, label: `${t.name} · ID ${t.id}` })) ?? []
   )
 
+  readonly editPropertyOptions = computed(() =>
+    this.editing
+      ? [
+          {
+            id: this.editing.propertyId,
+            label: `${this.editing.propertyName} · ID ${this.editing.propertyId}`
+          },
+          ...this.propertyOptions().filter(option => option.id !== this.editing!.propertyId)
+        ]
+      : this.propertyOptions()
+  )
+  readonly editTypeOptions = computed(() =>
+    this.editing
+      ? [
+          {
+            id: this.editing.serviceTypeId,
+            label: `${this.editing.serviceTypeName} · ID ${this.editing.serviceTypeId}`
+          },
+          ...this.typeOptions().filter(option => option.id !== this.editing!.serviceTypeId)
+        ]
+      : this.typeOptions()
+  )
+
   readonly catalogs = computed(() => [
-    {
-      key: "customerId" as const,
-      label: "Cliente",
-      name: "clientes",
-      options: this.customerOptions(),
-      loaded: !!this.customerPage(),
-      busy: this.customerBusy(),
-      failed: this.customerFailed()
-    },
+    ...(this.editing
+      ? []
+      : [
+          {
+            key: "customerId" as const,
+            label: "Cliente",
+            name: "clientes",
+            options: this.customerOptions(),
+            loaded: !!this.customerPage(),
+            busy: this.customerBusy(),
+            failed: this.customerFailed()
+          }
+        ]),
     {
       key: "propertyId" as const,
       label: "Propiedad",
       name: "propiedades",
-      options: this.propertyOptions(),
+      options: this.editPropertyOptions(),
       loaded: this.propertyEntry().loaded,
       busy: this.propertyBusy(),
       failed: this.propertyFailed()
@@ -155,7 +191,7 @@ export class ServiceRequestEditor implements OnInit {
       key: "serviceTypeId" as const,
       label: "Tipo de servicio",
       name: "tipos de servicio",
-      options: this.typeOptions(),
+      options: this.editTypeOptions(),
       loaded: this.typeEntry().loaded,
       busy: this.typeBusy(),
       failed: this.typeFailed()
@@ -180,6 +216,7 @@ export class ServiceRequestEditor implements OnInit {
   }
 
   private validCustomer(value: string): boolean {
+    if (this.editing) return positiveId(value) && Number(value) === this.editing.customerId
     const selected = this.selectedCustomer()
     if (!positiveId(value) || !selected || selected.id !== Number(value)) return false
     const source = this.customers.selectQuery(selected.query)
@@ -197,6 +234,16 @@ export class ServiceRequestEditor implements OnInit {
     )
   }
   private validProperty(value: string): boolean {
+    if (this.editing)
+      return (
+        positiveId(value) &&
+        (Number(value) === this.editing.propertyId ||
+          (this.propertyEntry().loaded &&
+            this.propertyEntry().expires > Date.now() &&
+            !this.propertyBusy() &&
+            !this.propertyFailed() &&
+            this.propertyOptions().some(p => p.id === Number(value))))
+      )
     return (
       this.validCustomer(this.model().customerId) &&
       positiveId(value) &&
@@ -208,6 +255,8 @@ export class ServiceRequestEditor implements OnInit {
     )
   }
   private validType(value: string): boolean {
+    if (this.editing && positiveId(value) && Number(value) === this.editing.serviceTypeId)
+      return true
     return (
       positiveId(value) &&
       this.typeEntry().loaded &&
@@ -264,6 +313,11 @@ export class ServiceRequestEditor implements OnInit {
       this.ownerChanged.next()
       this.ownerChanged.complete()
     })
+    if (this.editing) {
+      this.loadProperties()
+      this.loadTypes()
+      return
+    }
     this.customerQueries
       .pipe(
         switchMap(({ query, force }) => {
@@ -301,10 +355,12 @@ export class ServiceRequestEditor implements OnInit {
     this.loadTypes()
   }
   loadCustomers(force = false): void {
+    if (this.editing) return
     if (!this.current() || this.pending()) return
     this.customerQueries.next({ query: this.requested(), force })
   }
   goToPage(page: number): void {
+    if (this.editing) return
     if (
       !this.current() ||
       this.pending() ||
@@ -322,6 +378,7 @@ export class ServiceRequestEditor implements OnInit {
     })
   }
   customerChanged(event: Event): void {
+    if (this.editing) return
     if (!this.current() || this.pending()) return
     const value = (event.target as HTMLSelectElement).value
     if (value === String(this.selectedCustomer()?.id ?? "")) return
@@ -344,6 +401,10 @@ export class ServiceRequestEditor implements OnInit {
     this.loadProperties()
   }
   loadProperties(force = false): void {
+    if (this.editing) {
+      this.loadEditProperties(force)
+      return
+    }
     if (!this.current() || this.pending() || !this.validCustomer(this.model().customerId)) return
     const owner = this.selectedCustomer()!.id
     this.propertyAdmissionError.set(false)
@@ -370,12 +431,34 @@ export class ServiceRequestEditor implements OnInit {
           this.propertyAdmissionError.set(true)
       })
   }
+  private loadEditProperties(force: boolean): void {
+    const request = this.editing
+    if (!request || !this.current() || this.pending()) return
+    this.propertyAdmissionError.set(false)
+    this.properties
+      .loadProperties(request.customerId, force)
+      .pipe(
+        takeUntil(this.context.ownerChanged$ ?? EMPTY),
+        takeUntil(this.lifecycle.cancelled$),
+        takeUntilDestroyed(this.destroyRef),
+        takeUntilDestroyed(this.context.owner),
+        catchError(() => {
+          if (this.current()) this.propertyAdmissionError.set(true)
+          return EMPTY
+        })
+      )
+      .subscribe(result => {
+        if (!result.success && this.current() && !this.propertyEntry().error)
+          this.propertyAdmissionError.set(true)
+      })
+  }
   loadTypes(force = false): void {
     if (!this.current() || this.pending()) return
     this.typeAdmissionError.set(false)
     this.catalog
       .loadActiveServiceTypes(force)
       .pipe(
+        takeUntil(this.context.ownerChanged$ ?? EMPTY),
         takeUntil(this.lifecycle.cancelled$),
         takeUntilDestroyed(this.destroyRef),
         takeUntilDestroyed(this.context.owner),
@@ -394,11 +477,12 @@ export class ServiceRequestEditor implements OnInit {
       key === "customerId"
         ? this.customerOptions()
         : key === "propertyId"
-          ? this.propertyOptions()
-          : this.typeOptions()
+          ? this.editPropertyOptions()
+          : this.editTypeOptions()
     return options.some(o => String(o.id) === value)
   }
   save(): Promise<boolean> {
+    if (this.editing) return this.saveEdit()
     if (!this.current() || this.pending()) return Promise.resolve(false)
     this.error.set("")
     return submit(this.profile, async () => {
@@ -429,6 +513,63 @@ export class ServiceRequestEditor implements OnInit {
             })
             .pipe(
               takeUntil(this.ownerChanged),
+              takeUntil(this.lifecycle.cancelled$),
+              takeUntilDestroyed(this.destroyRef),
+              takeUntilDestroyed(this.context.owner)
+            ),
+          { defaultValue: undefined }
+        )
+        if (!this.current() || !result) return
+        if (!result.success) this.error.set(this.writeError(result.error.code))
+        else {
+          this.context.onSaved()
+          if (this.current()) this.dialog.close()
+        }
+      } catch {
+        if (this.current())
+          this.error.set(
+            "No se pudo confirmar el guardado. Consulta las solicitudes antes de reintentar."
+          )
+      }
+    })
+  }
+  private saveEdit(): Promise<boolean> {
+    const request = this.editing
+    if (!request || !this.current() || this.pending()) return Promise.resolve(false)
+    this.error.set("")
+    return submit(this.profile, async () => {
+      const v = this.model()
+      if (!this.current() || this.store.writing()) return
+      // Original references are legitimate captured metadata. Only a changed
+      // choice must be backed by a fresh, successful active-membership read.
+      if (
+        !this.validCustomer(v.customerId) ||
+        !this.validProperty(v.propertyId) ||
+        !this.validType(v.serviceTypeId)
+      ) {
+        this.error.set("Actualiza los catálogos de las opciones seleccionadas antes de guardar.")
+        return
+      }
+      if (
+        v.description.trim().length > 2000 ||
+        (v.desiredDate.trim() !== "" && !calendar(v.desiredDate.trim()))
+      )
+        return
+      try {
+        const result = await firstValueFrom(
+          this.store
+            .updateRequest(
+              request.id,
+              {
+                propertyId: Number(v.propertyId),
+                serviceTypeId: Number(v.serviceTypeId),
+                description: v.description.trim() || null,
+                desiredDate: v.desiredDate.trim() || null
+              },
+              request.customerId
+            )
+            .pipe(
+              takeUntil(this.context.ownerChanged$ ?? EMPTY),
               takeUntil(this.lifecycle.cancelled$),
               takeUntilDestroyed(this.destroyRef),
               takeUntilDestroyed(this.context.owner)
