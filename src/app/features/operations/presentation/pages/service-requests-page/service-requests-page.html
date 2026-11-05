@@ -6,6 +6,11 @@
     description="Consulta de solicitudes de servicio registradas"
     [busy]="list().loading || list().refreshing"
   >
+    <div catalogControls>
+      <button hlmBtn type="button" [disabled]="writing()" (click)="create()">
+        Crear solicitud
+      </button>
+    </div>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando solicitudes…

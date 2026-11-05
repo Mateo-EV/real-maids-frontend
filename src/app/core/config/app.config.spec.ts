@@ -51,6 +51,10 @@ import { OPERATIONS_REPOSITORY } from "@/app/features/operations/domain/reposito
 import { OperationsRepositoryImpl } from "@/app/features/operations/infrastructure/repositories/operations.repository-impl"
 import { ServiceRequestsHttpSource } from "@/app/features/operations/infrastructure/source/service-requests-http.source"
 import { ServiceRequestsStore } from "@/app/features/operations/presentation/state/service-requests.store"
+import { SERVICE_CATALOG_REPOSITORY } from "@/app/features/service-catalog/domain/repositories/service-catalog.repository"
+import { ServiceCatalogRepositoryImpl } from "@/app/features/service-catalog/infrastructure/repositories/service-catalog.repository-impl"
+import { ServiceCatalogHttpSource } from "@/app/features/service-catalog/infrastructure/source/service-catalog-http.source"
+import { ServiceCatalogStore } from "@/app/features/service-catalog/presentation/state/service-catalog.store"
 
 async function settle<T>(stream: Observable<T>): Promise<T> {
   const pending = firstValueFrom(stream)
@@ -150,6 +154,51 @@ describe("Application repository composition", () => {
     expect(TestBed.inject(ServiceRequestsStore)).toBe(store)
     expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthRepositoryImpl))
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
+    http.verify()
+  })
+
+  it("installs active service types as a root useExisting alias using the actual auth interceptor", async () => {
+    const repository = TestBed.inject(SERVICE_CATALOG_REPOSITORY, null)
+    expect(repository, "Missing root service catalog alias").not.toBeNull()
+    expect(repository).toBe(TestBed.inject(ServiceCatalogRepositoryImpl))
+    expect(repository).not.toBe(TestBed.inject(ServiceCatalogHttpSource))
+    await establishHttpAuth()
+    const store = TestBed.inject(ServiceCatalogStore)
+    const pending = firstValueFrom(store.loadActiveServiceTypes())
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne("http://localhost:8080/api/catalogos/tipos-servicio")
+    expect(request.request.method).toBe("GET")
+    expect(request.request.params.keys()).toEqual([])
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(request.request.transferCache).toBe(false)
+    request.flush([
+      {
+        idTipoServicio: 4,
+        nombre: "Tipo devuelto",
+        descripcion: null,
+        duracionEstimadaMinutos: 90,
+        idCategoria: 2,
+        categoria: "Categoría devuelta"
+      }
+    ])
+    expect(await pending).toMatchObject({
+      success: true,
+      data: [
+        {
+          id: 4,
+          name: "Tipo devuelto",
+          description: null,
+          estimatedDurationMinutes: 90,
+          categoryId: 2,
+          categoryName: "Categoría devuelta"
+        }
+      ]
+    })
+    expect(store.selectActiveServiceTypes().data?.[0]).not.toHaveProperty("isActive")
+    expect(TestBed.inject(ServiceCatalogStore)).toBe(store)
+    expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(TestBed.inject(OperationsRepositoryImpl))
+    expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
+    expect(TestBed.inject(ToastConfig, null)).toBeNull()
     http.verify()
   })
 

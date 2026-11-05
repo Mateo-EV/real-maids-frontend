@@ -1,0 +1,159 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Crear solicitud</h2>
+  <p hlmDialogDescription>
+    Selecciona un cliente, su propiedad activa y un tipo de servicio del catálogo.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-4" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Datos de la solicitud</legend>
+    @for (catalog of catalogs(); track catalog.key) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel [for]="'request-' + catalog.key"
+          >{{ catalog.label }} (obligatorio)</label
+        >
+        <hlm-native-select
+          [selectId]="'request-' + catalog.key"
+          [formField]="profile[catalog.key]"
+          [attr.aria-describedby]="
+            'request-' + catalog.key + '-status request-' + catalog.key + '-errors'
+          "
+          (change)="catalog.key === 'customerId' && customerChanged($event)"
+          class="w-full"
+        >
+          <option value="">Selecciona {{ catalog.label.toLowerCase() }}</option>
+          @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
+            <option [value]="model()[catalog.key]" [selected]="true">
+              @if (catalog.key === "customerId" && selectedCustomer(); as selected) {
+                {{ selected.name }} · ID {{ selected.id }}
+              } @else {
+                ID {{ model()[catalog.key] }} · No disponible en el catálogo actual
+              }
+            </option>
+          }
+          @for (option of catalog.options; track option.id) {
+            <option [value]="'' + option.id" [selected]="model()[catalog.key] === '' + option.id">
+              {{ option.label }}
+            </option>
+          }
+        </hlm-native-select>
+        <div [id]="'request-' + catalog.key + '-status'" class="flex flex-col gap-2">
+          @if (catalog.busy) {
+            <p role="status">Cargando {{ catalog.name }}…</p>
+          }
+          @if (catalog.failed) {
+            <div hlmAlert variant="destructive" role="alert">
+              <p hlmAlertTitle>
+                No se pudieron cargar {{ catalog.key === "propertyId" ? "las" : "los" }}
+                {{ catalog.name }}.
+              </p>
+              <p hlmAlertDescription>
+                Reintenta para verificar las opciones. Tu borrador se conserva.
+              </p>
+            </div>
+          } @else if (catalog.loaded && !catalog.options.length) {
+            <p role="status">
+              No hay {{ catalog.name }}{{ catalog.key === "propertyId" ? " activas" : "" }} en el
+              catálogo recibido.
+            </p>
+          } @else if (catalog.key === "propertyId" && !selectedCustomer()) {
+            <p hlmFieldDescription>Selecciona primero un cliente activo verificado.</p>
+          }
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            size="sm"
+            [disabled]="
+              pending() || catalog.busy || (catalog.key === 'propertyId' && !selectedCustomer())
+            "
+            (click)="loadCatalog(catalog.key)"
+          >
+            {{ catalog.failed ? "Reintentar" : "Actualizar" }} {{ catalog.name }}
+          </button>
+        </div>
+        <div [id]="'request-' + catalog.key + '-errors'">
+          @if (profile[catalog.key]().touched()) {
+            @for (error of profile[catalog.key]().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+        @if (catalog.key === "customerId") {
+          @if (selectedCustomer(); as selected) {
+            <p hlmFieldDescription>
+              Cliente seleccionado: {{ selected.name }} · ID {{ selected.id }}
+            </p>
+          }
+          <p hlmFieldDescription role="status">
+            @if (customerPage(); as page) {
+              {{ page.items.length ? page.offset + 1 : 0 }}–{{
+                page.items.length ? page.offset + page.items.length : 0
+              }}
+              de {{ page.total }} clientes
+            } @else {
+              Clientes sin verificar
+            }
+          </p>
+          <app-table-pagination
+            label="Paginación de clientes para la solicitud"
+            [currentPage]="currentPage()"
+            [pageCount]="pageCount()"
+            [disabled]="pending() || customerBusy() || !customerPage()"
+            (pageSelected)="goToPage($event)"
+          />
+        }
+      </div>
+    }
+    @for (field of textFields; track field.key) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel [for]="'request-' + field.key">{{ field.label }}</label>
+        @if (field.key === "description") {
+          <textarea
+            hlmTextarea
+            [id]="'request-' + field.key"
+            [formField]="profile.description"
+            [attr.aria-describedby]="
+              'request-' + field.key + '-help request-' + field.key + '-errors'
+            "
+          ></textarea>
+        } @else {
+          <input
+            hlmInput
+            type="date"
+            [id]="'request-' + field.key"
+            [formField]="profile.desiredDate"
+            [attr.aria-describedby]="
+              'request-' + field.key + '-help request-' + field.key + '-errors'
+            "
+          />
+        }
+        <p hlmFieldDescription [id]="'request-' + field.key + '-help'">{{ field.help }}</p>
+        <div [id]="'request-' + field.key + '-errors'">
+          @if (profile[field.key]().touched()) {
+            @for (error of profile[field.key]().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+      </div>
+    }
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+      Cancelar
+    </button>
+    <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+      @if (pending()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ pending() ? "Guardando…" : "Crear solicitud" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

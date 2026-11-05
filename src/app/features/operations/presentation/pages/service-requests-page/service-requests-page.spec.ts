@@ -5,6 +5,7 @@ import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
 import { BehaviorSubject, Subscription } from "rxjs"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
@@ -59,6 +60,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
       provideHttpClient(),
       provideHttpClientTesting(),
       provideOperationsRequestReads(),
+      { provide: HotToastService, useValue: { success: vi.fn() } },
       provideRouter([
         { path: "admin/operations/requests", component: ServiceRequestsPage },
         { path: "admin/operations/requests/:id", component: NavigationTarget },
@@ -114,7 +116,7 @@ afterEach(() => {
 
 // WP7 T5 / S1-S4: leaf consumer contracts, not root route/sidebar integration.
 // The importable RED stub intentionally performs no observation or HTTP.
-describe("ServiceRequestsPage read-only inbox", () => {
+describe("ServiceRequestsPage inbox", () => {
   it("starts with one 0/20 GET, observable loading and actual ordered table/card records", async () => {
     const s = await setup()
     const pending = s.request()
@@ -150,9 +152,7 @@ describe("ServiceRequestsPage read-only inbox", () => {
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(2)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(2)
     expect(s.element.querySelector("input, select")).toBeNull()
-    expect(s.element.textContent).not.toMatch(
-      /Crear solicitud|Editar|Cancelar solicitud|Cotizar|KPI/
-    )
+    expect(s.element.textContent).not.toMatch(/Editar|Cancelar solicitud|Cotizar|KPI/)
     s.http.expectNone(() => true)
   })
 

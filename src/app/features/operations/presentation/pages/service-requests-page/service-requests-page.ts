@@ -18,6 +18,10 @@ import {
   serviceRequestPagingParams
 } from "../../navigation/service-request-page-context"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { ServiceRequestEditor } from "../../components/service-request-editor/service-request-editor"
 
 type Query = Required<PaginationParams>
 
@@ -41,6 +45,11 @@ export class ServiceRequestsPage implements OnInit {
   private readonly route = inject(ActivatedRoute)
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private dialog: BrnDialogRef | undefined
+  private dialogIdentity: object | undefined
+  readonly writing = this.store.writing
   private readonly requested = signal<Query>(
     serviceRequestPageContext(this.route.snapshot.queryParamMap)
   )
@@ -50,6 +59,7 @@ export class ServiceRequestsPage implements OnInit {
   private recoveryUsed = false
   private departing = false
   private readonly scope = createSessionReadScope(() => {
+    this.dialog?.close()
     this.revision++
     this.queries.next(null)
     this.admissionError.set(undefined)
@@ -96,11 +106,41 @@ export class ServiceRequestsPage implements OnInit {
     }
   })
 
+  create(): void {
+    if (
+      this.destroyRef.destroyed ||
+      this.departing ||
+      !this.scope.check() ||
+      this.writing() ||
+      this.dialog?.open
+    )
+      return
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      this.dialogIdentity === identity && this.current(generation) && !!this.dialog?.open
+    this.dialog = this.dialogs.open(ServiceRequestEditor, {
+      context: {
+        owner: this.destroyRef,
+        current,
+        onSaved: () => {
+          if (current()) this.toast.success("Solicitud creada correctamente.")
+        }
+      },
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => this.dialog?.close())
     const ready = this.scope.check()
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event instanceof NavigationStart) {
         this.departing = true
+        this.dialog?.close()
         this.revision++
         this.queries.next(null)
       }
