@@ -2,8 +2,8 @@ import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
-import { firstValueFrom, Observable } from "rxjs"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { firstValueFrom, Observable, of } from "rxjs"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { Result } from "@/app/shared/utils/result"
 import {
@@ -11,6 +11,7 @@ import {
   ListServiceRequestsUseCase
 } from "../../application/use-cases/service-request-read.use-cases"
 import {
+  CancelServiceRequestUseCase,
   CreateServiceRequestUseCase,
   UpdateServiceRequestUseCase
 } from "../../application/use-cases/service-request-write.use-cases"
@@ -78,7 +79,13 @@ describe("Operations request read public composition", () => {
     detail = TestBed.inject(GetServiceRequestByIdUseCase)
   })
 
-  afterEach(() => http.verify())
+  afterEach(() => {
+    try {
+      http.verify()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
 
   function read(kind: "list" | "detail"): Observable<Result<unknown, OperationsError>> {
     return kind === "list" ? list.execute({}) : detail.execute(17)
@@ -317,7 +324,131 @@ describe("Operations request read public composition", () => {
     }
   })
 
-  it("keeps the remaining27 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
+  it.each(["repository", "usecase"] as const)(
+    "forwards cancellation through %s to the existing root source without changing the Result",
+    async boundary => {
+      const params = { reason: "  Motivo explícito  " }
+      const result = Result.success({ ...summary, status: "cancelada" })
+      const rootSource = TestBed.inject(ServiceRequestsHttpSource)
+      const forward = vi.spyOn(rootSource, "cancelRequest").mockReturnValue(of(result))
+      const cancel = TestBed.inject(CancelServiceRequestUseCase)
+      expect(TestBed.inject(CancelServiceRequestUseCase)).toBe(cancel)
+      const operation =
+        boundary === "repository"
+          ? repository.cancelRequest(17, params)
+          : cancel.execute(17, params)
+      expect(await firstValueFrom(operation)).toBe(result)
+      expect(forward).toHaveBeenCalledExactlyOnceWith(17, params)
+      expect(forward.mock.calls[0]?.[1]).toBe(params)
+      expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+      expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+      expect(TestBed.inject(ServiceRequestsHttpSource)).toBe(rootSource)
+      http.expectNone(() => true)
+    }
+  )
+
+  it("keeps the cancel action stateless and forwards the token repository's exact failure Result", async () => {
+    const result = Result.failure(
+      new OperationsError("FORBIDDEN", "No se pudo cancelar la solicitud de servicio.")
+    )
+    const params = { reason: "Motivo" }
+    const forward = vi.spyOn(repository, "cancelRequest").mockReturnValue(of(result))
+    const cancel = TestBed.inject(CancelServiceRequestUseCase)
+    expect(await firstValueFrom(cancel.execute(17, params))).toBe(result)
+    expect(forward).toHaveBeenCalledExactlyOnceWith(17, params)
+    expect(forward.mock.calls[0]?.[1]).toBe(params)
+    http.expectNone(() => true)
+  })
+
+  it.each(["repository", "usecase"] as const)(
+    "posts cancellation via %s with only motivo and returns the validated cancelled projection",
+    async boundary => {
+      const cancel = TestBed.inject(CancelServiceRequestUseCase)
+      const params = { reason: "  Motivo explícito  " }
+      const operation =
+        boundary === "repository"
+          ? repository.cancelRequest(17, params)
+          : cancel.execute(17, params)
+      http.expectNone(() => true)
+      const pending = firstValueFrom(operation)
+      const request = http.expectOne(`${url}/17/cancelacion`)
+      expect(request.request.method).toBe("POST")
+      expect(request.request.transferCache).toBe(false)
+      expect(request.request.params.keys()).toEqual([])
+      expect(request.request.body).toEqual({ motivo: "Motivo explícito" })
+      request.flush({ ...dto, estado: "cancelada" })
+      expect(await pending).toEqual(Result.success({ ...summary, status: "cancelada" }))
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "preserves safe cancellation failure through %s without a retry or synthetic success",
+    async boundary => {
+      const params = { reason: "Motivo" }
+      const operation =
+        boundary === "repository"
+          ? repository.cancelRequest(17, params)
+          : TestBed.inject(CancelServiceRequestUseCase).execute(17, params)
+      const pending = firstValueFrom(operation)
+      http
+        .expectOne(`${url}/17/cancelacion`)
+        .flush({ mensaje: "PRIVATE" }, { status: 409, statusText: "Conflict" })
+      expect(await pending).toMatchObject({
+        success: false,
+        error: { code: "CONFLICT", message: "No se pudo cancelar la solicitud de servicio." }
+      })
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "retains target/state response validation through %s",
+    async boundary => {
+      for (const patch of [{ idSolicitud: 18, estado: "cancelada" }, { estado: "registrada" }]) {
+        const params = { reason: "Motivo" }
+        const operation =
+          boundary === "repository"
+            ? repository.cancelRequest(17, params)
+            : TestBed.inject(CancelServiceRequestUseCase).execute(17, params)
+        const pending = firstValueFrom(operation)
+        http.expectOne(`${url}/17/cancelacion`).flush({ ...dto, ...patch })
+        expect(await pending).toMatchObject({
+          success: false,
+          error: {
+            code: "INVALID_RESPONSE",
+            message: "No se pudo cancelar la solicitud de servicio."
+          }
+        })
+        http.expectNone(() => true)
+      }
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "keeps %s cancellation cold and caller-owned without an unsubscribe success",
+    boundary => {
+      const params = { reason: "Motivo" }
+      const operation =
+        boundary === "repository"
+          ? repository.cancelRequest(17, params)
+          : TestBed.inject(CancelServiceRequestUseCase).execute(17, params)
+      http.expectNone(() => true)
+      const delivered = vi.fn()
+      const subscription = operation.subscribe(delivered)
+      try {
+        const request = http.expectOne(`${url}/17/cancelacion`)
+        subscription.unsubscribe()
+        expect(request.cancelled).toBe(true)
+        expect(delivered).not.toHaveBeenCalled()
+        http.expectNone(() => true)
+      } finally {
+        subscription.unsubscribe()
+      }
+    }
+  )
+
+  it("keeps the remaining26 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
       serviceTypeId: 4,
@@ -340,7 +471,6 @@ describe("Operations request read public composition", () => {
     const status = { name: "Estado", sortOrder: 1, isFinal: false }
     const reason = { name: "Motivo", description: null, isActive: true }
     const operations: Observable<Result<unknown, OperationsError>>[] = [
-      repository.cancelRequest(17, { reason: "Cancelación explícita" }),
       repository.getOrders({}),
       repository.getOrder(5),
       repository.createOrder({ requestId: 17, estimatedAmount: null, observation: null }),

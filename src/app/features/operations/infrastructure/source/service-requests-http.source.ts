@@ -9,10 +9,12 @@ import { Result } from "@/app/shared/utils/result"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
+  CancelServiceRequestParams,
   CreateServiceRequestParams,
   ServiceRequestQuery,
   UpdateServiceRequestParams
 } from "../../domain/params/operations.params"
+import { cancelRequestBody } from "./service-requests-cancel.validation"
 import { createRequestBody } from "./service-requests-create.validation"
 import {
   failure,
@@ -97,6 +99,45 @@ export class ServiceRequestsHttpSource {
               new OperationsError(
                 result.error.code,
                 "No se pudo actualizar la solicitud de servicio."
+              )
+            )
+      )
+    )
+  }
+
+  cancelRequest(
+    id: number,
+    params: CancelServiceRequestParams
+  ): Observable<Result<ServiceRequestSummary, OperationsError>> {
+    let reason: unknown
+    try {
+      reason =
+        params !== null && typeof params === "object" && !Array.isArray(params)
+          ? params.reason
+          : undefined
+    } catch {
+      reason = undefined
+    }
+    return this.request(() => {
+      if (!positiveId(id)) throw failure("INVALID_DATA")
+      const body = cancelRequestBody(reason)
+      return this.http
+        .post<unknown>(`${this.url}/${id}/cancelacion`, body, { transferCache: false })
+        .pipe(
+          map(value => {
+            const result = requestDto(value, id)
+            if (result.status !== "cancelada") throw failure("INVALID_RESPONSE")
+            return result
+          })
+        )
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(
+                result.error.code,
+                "No se pudo cancelar la solicitud de servicio."
               )
             )
       )
