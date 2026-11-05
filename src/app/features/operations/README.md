@@ -98,6 +98,12 @@ The unchanged strict decoder validates returned target/property/type identities.
 
 [Update public HTTP tests](infrastructure/source/service-requests-update-http.spec.ts) and [composition tests](infrastructure/repositories/operations-read-composition.spec.ts) observed compiled RED55 failures/12 passes, then **67/67 across two files**, unchanged assertions. The combined working tree with the separate creation-UI candidate passed **2359/2359 tests across 149 files** and browser/SSR production build, one prerendered route, warning **655.94/500 kB**. Those combined results are not a standalone update-only full-suite run, native approval, full T5 or live backend/CORS/permission/redaction/browser acceptance.
 
+### Caller-owned request update state
+
+`ServiceRequestsStore.updateRequest(id, params, expectedCustomerId)` captures the four-field payload and the legitimately loaded owner's customer ID, never inferring a customer from authentication or sending that expected owner in PUT. It shares the existing create/write gate and caller-owned cancellation. A wrong-owner success is rejected before cache invalidation or feedback. Confirmed success expires all request pages, the target detail and actual owner history; active observers revalidate once without optimistic patches, duplicate reloads or write replay.
+
+Session replacement clears/fences writes and old finalizers; same-session renewal preserves work. Existing root lifetimes, read TTL/capacity/session helpers and SSR safety remain unchanged. [Public state tests](presentation/state/service-requests-update.store.spec.ts) cover the captured payload, owner checks, shared gate, invalidation, read recovery and session cancellation. Independent Risk:item4 verification and the parent spot-check each passed **425/425 Operations tests across 17 files** for the combined current candidate; parent full verification passed **2495/2495 across 153 files** plus production SSR (656.43/500 kB warning). These are combined results, not a state-only full-suite run or native/live acceptance. The presentation consumer is checkpointed separately below.
+
 ## Schema coverage
 
 Authoritative fields: `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, area D. Each class below has its own named entity file, with private positional constructors/static `create()` following User. Factories only materialize values; they do not calculate totals, enforce transitions or infer identities.
