@@ -47,6 +47,10 @@ import { FIELD_OPERATIONS_REPOSITORY } from "@/app/features/field-operations/dom
 import { FieldOperationsRepositoryImpl } from "@/app/features/field-operations/infrastructure/repositories/field-operations.repository-impl"
 import { FieldStaffHttpSource } from "@/app/features/field-operations/infrastructure/source/field-staff-http.source"
 import { FieldStaffStore } from "@/app/features/field-operations/presentation/state/field-staff.store"
+import { OPERATIONS_REPOSITORY } from "@/app/features/operations/domain/repositories/operations.repository"
+import { OperationsRepositoryImpl } from "@/app/features/operations/infrastructure/repositories/operations.repository-impl"
+import { ServiceRequestsHttpSource } from "@/app/features/operations/infrastructure/source/service-requests-http.source"
+import { ServiceRequestsStore } from "@/app/features/operations/presentation/state/service-requests.store"
 
 async function settle<T>(stream: Observable<T>): Promise<T> {
   const pending = firstValueFrom(stream)
@@ -119,6 +123,34 @@ describe("Application repository composition", () => {
   it("aliases the customer token to the root implementation instance", () => {
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).not.toBe(TestBed.inject(CustomerInMemorySource))
+  })
+
+  it("composes singleton request reads through the existing authenticated HTTP transport", async () => {
+    const repository = TestBed.inject(OPERATIONS_REPOSITORY, null)
+    expect(repository, "Missing root Operations repository alias").not.toBeNull()
+    expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+    expect(repository).not.toBe(TestBed.inject(ServiceRequestsHttpSource))
+    await establishHttpAuth()
+    const store = TestBed.inject(ServiceRequestsStore)
+    const pending = firstValueFrom(store.observeRequests({ offset: 0, limit: 20 }))
+    const http = TestBed.inject(HttpTestingController)
+    const request = http.expectOne(
+      request => request.url === "http://localhost:8080/api/solicitudes"
+    )
+    expect(request.request.method).toBe("GET")
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(request.request.params.get("pagina")).toBe("0")
+    expect(request.request.params.get("tamanio")).toBe("20")
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { items: [], total: 0, offset: 0, limit: 20 }
+    })
+    expect(TestBed.inject(ServiceRequestsStore)).toBe(store)
+    expect(TestBed.inject(AUTH_REPOSITORY)).toBe(TestBed.inject(AuthRepositoryImpl))
+    expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
+    http.verify()
   })
 
   it("composes singleton staff reads through the existing authenticated HTTP transport", async () => {

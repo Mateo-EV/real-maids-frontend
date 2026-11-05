@@ -34,6 +34,7 @@ import { CUSTOMER_HISTORY_REPOSITORY } from "@/app/features/customers/domain/rep
 import { CustomerHistoryRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-history.repository-impl"
 
 import { provideFieldOperationsReads } from "@/app/features/field-operations/field-operations.providers"
+import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -43,6 +44,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     { provide: API_URL, useValue: environment.apiUrl },
     provideFieldOperationsReads(),
+    provideOperationsRequestReads(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: AcquisitionRepositoryImpl, provide: ACQUISITION_REPOSITORY },

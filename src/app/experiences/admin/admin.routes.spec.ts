@@ -370,7 +370,10 @@ describe("Admin users navigation", () => {
     expect(leads).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
     const sidebar = element.querySelector("app-admin-sidebar")!
     expect(sidebar.querySelector('a[href="/admin/customers"]')?.textContent?.trim()).toBe("CRM")
-    expect(sidebar.querySelectorAll("a")).toHaveLength(3)
+    expect(sidebar.querySelectorAll("a")).toHaveLength(4)
+    expect(sidebar.querySelector('a[href="/admin/operations"]')?.textContent?.trim()).toBe(
+      "Operaciones"
+    )
     const nav = element.querySelector("app-crm-catalog-navigation")!
     expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("Prospectos")
     nav.querySelector<HTMLAnchorElement>('a[href="/admin/customers"]')!.click()
@@ -451,7 +454,7 @@ describe("Admin users navigation", () => {
     expect(harness.routeNativeElement?.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
   })
 
-  it("keeps CRM and RRHH in General and IAM in Administration with three unavailable modules", async () => {
+  it("keeps CRM, RRHH and Operaciones in General and IAM in Administration with three unavailable modules", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
     const sidebar = harness.routeNativeElement!.querySelector("app-admin-sidebar")!
@@ -463,12 +466,15 @@ describe("Admin users navigation", () => {
     expect(
       Array.from(general.querySelectorAll("button"), button => button.textContent?.trim())
     ).toEqual(["Landing", "Cotizaciones", "Programaciones"])
-    expect(general.querySelectorAll("a")).toHaveLength(2)
+    expect(general.querySelectorAll("a")).toHaveLength(3)
+    expect(general.querySelector('a[href="/admin/operations"]')?.textContent?.trim()).toBe(
+      "Operaciones"
+    )
     const crm = general.querySelector('a[href="/admin/customers"]')!
     expect(crm.textContent?.trim()).toBe("CRM")
     expect(crm.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
     expect(administration.querySelectorAll("button")).toHaveLength(0)
-    expect(nav.querySelectorAll("a")).toHaveLength(3)
+    expect(nav.querySelectorAll("a")).toHaveLength(4)
     const iam = administration.querySelector("a")!
     expect(iam.textContent?.trim()).toBe("IAM")
     expect(iam.getAttribute("aria-current")).toBe("page")

@@ -30,6 +30,13 @@ export const ADMIN_ROUTES: Routes = [
           import("../../features/field-operations/field-operations.routes").then(
             routes => routes.FIELD_OPERATIONS_ROUTES
           )
+      },
+      {
+        path: "operations",
+        loadChildren: () =>
+          import("../../features/operations/operations.routes").then(
+            routes => routes.OPERATIONS_ROUTES
+          )
       }
     ]
   }

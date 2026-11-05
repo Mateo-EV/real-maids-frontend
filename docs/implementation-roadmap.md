@@ -252,11 +252,17 @@ Repeatable pending acceptance: CRM → Prospectos → verified detail → Conver
 
 - **Goal:** connect internal request → order → manual scheduling/assignment, not an automatic scheduling engine.
 - **Dependencies/readiness:** accepted customer/property selection; inspect [operations](../src/app/features/operations/README.md), [field operations](../src/app/features/field-operations/README.md) and [service catalog](../src/app/features/service-catalog/README.md) contracts before adapters.
-- **Deliverables, ordered slices:** staff directory/profile/weekly reads are now connected through RRHH. Active service-type HTTP reads are prepared, but their root/request consumer remains a T5 dependency. Staff writes and pricing administration are not delivered. Internal request list/detail/create/update/cancel, order creation/detail, manual schedule/re-schedule/team replacement, day/week/month agenda and order-detail interactions remain to be implemented within our layout.
+- **Deliverables, ordered slices:** staff directory/profile/weekly reads are now connected through RRHH. Active service-type HTTP reads are prepared, but their root/request consumer remains a T5 dependency. Staff writes and pricing administration are not delivered. Internal request list/detail now connect through Operaciones in the bounded read slice below. Request create/update/cancel, order creation/detail, manual schedule/re-schedule/team replacement, day/week/month agenda and order-detail interactions remain to be implemented within our layout.
 - **Staff/catalog gate:** read-only staff readiness precedes assignments; empty weekly availability means no weekly restriction, not free bookings. Crew membership endpoints are still proposals: use confirmed staff/team assignment operations without fabricating crew IDs, and defer crew management until contracted. Catalog integration must be ready before any pricing flow; rate/package administration is not established by active service-type reads.
 - **Acceptance/evidence:** verify actual date-range/staff filters, agenda response, team replacement including empty lists and server conflict/errors. Reference crew/package/type filters need separate contract confirmation. No drag move or recurring block operation may imply an unsupported write.
 - **Traceability:** M04/RF04/HU04/P05; M05/RF05–RF06/HU05–HU06/P06; M06/RF07/HU07/P07; M07/RF08/HU08 and M08/RF09/HU09/P08.
 - **Exit:** one authorized manual request-to-assignment journey is verified end to end; uncontracted crews, pricing, recurrence and conflict automation remain pending.
+
+#### Bounded T5 request-read checkpoint
+
+Inbox82ef219 and detail2d1b183 are separate leaf checkpoints. The root integration adds only lazy `/admin/operations` → `requests`, guarded list/detail, complete per-route toast scopes and the new Operaciones entry while preserving IAM/CRM/RRHH, disabled module buttons and users redirect. Existing root provider/store/HTTP/auth boundaries remain; no role ACL, write control, service-type catalog consumer or order/agenda destination is inferred.
+
+Isolated leaf checks passed17/17 and15/15; current root integration passed49/49 across four files using real AuthStore/interceptor over mocked HTTP. Independent guard verification passed 37/37 across three files without severe findings. Current-root full verification passed 2245/2245 tests across 145 files and browser/SSR production build with one prerendered route, warning 651.28/500 kB. Live backend/CORS/authorization/redaction and Chrome/Edge/Firefox keyboard/responsive acceptance remain pending; this read-only checkpoint does not close T5 or the request-to-assignment exit.
 
 ### WP8 — Customer support, separate from service requests
 

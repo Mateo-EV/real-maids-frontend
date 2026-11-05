@@ -51,6 +51,7 @@ describe("AdminSidebar RRHH navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
+      "Operaciones",
       "Cotizaciones",
       "Programaciones"
     ])
@@ -63,7 +64,7 @@ describe("AdminSidebar RRHH navigation", () => {
     const iam = administration.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')!
     expect(crm.textContent?.trim()).toBe("CRM")
     expect(iam.textContent?.trim()).toBe("IAM")
-    expect(element.querySelectorAll("nav a")).toHaveLength(3)
+    expect(element.querySelectorAll("nav a")).toHaveLength(4)
     const router = TestBed.inject(Router)
     rrhh!.click()
     await fixture.whenStable()
@@ -136,6 +137,7 @@ describe("AdminSidebar CRM navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
+      "Operaciones",
       "Cotizaciones",
       "Programaciones"
     ])
@@ -155,5 +157,61 @@ describe("AdminSidebar CRM navigation", () => {
     expect(iam.getAttribute("aria-current")).toBe("page")
     expect(crm.hasAttribute("aria-current")).toBe(false)
     expect(general.querySelectorAll("button[disabled]")).toHaveLength(3)
+  })
+})
+
+describe("AdminSidebar approved Operations navigation", () => {
+  it("adds Operaciones without repurposing existing module labels and marks its request descendants active", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
+    TestBed.configureTestingModule({
+      imports: [AdminSidebar],
+      providers: [
+        HlmSidebarService,
+        provideRouter([
+          { path: "admin/operations", pathMatch: "full", redirectTo: "/admin/operations/requests" },
+          { path: "admin/operations/requests", component: Destination },
+          { path: "admin/operations/requests/:id", component: Destination },
+          { path: "admin/users", component: Destination },
+          { path: "admin/customers", component: Destination },
+          { path: "admin/staff", component: Destination }
+        ])
+      ]
+    })
+    const fixture = TestBed.createComponent(AdminSidebar)
+    fixture.detectChanges()
+    await fixture.whenStable()
+    const element = fixture.nativeElement as HTMLElement
+    const link = element.querySelector<HTMLAnchorElement>('a[href="/admin/operations"]')
+    expect(link, "Missing approved Operaciones link").not.toBeNull()
+    expect(link!.textContent?.trim()).toBe("Operaciones")
+    expect(link!.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
+    const router = TestBed.inject(Router)
+    link!.click()
+    await fixture.whenStable()
+    expect(router.url).toBe("/admin/operations/requests")
+    for (const url of ["/admin/operations/requests", "/admin/operations/requests/17"]) {
+      await router.navigateByUrl(url)
+      await fixture.whenStable()
+      fixture.detectChanges()
+      expect(link!.getAttribute("aria-current")).toBe("page")
+      for (const old of ["/admin/users", "/admin/customers", "/admin/staff"])
+        expect(element.querySelector(`a[href="${old}"]`)!.hasAttribute("aria-current")).toBe(false)
+    }
+    for (const label of ["Landing", "Cotizaciones", "Programaciones"]) {
+      const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
+        button => button.textContent?.trim() === label
+      )!
+      expect(button.disabled).toBe(true)
+      button.click()
+      await fixture.whenStable()
+      expect(router.url).toBe("/admin/operations/requests/17")
+    }
   })
 })
