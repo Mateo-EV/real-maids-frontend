@@ -1,0 +1,78 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6"
+>
+  <app-catalog-frame
+    titleId="service-request-detail-title"
+    title="Detalle de solicitud"
+    description="Información registrada de la solicitud de servicio"
+    [busy]="!!detail()?.loading || !!detail()?.refreshing"
+  >
+    <div catalogControls class="flex flex-wrap gap-2">
+      <a
+        hlmBtn
+        variant="outline"
+        routerLink="/admin/operations/requests"
+        [queryParams]="backContext()"
+        >Volver a solicitudes</a
+      >
+    </div>
+    @if (id() === null) {
+      <div class="p-5" hlmAlert variant="destructive" role="alert">
+        <h2 hlmAlertTitle>Identificador de solicitud inválido</h2>
+        <p hlmAlertDescription>Vuelve a la bandeja y selecciona una solicitud.</p>
+      </div>
+    } @else {
+      @if (detail()?.loading) {
+        <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+          <hlm-spinner />Cargando solicitud…
+        </div>
+      }
+      @if (detail()?.refreshing) {
+        <p role="status" class="px-5 py-2 text-sm text-muted-foreground">Actualizando solicitud…</p>
+      }
+      @if (detail()?.error) {
+        <div class="p-5">
+          <div hlmAlert variant="destructive" role="alert">
+            <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+            <div hlmAlertDescription>
+              @if (request()) {
+                <p>Los datos pueden estar desactualizados.</p>
+              }
+            </div>
+          </div>
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            class="mt-4"
+            [disabled]="detail()?.loading || detail()?.refreshing"
+            (click)="retry()"
+          >
+            Reintentar
+          </button>
+        </div>
+      }
+      @if (request(); as selected) {
+        <div class="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
+          <span hlmBadge variant="outline" class="self-start">{{ selected.status }}</span>
+          <dl class="grid min-w-0 gap-x-8 gap-y-5 sm:grid-cols-2">
+            @for (field of profile(); track field[0]) {
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ field[0] }}</dt>
+                <dd class="mt-1 text-sm break-words">{{ field[1] ?? "No registrado" }}</dd>
+              </div>
+            }
+          </dl>
+          <section aria-labelledby="service-request-description-title" class="min-w-0">
+            <h2 id="service-request-description-title" class="text-sm font-semibold">
+              Descripción
+            </h2>
+            <p class="mt-2 max-w-prose text-sm leading-relaxed break-words whitespace-pre-wrap">
+              {{ selected.description ?? "No registrado" }}
+            </p>
+          </section>
+        </div>
+      }
+    }
+  </app-catalog-frame>
+</main>
