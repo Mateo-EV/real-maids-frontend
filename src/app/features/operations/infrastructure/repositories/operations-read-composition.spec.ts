@@ -10,6 +10,7 @@ import {
   GetServiceRequestByIdUseCase,
   ListServiceRequestsUseCase
 } from "../../application/use-cases/service-request-read.use-cases"
+import { CreateServiceRequestUseCase } from "../../application/use-cases/service-request-write.use-cases"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
@@ -180,7 +181,72 @@ describe("Operations request read public composition", () => {
     }
   })
 
-  it("keeps every non-request-read method explicitly UNSUPPORTED with zero HTTP", async () => {
+  it("forwards creation through the root repository and stateless action without replacing read composition", async () => {
+    const create = TestBed.inject(CreateServiceRequestUseCase)
+    expect(TestBed.inject(CreateServiceRequestUseCase)).toBe(create)
+    const params = {
+      customerId: 8,
+      propertyId: 31,
+      serviceTypeId: 4,
+      description: dto.descripcion,
+      desiredDate: dto.fechaDeseada
+    }
+    const operation = create.execute(params)
+    http.expectNone(() => true)
+    const pending = firstValueFrom(operation)
+    const request = http.expectOne(url)
+    expect(request.request.method).toBe("POST")
+    expect(request.request.transferCache).toBe(false)
+    expect(request.request.body).toEqual({
+      idCliente: 8,
+      idPropiedad: 31,
+      idTipoServicio: 4,
+      descripcion: dto.descripcion,
+      fechaDeseada: dto.fechaDeseada
+    })
+    request.flush(dto, { status: 201, statusText: "Created" })
+    expect(await pending).toEqual(Result.success(summary))
+    expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+    http.expectNone(() => true)
+  })
+
+  it("forwards creation failure without retry or a read-shaped error", async () => {
+    const pending = firstValueFrom(
+      TestBed.inject(CreateServiceRequestUseCase).execute({
+        customerId: 8,
+        propertyId: 31,
+        serviceTypeId: 4,
+        description: null,
+        desiredDate: null
+      })
+    )
+    http.expectOne(url).flush({ mensaje: "PRIVATE" }, { status: 403, statusText: "Forbidden" })
+    expect(await pending).toMatchObject({
+      success: false,
+      error: { code: "FORBIDDEN", message: "No se pudo crear la solicitud de servicio." }
+    })
+    http.expectNone(() => true)
+  })
+
+  it("forwards creation cancellation without a synthetic success", () => {
+    let delivered = false
+    const subscription = TestBed.inject(CreateServiceRequestUseCase)
+      .execute({
+        customerId: 8,
+        propertyId: 31,
+        serviceTypeId: 4,
+        description: null,
+        desiredDate: null
+      })
+      .subscribe(() => (delivered = true))
+    const request = http.expectOne(url)
+    subscription.unsubscribe()
+    expect(request.cancelled).toBe(true)
+    expect(delivered).toBe(false)
+    http.expectNone(() => true)
+  })
+
+  it("keeps the remaining28 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const request = { propertyId: 31, serviceTypeId: 4, description: null, desiredDate: null }
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
@@ -204,7 +270,6 @@ describe("Operations request read public composition", () => {
     const status = { name: "Estado", sortOrder: 1, isFinal: false }
     const reason = { name: "Motivo", description: null, isActive: true }
     const operations: Observable<Result<unknown, OperationsError>>[] = [
-      repository.createRequest({ ...request, customerId: 8 }),
       repository.updateRequest(17, request),
       repository.cancelRequest(17, { reason: "Cancelación explícita" }),
       repository.getOrders({}),
