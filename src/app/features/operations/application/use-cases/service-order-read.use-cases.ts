@@ -16,3 +16,11 @@ export class GetServiceOrderByIdUseCase {
     return this.repository.getOrder(id)
   }
 }
+
+@Injectable({ providedIn: "root" })
+export class GetActiveReschedulingReasonsUseCase {
+  private readonly repository = inject(OPERATIONS_REPOSITORY)
+  execute() {
+    return this.repository.getActiveReschedulingReasons()
+  }
+}

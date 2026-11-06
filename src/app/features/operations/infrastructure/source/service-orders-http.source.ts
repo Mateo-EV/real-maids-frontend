@@ -7,11 +7,20 @@ import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-pol
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import { OperationsError } from "../../domain/errors/operations.error"
-import { ServiceOrderDetail, ServiceOrderSummary } from "../../domain/models/operations-read.models"
-import { CreateServiceOrderParams, ServiceOrderQuery } from "../../domain/params/operations.params"
+import {
+  ReschedulingReasonSummary,
+  ServiceOrderDetail,
+  ServiceOrderSummary
+} from "../../domain/models/operations-read.models"
+import {
+  CreateServiceOrderParams,
+  ScheduleServiceOrderParams,
+  ServiceOrderQuery
+} from "../../domain/params/operations.params"
 import { positiveId, requestError } from "./service-requests-http.validation"
-import { orderDetail, orderPage, orderPagination } from "./service-orders-http.validation"
+import { order, orderDetail, orderPage, orderPagination } from "./service-orders-http.validation"
 import { createOrderBody, createdOrderDetail } from "./service-orders-create.validation"
+import { activeReschedulingReasons, scheduleOrderBody } from "./service-orders-schedule.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceOrdersHttpSource {
@@ -68,6 +77,61 @@ export class ServiceOrdersHttpSource {
           ? result
           : Result.failure(
               new OperationsError(result.error.code, "No se pudo crear la orden de servicio.")
+            )
+      )
+    )
+  }
+
+  scheduleOrder(
+    id: number,
+    params: ScheduleServiceOrderParams
+  ): Observable<Result<ServiceOrderSummary, OperationsError>> {
+    let snapshot: unknown = null
+    try {
+      if (params && typeof params === "object" && !Array.isArray(params))
+        snapshot = {
+          date: params.date,
+          startTime: params.startTime,
+          endTime: params.endTime,
+          reasonId: params.reasonId
+        }
+    } catch {
+      snapshot = null
+    }
+    return this.read(() => {
+      if (!positiveId(id))
+        throw new OperationsError("INVALID_DATA", "Identificador de orden inválido.")
+      const body = scheduleOrderBody(snapshot)
+      return this.http
+        .put<unknown>(`${this.url}/${id}/programacion`, body, { transferCache: false })
+        .pipe(map(value => order(value, id)))
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(result.error.code, "No se pudo programar la orden de servicio.")
+            )
+      )
+    )
+  }
+
+  getActiveReschedulingReasons(): Observable<Result<ReschedulingReasonSummary[], OperationsError>> {
+    return this.read(() =>
+      this.http
+        .get<unknown>(`${this.origin}/api/catalogos/motivos-reprogramacion`, {
+          transferCache: false
+        })
+        .pipe(map(value => activeReschedulingReasons(value)))
+    ).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(
+                result.error.code,
+                "No se pudieron consultar los motivos de reprogramación."
+              )
             )
       )
     )

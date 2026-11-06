@@ -209,3 +209,5 @@ export function orderPage(
   // Caller-relative customer/staff scope remains backend-owned, never inferred here.
   return { items, total, offset: page * size, limit: size }
 }
+
+export { order }

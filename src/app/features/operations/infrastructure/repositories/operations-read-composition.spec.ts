@@ -15,6 +15,8 @@ import {
   CreateServiceRequestUseCase,
   UpdateServiceRequestUseCase
 } from "../../application/use-cases/service-request-write.use-cases"
+import { ScheduleServiceOrderUseCase } from "../../application/use-cases/service-order-write.use-cases"
+import { GetActiveReschedulingReasonsUseCase } from "../../application/use-cases/service-order-read.use-cases"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
@@ -23,6 +25,14 @@ import {
 } from "../../domain/repositories/operations.repository"
 import { provideOperationsRequestReads } from "../../operations.providers"
 import { ServiceRequestsHttpSource } from "../source/service-requests-http.source"
+import { ServiceOrdersHttpSource } from "../source/service-orders-http.source"
+import {
+  reasonsUrl,
+  scheduleInput,
+  scheduledOrderDto,
+  scheduledOrderSummary,
+  scheduleUrl
+} from "../source/service-orders-schedule-http.testing"
 import { OperationsRepositoryImpl } from "./operations.repository-impl"
 
 const url = "https://api.example.test/api/solicitudes"
@@ -448,7 +458,101 @@ describe("Operations request read public composition", () => {
     }
   )
 
-  it("keeps the remaining23 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
+  it.each(["repository", "usecase"] as const)(
+    "forwards scheduling through %s to the same root order source with its exact Result",
+    async boundary => {
+      const source = TestBed.inject(ServiceOrdersHttpSource)
+      const params = scheduleInput()
+      const result = Result.success(scheduledOrderSummary())
+      const forward = vi.spyOn(source, "scheduleOrder").mockReturnValue(of(result))
+      const action = TestBed.inject(ScheduleServiceOrderUseCase)
+      expect(TestBed.inject(ScheduleServiceOrderUseCase)).toBe(action)
+      const operation =
+        boundary === "repository"
+          ? repository.scheduleOrder(17, params)
+          : action.execute(17, params)
+      expect(await firstValueFrom(operation)).toBe(result)
+      expect(forward).toHaveBeenCalledExactlyOnceWith(17, params)
+      expect(forward.mock.calls[0]?.[1]).toBe(params)
+      expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+      expect(repository).not.toBe(source)
+      expect("getRequests" in source).toBe(false)
+      expect(TestBed.inject(ServiceOrdersHttpSource)).toBe(source)
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "forwards active reasons through %s to the same root order source without inventing fields",
+    async boundary => {
+      const source = TestBed.inject(ServiceOrdersHttpSource)
+      const result = Result.success([{ id: 7, name: "Literal", description: null }])
+      const forward = vi.spyOn(source, "getActiveReschedulingReasons").mockReturnValue(of(result))
+      const action = TestBed.inject(GetActiveReschedulingReasonsUseCase)
+      expect(TestBed.inject(GetActiveReschedulingReasonsUseCase)).toBe(action)
+      const operation =
+        boundary === "repository" ? repository.getActiveReschedulingReasons() : action.execute()
+      expect(await firstValueFrom(operation)).toBe(result)
+      expect(forward).toHaveBeenCalledExactlyOnceWith()
+      expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+      expect(repository).not.toBe(source)
+      http.expectNone(() => true)
+    }
+  )
+
+  it("keeps both named actions stateless delegates to the repository token's exact safe failures", async () => {
+    const result = Result.failure(new OperationsError("FORBIDDEN", "Operación rechazada."))
+    const schedule = vi.spyOn(repository, "scheduleOrder").mockReturnValue(of(result))
+    const reasons = vi.spyOn(repository, "getActiveReschedulingReasons").mockReturnValue(of(result))
+    const params = scheduleInput()
+    expect(
+      await firstValueFrom(TestBed.inject(ScheduleServiceOrderUseCase).execute(17, params))
+    ).toBe(result)
+    expect(
+      await firstValueFrom(TestBed.inject(GetActiveReschedulingReasonsUseCase).execute())
+    ).toBe(result)
+    expect(schedule).toHaveBeenCalledExactlyOnceWith(17, params)
+    expect(reasons).toHaveBeenCalledExactlyOnceWith()
+    http.expectNone(() => true)
+  })
+
+  it.each(["repository", "usecase"] as const)(
+    "connects cold schedule PUT and active reasons GET through %s without changing root composition",
+    async boundary => {
+      const params = scheduleInput()
+      const schedule =
+        boundary === "repository"
+          ? repository.scheduleOrder(17, params)
+          : TestBed.inject(ScheduleServiceOrderUseCase).execute(17, params)
+      const reasons =
+        boundary === "repository"
+          ? repository.getActiveReschedulingReasons()
+          : TestBed.inject(GetActiveReschedulingReasonsUseCase).execute()
+      http.expectNone(() => true)
+      const scheduled = firstValueFrom(schedule)
+      const request = http.expectOne(scheduleUrl)
+      expect(request.request.method).toBe("PUT")
+      expect(request.request.transferCache).toBe(false)
+      expect(request.request.body).toEqual({
+        fecha: params.date,
+        horaInicio: params.startTime,
+        horaFin: null,
+        idMotivo: null
+      })
+      request.flush(scheduledOrderDto())
+      expect(await scheduled).toEqual(Result.success(scheduledOrderSummary()))
+      const catalog = firstValueFrom(reasons)
+      const get = http.expectOne(reasonsUrl)
+      expect(get.request.method).toBe("GET")
+      expect(get.request.transferCache).toBe(false)
+      get.flush([{ idMotivo: 7, nombre: "Literal", descripcion: null }])
+      expect(await catalog).toEqual(Result.success([{ id: 7, name: "Literal", description: null }]))
+      expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+      http.expectNone(() => true)
+    }
+  )
+
+  it("keeps the remaining21 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
       serviceTypeId: 4,
@@ -473,15 +577,8 @@ describe("Operations request read public composition", () => {
     const operations: Observable<Result<unknown, OperationsError>>[] = [
       repository.updateOrder(5, { estimatedAmount: null, observation: null }),
       repository.changeOrderStatus(5, { status: "PROGRAMADA", observation: null }),
-      repository.scheduleOrder(5, {
-        date: "2026-03-03",
-        startTime: "09:00",
-        endTime: null,
-        reasonId: null
-      }),
       repository.replaceAssignments(5, { assignments: [] }),
       repository.getAgenda({ from: "2026-03-01", until: "2026-03-02" }),
-      repository.getActiveReschedulingReasons(),
       repository.getQuotes({}),
       repository.getQuote(5),
       repository.createQuote({ ...quote, lines: [line] }),
