@@ -270,6 +270,12 @@ M04/RF04/HU04/P05 (RNF09/RNF10/RNF12): a matching loaded registered request expo
 
 Only validated success invalidates pages/target detail/actual owner history; existing active observers refresh once, without optimistic rows/totals or duplicate reload. Current independent Operations run and parent spot-check passed455/455 across19 files; parent full2525/155+SSR passed(one prerender656.43/500kB warning). Chrome156 over synthetic HTTP passed creation/editing/cancellation1440×1000/390×844. The first independent cross-drive copy failed before tests; only the temporary copy's drive changed, with no app/dependency/config/timeout modification. Technical T5 is connected; full WP7 and live backend/CORS/permissions/redaction/EdgeFirefox/exhaustive accessibility acceptance remain pending. Native assessment is not approval.
 
+## T6 first order-read boundary — source ready only
+
+M05/RF05–RF06/HU05–HU06/P06 (RNF09/RNF10/RNF12): cold root order HTTP list/detail and stateless application actions now forward through the existing full-interface repository/useExisting composition. Unknown responses validate identity, nested DTOs, effective server pagination and bounded decimal/offset timestamp fields. Detail property ID/customer must match the order before operational access fields are returned; never put them in lists/logs or infer authorization from roles. Dates/times remain literal business-calendar values; no timezone/browser-today, cache policy, store, route, UI or writes are added. Existing request behavior and other24 unsupported methods remain preserved.
+
+Focused105 tests and parent full2575/156+production SSR passed(one prerender661.99/500kB warning). Independent Operations verification passed505/505 across20 files in an isolated same-drive copy without blockers. Order consumers/creation/manual scheduling/team/agenda and full T6/WP7/live backend/CORS/authorization/redaction acceptance remain pending; no native approval or independent full-suite/SSR/browser is implied.
+
 ## Planned modules and useful identifiers
 
 RF denotes functional requirements, RNF non-functional requirements, HU user stories, M modules and P screens from the functional source, `Avance_1.pdf`. These identifiers express intent, not Angular modules or delivery progress. The inherited text says eleven modules but enumerates M01–M12; preserve the twelve listed IDs. Modules, requirements and screens do not map one-to-one.

@@ -290,6 +290,12 @@ Pending blocks duplicates and dismissal; same-ID query navigation preserves the 
 
 Independent and parent Operations checks each passed455/19; parent full2525/155+production SSR passed(one prerender656.43/500kB warning). Frozen Chrome156 creation/editing/cancellation passed1440×1000/390×844 over synthetic HTTP. The corrected independent copy stayed on the installed dependencies' drive; no application/config/dependency/timeout change was needed. Technical request consumers(T5) are connected, not accepted live backend/CORS/authorization/redaction/EdgeFirefox/exhaustive accessibility. Orders/manual scheduling/team replacement/calendar and full WP7 remain pending.
 
+#### First T6 order-read source/application checkpoint
+
+GET /api/ordenes and GET /api/ordenes/{id} now have cold validated HTTP adapters and stateless named application reads through the existing root repository/useExisting token. List preserves documented customer/staff/status/scheduled-date filters, aligned paging, effective returned metadata and server order without caller-ID inference. Detail rejects wrong target and crossed property/customer identity before access-field projection; sensitive property data belongs only to later authorized detail disclosures, never summary/log output. Literal calendars/nanosecond clocks, nullable fields, canonical bounded numeric decimals and offset instants retain their contract meanings without timezone/ACL/SQL-ID fabrication.
+
+Scoped105/3 and full2575/156+SSR passed(one prerender661.99/500kB warning); independent505/20 passed in isolated same-drive state without blockers. No order store/route/UI/cache policy/write/agenda consumer is delivered by this source checkpoint; other24 methods remain unsupported. T6/WP7 and live/backend/CORS/permission/redaction/browser acceptance remain pending, not native approval.
+
 ### WP8 — Customer support, separate from service requests
 
 - **Goal:** provide the official customer-attention workflow, not another order/request editor.

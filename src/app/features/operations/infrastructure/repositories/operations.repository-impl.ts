@@ -4,6 +4,7 @@ import { Result } from "@/app/shared/utils/result"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { OperationsRepository } from "../../domain/repositories/operations.repository"
 import { ServiceRequestsHttpSource } from "../source/service-requests-http.source"
+import { ServiceOrdersHttpSource } from "../source/service-orders-http.source"
 
 const unsupported = () =>
   of(Result.failure(new OperationsError("UNSUPPORTED", "Operación no disponible.")))
@@ -11,6 +12,7 @@ const unsupported = () =>
 @Injectable({ providedIn: "root" })
 export class OperationsRepositoryImpl implements OperationsRepository {
   private readonly source = inject(ServiceRequestsHttpSource)
+  private readonly orders = inject(ServiceOrdersHttpSource)
 
   getRequests: OperationsRepository["getRequests"] = query => this.source.getRequests(query)
   getRequest: OperationsRepository["getRequest"] = id => this.source.getRequest(id)
@@ -21,8 +23,8 @@ export class OperationsRepositoryImpl implements OperationsRepository {
     this.source.updateRequest(id, params)
   cancelRequest: OperationsRepository["cancelRequest"] = (id, params) =>
     this.source.cancelRequest(id, params)
-  getOrders: OperationsRepository["getOrders"] = unsupported
-  getOrder: OperationsRepository["getOrder"] = unsupported
+  getOrders: OperationsRepository["getOrders"] = query => this.orders.getOrders(query)
+  getOrder: OperationsRepository["getOrder"] = id => this.orders.getOrder(id)
   createOrder: OperationsRepository["createOrder"] = unsupported
   updateOrder: OperationsRepository["updateOrder"] = unsupported
   changeOrderStatus: OperationsRepository["changeOrderStatus"] = unsupported
