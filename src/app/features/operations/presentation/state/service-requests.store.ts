@@ -21,6 +21,7 @@ import {
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CustomerHistoryStore } from "@/app/features/customers/presentation/state/customer-history.store"
 import {
+  CancelServiceRequestUseCase,
   CreateServiceRequestUseCase,
   UpdateServiceRequestUseCase
 } from "../../application/use-cases/service-request-write.use-cases"
@@ -38,6 +39,7 @@ import {
 import { OperationsError, OperationsErrorCode } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
+  CancelServiceRequestParams,
   CreateServiceRequestParams,
   ServiceRequestQuery,
   UpdateServiceRequestParams
@@ -271,6 +273,49 @@ export const ServiceRequestsStore = signalStore(
       entries => patchState(store, { _details: entries })
     )
     return {
+      cancelRequest(
+        id: number,
+        params: CancelServiceRequestParams,
+        expectedCustomerId: number
+      ): Observable<Result<ServiceRequestSummary, OperationsError>> {
+        const snapshot = { ...params }
+        const writeError = (code: OperationsErrorCode) =>
+          new OperationsError(code, "No se pudo cancelar la solicitud de servicio.")
+        return defer(() => {
+          if (!scope.check()) return EMPTY
+          if (!positiveId(id) || !positiveId(expectedCustomerId))
+            return of(Result.failure(writeError("INVALID_DATA")))
+          if (store._pendingWrites()) return of(Result.failure(writeError("CONFLICT")))
+          const generation = scope.generation()
+          const current = () => scope.check() && generation === scope.generation()
+          patchState(store, { _pendingWrites: store._pendingWrites() + 1 })
+          return defer(() => injector.get(CancelServiceRequestUseCase).execute(id, snapshot)).pipe(
+            take(1),
+            defaultIfEmpty(Result.failure(writeError("INVALID_RESPONSE"))),
+            catchError((error: unknown) =>
+              of(Result.failure(error instanceof OperationsError ? error : writeError("UNKNOWN")))
+            ),
+            map(result =>
+              result.success && result.data.customerId !== expectedCustomerId
+                ? Result.failure(writeError("INVALID_RESPONSE"))
+                : result
+            ),
+            tap(result => {
+              if (!result.success || !current()) return
+              pages.invalidate()
+              if (!current()) return
+              details.invalidate(key => key === String(id))
+              if (!current()) return
+              injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
+            }),
+            takeUntil(scope.cancelled$),
+            finalize(() => {
+              if (generation === scope.generation())
+                patchState(store, { _pendingWrites: store._pendingWrites() - 1 })
+            })
+          )
+        })
+      },
       updateRequest(
         id: number,
         params: UpdateServiceRequestParams,
