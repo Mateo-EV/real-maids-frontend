@@ -1,0 +1,190 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <p class="text-sm text-muted-foreground">Operaciones</p>
+  <app-catalog-frame
+    titleId="service-orders-title"
+    title="Órdenes de servicio"
+    description="Consulta de órdenes de servicio registradas"
+    [busy]="list().loading || list().refreshing"
+  >
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner aria-label="Cargando órdenes" />Cargando órdenes…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando órdenes…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Órdenes de servicio registradas
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Orden / cliente</th>
+                <th hlmTh scope="col">Propiedad</th>
+                <th hlmTh scope="col">Servicio</th>
+                <th hlmTh scope="col">Estado</th>
+                <th hlmTh scope="col">Programación</th>
+                <th hlmTh scope="col" class="text-right">Monto estimado</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (order of rows(); track order.id) {
+                <tr hlmTr>
+                  <td hlmTd class="whitespace-normal break-words">
+                    <a
+                      hlmBtn
+                      variant="link"
+                      class="h-auto max-w-full text-left whitespace-normal break-words"
+                      [routerLink]="['/admin/operations/orders', order.id]"
+                      [queryParams]="paging()"
+                      [attr.aria-label]="'Ver orden ' + order.code + ' de ' + order.customerName"
+                      >{{ order.code }}</a
+                    >
+                    <p class="mt-1 text-xs text-muted-foreground">{{ order.customerName }}</p>
+                  </td>
+                  <td hlmTd class="whitespace-normal break-words">{{ order.propertyName }}</td>
+                  <td hlmTd class="whitespace-normal break-words">
+                    <p>{{ order.serviceTypeName }}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                      {{ order.estimatedDurationMinutes }} min
+                    </p>
+                  </td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{ order.statusName }}</span>
+                  </td>
+                  <td hlmTd>
+                    @if (order.schedule; as schedule) {
+                      <p>{{ schedule.date }}</p>
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        {{ schedule.startTime }} – {{ schedule.endTime ?? "No registrado" }}
+                      </p>
+                    } @else {
+                      Sin programación
+                    }
+                  </td>
+                  <td hlmTd class="text-right tabular-nums">
+                    {{ order.estimatedAmount ?? "No registrado" }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul
+          catalogMobile
+          class="flex flex-col gap-4 p-4"
+          aria-label="Órdenes de servicio registradas"
+        >
+          @for (order of rows(); track order.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">
+                  <a
+                    hlmBtn
+                    variant="link"
+                    class="h-auto max-w-full text-left whitespace-normal break-words"
+                    [routerLink]="['/admin/operations/orders', order.id]"
+                    [queryParams]="paging()"
+                    [attr.aria-label]="'Ver orden ' + order.code + ' de ' + order.customerName"
+                    >{{ order.code }}</a
+                  >
+                </h2>
+                <span hlmBadge variant="outline">{{ order.statusName }}</span>
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground break-words">{{ order.customerName }}</p>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Propiedad</dt>
+                <dd class="break-words">{{ order.propertyName }}</dd>
+                <dt class="text-muted-foreground">Servicio</dt>
+                <dd class="break-words">{{ order.serviceTypeName }}</dd>
+                <dt class="text-muted-foreground">Duración estimada</dt>
+                <dd>{{ order.estimatedDurationMinutes }} min</dd>
+                <dt class="text-muted-foreground">Programación</dt>
+                <dd class="break-words">
+                  @if (order.schedule; as schedule) {
+                    <p>{{ schedule.date }}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                      {{ schedule.startTime }} – {{ schedule.endTime ?? "No registrado" }}
+                    </p>
+                  } @else {
+                    Sin programación
+                  }
+                </dd>
+                <dt class="text-muted-foreground">Monto estimado</dt>
+                <dd class="tabular-nums">{{ order.estimatedAmount ?? "No registrado" }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{ page.total === 0 ? "No hay órdenes" : "Esta página ya no tiene registros" }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "El servidor no devolvió órdenes para esta consulta."
+                  : "El catálogo cambió. Selecciona otra página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p role="status" class="text-xs text-muted-foreground">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de órdenes"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>
