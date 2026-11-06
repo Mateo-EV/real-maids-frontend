@@ -90,7 +90,7 @@ export interface AgendaEntry {
   status: string
   customerName: string
   propertyName: string
-  serviceTypeName: string
+  serviceTypeName: string | null
   assignedStaff: AssignedStaffSummary[]
 }
 export interface ReschedulingReasonSummary {
