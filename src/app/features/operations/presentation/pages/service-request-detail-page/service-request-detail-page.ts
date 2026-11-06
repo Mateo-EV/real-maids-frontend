@@ -23,6 +23,10 @@ import {
   ServiceRequestEditorContext
 } from "../../components/service-request-editor/service-request-editor"
 import {
+  ServiceRequestCancelContext,
+  ServiceRequestCancelDialog
+} from "../../components/service-request-cancel-dialog/service-request-cancel-dialog"
+import {
   serviceRequestPageContext,
   serviceRequestPagingParams,
   serviceRequestRouteId
@@ -216,6 +220,50 @@ export class ServiceRequestDetailPage {
       }
     }
     this.dialog = this.dialogs.open(ServiceRequestEditor, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
+  cancelRequest(): void {
+    const selected = this.request()
+    if (
+      this.destroyRef.destroyed ||
+      this.departing ||
+      !selected ||
+      selected.id !== this.id() ||
+      selected.status !== "registrada" ||
+      this.writing() ||
+      !this.scope.check() ||
+      this.dialog?.open
+    )
+      return
+    const request = { ...selected }
+    const revision = this.revision
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      !this.departing &&
+      this.dialogIdentity === identity &&
+      revision === this.revision &&
+      request.id === this.id() &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    const context: ServiceRequestCancelContext = {
+      request,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onCancelled: () => {
+        if (current()) this.toast.success("Solicitud cancelada correctamente.")
+      }
+    }
+    this.dialog = this.dialogs.open(ServiceRequestCancelDialog, {
       context,
       disableClose: true,
       showCloseButton: false,

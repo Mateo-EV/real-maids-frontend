@@ -1,0 +1,57 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Cancelar solicitud</h2>
+  <p hlmDialogDescription>
+    Solicitud {{ context.request.id }} · {{ context.request.customerName }} · Cliente ID
+    {{ context.request.customerId }}
+  </p>
+</hlm-dialog-header>
+<p class="mt-3 text-sm">Esta acción es irreversible. La solicitud pasará a cancelada.</p>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se confirmó la cancelación</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="min-w-0" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Confirmación de cancelación</legend>
+    <div hlmField class="gap-1.5">
+      <label hlmFieldLabel for="request-cancel-reason">Motivo (obligatorio)</label>
+      <textarea
+        hlmTextarea
+        id="request-cancel-reason"
+        [formField]="profile.reason"
+        aria-describedby="request-cancel-help request-cancel-errors"
+        rows="4"
+      ></textarea>
+      <p hlmFieldDescription id="request-cancel-help">
+        Entre 1 y 250 caracteres. Se omiten espacios al inicio y al final. Si se pierde la
+        respuesta, consulta el estado antes de volver a intentar.
+      </p>
+      <div id="request-cancel-errors">
+        @if (profile.reason().touched()) {
+          @for (failure of profile.reason().errors(); track failure.kind) {
+            <hlm-field-error [validator]="failure.kind">{{ failure.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      variant="destructive"
+      [disabled]="pending()"
+      [attr.aria-busy]="pending()"
+    >
+      @if (pending()) {
+        <hlm-spinner aria-label="Cancelando solicitud" />
+      }
+      {{ pending() ? "Cancelando…" : "Confirmar cancelación" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
