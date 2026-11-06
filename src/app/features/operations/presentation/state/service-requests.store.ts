@@ -273,6 +273,15 @@ export const ServiceRequestsStore = signalStore(
       entries => patchState(store, { _details: entries })
     )
     return {
+      // Order creation owns history invalidation. This seam affects only
+      // already-admitted request pages and the linked request detail.
+      invalidateAfterOrderCreation(linkedRequestId: number): void {
+        if (!positiveId(linkedRequestId) || !scope.check()) return
+        const generation = scope.generation()
+        pages.invalidate()
+        if (!scope.check() || generation !== scope.generation()) return
+        details.invalidate(key => key === String(linkedRequestId))
+      },
       cancelRequest(
         id: number,
         params: CancelServiceRequestParams,
