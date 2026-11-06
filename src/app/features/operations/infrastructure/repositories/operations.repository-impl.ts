@@ -30,7 +30,8 @@ export class OperationsRepositoryImpl implements OperationsRepository {
   changeOrderStatus: OperationsRepository["changeOrderStatus"] = unsupported
   scheduleOrder: OperationsRepository["scheduleOrder"] = (id, params) =>
     this.orders.scheduleOrder(id, params)
-  replaceAssignments: OperationsRepository["replaceAssignments"] = unsupported
+  replaceAssignments: OperationsRepository["replaceAssignments"] = (id, params) =>
+    this.orders.replaceAssignments(id, params)
   getAgenda: OperationsRepository["getAgenda"] = unsupported
   getActiveReschedulingReasons: OperationsRepository["getActiveReschedulingReasons"] = () =>
     this.orders.getActiveReschedulingReasons()

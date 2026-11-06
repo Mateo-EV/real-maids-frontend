@@ -14,6 +14,7 @@ import {
 } from "../../domain/models/operations-read.models"
 import {
   CreateServiceOrderParams,
+  ReplaceServiceAssignmentsParams,
   ScheduleServiceOrderParams,
   ServiceOrderQuery
 } from "../../domain/params/operations.params"
@@ -21,6 +22,7 @@ import { positiveId, requestError } from "./service-requests-http.validation"
 import { order, orderDetail, orderPage, orderPagination } from "./service-orders-http.validation"
 import { createOrderBody, createdOrderDetail } from "./service-orders-create.validation"
 import { activeReschedulingReasons, scheduleOrderBody } from "./service-orders-schedule.validation"
+import { assignmentsBody, captureAssignments } from "./service-orders-assignments.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceOrdersHttpSource {
@@ -111,6 +113,29 @@ export class ServiceOrdersHttpSource {
           ? result
           : Result.failure(
               new OperationsError(result.error.code, "No se pudo programar la orden de servicio.")
+            )
+      )
+    )
+  }
+
+  replaceAssignments(
+    id: number,
+    params: ReplaceServiceAssignmentsParams
+  ): Observable<Result<ServiceOrderSummary, OperationsError>> {
+    const snapshot = captureAssignments(params)
+    return this.read(() => {
+      if (!positiveId(id))
+        throw new OperationsError("INVALID_DATA", "Identificador de orden inválido.")
+      const body = assignmentsBody(snapshot)
+      return this.http
+        .put<unknown>(`${this.url}/${id}/asignaciones`, body, { transferCache: false })
+        .pipe(map(value => order(value, id)))
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(result.error.code, "No se pudo reemplazar el equipo de la orden.")
             )
       )
     )
