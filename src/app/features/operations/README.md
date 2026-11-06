@@ -150,6 +150,10 @@ Backend creation locks a registered request, marks it attended and creates the o
 
 [Public creation tests](infrastructure/source/service-orders-create-http.spec.ts) observed compiled RED47 failures/76 preserved read passes, then GREEN123/123 across creation/read/composition. Current parent full2622/157+production SSR passed(one prerender663.09/500kB warning). Independent focused verification passed552/552 Operations tests21files in a fresh same-drive isolated copy without blockers; the parent spot-check of the same Operations command also passed552/552 across21 files. This is source/application proof only, not native approval, independent full-suite/SSR/browser, live backend/CORS/permissions/redaction/cross-record rollback, order UI, scheduling/team/calendar or full T6/WP7 acceptance.
 
+## T6 numeric order navigation — routes still pending
+
+[Feature-local helpers](presentation/navigation/service-order-page-context.ts) and [public tests](presentation/navigation/service-order-page-context.spec.ts) cover M05/RF05–RF06/HU05–HU06/P06 (RNF09/RNF10/RNF12): numeric zero-based page/size, default0/20 for malformed/duplicate/unsafe pairs, safe aligned effective metadata and independent positive decimal int32 order IDs. Sizes above100 are not silently clamped; links emit only numeric paging, never customer/staff/search/session context. Existing request/staff helpers stay unchanged. Compiled navigation RED52/52 preceded current Operations629/23 GREEN and independent629/23 PASS. No order route/page is activated by these helpers; parent full+SSR exited0(one prerender663.09/500kB warning), but its temporary log count is unavailable. No native/live/backend/browser or full WP7 acceptance is implied.
+
 ## Schema coverage
 
 Authoritative fields: `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, area D. Each class below has its own named entity file, with private positional constructors/static `create()` following User. Factories only materialize values; they do not calculate totals, enforce transitions or infer identities.
