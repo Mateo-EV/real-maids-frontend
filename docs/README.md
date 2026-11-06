@@ -276,6 +276,12 @@ M05/RF05–RF06/HU05–HU06/P06 (RNF09/RNF10/RNF12): cold root order HTTP list/d
 
 Focused105 tests and parent full2575/156+production SSR passed(one prerender661.99/500kB warning). Independent Operations verification passed505/505 across20 files in an isolated same-drive copy without blockers. Order consumers/creation/manual scheduling/team/agenda and full T6/WP7/live backend/CORS/authorization/redaction acceptance remain pending; no native approval or independent full-suite/SSR/browser is implied.
 
+## T6 order-create boundary — source ready only
+
+M05/RF05–RF06/HU05–HU06/P06 (RNF09/RNF10/RNF12): a stateless CreateServiceOrderUseCase and root repository now forward the cold captured three-field POST(idSolicitud/montoEstimado/observacion). Validate positive request ID, nullable bounded plain decimal input→JSON number and nullable literal observation(max2000); do not copy customer/property/actor/status/generated IDs or add preflight/optimism. Validate positive returned order/request linkage/PENDIENTE and reuse unchanged nested detail/property-owner guards. Backend atomically changes registered request to attended and creates the order; repeated subscriptions are separate non-idempotent writes, no retry/rollback guarantee. No order store/form/route/consumer or freshness policy is delivered.
+
+Creation/read/composition GREEN123 followed meaningful RED47fail/76pass. Parent full2622/157+SSR passed(one prerender663.09/500kB warning); independent Operations verification passed552/552 across21 files without blockers. Order presentation, manual scheduling/team/agenda, full T6/WP7 and live/backend/CORS/authorization/redaction acceptance remain pending; no native approval or independent full-suite/SSR/browser claim.
+
 ## Planned modules and useful identifiers
 
 RF denotes functional requirements, RNF non-functional requirements, HU user stories, M modules and P screens from the functional source, `Avance_1.pdf`. These identifiers express intent, not Angular modules or delivery progress. The inherited text says eleven modules but enumerates M01–M12; preserve the twelve listed IDs. Modules, requirements and screens do not map one-to-one.

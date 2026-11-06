@@ -8,9 +8,10 @@ import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceOrderDetail, ServiceOrderSummary } from "../../domain/models/operations-read.models"
-import { ServiceOrderQuery } from "../../domain/params/operations.params"
+import { CreateServiceOrderParams, ServiceOrderQuery } from "../../domain/params/operations.params"
 import { positiveId, requestError } from "./service-requests-http.validation"
 import { orderDetail, orderPage, orderPagination } from "./service-orders-http.validation"
+import { createOrderBody, createdOrderDetail } from "./service-orders-create.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceOrdersHttpSource {
@@ -42,6 +43,36 @@ export class ServiceOrdersHttpSource {
       )
     })
   }
+  createOrder(
+    params: CreateServiceOrderParams
+  ): Observable<Result<ServiceOrderDetail, OperationsError>> {
+    let snapshot: unknown = null
+    try {
+      if (params && typeof params === "object" && !Array.isArray(params))
+        snapshot = {
+          requestId: params.requestId,
+          estimatedAmount: params.estimatedAmount,
+          observation: params.observation
+        }
+    } catch {
+      snapshot = null
+    }
+    return this.read(() => {
+      const body = createOrderBody(snapshot)
+      return this.http
+        .post<unknown>(this.url, body, { transferCache: false })
+        .pipe(map(value => createdOrderDetail(value, body.idSolicitud)))
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(result.error.code, "No se pudo crear la orden de servicio.")
+            )
+      )
+    )
+  }
+
   getOrders(
     query: ServiceOrderQuery = {}
   ): Observable<Result<PaginationResponse<ServiceOrderSummary>, OperationsError>> {

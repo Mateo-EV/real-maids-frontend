@@ -25,7 +25,7 @@ export class OperationsRepositoryImpl implements OperationsRepository {
     this.source.cancelRequest(id, params)
   getOrders: OperationsRepository["getOrders"] = query => this.orders.getOrders(query)
   getOrder: OperationsRepository["getOrder"] = id => this.orders.getOrder(id)
-  createOrder: OperationsRepository["createOrder"] = unsupported
+  createOrder: OperationsRepository["createOrder"] = params => this.orders.createOrder(params)
   updateOrder: OperationsRepository["updateOrder"] = unsupported
   changeOrderStatus: OperationsRepository["changeOrderStatus"] = unsupported
   scheduleOrder: OperationsRepository["scheduleOrder"] = unsupported

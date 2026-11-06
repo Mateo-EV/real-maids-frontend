@@ -296,6 +296,12 @@ GET /api/ordenes and GET /api/ordenes/{id} now have cold validated HTTP adapters
 
 Scoped105/3 and full2575/156+SSR passed(one prerender661.99/500kB warning); independent505/20 passed in isolated same-drive state without blockers. No order store/route/UI/cache policy/write/agenda consumer is delivered by this source checkpoint; other24 methods remain unsupported. T6/WP7 and live/backend/CORS/permission/redaction/browser acceptance remain pending, not native approval.
 
+#### T6 order-create source/application checkpoint
+
+Cold POST /api/ordenes now forwards through root repository and CreateServiceOrderUseCase with only captured request ID, nullable bounded decimal amount and nullable observation. Validate input/response request linkage/PENDIENTE before reusing unchanged nested owner/property guards; no copied customer/property/actor/status, generated ID, preflight, optimistic state or automatic replay. Backend marks the registered request attended and creates the order; cancellation cannot prove rollback of that irreversible non-idempotent operation. Source-only support adds no store/form/route/consumer or freshness choice; other23 methods remain unsupported.
+
+Observed RED47fail/76preservedpass→GREEN123/3, parent full2622/157+SSR(one prerender663.09/500kB warning) and independent552/21 passed. Frontend order consumers, cache policy, manual schedule/team/calendar and full T6/WP7/live backend/CORS/authorization/redaction acceptance remain pending. No native approval or independent full-suite/SSR/browser evidence is implied.
+
 ### WP8 — Customer support, separate from service requests
 
 - **Goal:** provide the official customer-attention workflow, not another order/request editor.
