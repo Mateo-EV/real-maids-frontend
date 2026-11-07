@@ -226,7 +226,7 @@ describe("loaded order manual workflow", () => {
     s.http.expectNone(r => r.method === "PUT")
     expect(s.dialog()!.textContent).toContain("Revalida el personal")
     expect(s.dialog()!.textContent).toContain("Personal 23")
-    await s.click("Buscar personal", s.dialog()!)
+    await s.openStaffSearch()
     s.staffRead().flush(staffPageDto())
     await s.settle()
     await s.submit()

@@ -133,8 +133,8 @@ export class AdminSidebar {
     { label: "Landing", icon: "lucideHouse" },
     { label: "CRM", icon: "lucideContactRound" },
     { label: "RRHH", icon: "lucideUsersRound" },
-    { label: "Operaciones", icon: "lucideFileText" },
-    { label: "Cotizaciones", icon: "lucideFileText" },
-    { label: "Programaciones", icon: "lucideCalendarDays" }
+    { label: "Operaciones", icon: "lucideFileText" }
+    // { label: "Cotizaciones", icon: "lucideFileText" },
+    // { label: "Programaciones", icon: "lucideCalendarDays" }
   ]
 }

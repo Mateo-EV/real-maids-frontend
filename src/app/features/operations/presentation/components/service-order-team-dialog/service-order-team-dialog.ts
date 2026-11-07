@@ -3,6 +3,8 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { form, FormField, FormRoot, submit, validate } from "@angular/forms/signals"
 import { catchError, EMPTY, firstValueFrom, Subject, switchMap, takeUntil } from "rxjs"
 import { BrnDialogRef, injectBrnDialogContext } from "@spartan-ng/brain/dialog"
+import { BrnComboboxInput } from "@spartan-ng/brain/combobox"
+import { HlmComboboxImports } from "@spartan-ng/helm/combobox"
 import { HlmDialogImports } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmFieldImports } from "@spartan-ng/helm/field"
@@ -30,6 +32,8 @@ import {
     HlmFieldImports,
     HlmInputImports,
     HlmNativeSelectImports,
+    BrnComboboxInput,
+    HlmComboboxImports,
     HlmAlertImports,
     HlmSpinnerImports
   ],
@@ -48,6 +52,7 @@ export class ServiceOrderTeamDialog {
   readonly choices = computed(() => this.staff.selectStaff(this.query()))
   readonly readError = signal("")
   readonly error = signal("")
+  readonly staffComboboxOpen = signal<"open" | "closed">("closed")
   readonly model = signal({
     search: "",
     selectedStaffId: "",
@@ -130,19 +135,41 @@ export class ServiceOrderTeamDialog {
   unconfirm(): void {
     this.model.update(value => ({ ...value, confirmed: false }))
   }
-  search(): void {
+  searchStaff(search: string): void {
     if (!this.current() || this.pending()) return
-    this.model.update(value => ({ ...value, selectedStaffId: "" }))
+    this.model.update(value => ({ ...value, search, selectedStaffId: "" }))
     this.reads.next({
       query: {
         offset: 0,
         limit: this.choices().result?.limit ?? 20,
         isActive: true,
-        search: this.model().search.trim() || undefined
+        search: search.trim() || undefined
       },
       force: false
     })
   }
+  selectStaff(id: string | null | undefined): void {
+    if (!this.current() || this.pending()) return
+    this.model.update(value => ({ ...value, selectedStaffId: id ?? "" }))
+    this.unconfirm()
+  }
+  staffComboboxStateChanged(state: "open" | "closed"): void {
+    if (!this.current() || this.pending()) {
+      this.staffComboboxOpen.set("closed")
+      return
+    }
+    this.staffComboboxOpen.set(state)
+    if (state === "open") {
+      const query = this.query(),
+        entry = this.staff.selectStaff(query)
+      if (entry.expires <= Date.now() || entry.error) this.reads.next({ query, force: true })
+    }
+  }
+  readonly staffOptionLabel = (value: string): string => {
+    const selected = this.choices().result?.items.find(person => String(person.id) === value)
+    return selected?.name ?? "Buscar personal activo"
+  }
+  readonly showStaffOption = () => true
   staffPage(direction: -1 | 1): void {
     const page = this.choices().result
     if (

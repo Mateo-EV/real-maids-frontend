@@ -94,7 +94,7 @@
   font-weight: 600;
 }
 
-.module-button[data-active="true"] ng-icon {
+.module-button ng-icon {
   color: var(--gold);
 }
 

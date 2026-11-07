@@ -137,6 +137,12 @@ export async function setupManual(
         r.method === "PUT"
     )
   const staffRead = () => http.expectOne(r => r.url === staffUrl && r.method === "GET")
+  const openStaffSearch = async () => {
+    const trigger = dialog()!.querySelector<HTMLButtonElement>("#order-team-search")
+    expect(trigger).not.toBeNull()
+    trigger!.click()
+    await settle()
+  }
   const open = async (kind: "schedule" | "team") => {
     await click(kind === "schedule" ? "Programar orden" : "Reemplazar equipo")
     expect(dialog()).not.toBeNull()
@@ -164,6 +170,7 @@ export async function setupManual(
     read,
     put,
     staffRead,
+    openStaffSearch,
     open,
     navigate,
     overlay

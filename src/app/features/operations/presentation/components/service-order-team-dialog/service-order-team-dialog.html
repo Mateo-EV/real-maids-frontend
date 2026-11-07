@@ -78,9 +78,42 @@
     }
     <div hlmField>
       <label hlmFieldLabel for="order-team-search">Buscar personal por nombre o documento</label>
-      <input hlmInput id="order-team-search" [formField]="profile.search" />
+      <hlm-combobox
+        [value]="model().selectedStaffId"
+        [search]="model().search"
+        (searchChange)="searchStaff($event)"
+        (valueChange)="selectStaff($event)"
+        [disabled]="pending()"
+        [itemToString]="staffOptionLabel"
+        [filter]="showStaffOption"
+        [state]="staffComboboxOpen()"
+        (stateChanged)="staffComboboxStateChanged($event)"
+      >
+        <hlm-combobox-trigger buttonId="order-team-search" class="w-full justify-between">
+          <span hlmComboboxValue placeholder="Buscar nombre o documento…"></span>
+        </hlm-combobox-trigger>
+        <hlm-combobox-content *hlmComboboxPortal class="max-w-[calc(100vw-2rem)]">
+          <label for="order-team-search-input" class="sr-only">
+            Buscar personal por nombre o documento
+          </label>
+          <input
+            hlmInput
+            brnComboboxInput
+            id="order-team-search-input"
+            placeholder="Escribí un nombre o documento…"
+          />
+          <div hlmComboboxList>
+            @for (person of choices().result?.items ?? []; track person.id) {
+              <hlm-combobox-item [value]="'' + person.id">
+                {{ person.name }}
+              </hlm-combobox-item>
+            } @empty {
+              <hlm-combobox-empty>Sin resultados en esta página.</hlm-combobox-empty>
+            }
+          </div>
+        </hlm-combobox-content>
+      </hlm-combobox>
     </div>
-    <button hlmBtn type="button" variant="outline" (click)="search()">Buscar personal</button>
     @if (choices().loading || choices().refreshing) {
       <p role="status">{{ choices().result ? "Actualizando personal…" : "Cargando personal…" }}</p>
     }
@@ -92,17 +125,17 @@
         Reintentar personal
       </button>
     }
-    <div hlmField>
-      <label hlmFieldLabel for="order-team-staff">Personal activo verificado</label>
-      <select hlmNativeSelect id="order-team-staff" [formField]="profile.selectedStaffId">
-        <option value="">Sin seleccionar</option>
-        @for (person of choices().result?.items ?? []; track person.id) {
-          <option [value]="'' + person.id">
-            {{ person.name }}{{ person.isActive ? "" : " · Inactivo" }}
-          </option>
-        }
-      </select>
-    </div>
+    <!-- <div hlmField> -->
+    <!--   <label hlmFieldLabel for="order-team-staff">Personal activo verificado</label> -->
+    <!--   <hlm-native-select selectId="order-team-staff" [formField]="profile.selectedStaffId"> -->
+    <!--     <option value="">Sin seleccionar</option> -->
+    <!--     @for (person of choices().result?.items ?? []; track person.id) { -->
+    <!--       <option [value]="'' + person.id"> -->
+    <!--         {{ person.name }}{{ person.isActive ? "" : " · Inactivo" }} -->
+    <!--       </option> -->
+    <!--     } -->
+    <!--   </hlm-native-select> -->
+    <!-- </div> -->
     <button hlmBtn type="button" variant="outline" (click)="add()">Agregar al borrador</button>
     @if (choices().result; as page) {
       <p class="text-sm">

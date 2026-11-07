@@ -127,7 +127,9 @@ async function setup(server = false) {
     await settle()
   }
   const fill = async (field: string, value: string) => {
-    const input = dialog().querySelector<HTMLInputElement>(`#preference-${field}`)!
+    const input = dialog().querySelector<HTMLInputElement | HTMLSelectElement>(
+      `#preference-${field}`
+    )!
     input.value = value
     input.dispatchEvent(
       new Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true })
@@ -147,7 +149,7 @@ async function setup(server = false) {
   }
   const valid = async () => {
     await click("Nueva preferencia")
-    await fill("type", " Libre ")
+    await fill("type", "Limpieza")
     await fill("detail", " Detalle ")
   }
   await settle()
@@ -236,7 +238,7 @@ describe("WP5 preferences public owner consumer", () => {
     await s.submit()
     expect(s.create).toHaveBeenCalledExactlyOnceWith(7, {
       propertyId: null,
-      type: "Libre",
+      type: "Limpieza",
       detail: "Detalle",
       isActive: true
     })
@@ -264,7 +266,10 @@ describe("WP5 preferences public owner consumer", () => {
     )
     expect(s.dialog().textContent).not.toContain("PRIVATE")
     await s.fill("propertyId", "12")
-    await s.fill("type", " Nuevo tipo ")
+    expect(s.dialog().querySelector<HTMLSelectElement>("#preference-type")!.textContent).toContain(
+      "General libre"
+    )
+    await s.fill("type", "Horarios")
     await s.fill("detail", " Nuevo detalle ")
     s.dialog().querySelector<HTMLElement>("#preference-isActive")!.click()
     await s.settle()
@@ -272,7 +277,7 @@ describe("WP5 preferences public owner consumer", () => {
     expect(s.update).toHaveBeenCalledExactlyOnceWith(7, {
       id: 3,
       propertyId: 12,
-      type: "Nuevo tipo",
+      type: "Horarios",
       detail: "Nuevo detalle",
       isActive: true
     })
@@ -296,7 +301,6 @@ describe("WP5 preferences public owner consumer", () => {
   })
   it.each([
     ["type", " "],
-    ["type", "a".repeat(51)],
     ["detail", " "]
   ])("rejects invalid %s without write", async (field, value) => {
     const s = await setup()
@@ -307,20 +311,21 @@ describe("WP5 preferences public owner consumer", () => {
     expect(s.create).not.toHaveBeenCalled()
     expect(s.dialog().querySelector("hlm-field-error")).not.toBeNull()
   })
-  it("allows type 50 and long detail with no invented maxlength or type catalog", async () => {
+  it("offers fixed type choices and allows long detail", async () => {
     const s = await setup()
     await s.loaded()
     await s.valid()
-    await s.fill("type", "a".repeat(50))
+    await s.fill("type", "Otro")
     await s.fill("detail", "x".repeat(12000))
     await s.submit()
     expect(s.create).toHaveBeenCalledExactlyOnceWith(7, {
       propertyId: null,
-      type: "a".repeat(50),
+      type: "Otro",
       detail: "x".repeat(12000),
       isActive: true
     })
-    expect(s.dialog().querySelector("#preference-type")?.tagName).toBe("INPUT")
+    expect(s.dialog().querySelector("#preference-type")?.tagName).toBe("SELECT")
+    expect(s.dialog().querySelector("#preference-type")?.textContent).toContain("Mascotas")
     expect(s.dialog().querySelector("#preference-detail")?.hasAttribute("maxlength")).toBe(false)
   })
   it.each(["pending", "failed"])(
@@ -333,7 +338,7 @@ describe("WP5 preferences public owner consumer", () => {
       )
       await s.loaded()
       await s.valid()
-      expect(s.dialog().querySelectorAll("select option")).toHaveLength(1)
+      expect(s.dialog().querySelectorAll("#preference-propertyId option")).toHaveLength(1)
       expect(s.dialog().textContent).toContain(
         mode === "pending" ? "Cargando propiedades" : "No se pudieron consultar las propiedades"
       )
@@ -398,7 +403,9 @@ describe("WP5 preferences public owner consumer", () => {
       await s.submit()
       s.response.next(Result.failure(new CustomerError(code)))
       await s.settle()
-      expect(s.dialog().querySelector<HTMLInputElement>("#preference-type")!.value).toBe(" Libre ")
+      expect(s.dialog().querySelector<HTMLSelectElement>("#preference-type")!.value).toBe(
+        "Limpieza"
+      )
       expect(s.dialog().querySelector('[role="alert"]')).not.toBeNull()
       expect(s.dialog().textContent).not.toContain(new CustomerError(code).message)
       expect(s.create).toHaveBeenCalledOnce()
