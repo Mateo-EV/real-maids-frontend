@@ -17,6 +17,9 @@ import {
 } from "../../application/use-cases/service-request-write.use-cases"
 import { ScheduleServiceOrderUseCase } from "../../application/use-cases/service-order-write.use-cases"
 import { GetActiveReschedulingReasonsUseCase } from "../../application/use-cases/service-order-read.use-cases"
+import { GetAgendaUseCase } from "../../application/use-cases/get-agenda.use-case"
+import { AgendaHttpSource } from "../source/agenda-http.source"
+import { agendaDto, agendaEntry, agendaQuery, agendaUrl } from "../source/agenda-http.testing"
 import { OperationsError } from "../../domain/errors/operations.error"
 import { ServiceRequestSummary } from "../../domain/models/operations-read.models"
 import {
@@ -552,7 +555,140 @@ describe("Operations request read public composition", () => {
     }
   )
 
-  it("keeps the remaining20 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
+  it("resolves the agenda action and existing root alias/source without eager requests", () => {
+    const action = TestBed.inject(GetAgendaUseCase)
+    const source = TestBed.inject(AgendaHttpSource)
+    expect(TestBed.inject(GetAgendaUseCase)).toBe(action)
+    expect(TestBed.inject(AgendaHttpSource)).toBe(source)
+    expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+    expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+    expect(repository).not.toBe(source)
+    action.execute(agendaQuery())
+    repository.getAgenda(agendaQuery())
+    http.expectNone(() => true)
+  })
+
+  it.each(["repository", "usecase"] as const)(
+    "delegates agenda through %s to the shared root source with the exact query, observable and Result",
+    async boundary => {
+      const source = TestBed.inject(AgendaHttpSource)
+      const query = { ...agendaQuery(), staffId: 9 }
+      for (const result of [
+        Result.success([agendaEntry()]),
+        Result.success([]),
+        Result.failure(new OperationsError("FORBIDDEN", "No se pudo consultar la agenda."))
+      ]) {
+        const observable = of(result)
+        const forward = vi.spyOn(source, "getAgenda").mockReturnValue(observable)
+        try {
+          const operation =
+            boundary === "repository"
+              ? repository.getAgenda(query)
+              : TestBed.inject(GetAgendaUseCase).execute(query)
+          expect(operation).toBe(observable)
+          expect(await firstValueFrom(operation)).toBe(result)
+          expect(forward).toHaveBeenCalledExactlyOnceWith(query)
+          expect(forward.mock.calls[0]?.[0]).toBe(query)
+          expect(TestBed.inject(AgendaHttpSource)).toBe(source)
+          expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+          http.expectNone(() => true)
+        } finally {
+          forward.mockRestore()
+        }
+      }
+    }
+  )
+
+  it("keeps the agenda action a stateless delegate to the token's exact query, observable and Results", async () => {
+    const query = { ...agendaQuery(), staffId: 9 }
+    const action = TestBed.inject(GetAgendaUseCase)
+    for (const result of [
+      Result.success([agendaEntry()]),
+      Result.success([]),
+      Result.failure(new OperationsError("FORBIDDEN", "Operación rechazada."))
+    ]) {
+      const observable = of(result)
+      const forward = vi.spyOn(repository, "getAgenda").mockReturnValue(observable)
+      try {
+        const operation = action.execute(query)
+        expect(operation).toBe(observable)
+        expect(await firstValueFrom(operation)).toBe(result)
+        expect(forward).toHaveBeenCalledExactlyOnceWith(query)
+        expect(forward.mock.calls[0]?.[0]).toBe(query)
+        http.expectNone(() => true)
+      } finally {
+        forward.mockRestore()
+      }
+    }
+  })
+
+  it.each(["repository", "usecase"] as const)(
+    "reaches the real agenda GET through %s with only the supplied range/staff query and unchanged projection",
+    async boundary => {
+      const query = { ...agendaQuery(), staffId: 9 }
+      const operation =
+        boundary === "repository"
+          ? repository.getAgenda(query)
+          : TestBed.inject(GetAgendaUseCase).execute(query)
+      http.expectNone(() => true)
+      const pending = firstValueFrom(operation)
+      const request = http.expectOne(r => r.url === agendaUrl)
+      expect(request.request.method).toBe("GET")
+      expect(request.request.body).toBeNull()
+      expect(request.request.transferCache).toBe(false)
+      expect(
+        Object.fromEntries(
+          request.request.params.keys().map(key => [key, request.request.params.get(key)])
+        )
+      ).toEqual({ desde: query.from, hasta: query.until, idPersonal: "9" })
+      request.flush([agendaDto()])
+      expect(await pending).toEqual(Result.success([agendaEntry()]))
+      expect(TestBed.inject(OPERATIONS_REPOSITORY)).toBe(repository)
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "propagates a safe agenda HTTP failure through %s without retry or fabricated empty data",
+    async boundary => {
+      const operation =
+        boundary === "repository"
+          ? repository.getAgenda(agendaQuery())
+          : TestBed.inject(GetAgendaUseCase).execute(agendaQuery())
+      const pending = firstValueFrom(operation)
+      const request = http.expectOne(r => r.url === agendaUrl)
+      expect(request.request.params.has("idPersonal")).toBe(false)
+      request.flush({ mensaje: "PRIVATE DETAIL" }, { status: 403, statusText: "Forbidden" })
+      expect(await pending).toEqual(
+        Result.failure(new OperationsError("FORBIDDEN", "No se pudo consultar la agenda."))
+      )
+      http.expectNone(() => true)
+    }
+  )
+
+  it.each(["repository", "usecase"] as const)(
+    "keeps agenda %s reads cold and propagates caller cancellation without delivery",
+    boundary => {
+      const operation =
+        boundary === "repository"
+          ? repository.getAgenda(agendaQuery())
+          : TestBed.inject(GetAgendaUseCase).execute(agendaQuery())
+      http.expectNone(() => true)
+      const delivered = vi.fn()
+      const subscription = operation.subscribe(delivered)
+      try {
+        const request = http.expectOne(r => r.url === agendaUrl)
+        subscription.unsubscribe()
+        expect(request.cancelled).toBe(true)
+        expect(delivered).not.toHaveBeenCalled()
+        http.expectNone(() => true)
+      } finally {
+        subscription.unsubscribe()
+      }
+    }
+  )
+
+  it("keeps the remaining19 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
       serviceTypeId: 4,
@@ -577,7 +713,6 @@ describe("Operations request read public composition", () => {
     const operations: Observable<Result<unknown, OperationsError>>[] = [
       repository.updateOrder(5, { estimatedAmount: null, observation: null }),
       repository.changeOrderStatus(5, { status: "PROGRAMADA", observation: null }),
-      repository.getAgenda({ from: "2026-03-01", until: "2026-03-02" }),
       repository.getQuotes({}),
       repository.getQuote(5),
       repository.createQuote({ ...quote, lines: [line] }),
@@ -606,4 +741,45 @@ describe("Operations request read public composition", () => {
       http.expectNone(() => true)
     }
   })
+})
+
+describe("Agenda public composition without browser HTTP availability", () => {
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify()
+  })
+
+  it.each([
+    { platform: "server", origin: "https://api.example.test" },
+    { platform: "browser", origin: null }
+  ])(
+    "preserves UNCONFIGURED and zero HTTP for $platform with origin $origin",
+    async ({ platform, origin }) => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: PLATFORM_ID, useValue: platform },
+          { provide: API_URL, useValue: origin },
+          provideOperationsRequestReads()
+        ]
+      })
+      const http = TestBed.inject(HttpTestingController)
+      const repository = TestBed.inject(OPERATIONS_REPOSITORY)
+      const action = TestBed.inject(GetAgendaUseCase)
+      expect(repository).toBe(TestBed.inject(OperationsRepositoryImpl))
+      expect(repository).not.toBe(TestBed.inject(AgendaHttpSource))
+      http.expectNone(() => true)
+      for (const operation of [
+        repository.getAgenda(agendaQuery()),
+        action.execute(agendaQuery())
+      ]) {
+        expect(await firstValueFrom(operation)).toEqual(
+          Result.failure(
+            new OperationsError("UNCONFIGURED", "El servicio de agenda no está disponible.")
+          )
+        )
+        http.expectNone(() => true)
+      }
+    }
+  )
 })

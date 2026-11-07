@@ -5,6 +5,7 @@ import { OperationsError } from "../../domain/errors/operations.error"
 import { OperationsRepository } from "../../domain/repositories/operations.repository"
 import { ServiceRequestsHttpSource } from "../source/service-requests-http.source"
 import { ServiceOrdersHttpSource } from "../source/service-orders-http.source"
+import { AgendaHttpSource } from "../source/agenda-http.source"
 
 const unsupported = () =>
   of(Result.failure(new OperationsError("UNSUPPORTED", "Operación no disponible.")))
@@ -13,6 +14,7 @@ const unsupported = () =>
 export class OperationsRepositoryImpl implements OperationsRepository {
   private readonly source = inject(ServiceRequestsHttpSource)
   private readonly orders = inject(ServiceOrdersHttpSource)
+  private readonly agenda = inject(AgendaHttpSource)
 
   getRequests: OperationsRepository["getRequests"] = query => this.source.getRequests(query)
   getRequest: OperationsRepository["getRequest"] = id => this.source.getRequest(id)
@@ -32,7 +34,7 @@ export class OperationsRepositoryImpl implements OperationsRepository {
     this.orders.scheduleOrder(id, params)
   replaceAssignments: OperationsRepository["replaceAssignments"] = (id, params) =>
     this.orders.replaceAssignments(id, params)
-  getAgenda: OperationsRepository["getAgenda"] = unsupported
+  getAgenda: OperationsRepository["getAgenda"] = query => this.agenda.getAgenda(query)
   getActiveReschedulingReasons: OperationsRepository["getActiveReschedulingReasons"] = () =>
     this.orders.getActiveReschedulingReasons()
 
