@@ -8,7 +8,7 @@ import {
   signal
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { Subject, switchMap } from "rxjs"
+import { Observable, Subject, switchMap, takeUntil } from "rxjs"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
@@ -52,6 +52,8 @@ export class LeadsPage implements OnInit {
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   readonly writing = this.acquisition.writing
+  readonly origins = computed(() => this.acquisition.origins())
+  readonly stages = computed(() => this.acquisition.stages())
   private readonly requestedQuery = signal<NormalizedPagination>(
     leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
@@ -72,6 +74,24 @@ export class LeadsPage implements OnInit {
   readonly rangeEnd = computed(() =>
     this.rows().length ? this.result()!.offset + this.rows().length : 0
   )
+  originLabel(id: number): string {
+    return this.origins().data?.find(origin => origin.id === id)?.name ?? "Origen no disponible"
+  }
+  stageLabel(id: number): string {
+    return this.stages().data?.find(stage => stage.id === id)?.name ?? "Etapa no disponible"
+  }
+  private readCatalog(read: (force: boolean) => Observable<unknown>, force = false): void {
+    if (this.destroyRef.destroyed || !this.scope.check()) return
+    read(force)
+      .pipe(takeUntil(this.scope.cancelled$), takeUntilDestroyed(this.destroyRef))
+      .subscribe()
+  }
+  retryOrigins(): void {
+    this.readCatalog(force => this.acquisition.loadOrigins(force), true)
+  }
+  retryStages(): void {
+    this.readCatalog(force => this.acquisition.loadStages(force), true)
+  }
   readonly errorMessage = computed(() => {
     switch (this.list().error?.code) {
       case "FORBIDDEN":
@@ -111,12 +131,14 @@ export class LeadsPage implements OnInit {
       },
       showCloseButton: false,
       disableClose: true,
-      contentClass: "sm:max-w-lg"
+      contentClass: "sm:max-w-2xl"
     })
   }
 
   ngOnInit(): void {
     this.scope.check()
+    this.readCatalog(force => this.acquisition.loadOrigins(force))
+    this.readCatalog(force => this.acquisition.loadStages(force))
     this.destroyRef.onDestroy(() => this.dialog?.close())
     this.queries
       .pipe(

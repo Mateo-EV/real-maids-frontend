@@ -1,5 +1,6 @@
 import { PLATFORM_ID } from "@angular/core"
 import { HotToastService } from "@ngxpert/hot-toast"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { BehaviorSubject, Subject } from "rxjs"
@@ -9,7 +10,13 @@ import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-c
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
-import { ListLeadsUseCase } from "../../../application/use-cases/acquisition.use-cases"
+import {
+  ListFunnelStagesUseCase,
+  ListLeadOriginsUseCase,
+  ListLeadsUseCase
+} from "../../../application/use-cases/acquisition.use-cases"
+import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
+import { LeadOrigin } from "../../../domain/entities/lead-origin.entity"
 import { Lead } from "../../../domain/entities/lead.entity"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
@@ -34,22 +41,41 @@ const row = lead()
 const page = (items: Lead[] = [row], total = 45, offset = 0, limit = 20): PageResult =>
   Result.success({ items, total, offset, limit })
 
+type CatalogResult<T> = Result<readonly T[], CustomerError>
+
 function setup(server = false) {
   const requests: Subject<PageResult>[] = []
+  const originRequests: Subject<CatalogResult<LeadOrigin>>[] = []
+  const stageRequests: Subject<CatalogResult<FunnelStage>>[] = []
   const execute = vi.fn(() => {
     const response = new Subject<PageResult>()
     requests.push(response)
     return response
   })
+  const loadOrigins = vi.fn(() => {
+    const response = new Subject<CatalogResult<LeadOrigin>>()
+    originRequests.push(response)
+    return response
+  })
+  const loadStages = vi.fn(() => {
+    const response = new Subject<CatalogResult<FunnelStage>>()
+    stageRequests.push(response)
+    return response
+  })
   const session = new BehaviorSubject<AuthSession | null>(
     AuthSession.create("Test", "identity@example.test", null, Date.now() + 600000, 7)
   )
+  const dialogRef = { open: true, close: vi.fn() }
+  const openDialog = vi.fn((_component: unknown, _config: unknown) => dialogRef)
   TestBed.configureTestingModule({
     imports: [LeadsPage],
     providers: [
       provideRouter([]),
       { provide: HotToastService, useValue: { success: vi.fn() } },
+      { provide: HlmDialogService, useValue: { open: openDialog } },
       { provide: ListLeadsUseCase, useValue: { execute } },
+      { provide: ListLeadOriginsUseCase, useValue: { execute: loadOrigins } },
+      { provide: ListFunnelStagesUseCase, useValue: { execute: loadStages } },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       ...(server ? [{ provide: PLATFORM_ID, useValue: "server" }] : [])
@@ -68,6 +94,16 @@ function setup(server = false) {
     requests.at(-1)!.complete()
     await settle()
   }
+  const respondOrigins = async (value: CatalogResult<LeadOrigin>) => {
+    originRequests.at(-1)!.next(value)
+    originRequests.at(-1)!.complete()
+    await settle()
+  }
+  const respondStages = async (value: CatalogResult<FunnelStage>) => {
+    stageRequests.at(-1)!.next(value)
+    stageRequests.at(-1)!.complete()
+    await settle()
+  }
   const click = async (label: string) => {
     const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
       item => item.getAttribute("aria-label") === label || item.textContent?.trim() === label
@@ -76,7 +112,23 @@ function setup(server = false) {
     button!.click()
     await settle()
   }
-  return { fixture, element, execute, requests, session, respond, click, settle }
+  return {
+    fixture,
+    element,
+    execute,
+    requests,
+    originRequests,
+    stageRequests,
+    loadOrigins,
+    loadStages,
+    openDialog,
+    session,
+    respond,
+    respondOrigins,
+    respondStages,
+    click,
+    settle
+  }
 }
 
 afterEach(() => vi.restoreAllMocks())
@@ -100,6 +152,10 @@ describe("LeadsPage read-only inbox", () => {
   it("renders actual lead fields and converted state in container-responsive records with working detail links", async () => {
     const s = setup()
     await s.respond(page([row, lead(8, "Convertido real", true)]))
+    await s.respondOrigins(
+      Result.success([LeadOrigin.create(11, "<b>Recomendación</b>", null, true)])
+    )
+    await s.respondStages(Result.success([FunnelStage.create(12, "Contactado", 1, false)]))
     const frame = s.element.querySelector("app-catalog-frame")!
     expect(
       frame.querySelector('section[aria-labelledby="leads-title"]')?.getAttribute("aria-busy")
@@ -114,8 +170,11 @@ describe("LeadsPage read-only inbox", () => {
       expect(records.textContent).toContain(row.phone)
       expect(records.textContent).toContain("Convertido")
       expect(records.textContent).toContain("No convertido")
-      expect(records.textContent).toContain("11")
-      expect(records.textContent).toContain("12")
+      expect(records.textContent).toContain("<b>Recomendación</b>")
+      expect(records.querySelector("b")).toBeNull()
+      expect(records.textContent).toContain("Contactado")
+      expect(records.textContent).not.toContain("11")
+      expect(records.textContent).not.toContain("12")
       expect(records.querySelectorAll("a")).toHaveLength(2)
       expect(records.querySelector("a")?.getAttribute("href")).toBe(
         "/admin/customers/leads/7?offset=0&limit=20"
@@ -123,9 +182,18 @@ describe("LeadsPage read-only inbox", () => {
       expect(records.querySelector("button")).toBeNull()
     }
     expect(frame.querySelector("th")?.textContent).toBe("Nombre")
-    expect(frame.textContent).toContain("Origen (ID)")
-    expect(frame.textContent).toContain("Etapa (ID)")
+    expect(frame.textContent).toContain("Origen")
+    expect(frame.textContent).toContain("Etapa")
+    expect(frame.textContent).not.toContain("Origen (ID)")
+    expect(frame.textContent).not.toContain("Etapa (ID)")
     expect(frame.textContent).not.toContain("Cliente vinculado")
+  })
+
+  it("uses the wider local editor dialog width", async () => {
+    const s = setup()
+    await s.click("Crear prospecto")
+    expect(s.openDialog).toHaveBeenCalledOnce()
+    expect(s.openDialog.mock.calls[0][1]).toMatchObject({ contentClass: "sm:max-w-2xl" })
   })
 
   it("preserves null contacts as unregistered without fabricating metadata or interpreting text", async () => {
@@ -150,6 +218,41 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.element.querySelector("[catalogMobile]")?.textContent).toContain("No registrado")
     expect(s.element.textContent).not.toContain("Cliente vinculado")
     expect(s.execute).toHaveBeenCalledTimes(1)
+  })
+
+  it("loads origin and stage catalogs independently and labels references without N+1 reads", async () => {
+    const s = setup()
+    expect(s.loadOrigins).toHaveBeenCalledOnce()
+    expect(s.loadStages).toHaveBeenCalledOnce()
+    expect(s.element.textContent).toContain("Cargando orígenes")
+    expect(s.element.textContent).toContain("Cargando etapas")
+    await s.respond(page([row, lead(8, "Otro prospecto")]))
+    await s.respondOrigins(Result.success([LeadOrigin.create(11, "Formulario web", null, true)]))
+    await s.respondStages(Result.success([FunnelStage.create(12, "Por contactar", 1, false)]))
+    expect(s.element.textContent).toContain("Formulario web")
+    expect(s.element.textContent).toContain("Por contactar")
+    expect(s.element.textContent).not.toMatch(/(?:Origen|Etapa)\s*:?\s*(?:11|12)\b/)
+    expect(s.loadOrigins).toHaveBeenCalledTimes(1)
+    expect(s.loadStages).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows honest missing-reference labels and independent retryable catalog errors without hiding leads", async () => {
+    const s = setup()
+    await s.respond(page([row]))
+    await s.respondOrigins(Result.failure(new CustomerError("NETWORK")))
+    await s.respondStages(Result.success([FunnelStage.create(99, "Nueva etapa", 1, false)]))
+    expect(s.element.textContent).toContain(row.name)
+    expect(s.element.textContent).toContain("Origen no disponible")
+    expect(s.element.textContent).toContain("Etapa no disponible")
+    expect(s.element.textContent).toContain("No se pudieron cargar los orígenes")
+    expect(s.element.textContent).not.toContain("11")
+    expect(s.element.textContent).not.toContain("12")
+    await s.click("Reintentar orígenes")
+    expect(s.loadOrigins).toHaveBeenCalledTimes(2)
+    await s.respondOrigins(Result.success([LeadOrigin.create(11, "Referencia", null, false)]))
+    expect(s.element.textContent).toContain("Referencia")
+    expect(s.element.textContent).toContain(row.name)
+    expect(s.loadStages).toHaveBeenCalledTimes(1)
   })
 
   it("uses effective offset/limit, server total and ranges for next/previous, not local slicing", async () => {
@@ -325,8 +428,27 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.execute).toHaveBeenCalledTimes(1)
   })
 
-  it("does not dispatch reads during SSR", () => {
+  it("releases catalog reads when the page is destroyed", () => {
+    const s = setup()
+    expect(s.originRequests[0].observed).toBe(true)
+    expect(s.stageRequests[0].observed).toBe(true)
+    s.fixture.destroy()
+    expect(s.originRequests[0].observed).toBe(false)
+    expect(s.stageRequests[0].observed).toBe(false)
+  })
+
+  it("releases catalog reads when the session is replaced", async () => {
+    const s = setup()
+    s.session.next(AuthSession.create("Other", "other@example.test", null, Date.now() + 600000, 8))
+    await s.settle()
+    expect(s.originRequests[0].observed).toBe(false)
+    expect(s.stageRequests[0].observed).toBe(false)
+  })
+
+  it("does not dispatch lead or catalog reads during SSR", () => {
     const s = setup(true)
     expect(s.execute).not.toHaveBeenCalled()
+    expect(s.loadOrigins).not.toHaveBeenCalled()
+    expect(s.loadStages).not.toHaveBeenCalled()
   })
 })

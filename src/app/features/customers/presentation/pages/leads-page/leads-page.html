@@ -19,6 +19,62 @@
     @if (list().refreshing) {
       <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando prospectos…</p>
     }
+    @if (origins().loading || origins().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+        {{ origins().refreshing ? "Actualizando orígenes…" : "Cargando orígenes…" }}
+      </p>
+    }
+    @if (origins().error) {
+      <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
+        <span>
+          {{
+            origins().data
+              ? "No se pudieron actualizar los orígenes."
+              : "No se pudieron cargar los orígenes."
+          }}
+          @if (origins().data) {
+            Se conservan las etiquetas verificadas disponibles.
+          }
+        </span>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          (click)="retryOrigins()"
+          [disabled]="origins().loading || origins().refreshing"
+        >
+          Reintentar orígenes
+        </button>
+      </div>
+    }
+    @if (stages().loading || stages().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+        {{ stages().refreshing ? "Actualizando etapas…" : "Cargando etapas…" }}
+      </p>
+    }
+    @if (stages().error) {
+      <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
+        <span>
+          {{
+            stages().data
+              ? "No se pudieron actualizar las etapas."
+              : "No se pudieron cargar las etapas."
+          }}
+          @if (stages().data) {
+            Se conservan las etiquetas verificadas disponibles.
+          }
+        </span>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          (click)="retryStages()"
+          [disabled]="stages().loading || stages().refreshing"
+        >
+          Reintentar etapas
+        </button>
+      </div>
+    }
     @if (list().error) {
       <div class="p-5">
         <div hlmAlert variant="destructive" role="alert">
@@ -53,8 +109,8 @@
                 <th hlmTh scope="col">Nombre</th>
                 <th hlmTh scope="col">Correo</th>
                 <th hlmTh scope="col">Teléfono</th>
-                <th hlmTh scope="col">Origen (ID)</th>
-                <th hlmTh scope="col">Etapa (ID)</th>
+                <th hlmTh scope="col">Origen</th>
+                <th hlmTh scope="col">Etapa</th>
                 <th hlmTh scope="col">Conversión</th>
               </tr>
             </thead>
@@ -74,8 +130,12 @@
                   </td>
                   <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
                   <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
-                  <td hlmTd>{{ lead.originId }}</td>
-                  <td hlmTd>{{ lead.stageId }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                  </td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                  </td>
                   <td hlmTd>
                     <span hlmBadge variant="outline">{{
                       lead.isConverted ? "Convertido" : "No convertido"
@@ -110,10 +170,14 @@
                 <dd class="break-all">{{ lead.email ?? "No registrado" }}</dd>
                 <dt class="text-muted-foreground">Teléfono</dt>
                 <dd class="break-words">{{ lead.phone ?? "No registrado" }}</dd>
-                <dt class="text-muted-foreground">Origen (ID)</dt>
-                <dd>{{ lead.originId }}</dd>
-                <dt class="text-muted-foreground">Etapa (ID)</dt>
-                <dd>{{ lead.stageId }}</dd>
+                <dt class="text-muted-foreground">Origen</dt>
+                <dd>
+                  <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                </dd>
+                <dt class="text-muted-foreground">Etapa</dt>
+                <dd>
+                  <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                </dd>
               </dl>
             </li>
           }
