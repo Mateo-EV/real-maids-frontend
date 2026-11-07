@@ -6,6 +6,38 @@
     description="Consulta de órdenes de servicio registradas"
     [busy]="list().loading || list().refreshing"
   >
+    <div catalogControls>
+      <nav class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
+        <a
+          hlmBtn
+          variant="outline"
+          routerLink="/admin/operations/requests"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Solicitudes</a
+        >
+        <a
+          hlmBtn
+          variant="outline"
+          routerLink="/admin/operations/orders"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Órdenes</a
+        >
+      </nav>
+    </div>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner aria-label="Cargando órdenes" />Cargando órdenes…

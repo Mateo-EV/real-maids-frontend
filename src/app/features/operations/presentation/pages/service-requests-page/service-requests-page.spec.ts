@@ -64,6 +64,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
       provideRouter([
         { path: "admin/operations/requests", component: ServiceRequestsPage },
         { path: "admin/operations/requests/:id", component: NavigationTarget },
+        { path: "admin/operations/orders", component: NavigationTarget },
         { path: "elsewhere", component: NavigationTarget }
       ]),
       { provide: API_URL, useValue: "https://api.example.test" },
@@ -117,6 +118,37 @@ afterEach(() => {
 // WP7 T5 / S1-S4: leaf consumer contracts, not root route/sidebar integration.
 // The importable RED stub intentionally performs no observation or HTTP.
 describe("ServiceRequestsPage inbox", () => {
+  // T6F / S1,S3,S4,S5,S6,S8: navigation is feature-local, not a sidebar change.
+  it.each(["loading", "empty", "error"] as const)(
+    "exposes working Solicitudes/Órdenes links in CatalogFrame controls during %s",
+    async state => {
+      const s = await setup({ url: `${inbox}?page=2&size=5` })
+      const pending = s.request(2, 5)
+      if (state === "empty") pending.flush(page(2, 5, 0))
+      else if (state === "error") pending.error(new ProgressEvent("error"))
+      await s.settle()
+      const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")!
+      expect(controls, "CatalogFrame header controls").not.toBeNull()
+      const requests = controls.querySelector<HTMLAnchorElement>(`a[href="${inbox}"]`)
+      const orders = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/orders"]')
+      expect(requests?.textContent?.trim()).toBe("Solicitudes")
+      expect(requests?.getAttribute("aria-current")).toBe("page")
+      expect(orders?.textContent?.trim()).toBe("Órdenes")
+      expect(orders?.getAttribute("aria-current")).toBeNull()
+      expect(controls.querySelector('a[href*="agenda"]')).toBeNull()
+      const create = Array.from(controls.querySelectorAll("button")).find(
+        button => button.textContent?.trim() === "Crear solicitud"
+      )
+      expect(create, "Existing create action remains available").toBeDefined()
+      expect(create!.disabled).toBe(false)
+      orders!.click()
+      await s.settle()
+      expect(TestBed.inject(Router).url).toBe("/admin/operations/orders")
+      if (state === "loading") expect(pending.cancelled).toBe(true)
+      s.http.expectNone(() => true)
+    }
+  )
+
   it("starts with one 0/20 GET, observable loading and actual ordered table/card records", async () => {
     const s = await setup()
     const pending = s.request()
@@ -162,7 +194,9 @@ describe("ServiceRequestsPage inbox", () => {
     await s.settle()
     s.http.expectNone(() => true)
     expect(s.element.textContent).toContain("201–201 de 201")
-    expect(s.element.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("3")
+    expect(
+      s.element.querySelector('app-table-pagination [aria-current="page"]')?.textContent?.trim()
+    ).toBe("3")
     for (const selector of ["[catalogDesktop]", "[catalogMobile]"]) {
       const link = s.element.querySelector<HTMLAnchorElement>(`${selector} a`)
       expect(link?.getAttribute("href")).toBe(`${inbox}/17?page=2&size=100`)

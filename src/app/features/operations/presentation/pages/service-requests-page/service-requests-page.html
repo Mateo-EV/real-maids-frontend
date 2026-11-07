@@ -6,7 +6,37 @@
     description="Consulta de solicitudes de servicio registradas"
     [busy]="list().loading || list().refreshing"
   >
-    <div catalogControls>
+    <div catalogControls class="flex flex-wrap items-center gap-3">
+      <nav class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
+        <a
+          hlmBtn
+          variant="outline"
+          routerLink="/admin/operations/requests"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Solicitudes</a
+        >
+        <a
+          hlmBtn
+          variant="outline"
+          routerLink="/admin/operations/orders"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Órdenes</a
+        >
+      </nav>
       <button hlmBtn type="button" [disabled]="writing()" (click)="create()">
         Crear solicitud
       </button>

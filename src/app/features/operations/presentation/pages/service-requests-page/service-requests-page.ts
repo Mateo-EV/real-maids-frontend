@@ -1,6 +1,12 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
+import {
+  ActivatedRoute,
+  NavigationStart,
+  Router,
+  RouterLink,
+  RouterLinkActive
+} from "@angular/router"
 import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
@@ -29,6 +35,7 @@ type Query = Required<PaginationParams>
   selector: "app-service-requests-page",
   imports: [
     RouterLink,
+    RouterLinkActive,
     CatalogFrame,
     TablePagination,
     HlmAlertImports,

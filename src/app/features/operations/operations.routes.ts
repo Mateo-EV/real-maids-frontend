@@ -23,5 +23,25 @@ export const OPERATIONS_ROUTES: Routes = [
       import("./presentation/pages/service-request-detail-page/service-request-detail-page").then(
         component => component.ServiceRequestDetailPage
       )
+  },
+  {
+    path: "orders",
+    title: "Órdenes de servicio | The Real Maids",
+    canActivate: [authGuard],
+    providers: provideCatalogToast(),
+    loadComponent: () =>
+      import("./presentation/pages/service-orders-page/service-orders-page").then(
+        component => component.ServiceOrdersPage
+      )
+  },
+  {
+    path: "orders/:id",
+    title: "Detalle de orden | The Real Maids",
+    canActivate: [authGuard],
+    providers: provideCatalogToast(),
+    loadComponent: () =>
+      import("./presentation/pages/service-order-detail-page/service-order-detail-page").then(
+        component => component.ServiceOrderDetailPage
+      )
   }
 ]

@@ -38,6 +38,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
       provideRouter([
         { path: "admin/operations/orders", component: ServiceOrdersPage },
         { path: "admin/operations/orders/:id", component: NavigationTarget },
+        { path: "admin/operations/requests", component: NavigationTarget },
         { path: "elsewhere", component: NavigationTarget }
       ]),
       { provide: API_URL, useValue: "https://api.example.test" },
@@ -92,6 +93,34 @@ afterEach(() => {
 // T6D / S1,S3,S4,S5,S6: public unrouted leaf contracts, not root integration.
 // The typed RED scaffold intentionally has no observation, retry or page action.
 describe("ServiceOrdersPage read-only inbox", () => {
+  // T6F / S1,S3,S4,S5,S6,S8: preserve paging and read-only controls.
+  it.each(["loading", "empty", "error"] as const)(
+    "exposes working Solicitudes/Órdenes links in CatalogFrame controls during %s",
+    async state => {
+      const s = await setup({ url: `${inbox}?page=2&size=5` })
+      const pending = s.request(2, 5)
+      if (state === "empty") pending.flush(ordersDtoPage(2, 5, 0))
+      else if (state === "error") pending.error(new ProgressEvent("error"))
+      await s.settle()
+      const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")!
+      expect(controls, "CatalogFrame header controls").not.toBeNull()
+      const requests = controls.querySelector<HTMLAnchorElement>(
+        'a[href="/admin/operations/requests"]'
+      )
+      const orders = controls.querySelector<HTMLAnchorElement>(`a[href="${inbox}"]`)
+      expect(requests?.textContent?.trim()).toBe("Solicitudes")
+      expect(requests?.getAttribute("aria-current")).toBeNull()
+      expect(orders?.textContent?.trim()).toBe("Órdenes")
+      expect(orders?.getAttribute("aria-current")).toBe("page")
+      expect(controls.querySelector('a[href*="agenda"], button')).toBeNull()
+      requests!.click()
+      await s.settle()
+      expect(TestBed.inject(Router).url).toBe("/admin/operations/requests")
+      if (state === "loading") expect(pending.cancelled).toBe(true)
+      s.http.expectNone(() => true)
+    }
+  )
+
   it("starts one 0/20 GET, announces loading and renders actual server order in table and cards", async () => {
     const s = await setup()
     const pending = s.request()
@@ -146,7 +175,9 @@ describe("ServiceOrdersPage read-only inbox", () => {
     await s.settle()
     s.http.expectNone(() => true)
     expect(s.element.textContent).toContain("201–201 de 201")
-    expect(s.element.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("3")
+    expect(
+      s.element.querySelector('app-table-pagination [aria-current="page"]')?.textContent?.trim()
+    ).toBe("3")
     for (const selector of ["[catalogDesktop]", "[catalogMobile]"])
       expect(s.element.querySelector(`${selector} a`)?.getAttribute("href")).toBe(
         `${inbox}/17?page=2&size=100`
