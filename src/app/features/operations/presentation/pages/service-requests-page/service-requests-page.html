@@ -36,6 +36,20 @@
           ariaCurrentWhenActive="page"
           >Órdenes</a
         >
+        <a
+          hlmBtn
+          variant="outline"
+          routerLink="/admin/operations/agenda"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Agenda</a
+        >
       </nav>
       <button hlmBtn type="button" [disabled]="writing()" (click)="create()">
         Crear solicitud

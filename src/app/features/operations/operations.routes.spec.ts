@@ -24,6 +24,9 @@ import { orderDetailDto } from "./presentation/pages/service-order-detail-page/s
 import { ServiceOrdersStore } from "./presentation/state/service-orders.store"
 import { OPERATIONS_REPOSITORY } from "./domain/repositories/operations.repository"
 import { OperationsRepositoryImpl } from "./infrastructure/repositories/operations.repository-impl"
+import { AgendaPage } from "./presentation/pages/agenda-page/agenda-page"
+import { AgendaStore } from "./presentation/state/agenda.store"
+import { agendaDto } from "./presentation/state/agenda.testing"
 
 @Component({ template: "Login destination" })
 class LoginDestination {}
@@ -110,7 +113,8 @@ describe("Operations protected request integration", () => {
       "requests",
       "requests/:id",
       "orders",
-      "orders/:id"
+      "orders/:id",
+      "agenda"
     ])
     expect(OPERATIONS_ROUTES[0]).toMatchObject({ pathMatch: "full", redirectTo: "requests" })
   })
@@ -119,7 +123,8 @@ describe("Operations protected request integration", () => {
     ["requests", ServiceRequestsPage],
     ["requests/:id", ServiceRequestDetailPage],
     ["orders", ServiceOrdersPage],
-    ["orders/:id", ServiceOrderDetailPage]
+    ["orders/:id", ServiceOrderDetailPage],
+    ["agenda", AgendaPage]
   ] as const)("lazy loads %s behind the unchanged auth guard", async (path, component) => {
     const route = OPERATIONS_ROUTES.find(route => route.path === path)
     expect(route, `Missing protected request route: ${path}`).toBeDefined()
@@ -144,7 +149,7 @@ describe("Operations protected request integration", () => {
 
   it("owns complete distinct route toast scopes and inherits root request/order/auth/repository lifetimes", () => {
     const routes = OPERATIONS_ROUTES.filter(route => route.loadComponent)
-    expect(routes).toHaveLength(4)
+    expect(routes).toHaveLength(5)
     TestBed.configureTestingModule({ providers: appConfig.providers })
     const root = TestBed.inject(EnvironmentInjector)
     const reference = createEnvironmentInjector(provideCatalogToast(), root)
@@ -171,8 +176,8 @@ describe("Operations protected request integration", () => {
         expect(scope.get(ServiceRequestsStore)).toBe(store)
         expect(scope.get(AuthStore)).toBe(auth)
       })
-      expect(new Set(toasts).size).toBe(4)
-      expect(new Set(views).size).toBe(4)
+      expect(new Set(toasts).size).toBe(5)
+      expect(new Set(views).size).toBe(5)
     } finally {
       scopes.forEach(scope => scope.destroy())
       reference.destroy()
@@ -184,7 +189,8 @@ describe("Operations protected request integration", () => {
     "/admin/operations/requests",
     "/admin/operations/requests/17?page=2&size=5",
     "/admin/operations/orders",
-    "/admin/operations/orders/17?page=2&size=5"
+    "/admin/operations/orders/17?page=2&size=5",
+    "/admin/operations/agenda"
   ])("restores guest %s and redirects to login without private UI or requests", async url => {
     const app = await setup(false)
     requireAdminEntry()
@@ -309,6 +315,51 @@ describe("Operations protected request integration", () => {
       app.http.verify()
     }
   )
+
+  it("opens protected Agenda blank, then dispatches one explicit root-composed GET and links the actual order", async () => {
+    const app = await setup(true)
+    const harness = await RouterTestingHarness.create("/admin/operations/agenda")
+    const settle = async () => {
+      await harness.fixture.whenStable()
+      harness.detectChanges()
+    }
+    await settle()
+    const consumer = harness.fixture.debugElement.query(By.directive(AgendaPage))
+    expect(consumer).not.toBeNull()
+    expect(consumer.injector.get(AgendaStore)).toBeDefined()
+    expect(TestBed.inject(AgendaStore, null)).toBeNull()
+    expect(consumer.injector.get(OPERATIONS_REPOSITORY)).toBe(
+      TestBed.inject(OperationsRepositoryImpl)
+    )
+    expect(consumer.injector.get(AuthStore)).toBe(app.auth)
+    expect(consumer.injector.get(HotToastService)).toBeDefined()
+    app.http.expectNone(r => r.url.includes("/api/"))
+    const shell = harness.routeNativeElement!
+    expect(shell.querySelector('app-admin-sidebar a[href="/admin/operations/agenda"]')).toBeNull()
+    expect(shell.querySelector('a[href="/admin/operations"]')?.getAttribute("aria-current")).toBe(
+      "page"
+    )
+    const date = shell.querySelector<HTMLInputElement>("#agenda-date")!
+    expect(date.value).toBe("")
+    date.value = "2024-02-29"
+    date.dispatchEvent(new Event("input", { bubbles: true }))
+    await settle()
+    shell.querySelector<HTMLButtonElement>('app-agenda-page button[type="submit"]')!.click()
+    await settle()
+    const pending = app.http.expectOne(r => r.url === "http://localhost:8080/api/agenda")
+    expect(pending.request.method).toBe("GET")
+    expect(pending.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(pending.request.transferCache).toBe(false)
+    expect(pending.request.params.keys().sort()).toEqual(["desde", "hasta"])
+    expect(pending.request.params.get("desde")).toBe("2024-02-29")
+    expect(pending.request.params.get("hasta")).toBe("2024-02-29")
+    pending.flush([agendaDto()])
+    await settle()
+    expect(
+      shell.querySelector('app-agenda-page a[href="/admin/operations/orders/17"]')
+    ).not.toBeNull()
+    app.http.verify()
+  })
 
   it("navigates requests → orders → loaded detail → effective inbox → requests without duplicate reads", async () => {
     const app = await setup(true)

@@ -43,5 +43,13 @@ export const OPERATIONS_ROUTES: Routes = [
       import("./presentation/pages/service-order-detail-page/service-order-detail-page").then(
         component => component.ServiceOrderDetailPage
       )
+  },
+  {
+    path: "agenda",
+    title: "Agenda | The Real Maids",
+    canActivate: [authGuard],
+    providers: provideCatalogToast(),
+    loadComponent: () =>
+      import("./presentation/pages/agenda-page/agenda-page").then(component => component.AgendaPage)
   }
 ]

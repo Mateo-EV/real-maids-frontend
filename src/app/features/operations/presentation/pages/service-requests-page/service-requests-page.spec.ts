@@ -14,6 +14,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { provideOperationsRequestReads } from "../../../operations.providers"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
 import { ServiceRequestsPage } from "./service-requests-page"
+import { AgendaPage } from "../agenda-page/agenda-page"
 
 const api = "https://api.example.test/api/solicitudes"
 const inbox = "/admin/operations/requests"
@@ -65,6 +66,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
         { path: "admin/operations/requests", component: ServiceRequestsPage },
         { path: "admin/operations/requests/:id", component: NavigationTarget },
         { path: "admin/operations/orders", component: NavigationTarget },
+        { path: "admin/operations/agenda", component: AgendaPage },
         { path: "elsewhere", component: NavigationTarget }
       ]),
       { provide: API_URL, useValue: "https://api.example.test" },
@@ -135,7 +137,9 @@ describe("ServiceRequestsPage inbox", () => {
       expect(requests?.getAttribute("aria-current")).toBe("page")
       expect(orders?.textContent?.trim()).toBe("Órdenes")
       expect(orders?.getAttribute("aria-current")).toBeNull()
-      expect(controls.querySelector('a[href*="agenda"]')).toBeNull()
+      const agenda = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/agenda"]')
+      expect(agenda?.textContent?.trim()).toBe("Agenda")
+      expect(agenda?.getAttribute("aria-current")).toBeNull()
       const create = Array.from(controls.querySelectorAll("button")).find(
         button => button.textContent?.trim() === "Crear solicitud"
       )
@@ -148,6 +152,23 @@ describe("ServiceRequestsPage inbox", () => {
       s.http.expectNone(() => true)
     }
   )
+
+  it("opens the working blank agenda consumer from the inbox header without an agenda GET", async () => {
+    const s = await setup()
+    const pending = s.request()
+    const link = s.element.querySelector<HTMLAnchorElement>(
+      '[catalogControls] a[href="/admin/operations/agenda"]'
+    )!
+    expect(link).not.toBeNull()
+    link.click()
+    await s.settle()
+    expect(pending.cancelled).toBe(true)
+    expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
+    expect(
+      s.harness.routeNativeElement!.querySelector<HTMLInputElement>("#agenda-date")?.value
+    ).toBe("")
+    s.http.expectNone(r => r.url.includes("/api/"))
+  })
 
   it("starts with one 0/20 GET, observable loading and actual ordered table/card records", async () => {
     const s = await setup()

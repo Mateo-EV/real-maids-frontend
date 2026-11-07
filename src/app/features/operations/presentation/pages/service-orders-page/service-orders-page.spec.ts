@@ -13,6 +13,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { provideOperationsRequestReads } from "../../../operations.providers"
 import { ServiceOrdersStore } from "../../state/service-orders.store"
 import { ServiceOrdersPage } from "./service-orders-page"
+import { AgendaPage } from "../agenda-page/agenda-page"
 import { orderDto, ordersDtoPage } from "./service-orders-page.testing"
 
 const api = "https://api.example.test/api/ordenes"
@@ -39,6 +40,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
         { path: "admin/operations/orders", component: ServiceOrdersPage },
         { path: "admin/operations/orders/:id", component: NavigationTarget },
         { path: "admin/operations/requests", component: NavigationTarget },
+        { path: "admin/operations/agenda", component: AgendaPage },
         { path: "elsewhere", component: NavigationTarget }
       ]),
       { provide: API_URL, useValue: "https://api.example.test" },
@@ -93,6 +95,22 @@ afterEach(() => {
 // T6D / S1,S3,S4,S5,S6: public unrouted leaf contracts, not root integration.
 // The typed RED scaffold intentionally has no observation, retry or page action.
 describe("ServiceOrdersPage read-only inbox", () => {
+  it("opens the working blank agenda consumer from the inbox header without an agenda GET", async () => {
+    const s = await setup()
+    const pending = s.request()
+    const link = s.element.querySelector<HTMLAnchorElement>(
+      '[catalogControls] a[href="/admin/operations/agenda"]'
+    )!
+    expect(link).not.toBeNull()
+    link.click()
+    await s.settle()
+    expect(pending.cancelled).toBe(true)
+    expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
+    expect(
+      s.harness.routeNativeElement!.querySelector<HTMLInputElement>("#agenda-date")?.value
+    ).toBe("")
+    s.http.expectNone(r => r.url.includes("/api/"))
+  })
   // T6F / S1,S3,S4,S5,S6,S8: preserve paging and read-only controls.
   it.each(["loading", "empty", "error"] as const)(
     "exposes working Solicitudes/Órdenes links in CatalogFrame controls during %s",
@@ -112,7 +130,10 @@ describe("ServiceOrdersPage read-only inbox", () => {
       expect(requests?.getAttribute("aria-current")).toBeNull()
       expect(orders?.textContent?.trim()).toBe("Órdenes")
       expect(orders?.getAttribute("aria-current")).toBe("page")
-      expect(controls.querySelector('a[href*="agenda"], button')).toBeNull()
+      const agenda = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/agenda"]')
+      expect(agenda?.textContent?.trim()).toBe("Agenda")
+      expect(agenda?.getAttribute("aria-current")).toBeNull()
+      expect(controls.querySelector("button")).toBeNull()
       requests!.click()
       await s.settle()
       expect(TestBed.inject(Router).url).toBe("/admin/operations/requests")

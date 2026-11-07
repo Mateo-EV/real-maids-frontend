@@ -1,0 +1,213 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full min-w-0 flex-col gap-5 px-4 py-6 sm:px-6"
+>
+  <p class="text-sm text-muted-foreground">Operaciones</p>
+  <app-catalog-frame
+    titleId="agenda-title"
+    title="Agenda"
+    description="Consulta de programación por fechas explícitas. Sin cambios de programación desde el calendario."
+    [busy]="busy()"
+  >
+    <nav catalogControls class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
+      @for (
+        link of [
+          { path: "requests", label: "Solicitudes" },
+          { path: "orders", label: "Órdenes" },
+          { path: "agenda", label: "Agenda" }
+        ];
+        track link.path
+      ) {
+        <a
+          hlmBtn
+          variant="outline"
+          [routerLink]="'/admin/operations/' + link.path"
+          routerLinkActive="bg-accent text-accent-foreground"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >{{ link.label }}</a
+        >
+      }
+    </nav>
+    <form
+      class="grid gap-4 border-b p-4 sm:grid-cols-2 xl:grid-cols-4"
+      [formRoot]="fields"
+      (submit)="search()"
+    >
+      <div class="flex min-w-0 flex-col gap-2">
+        <label hlmLabel for="agenda-date">Fecha seleccionada (obligatoria)</label>
+        <input
+          hlmInput
+          id="agenda-date"
+          type="date"
+          [formField]="fields.date"
+          aria-describedby="agenda-date-help agenda-date-error"
+        />
+        <p id="agenda-date-help" class="text-xs text-muted-foreground">
+          Selecciona una fecha; no se asume el día de hoy.
+        </p>
+        <p id="agenda-date-error" class="text-xs text-destructive">
+          @if (fields.date().touched()) {
+            @for (error of fields.date().errors(); track error.kind) {
+              {{ error.message }}
+            }
+          }
+        </p>
+      </div>
+      <div class="flex min-w-0 flex-col gap-2">
+        <label hlmLabel for="agenda-view">Vista</label>
+        <hlm-native-select selectId="agenda-view" [formField]="fields.view">
+          <option value="day">Día</option>
+          <option value="week">7 días desde la fecha seleccionada</option>
+          <option value="month">Mes completo de la fecha seleccionada</option>
+        </hlm-native-select>
+      </div>
+      <div class="flex min-w-0 flex-col gap-2">
+        <label hlmLabel for="agenda-staff">ID de personal (opcional)</label>
+        <input
+          hlmInput
+          id="agenda-staff"
+          type="text"
+          inputmode="numeric"
+          [formField]="fields.staff"
+          aria-describedby="agenda-staff-help agenda-staff-error"
+        />
+        <p id="agenda-staff-help" class="text-xs text-muted-foreground">
+          El alcance real lo determina el servidor.
+        </p>
+        <p id="agenda-staff-error" class="text-xs text-destructive">
+          @if (fields.staff().touched()) {
+            @for (error of fields.staff().errors(); track error.kind) {
+              {{ error.message }}
+            }
+          }
+        </p>
+      </div>
+      <div class="flex items-start">
+        <button hlmBtn type="submit" [disabled]="fields().invalid()">Consultar agenda</button>
+      </div>
+    </form>
+    @if (!store.query()) {
+      <p class="p-5 text-sm text-muted-foreground">
+        Selecciona una fecha para consultar la agenda.
+      </p>
+    }
+    @if (store.loading()) {
+      <div role="status" class="flex items-center gap-3 p-5"><hlm-spinner />Cargando agenda…</div>
+    }
+    @if (store.refreshing()) {
+      <p role="status" class="p-4 text-sm text-muted-foreground">Actualizando agenda…</p>
+    }
+    @if (store.error()) {
+      <div class="p-4">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>No se pudo consultar la agenda.</h2>
+          <p hlmAlertDescription>
+            @if (store.result() !== undefined) {
+              Los datos pueden estar desactualizados.
+            }
+            Reintenta la lectura.
+          </p>
+        </div>
+        <button
+          hlmBtn
+          variant="outline"
+          class="mt-3"
+          type="button"
+          (click)="retry()"
+          [disabled]="busy()"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (store.result() !== undefined && range(); as calendar) {
+      <section class="min-w-0 p-4" aria-label="Programación consultada">
+        <h2 class="mb-4 text-sm font-semibold">
+          {{
+            applied()?.view === "day"
+              ? "Día"
+              : applied()?.view === "week"
+                ? "7 días desde la fecha seleccionada"
+                : "Mes completo"
+          }}
+          · {{ calendar.from }} → {{ calendar.until }}
+        </h2>
+        @if (store.result()?.length === 0) {
+          <p class="mb-4 text-sm text-muted-foreground">
+            No se devolvieron servicios para esta consulta.
+          </p>
+        }
+        <div
+          class="grid min-w-0 gap-3"
+          [class.md:grid-cols-2]="applied()?.view === 'week'"
+          [class.xl:grid-cols-4]="applied()?.view === 'week'"
+          [class.sm:grid-cols-2]="applied()?.view === 'month'"
+          [class.lg:grid-cols-4]="applied()?.view === 'month'"
+          [class.2xl:grid-cols-7]="applied()?.view === 'month'"
+        >
+          @for (day of days(); track day.date) {
+            <section
+              data-agenda-day
+              class="min-w-0 rounded-lg border p-3"
+              [attr.aria-label]="day.date"
+            >
+              <h3 class="mb-3 font-semibold">
+                <time [attr.datetime]="day.date">{{ day.date }}</time>
+              </h3>
+              @if (day.outsideRange) {
+                <p class="mb-2 text-xs text-muted-foreground">
+                  Fecha devuelta fuera del intervalo solicitado.
+                </p>
+              }
+              @for (entry of day.entries; track $index) {
+                <article
+                  class="min-w-0 rounded-md border bg-card p-3 text-sm break-words"
+                  data-agenda-entry
+                >
+                  <h3 class="mb-3 text-sm font-semibold">
+                    <time [attr.datetime]="entry.date">{{ entry.date }}</time>
+                  </h3>
+                  <a
+                    class="font-semibold text-primary underline underline-offset-4"
+                    [routerLink]="['/admin/operations/orders', entry.orderId]"
+                    >{{ entry.code }} · Orden ID {{ entry.orderId }}</a
+                  >
+                  <p>
+                    {{ entry.startTime }} →
+                    {{ entry.endTime === null ? "No registrado" : entry.endTime }}
+                  </p>
+                  <p>Estado: {{ entry.status }}</p>
+                  <p>Cliente: {{ entry.customerName }}</p>
+                  <p>Propiedad: {{ entry.propertyName }}</p>
+                  <p>
+                    Servicio:
+                    {{ entry.serviceTypeName === null ? "No registrado" : entry.serviceTypeName }}
+                  </p>
+                  <ul class="mt-2 flex flex-col gap-1" aria-label="Personal asignado">
+                    @for (staff of entry.assignedStaff; track $index) {
+                      <li>
+                        {{ staff.name }} · ID {{ staff.staffId }} · {{ staff.role }} ·
+                        {{ staff.phone === null ? "No registrado" : staff.phone }}
+                      </li>
+                    } @empty {
+                      <li>Sin personal asignado</li>
+                    }
+                  </ul>
+                </article>
+              } @empty {
+                <p class="text-sm text-muted-foreground">
+                  No se devolvieron servicios para esta fecha.
+                </p>
+              }
+            </section>
+          }
+        </div>
+      </section>
+    }
+  </app-catalog-frame>
+</main>
