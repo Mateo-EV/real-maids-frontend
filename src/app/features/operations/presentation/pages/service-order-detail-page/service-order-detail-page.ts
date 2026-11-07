@@ -8,7 +8,21 @@ import {
   viewChild
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { ActivatedRoute, RouterLink } from "@angular/router"
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  NavigationStart,
+  PRIMARY_OUTLET,
+  Router,
+  RouterLink
+} from "@angular/router"
+import { DEFAULT_DIALOG_CONFIG, Dialog, DialogConfig } from "@angular/cdk/dialog"
+import { BrnDialogRef, BrnDialogService } from "@spartan-ng/brain/dialog"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { ServiceOrderScheduleDialog } from "../../components/service-order-schedule-dialog/service-order-schedule-dialog"
+import { ServiceOrderTeamDialog } from "../../components/service-order-team-dialog/service-order-team-dialog"
+import { ServiceOrderWriteDialogContext } from "../../components/service-order-write-dialog-context"
 import {
   catchError,
   distinctUntilChanged,
@@ -40,6 +54,19 @@ type DetailField = readonly [label: string, value: string | number | null]
 
 @Component({
   selector: "app-service-order-detail-page",
+  providers: [
+    HlmDialogService,
+    BrnDialogService,
+    Dialog,
+    {
+      provide: DEFAULT_DIALOG_CONFIG,
+      useFactory: () => ({
+        ...new DialogConfig(),
+        ...inject(DEFAULT_DIALOG_CONFIG, { optional: true, skipSelf: true }),
+        closeOnNavigation: false
+      })
+    }
+  ],
   imports: [
     RouterLink,
     CatalogFrame,
@@ -55,6 +82,13 @@ export class ServiceOrderDetailPage {
   private readonly route = inject(ActivatedRoute)
   private readonly destroyRef = inject(DestroyRef)
   private readonly orders = inject(ServiceOrdersStore)
+  private readonly router = inject(Router)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService, { optional: true })
+  private dialog: BrnDialogRef | undefined
+  private dialogIdentity: object | undefined
+  private departing = false
+  readonly writing = this.orders.writing
   private readonly retries = new Subject<boolean>()
   private readonly ownerChanged = new Subject<void>()
   private readonly params = signal(this.route.snapshot.queryParamMap)
@@ -146,6 +180,20 @@ export class ServiceOrderDetailPage {
       this.ownerChanged.complete()
       this.retries.complete()
     })
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (!(event instanceof NavigationStart)) return
+      const segments = this.router.parseUrl(event.url).root.children[PRIMARY_OUTLET]?.segments
+      const sameOwner =
+        segments?.length === 4 &&
+        segments[0].path === "admin" &&
+        segments[1].path === "operations" &&
+        segments[2].path === "orders" &&
+        serviceOrderRouteId(convertToParamMap({ id: segments[3].path })) === this.id()
+      if (!sameOwner) {
+        this.departing = true
+        this.stopDialog()
+      }
+    })
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(params => this.params.set(params))
@@ -157,6 +205,7 @@ export class ServiceOrderDetailPage {
           // switchMap releases the previous observation before replacement data
           // can be selected. Session cancellation never automatically rereads.
           this.stopOwner()
+          this.departing = false
           this.id.set(id)
           if (id === null || !this.scope.check()) return EMPTY
           this.ownerGeneration = this.scope.generation()
@@ -240,7 +289,73 @@ export class ServiceOrderDetailPage {
     )
   }
 
+  scheduleOrder(): void {
+    this.openWriteDialog("schedule")
+  }
+  replaceTeam(): void {
+    this.openWriteDialog("team")
+  }
+
+  private openWriteDialog(kind: "schedule" | "team"): void {
+    const selected = this.selected()
+    if (
+      !selected ||
+      this.departing ||
+      this.writing() ||
+      this.dialog?.open ||
+      !this.current(this.id(), this.ownerRevision())
+    )
+      return
+    // Safe captured context excludes the detail's operational access fields.
+    const order = {
+      ...selected.order,
+      schedule: selected.order.schedule ? { ...selected.order.schedule } : null,
+      assignedStaff: selected.order.assignedStaff.map(item => ({ ...item }))
+    }
+    const revision = this.ownerRevision(),
+      generation = this.scope.generation(),
+      identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      !this.departing &&
+      this.dialogIdentity === identity &&
+      this.current(order.id, revision) &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    const context: ServiceOrderWriteDialogContext = {
+      order,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onSaved: () => {
+        if (current())
+          this.toast?.success(
+            kind === "schedule" ? "Programación confirmada." : "Reemplazo de equipo confirmado."
+          )
+      }
+    }
+    const options = {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    }
+    this.dialog =
+      kind === "schedule"
+        ? this.dialogs.open(ServiceOrderScheduleDialog, options)
+        : this.dialogs.open(ServiceOrderTeamDialog, options)
+  }
+  private stopDialog(): void {
+    const dialog = this.dialog
+    this.dialog = undefined
+    this.dialogIdentity = undefined
+    this.ownerChanged.next()
+    if (this.destroyRef.destroyed) dialog?.forceClose()
+    else dialog?.close()
+  }
+
   private stopOwner(): void {
+    this.stopDialog()
     this.ownerActive.set(false)
     this.ownerGeneration = -1
     this.accessVisible.set(false)
@@ -250,6 +365,5 @@ export class ServiceOrderDetailPage {
     }
     this.observationError.set(undefined)
     this.ownerRevision.update(revision => revision + 1)
-    this.ownerChanged.next()
   }
 }

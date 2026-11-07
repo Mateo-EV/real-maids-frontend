@@ -203,9 +203,9 @@ describe("WP7 T6E read-only order detail leaf RED contract", () => {
     expect(app.field(/propiedad.*activ|^activ/i)).toMatch(/inactiva|^no$/i)
     expect(app.text()).not.toContain("Session caller")
     expect(app.element().querySelector("form, input, select, textarea")).toBeNull()
-    expect(app.text()).not.toMatch(
-      /crear orden|editar orden|cancelar orden|asignar personal|programar orden/i
-    )
+    expect(app.text()).toContain("Programar orden")
+    expect(app.text()).toContain("Reemplazar equipo")
+    expect(app.text()).not.toMatch(/crear orden|editar orden|cancelar orden|asignar personal/i)
     expect(
       app.element().querySelector('a[href*="/staff"], a[href*="/customers"], a[href*="/agenda"]')
     ).toBeNull()

@@ -16,6 +16,18 @@
         >Volver a órdenes</a
       >
       @if (selected(); as selected) {
+        <button hlmBtn type="button" [disabled]="writing()" (click)="scheduleOrder()">
+          Programar orden
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          [disabled]="writing()"
+          (click)="replaceTeam()"
+        >
+          Reemplazar equipo
+        </button>
         @if (selected.order.requestId !== null) {
           <a
             hlmBtn

@@ -1,0 +1,180 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Reemplazar equipo</h2>
+  <p hlmDialogDescription>
+    Orden {{ context.order.id }} · {{ context.order.code }} · {{ context.order.customerName }}
+  </p>
+</hlm-dialog-header>
+<p class="mt-3 text-sm">
+  Se reemplazará TODO el equipo actual. Las personas omitidas se retirarán. El servidor valida
+  disponibilidad y estado.
+</p>
+<details class="mt-3 rounded-md border p-3">
+  <summary class="cursor-pointer text-sm font-medium">
+    Equipo original capturado ({{ context.order.assignedStaff.length }})
+  </summary>
+  <ul class="mt-2 flex flex-col gap-1 text-sm">
+    @for (person of context.order.assignedStaff; track person.staffId) {
+      <li class="break-words">
+        {{ person.name }} · Personal ID {{ person.staffId }} · {{ person.role }}
+      </li>
+    } @empty {
+      <li>Sin asignaciones recibidas.</li>
+    }
+  </ul>
+</details>
+<form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se confirmó el reemplazo</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="min-w-0" [disabled]="pending()">
+    <legend hlmFieldLegend>Equipo que reemplazará al actual</legend>
+    <p class="text-sm text-muted-foreground">
+      Máximo 20 personas únicas. Si hay personas, exactamente una debe ser RESPONSABLE; las demás
+      APOYO. Los roles originales no reconocidos requieren una elección explícita.
+    </p>
+    @for (item of model().assignments; track item.staffId; let index = $index) {
+      <div class="flex min-w-0 flex-col gap-2 rounded-md border p-3">
+        <p class="break-words text-sm font-medium">
+          {{ item.name }} · Personal ID {{ item.staffId }}
+        </p>
+        @if (item.previousRole) {
+          <p class="text-xs text-muted-foreground">Rol recibido: {{ item.previousRole }}</p>
+        }
+        <div hlmField>
+          <label hlmFieldLabel [for]="'order-team-role-' + item.staffId"
+            >Rol de {{ item.name }}</label
+          >
+          <select
+            hlmNativeSelect
+            [id]="'order-team-role-' + item.staffId"
+            [formField]="profile.assignments[index].role"
+            (change)="unconfirm()"
+          >
+            <option value="">Elige un rol</option>
+            <option value="RESPONSABLE">RESPONSABLE</option>
+            <option value="APOYO">APOYO</option>
+          </select>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          (click)="remove(item.staffId)"
+          [attr.aria-label]="'Retirar a ' + item.name"
+        >
+          Retirar
+        </button>
+      </div>
+    } @empty {
+      <p role="status" class="font-medium">
+        Sin integrantes: confirmar eliminará TODAS las asignaciones de la orden.
+      </p>
+    }
+    @for (failure of profile.assignments().errors(); track failure.kind) {
+      <hlm-field-error [validator]="failure.kind">{{ failure.message }}</hlm-field-error>
+    }
+    <div hlmField>
+      <label hlmFieldLabel for="order-team-search">Buscar personal por nombre o documento</label>
+      <input hlmInput id="order-team-search" [formField]="profile.search" />
+    </div>
+    <button hlmBtn type="button" variant="outline" (click)="search()">Buscar personal</button>
+    @if (choices().loading || choices().refreshing) {
+      <p role="status">{{ choices().result ? "Actualizando personal…" : "Cargando personal…" }}</p>
+    }
+    @if (choices().error || readError()) {
+      <p role="alert">
+        No se pudo consultar el personal. Los datos anteriores pueden estar desactualizados.
+      </p>
+      <button hlmBtn type="button" variant="outline" (click)="retryStaff()">
+        Reintentar personal
+      </button>
+    }
+    <div hlmField>
+      <label hlmFieldLabel for="order-team-staff">Personal activo verificado</label>
+      <select hlmNativeSelect id="order-team-staff" [formField]="profile.selectedStaffId">
+        <option value="">Sin seleccionar</option>
+        @for (person of choices().result?.items ?? []; track person.id) {
+          <option [value]="'' + person.id">
+            {{ person.name }} · ID {{ person.id }}{{ person.isActive ? "" : " · Inactivo" }}
+          </option>
+        }
+      </select>
+    </div>
+    <button hlmBtn type="button" variant="outline" (click)="add()">Agregar al borrador</button>
+    @if (choices().result; as page) {
+      <p class="text-sm">
+        {{ page.total }} resultados · {{ page.offset }} de {{ page.total }} · tamaño
+        {{ page.limit }}
+      </p>
+      @if (!page.items.length) {
+        <p role="status">No se devolvió personal en esta página.</p>
+      }
+      <div class="flex flex-wrap gap-2">
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          [disabled]="page.offset === 0 || choices().loading || choices().refreshing"
+          (click)="staffPage(-1)"
+        >
+          Personal anterior
+        </button>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          [disabled]="
+            page.offset + page.limit >= page.total || choices().loading || choices().refreshing
+          "
+          (click)="staffPage(1)"
+        >
+          Personal siguiente
+        </button>
+      </div>
+    }
+    <div hlmField>
+      <label hlmFieldLabel for="order-team-confirm" class="flex items-start gap-2">
+        <input
+          id="order-team-confirm"
+          type="checkbox"
+          [formField]="profile.confirmed"
+          aria-describedby="order-team-confirm-help"
+        />
+        {{
+          model().assignments.length
+            ? "Confirmo el reemplazo completo por las personas y roles mostrados."
+            : "Confirmo eliminar TODAS las asignaciones de esta orden."
+        }}
+      </label>
+      <p hlmFieldDescription id="order-team-confirm-help">
+        Revisa el equipo completo antes de confirmar. Cancelar después del envío no garantiza
+        revertir cambios.
+      </p>
+      @if (profile.confirmed().touched()) {
+        @for (failure of profile.confirmed().errors(); track failure.kind) {
+          <hlm-field-error [validator]="failure.kind">{{ failure.message }}</hlm-field-error>
+        }
+      }
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      variant="destructive"
+      [disabled]="pending()"
+      [attr.aria-busy]="pending()"
+    >
+      @if (pending()) {
+        <hlm-spinner aria-label="Reemplazando equipo" />
+      }
+      {{ pending() ? "Guardando…" : "Confirmar reemplazo completo" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

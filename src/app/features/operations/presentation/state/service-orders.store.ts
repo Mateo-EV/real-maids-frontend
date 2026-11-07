@@ -31,10 +31,19 @@ import {
   GetServiceOrderByIdUseCase,
   ListServiceOrdersUseCase
 } from "../../application/use-cases/service-order-read.use-cases"
-import { CreateServiceOrderUseCase } from "../../application/use-cases/service-order-write.use-cases"
+import {
+  CreateServiceOrderUseCase,
+  ScheduleServiceOrderUseCase
+} from "../../application/use-cases/service-order-write.use-cases"
+import { ReplaceServiceAssignmentsUseCase } from "../../application/use-cases/replace-service-assignments.use-case"
 import { OperationsError, OperationsErrorCode } from "../../domain/errors/operations.error"
 import { ServiceOrderDetail, ServiceOrderSummary } from "../../domain/models/operations-read.models"
-import { CreateServiceOrderParams, ServiceOrderQuery } from "../../domain/params/operations.params"
+import {
+  CreateServiceOrderParams,
+  ServiceOrderQuery,
+  ScheduleServiceOrderParams,
+  ReplaceServiceAssignmentsParams
+} from "../../domain/params/operations.params"
 import { ServiceRequestsStore } from "./service-requests.store"
 
 export interface ServiceOrdersReadEntry<T> {
@@ -276,7 +285,107 @@ export const ServiceOrdersStore = signalStore(
       () => store._details(),
       entries => patchState(store, { _details: entries })
     )
+    // Manual writes share creation's per-store gate, but never invalidate requests.
+    function manualWrite(
+      id: number,
+      expectedCustomerId: number,
+      request: () => Observable<Result<ServiceOrderSummary, OperationsError>>
+    ): Observable<Result<ServiceOrderSummary, OperationsError>> {
+      const failed = (code: OperationsErrorCode) =>
+        Result.failure<OperationsError>(
+          new OperationsError(code, "No se pudo confirmar el cambio de la orden.")
+        )
+      return defer(() => {
+        if (!scope.check()) return EMPTY
+        if (!positiveId(id) || !positiveId(expectedCustomerId)) return of(failed("INVALID_DATA"))
+        if (store._pendingWrites()) return of(failed("CONFLICT"))
+        const generation = scope.generation()
+        const current = () => scope.check() && generation === scope.generation()
+        patchState(store, { _pendingWrites: store._pendingWrites() + 1 })
+        return defer(request).pipe(
+          take(1),
+          defaultIfEmpty(failed("INVALID_RESPONSE")),
+          map(result =>
+            result.success &&
+            (!result.data ||
+              !positiveId(result.data.id) ||
+              result.data.id !== id ||
+              !positiveId(result.data.customerId) ||
+              result.data.customerId !== expectedCustomerId)
+              ? failed("INVALID_RESPONSE")
+              : result
+          ),
+          catchError((value: unknown) =>
+            of(
+              Result.failure<OperationsError>(
+                value instanceof OperationsError
+                  ? value
+                  : new OperationsError("UNKNOWN", "No se pudo confirmar el cambio de la orden.")
+              )
+            )
+          ),
+          tap(result => {
+            if (!result.success || !current()) return
+            pages.invalidate()
+            if (!current()) return
+            details.invalidate(key => key === String(id))
+            if (!current()) return
+            injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
+          }),
+          takeUntil(scope.cancelled$),
+          finalize(() => {
+            if (generation === scope.generation())
+              patchState(store, { _pendingWrites: store._pendingWrites() - 1 })
+          })
+        )
+      })
+    }
     return {
+      scheduleOrder(id: number, params: ScheduleServiceOrderParams, expectedCustomerId: number) {
+        let snapshot: ScheduleServiceOrderParams
+        try {
+          snapshot = {
+            date: params.date,
+            startTime: params.startTime,
+            endTime: params.endTime,
+            reasonId: params.reasonId
+          }
+        } catch {
+          return failure<ServiceOrderSummary>("INVALID_DATA")
+        }
+        return manualWrite(id, expectedCustomerId, () =>
+          injector.get(ScheduleServiceOrderUseCase).execute(id, snapshot)
+        )
+      },
+      replaceAssignments(
+        id: number,
+        params: ReplaceServiceAssignmentsParams,
+        expectedCustomerId: number
+      ) {
+        let snapshot: ReplaceServiceAssignmentsParams
+        try {
+          const items = params.assignments
+          if (
+            !Array.isArray(items) ||
+            !Number.isInteger(items.length) ||
+            items.length < 0 ||
+            items.length > 20
+          )
+            return failure<ServiceOrderSummary>("INVALID_DATA")
+          const assignments: ReplaceServiceAssignmentsParams["assignments"] = []
+          for (let index = 0; index < items.length; index++) {
+            if (!Object.hasOwn(items, index)) return failure<ServiceOrderSummary>("INVALID_DATA")
+            const item = items[index]
+            assignments.push({ staffId: item.staffId, role: item.role })
+          }
+          snapshot = { assignments }
+        } catch {
+          return failure<ServiceOrderSummary>("INVALID_DATA")
+        }
+        return manualWrite(id, expectedCustomerId, () =>
+          injector.get(ReplaceServiceAssignmentsUseCase).execute(id, snapshot)
+        )
+      },
       createOrder(
         params: CreateServiceOrderParams,
         expectedCustomerId: number
