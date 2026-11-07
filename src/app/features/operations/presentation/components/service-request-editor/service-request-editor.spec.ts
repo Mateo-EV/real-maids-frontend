@@ -254,6 +254,8 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     }
     expect(s.dialog().textContent).toContain("Cliente 8")
     expect(s.dialog().textContent).toContain("Tipo real")
+    expect(s.dialog().querySelector('option[value="8"]')?.textContent?.trim()).toBe("Cliente 8")
+    expect(s.dialog().querySelector('option[value="4"]')?.textContent?.trim()).toBe("Tipo real")
     expect(s.dialog().textContent).not.toMatch(/Editar|Precio|Registrado por|SYNTHETIC/)
     s.http.expectNone(r => r.url.includes("propiedades"))
     await s.submit()

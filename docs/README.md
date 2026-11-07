@@ -32,13 +32,13 @@ The [session read scope](../src/app/features/auth/presentation/state/session-rea
 
 The read path is **consumer → store → read resource → use case → store adapter → readonly selector**. A fresh verified result is returned without HTTP; otherwise the resource coordinates a request. Only a successful current response renews freshness. An obsolete response cannot replace state, and cancellation is shared until the final subscriber leaves.
 
-| Owner    | Responsibility kept outside the shared coordinator                                            |
-| -------- | --------------------------------------------------------------------------------------------- |
-| Roles    | Catalog changes and aggregate read/write loading.                                             |
-| RBAC     | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
-| Audit    | Query identity, current-page projection and ordering between page-derived/global totals.      |
-| Users    | Query admission/history, effective pagination, statistics and mutation observer fan-out.      |
-| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation.     |
+| Owner | Responsibility kept outside the shared coordinator |
+| --- | --- |
+| Roles | Catalog changes and aggregate read/write loading. |
+| RBAC | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
+| Audit | Query identity, current-page projection and ordering between page-derived/global totals. |
+| Users | Query admission/history, effective pagination, statistics and mutation observer fan-out. |
+| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation. |
 
 A new cached read supplies a typed state adapter, request factory, error normalization, TTL and scope. `read()` checks admission/freshness; `invalidate()` makes verified data stale according to the consumer's cancellation policy; `reset()` cancels all flights and clears the read state. A registry may retain coordinators per key, but results stay only in the store. Do not use this mechanism to cache authentication decisions, writes or uncached exports.
 
@@ -130,7 +130,7 @@ Confirmed property create/edit/status callbacks and minimal contact/preference o
 
 The authorized continuation connects `/admin/customers/leads` before customer `:id`, guarded by existing auth. Customer and lead lists share feature-local [Clientes/Prospectos navigation](../src/app/features/customers/presentation/components/crm-catalog-navigation/crm-catalog-navigation.ts); sidebar **CRM**, IAM, default users redirect and official visual hierarchy remain unchanged. The [inbox](../src/app/features/customers/presentation/pages/leads-page/leads-page.ts) reuses the existing root acquisition store, CatalogFrame/Helm responsive table/cards and shared pagination, initially 0/20. Actual server total/effective offset/limit drive ranges and navigation without local slicing/search/filtering. One positive-total empty out-of-range recovery per navigation/retry retains effective limit, without response rewriting or automatic loops.
 
-Actual name/email/phone, converted boolean labels and explicit origin/stage IDs are shown, not invented catalog names/statuses/linked customer IDs. No catalog calls, editor/create, follow-up, conversion or catalog administration is delivered. Read-only detail and real name links are connected by the second bounded slice below. Public quote/pricing/landing/SMTP remains outside scope. M03/RF03/HU03 supplies customer context; dedicated acquisition RF/HU remains missing, not invented. The remaining WP6 workflow is planned, not completed by this inbox.
+The current inbox shows actual name/email/phone, converted labels and origin/stage name badges resolved through existing root catalogs, with independent loading/error/retry and explicit unavailable labels. Catalog reads reuse the 120000ms freshness and caller/session cancellation; there are no per-row lookups or invented names/statuses/linked customer IDs. The later slices below connect editor/create, follow-up and conversion; catalog administration remains undelivered. Read-only detail and real name links are connected by the second bounded slice below. Public quote/pricing/landing/SMTP remains outside scope. M03/RF03/HU03 supplies customer context; dedicated acquisition RF/HU remains missing, not invented. The remaining WP6 workflow is planned, not completed by this inbox.
 
 Consumer-owned observeLeads/selectLeads projections preserve the existing 30000ms success TTL, same-query stale refreshing/error/retry, unrelated-query isolation and session/destruction/SSR safety. Queued recovery is fenced across session replacement/destruction; same-session renewal preserves work. Pending independent acceptance: CRM → Prospectos → next/previous → Clientes → IAM, plus empty/failure/stale retry checks with authorized non-sensitive data. Deterministic router/DOM/real-store checks and compilation are technical evidence only, not live backend/CORS, permission or Chrome/Edge/Firefox keyboard/responsive proof. WP6, full WP5 and independent WP4 acceptance remain open; previous WP2/WP3 user reports are unchanged.
 
@@ -206,19 +206,19 @@ This delivers read-only HTTP query/detail/export, not audit writes, a separate r
 
 The PDF/64-table SQL schema now has English-named domain coverage across all eleven backend areas. These are entities, explicit action/query parameters, typed errors and repository contracts, **not completed screens or integrations**. New repositories outside customers remain unwired. Existing auth/IAM behavior stays intact; customers now adds its documented HTTP sources, application actions and a source-connected P04 list with WP3 create/edit/deactivate actions; WP3 acceptance is user-reported; remaining customer screens and independent live/browser verification are pending.
 
-| Backend area                      | Feature and coverage reference                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| A — Security and access           | Existing auth and [users domain](../src/app/features/users/domain/README.md); no credential hashes in frontend entities. |
-| B — Customers and acquisition     | [customers](../src/app/features/customers/README.md)                                                                     |
-| C — Services and pricing          | [service-catalog](../src/app/features/service-catalog/README.md)                                                         |
-| D — Operations and scheduling     | [operations](../src/app/features/operations/README.md)                                                                   |
-| E — Field personnel and execution | [field-operations](../src/app/features/field-operations/README.md)                                                       |
-| F — Billing and collections       | [billing](../src/app/features/billing/README.md)                                                                         |
-| G — Customer support              | [customer-support](../src/app/features/customer-support/README.md)                                                       |
-| H — Communications                | [communications](../src/app/features/communications/README.md)                                                           |
-| I — Web content                   | [web-content](../src/app/features/web-content/README.md)                                                                 |
-| J — Reports and configuration     | [reports-settings](../src/app/features/reports-settings/README.md)                                                       |
-| K — Accounting integration        | [quickbooks](../src/app/features/quickbooks/README.md)                                                                   |
+| Backend area | Feature and coverage reference |
+| --- | --- |
+| A — Security and access | Existing auth and [users domain](../src/app/features/users/domain/README.md); no credential hashes in frontend entities. |
+| B — Customers and acquisition | [customers](../src/app/features/customers/README.md) |
+| C — Services and pricing | [service-catalog](../src/app/features/service-catalog/README.md) |
+| D — Operations and scheduling | [operations](../src/app/features/operations/README.md) |
+| E — Field personnel and execution | [field-operations](../src/app/features/field-operations/README.md) |
+| F — Billing and collections | [billing](../src/app/features/billing/README.md) |
+| G — Customer support | [customer-support](../src/app/features/customer-support/README.md) |
+| H — Communications | [communications](../src/app/features/communications/README.md) |
+| I — Web content | [web-content](../src/app/features/web-content/README.md) |
+| J — Reports and configuration | [reports-settings](../src/app/features/reports-settings/README.md) |
+| K — Accounting integration | [quickbooks](../src/app/features/quickbooks/README.md) |
 
 Each reference maps its SQL tables to entities and distinguishes actual backend operation/response contracts from schema-derived **proposals**. SQL records and partial/redacted API projections are separate: missing response fields are never synthesized. Older SQL does not replace richer existing IAM contracts. Credentials, processor tokens and backend-only integration fields are excluded explicitly.
 
@@ -366,6 +366,10 @@ Support states are independent of order states. Do not invent request states or 
 - Spanish/English localization and fallback, operational timezone/formatting, browser/performance acceptance measurements, E2E tooling and production hosting.
 
 Resolve these with explicit product/technical decisions and actual backend evidence. Update this guide when a route, consumer or integration changes delivery status; keep the useful identifiers without expanding this into a duplicate implementation matrix.
+
+## Readable choices and reachable lead actions
+
+RNF06/RNF08/RNF12: lead create/edit is viewport-bounded, with a scrolling body and non-scrolling header/actions. Selects show names and useful status/context rather than appended IDs across acquisition, preference properties, request choices, order reasons/staff and audit actors. Missing references remain explicit; numeric selection values, validation, write payloads and backend authority are unchanged. This is a presentation correction, not full WP1–WP7 acceptance.
 
 ## Current WP7 consumer integration (S10)
 

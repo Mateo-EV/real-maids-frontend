@@ -509,9 +509,10 @@ describe("UsersPage", () => {
     await flush(fixture.whenStable())
     fixture.detectChanges()
     expect(query).toHaveBeenCalledTimes(callsBeforeOpening)
+    const expectedActor = viewer.actorOptions().find(actor => actor.id === 1)!
     const option = Array.from(
       document.querySelectorAll<HTMLElement>('[data-slot="combobox-item"]')
-    ).find(item => item.textContent?.includes("(USR-1)"))!
+    ).find(item => item.textContent?.includes(expectedActor.email))!
     expect(option).toBeDefined()
     option.scrollIntoView = vi.fn()
     option.click()
@@ -519,7 +520,8 @@ describe("UsersPage", () => {
     fixture.detectChanges()
     expect(viewer.filters()).toEqual({ entity: "sesion", userId: 1 })
     const actorLabel = actor.textContent
-    expect(actorLabel).toContain("(USR-1)")
+    expect(actorLabel).toContain(expectedActor.email)
+    expect(actorLabel).not.toContain("USR-1")
     viewer.goToPage(2)
     await flush(fixture.whenStable())
     fixture.detectChanges()

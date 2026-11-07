@@ -44,6 +44,9 @@ describe("loaded order manual workflow", () => {
     expect(text).not.toContain(accessText)
     expect(text).not.toContain(doorText)
     expect(s.dialog()!.querySelector('label[for="order-schedule-date"]')).not.toBeNull()
+    expect(s.dialog()!.querySelector('option[value="3"]')?.textContent?.trim()).toBe(
+      reasonDto.nombre
+    )
     expect(s.dialog()!.closest("[role=dialog]")?.textContent).toContain("Programar orden")
     s.http.expectNone(r => r.method !== "GET")
     await s.click("Cancelar", s.dialog()!)
@@ -166,6 +169,7 @@ describe("loaded order manual workflow", () => {
     expect(first.request.params.get("tamanio")).toBe("20")
     first.flush(staffPageDto([23], 0, 1, 2))
     await s.settle()
+    expect(s.dialog()!.querySelector('option[value="23"]')?.textContent?.trim()).toBe("Personal 23")
     await s.fill("order-team-staff", "23")
     await s.click("Agregar al borrador", s.dialog()!)
     await s.fill("order-team-role-23", "APOYO")

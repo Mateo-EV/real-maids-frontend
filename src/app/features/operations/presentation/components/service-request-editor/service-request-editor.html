@@ -37,9 +37,9 @@
           @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
             <option [value]="model()[catalog.key]" [selected]="true">
               @if (catalog.key === "customerId" && selectedCustomer(); as selected) {
-                {{ selected.name }} · ID {{ selected.id }}
+                {{ selected.name }}
               } @else {
-                ID {{ model()[catalog.key] }} · No disponible en el catálogo actual
+                {{ catalog.label }} no disponible en el catálogo actual
               }
             </option>
           }

@@ -98,7 +98,7 @@
         <option value="">Sin seleccionar</option>
         @for (person of choices().result?.items ?? []; track person.id) {
           <option [value]="'' + person.id">
-            {{ person.name }} · ID {{ person.id }}{{ person.isActive ? "" : " · Inactivo" }}
+            {{ person.name }}{{ person.isActive ? "" : " · Inactivo" }}
           </option>
         }
       </select>

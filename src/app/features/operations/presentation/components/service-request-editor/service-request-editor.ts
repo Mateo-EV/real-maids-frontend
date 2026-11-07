@@ -104,7 +104,7 @@ export class ServiceRequestEditor implements OnInit {
         .result?.items.filter(c => c.isActive)
         .map(c => ({
           id: c.id,
-          label: `${c.name} · ID ${c.id}`
+          label: c.name
         })) ?? []
   )
   readonly customerBusy = computed(
@@ -129,8 +129,7 @@ export class ServiceRequestEditor implements OnInit {
           p =>
             p.isActive && p.customerId === (this.editing?.customerId ?? this.selectedCustomer()?.id)
         )
-        .map(p => ({ id: p.id, label: `${p.alias ?? "Sin alias"} · ${p.address} · ID ${p.id}` })) ??
-      []
+        .map(p => ({ id: p.id, label: `${p.alias ?? "Sin alias"} · ${p.address}` })) ?? []
   )
   readonly typeEntry = computed(() => this.catalog.selectActiveServiceTypes())
   readonly typeBusy = computed(
@@ -138,7 +137,7 @@ export class ServiceRequestEditor implements OnInit {
   )
   readonly typeFailed = computed(() => !!this.typeEntry().error || this.typeAdmissionError())
   readonly typeOptions = computed(
-    () => this.typeEntry().data?.map(t => ({ id: t.id, label: `${t.name} · ID ${t.id}` })) ?? []
+    () => this.typeEntry().data?.map(t => ({ id: t.id, label: t.name })) ?? []
   )
 
   readonly editPropertyOptions = computed(() =>
@@ -146,7 +145,7 @@ export class ServiceRequestEditor implements OnInit {
       ? [
           {
             id: this.editing.propertyId,
-            label: `${this.editing.propertyName} · ID ${this.editing.propertyId}`
+            label: this.editing.propertyName
           },
           ...this.propertyOptions().filter(option => option.id !== this.editing!.propertyId)
         ]
@@ -157,7 +156,7 @@ export class ServiceRequestEditor implements OnInit {
       ? [
           {
             id: this.editing.serviceTypeId,
-            label: `${this.editing.serviceTypeName} · ID ${this.editing.serviceTypeId}`
+            label: this.editing.serviceTypeName
           },
           ...this.typeOptions().filter(option => option.id !== this.editing!.serviceTypeId)
         ]

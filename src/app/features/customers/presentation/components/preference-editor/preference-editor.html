@@ -26,7 +26,7 @@
         >
           @if (unknownScope()) {
             <option hlmNativeSelectOption [value]="model().propertyId" selected disabled>
-              Propiedad ID {{ model().propertyId }} · Sin verificar
+              Propiedad sin verificar
             </option>
           }
           <option
@@ -42,7 +42,7 @@
               [value]="'' + property.id"
               [selected]="model().propertyId === '' + property.id"
             >
-              {{ property.label }}
+              {{ property.optionLabel }}
             </option>
           }
         </hlm-native-select>

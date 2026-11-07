@@ -259,6 +259,9 @@ describe("WP5 preferences public owner consumer", () => {
     await s.click("Editar preferencia 3")
     expect(s.dialog().textContent).toContain("Cliente 7")
     expect(s.dialog().querySelector("select")?.textContent).toContain("Inactiva")
+    expect(s.dialog().querySelector('option[value="12"]')?.textContent?.trim()).toBe(
+      "Casa · Inactiva"
+    )
     expect(s.dialog().textContent).not.toContain("PRIVATE")
     await s.fill("propertyId", "12")
     await s.fill("type", " Nuevo tipo ")
@@ -346,7 +349,7 @@ describe("WP5 preferences public owner consumer", () => {
     await s.loaded()
     expect(s.list().textContent).toContain("ID 99")
     await s.click("Editar preferencia 9")
-    expect(s.dialog().textContent).toContain("ID 99")
+    expect(s.dialog().textContent).toContain("Propiedad sin verificar")
     expect(s.dialog().querySelector<HTMLSelectElement>("select")!.value).not.toBe("general")
     await s.submit()
     expect(s.update).not.toHaveBeenCalled()

@@ -29,7 +29,7 @@
             (searchChange)="searchActors($event)"
             (valueChange)="selectActor($event)"
             [disabled]="exporting()"
-            [itemToString]="actorLabel"
+            [itemToString]="actorOptionLabel"
             [filter]="showActorOption"
             [state]="actorOpen()"
             (stateChanged)="actorStateChanged($event)"
@@ -63,7 +63,7 @@
                     [disabled]="exporting() || (!actorReady() && actor.id !== selectedActor()?.id)"
                   >
                     <span class="min-w-0 break-words [overflow-wrap:anywhere]"
-                      >{{ actor.name }} · {{ actor.email }} (USR-{{ actor.id }})</span
+                      >{{ actor.name }} · {{ actor.email }}</span
                     >
                   </hlm-combobox-item>
                 }

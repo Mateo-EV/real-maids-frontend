@@ -78,12 +78,10 @@
       <select hlmNativeSelect id="order-schedule-reason" [formField]="profile.reasonId">
         <option value="">Sin seleccionar</option>
         @if (missingReason()) {
-          <option [value]="model().reasonId">
-            Motivo ID {{ model().reasonId }} — no disponible
-          </option>
+          <option [value]="model().reasonId">Motivo no disponible</option>
         }
         @for (reason of reasons(); track reason.id) {
-          <option [value]="'' + reason.id">{{ reason.name }} · ID {{ reason.id }}</option>
+          <option [value]="'' + reason.id">{{ reason.name }}</option>
         }
       </select>
     </div>

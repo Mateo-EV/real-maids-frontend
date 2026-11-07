@@ -4,7 +4,7 @@ import { CustomerError } from "../../../domain/errors/customer.error"
 
 export type OwnerPropertyRead = ReadResourceState<readonly Property[], CustomerError>
 export interface PreferencePropertyChoices {
-  readonly items: readonly { id: number; label: string }[]
+  readonly items: readonly { id: number; label: string; optionLabel: string }[]
   readonly message: string
 }
 /** Only display-safe, verified owner options cross into the editor. No access fields. */
@@ -20,7 +20,8 @@ export function preferencePropertyChoices(
           )
           .map(p => ({
             id: p.id,
-            label: `${p.alias ?? p.address} · ID ${p.id}${p.isActive ? "" : " · Inactiva"}`
+            label: `${p.alias ?? p.address} · ID ${p.id}${p.isActive ? "" : " · Inactiva"}`,
+            optionLabel: `${p.alias ?? p.address}${p.isActive ? "" : " · Inactiva"}`
           }))
       : [],
     message: read?.pendingReads

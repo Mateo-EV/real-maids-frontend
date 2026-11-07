@@ -202,6 +202,14 @@ export class AuditViewer implements OnInit {
         : this.actorOptions().find(user => String(user.id) === value)
     return actor ? `${actor.name} · ${actor.email} (USR-${actor.id})` : `USR-${value}`
   }
+  readonly actorOptionLabel = (value: string): string => {
+    if (value === "all") return "Todos los actores"
+    const actor =
+      this.selectedActor()?.id === Number(value)
+        ? this.selectedActor()
+        : this.actorOptions().find(user => String(user.id) === value)
+    return actor ? `${actor.name} · ${actor.email}` : "Actor no disponible"
+  }
   // The server filters names/emails; Brain must not filter the returned page again.
   readonly showActorOption = () => true
   readonly filterModel = signal({ fromUTC: "", toUTC: "", actorSearch: "" })
