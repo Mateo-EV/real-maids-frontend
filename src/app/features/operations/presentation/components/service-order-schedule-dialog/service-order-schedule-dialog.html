@@ -4,10 +4,10 @@
     Orden {{ context.order.id }} · {{ context.order.code }} · {{ context.order.customerName }}
   </p>
 </hlm-dialog-header>
-<p class="mt-3 text-sm text-muted-foreground">
-  Usa la fecha y las horas civiles del servicio. El servidor valida el estado, el motivo requerido y
-  la disponibilidad; no se garantiza una reserva.
-</p>
+<!-- <p class="mt-3 text-sm text-muted-foreground"> -->
+<!--   Usa la fecha y las horas civiles del servicio. El servidor valida el estado, el motivo requerido y -->
+<!--   la disponibilidad; no se garantiza una reserva. -->
+<!-- </p> -->
 <form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
   @if (error()) {
     <div hlmAlert variant="destructive" role="alert">
@@ -22,7 +22,7 @@
       <input
         hlmInput
         id="order-schedule-date"
-        type="text"
+        type="date"
         [formField]="profile.date"
         aria-describedby="order-schedule-date-errors"
       />
@@ -39,7 +39,7 @@
       <input
         hlmInput
         id="order-schedule-start"
-        type="text"
+        type="time"
         [formField]="profile.startTime"
         aria-describedby="order-schedule-clock-help order-schedule-start-errors"
       />
@@ -59,7 +59,7 @@
       <input
         hlmInput
         id="order-schedule-end"
-        type="text"
+        type="time"
         [formField]="profile.endTime"
         aria-describedby="order-schedule-end-errors"
       />
@@ -71,32 +71,32 @@
         }
       </div>
     </div>
-    <div hlmField>
-      <label hlmFieldLabel for="order-schedule-reason"
-        >Motivo activo (opcional; el servidor decide si es necesario)</label
-      >
-      <select hlmNativeSelect id="order-schedule-reason" [formField]="profile.reasonId">
-        <option value="">Sin seleccionar</option>
-        @if (missingReason()) {
-          <option [value]="model().reasonId">Motivo no disponible</option>
-        }
-        @for (reason of reasons(); track reason.id) {
-          <option [value]="'' + reason.id">{{ reason.name }}</option>
-        }
-      </select>
-    </div>
-    @if (reasonsLoading()) {
-      <p role="status">Cargando motivos…</p>
-    }
-    @if (reasonsError()) {
-      <p role="alert">{{ reasonsError() }}</p>
-      <button hlmBtn type="button" variant="outline" (click)="loadReasons()">
-        Reintentar motivos
-      </button>
-    }
-    @if (reasonsVerified() && !reasons().length) {
-      <p role="status">No se devolvieron motivos activos.</p>
-    }
+    <!-- <div hlmField> -->
+    <!--   <label hlmFieldLabel for="order-schedule-reason" -->
+    <!--     >Motivo activo (opcional; el servidor decide si es necesario)</label -->
+    <!--   > -->
+    <!--   <select hlmNativeSelect id="order-schedule-reason" [formField]="profile.reasonId"> -->
+    <!--     <option value="">Sin seleccionar</option> -->
+    <!--     @if (missingReason()) { -->
+    <!--       <option [value]="model().reasonId">Motivo no disponible</option> -->
+    <!--     } -->
+    <!--     @for (reason of reasons(); track reason.id) { -->
+    <!--       <option [value]="'' + reason.id">{{ reason.name }}</option> -->
+    <!--     } -->
+    <!--   </select> -->
+    <!-- </div> -->
+    <!-- @if (reasonsLoading()) { -->
+    <!--   <p role="status">Cargando motivos…</p> -->
+    <!-- } -->
+    <!-- @if (reasonsError()) { -->
+    <!--   <p role="alert">{{ reasonsError() }}</p> -->
+    <!--   <button hlmBtn type="button" variant="outline" (click)="loadReasons()"> -->
+    <!--     Reintentar motivos -->
+    <!--   </button> -->
+    <!-- } -->
+    <!-- @if (reasonsVerified() && !reasons().length) { -->
+    <!--   <p role="status">No se devolvieron motivos activos.</p> -->
+    <!-- } -->
   </fieldset>
   <hlm-dialog-footer class="border-t pt-3">
     <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
