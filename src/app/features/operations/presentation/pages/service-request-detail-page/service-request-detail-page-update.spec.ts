@@ -58,7 +58,8 @@ describe("WP7 request detail additive edit ownership", () => {
     const controls = s.root().querySelector("[catalogControls]")
     expect(controls?.textContent).toContain("Editar solicitud")
     expect(controls?.textContent).toContain("Cancelar solicitud")
-    expect(s.root().textContent).not.toMatch(/Crear orden|Cotizar/i)
+    expect(s.root().textContent).toContain("Crear orden")
+    expect(s.root().textContent).not.toMatch(/Cotizar/i)
     await s.open()
     // Double activation must not mount duplicate editors/read the catalogs twice.
     s.button("Editar solicitud")?.click()

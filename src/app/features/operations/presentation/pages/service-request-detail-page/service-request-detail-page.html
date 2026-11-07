@@ -9,6 +9,14 @@
   >
     <div catalogControls class="flex flex-wrap gap-2">
       @if (request()?.status === "registrada") {
+        <button
+          hlmBtn
+          type="button"
+          [disabled]="writing() || creatingOrder()"
+          (click)="createOrder()"
+        >
+          Crear orden
+        </button>
         <button hlmBtn type="button" [disabled]="writing()" (click)="edit()">
           Editar solicitud
         </button>
@@ -29,6 +37,11 @@
         [queryParams]="backContext()"
         >Volver a solicitudes</a
       >
+      @if (createdOrderId(); as orderId) {
+        <a hlmBtn variant="outline" [routerLink]="['/admin/operations/orders', orderId]"
+          >Ver orden creada</a
+        >
+      }
     </div>
     @if (id() === null) {
       <div class="p-5" hlmAlert variant="destructive" role="alert">

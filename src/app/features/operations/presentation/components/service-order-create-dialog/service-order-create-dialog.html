@@ -1,0 +1,75 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Crear orden</h2>
+  <p hlmDialogDescription>
+    Solicitud {{ context.requestId }} · {{ context.customerName }} · Cliente ID
+    {{ context.customerId }}
+  </p>
+</hlm-dialog-header>
+<p class="mt-3 text-sm">
+  Esta acción es irreversible: la solicitud pasará a atendida y se creará una orden pendiente. No es
+  una operación idempotente. No vuelvas a enviarla sin comprobar su estado si se pierde la
+  respuesta.
+</p>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se confirmó la creación</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="min-w-0" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Confirmación de creación de orden</legend>
+    <div hlmField class="gap-1.5">
+      <label hlmFieldLabel for="order-create-amount">Importe estimado (opcional)</label>
+      <input
+        hlmInput
+        id="order-create-amount"
+        type="text"
+        inputmode="decimal"
+        [formField]="profile.estimatedAmount"
+        aria-describedby="order-create-amount-help order-create-amount-errors"
+      />
+      <p hlmFieldDescription id="order-create-amount-help">
+        De 0 a 99999999.99. Usa punto y hasta dos decimales; vacío significa sin importe registrado.
+      </p>
+      <div id="order-create-amount-errors">
+        @if (profile.estimatedAmount().touched()) {
+          @for (failure of profile.estimatedAmount().errors(); track failure.kind) {
+            <hlm-field-error [validator]="failure.kind">{{ failure.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="gap-1.5">
+      <label hlmFieldLabel for="order-create-observation">Observación (opcional)</label>
+      <textarea
+        hlmTextarea
+        id="order-create-observation"
+        rows="4"
+        [formField]="profile.observation"
+        aria-describedby="order-create-observation-help order-create-observation-errors"
+      ></textarea>
+      <p hlmFieldDescription id="order-create-observation-help">
+        Hasta 2000 caracteres. Un campo vacío o solo con espacios se envía sin observación.
+      </p>
+      <div id="order-create-observation-errors">
+        @if (profile.observation().touched()) {
+          @for (failure of profile.observation().errors(); track failure.kind) {
+            <hlm-field-error [validator]="failure.kind">{{ failure.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+      Cancelar
+    </button>
+    <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+      @if (pending()) {
+        <hlm-spinner aria-label="Creando orden" />
+      }
+      {{ pending() ? "Creando…" : "Confirmar creación" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

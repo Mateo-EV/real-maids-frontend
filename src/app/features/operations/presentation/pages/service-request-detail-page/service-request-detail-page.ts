@@ -32,6 +32,11 @@ import {
   serviceRequestRouteId
 } from "../../navigation/service-request-page-context"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
+import { ServiceOrdersStore } from "../../state/service-orders.store"
+import {
+  ServiceOrderCreateContext,
+  ServiceOrderCreateDialog
+} from "../../components/service-order-create-dialog/service-order-create-dialog"
 
 @Component({
   // This page owns navigation dismissal. Keep CDK history disposal from
@@ -64,6 +69,9 @@ export class ServiceRequestDetailPage {
   private readonly route = inject(ActivatedRoute)
   private readonly destroyRef = inject(DestroyRef)
   private readonly requests = inject(ServiceRequestsStore)
+  private readonly orders = inject(ServiceOrdersStore)
+  readonly creatingOrder = this.orders.writing
+  readonly createdOrderId = signal<number | null>(null)
   private readonly router = inject(Router)
   private readonly dialogs = inject(HlmDialogService)
   private readonly toast = inject(HotToastService)
@@ -172,6 +180,7 @@ export class ServiceRequestDetailPage {
   }
 
   private stopEditor(): void {
+    this.createdOrderId.set(null)
     const dialog = this.dialog
     this.dialog = undefined
     this.revision++
@@ -264,6 +273,56 @@ export class ServiceRequestDetailPage {
       }
     }
     this.dialog = this.dialogs.open(ServiceRequestCancelDialog, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
+  createOrder(): void {
+    const selected = this.request()
+    if (
+      this.destroyRef.destroyed ||
+      this.departing ||
+      !selected ||
+      selected.id !== this.id() ||
+      selected.status !== "registrada" ||
+      this.writing() ||
+      this.creatingOrder() ||
+      !this.scope.check() ||
+      this.dialog?.open
+    )
+      return
+    const request = { ...selected }
+    const revision = this.revision
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      !this.departing &&
+      this.dialogIdentity === identity &&
+      revision === this.revision &&
+      request.id === this.id() &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    const context: ServiceOrderCreateContext = {
+      requestId: request.id,
+      customerId: request.customerId,
+      customerName: request.customerName,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onCreated: orderId => {
+        if (!current()) return
+        this.toast.success("Orden creada correctamente.")
+        // Toast callbacks may synchronously replace the owner/session.
+        if (current()) this.createdOrderId.set(orderId)
+      }
+    }
+    this.dialog = this.dialogs.open(ServiceOrderCreateDialog, {
       context,
       disableClose: true,
       showCloseButton: false,
