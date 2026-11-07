@@ -63,14 +63,19 @@
       />
     </div>
     <div hlmField class="min-w-0 gap-1.5">
-      <label hlmFieldLabel for="preference-type">Tipo (obligatorio, máximo 50)</label>
-      <input
-        hlmInput
-        id="preference-type"
-        autocomplete="off"
+      <label hlmFieldLabel for="preference-type">Tipo (obligatorio)</label>
+      <hlm-native-select
+        selectId="preference-type"
         aria-describedby="preference-type-errors"
         [formField]="profile.type"
-      />
+      >
+        @if (!isPreferenceType(model().type)) {
+          <option [value]="model().type">{{ model().type }}</option>
+        }
+        @for (type of preferenceTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </hlm-native-select>
       <ng-container
         [ngTemplateOutlet]="errors"
         [ngTemplateOutletContext]="{ field: profile.type, id: 'preference-type-errors' }"

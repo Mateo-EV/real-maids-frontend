@@ -60,6 +60,10 @@ export interface PreferenceEditorContext {
 })
 export class PreferenceEditor {
   readonly context = injectBrnDialogContext<PreferenceEditorContext>()
+  readonly preferenceTypes = ["Limpieza", "Productos", "Horarios", "Mascotas", "Otro"] as const
+  isPreferenceType(value: string): boolean {
+    return this.preferenceTypes.some(type => type === value)
+  }
   private readonly dialog = inject(BrnDialogRef)
   private readonly destroyRef = inject(DestroyRef)
   private readonly relations = inject(CustomerRelationsStore)
