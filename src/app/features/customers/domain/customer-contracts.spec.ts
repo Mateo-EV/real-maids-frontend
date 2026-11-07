@@ -125,6 +125,7 @@ describe("Customer domain contracts", () => {
 
   it("keeps acquisition operations typed without inferred transitions", async () => {
     const repository: AcquisitionRepository = {
+      checkLeadEmail: vi.fn(() => failed),
       listOrigins: vi.fn(() => failed),
       createOrigin: vi.fn(() => failed),
       updateOrigin: vi.fn(() => failed),

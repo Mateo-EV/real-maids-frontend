@@ -1,3 +1,6 @@
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
+import { CheckLeadEmailParams, LeadEmailCheck } from "../../domain/params/lead-email.params"
+import { reservedCustomerEmail } from "./customer-email-conflict"
 import { Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
@@ -127,6 +130,33 @@ export class AcquisitionHttpSource {
   private readonly origins = `${this.t.origin}/api/catalogos/origenes-prospecto`
   private readonly stages = `${this.t.origin}/api/catalogos/etapas-embudo`
   private readonly leads = `${this.t.origin}/api/prospectos`
+  checkLeadEmail(params: CheckLeadEmailParams) {
+    const p = { ...params }
+    return this.t.request(
+      () => {
+        input(
+          required(p.email, 120) &&
+            email(p.email) &&
+            (p.excludeLeadId === undefined || id(p.excludeLeadId))
+        )
+        return this.http.post<unknown>(
+          `${this.leads}/validacion-correo`,
+          {
+            correo: p.email,
+            ...(p.excludeLeadId === undefined ? {} : { idProspectoExcluir: p.excludeLeadId })
+          },
+          { transferCache: false }
+        )
+      },
+      (v): LeadEmailCheck => {
+        const dto = record(v)
+        return {
+          customerExists: flag(dto["clienteExistente"]),
+          leadExists: flag(dto["prospectoExistente"])
+        }
+      }
+    )
+  }
   listOrigins() {
     return this.t.request(
       () => this.http.get<unknown>(this.origins, { transferCache: false }),
@@ -252,11 +282,13 @@ export class AcquisitionHttpSource {
     return this.t.request(
       () => {
         input(id(p.leadId) && Object.values(CustomerType).includes(p.type))
-        return this.http.post<unknown>(
-          `${this.leads}/${p.leadId}/conversion`,
-          { tipo: p.type },
-          { transferCache: false }
-        )
+        return this.http
+          .post<unknown>(
+            `${this.leads}/${p.leadId}/conversion`,
+            { tipo: p.type },
+            { transferCache: false, context: apiConflictContext() }
+          )
+          .pipe(reservedCustomerEmail())
       },
       v => {
         const c = customerDto(v)

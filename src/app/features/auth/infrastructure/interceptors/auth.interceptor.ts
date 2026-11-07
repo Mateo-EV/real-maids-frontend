@@ -1,3 +1,4 @@
+import { PRESERVE_API_CONFLICT } from "@/app/core/http/api-conflict-context"
 import { HttpErrorResponse, HttpInterceptorFn } from "@angular/common/http"
 import { inject } from "@angular/core"
 import { catchError, switchMap, throwError } from "rxjs"
@@ -26,6 +27,12 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
         catchError((error: unknown) => {
           // No replay, including writes. A stale 401 cannot clear newer credentials.
           if (error instanceof HttpErrorResponse && error.status === 401) source.invalidate(token)
+          if (
+            error instanceof HttpErrorResponse &&
+            error.status === 409 &&
+            request.context.get(PRESERVE_API_CONFLICT)
+          )
+            return throwError(() => error)
           return throwError(
             () =>
               new AuthError(

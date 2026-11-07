@@ -4,6 +4,7 @@ export type CustomerErrorCode =
   | "LEAD_NOT_FOUND"
   | "INVALID_INPUT"
   | "CONFLICT"
+  | "EMAIL_RESERVED"
   | "FORBIDDEN"
   | "UNAUTHENTICATED"
   | "NETWORK"
@@ -18,6 +19,7 @@ const messages: Record<CustomerErrorCode, string> = {
   LEAD_NOT_FOUND: "Lead not found",
   INVALID_INPUT: "Invalid customer input",
   CONFLICT: "Customer data conflict",
+  EMAIL_RESERVED: "Customer email is already reserved",
   FORBIDDEN: "Customer operation forbidden",
   UNAUTHENTICATED: "Customer operation requires a valid session",
   NETWORK: "Customer service unavailable",

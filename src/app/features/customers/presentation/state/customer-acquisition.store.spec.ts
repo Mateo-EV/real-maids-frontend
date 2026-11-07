@@ -37,6 +37,7 @@ describe("CustomerAcquisitionStore", () => {
   const customerFactory = vi.fn(() => customers)
   beforeEach(() => {
     repository = {
+      checkLeadEmail: vi.fn(),
       listOrigins: vi.fn(),
       createOrigin: vi.fn(),
       updateOrigin: vi.fn(),

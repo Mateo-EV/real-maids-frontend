@@ -1,3 +1,4 @@
+import { CheckLeadEmailParams } from "../../domain/params/lead-email.params"
 import { inject, Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { ACQUISITION_REPOSITORY } from "../../domain/repositories/acquisition.repository"
@@ -12,6 +13,13 @@ import {
   ConvertLeadParams
 } from "../../domain/params/acquisition.params"
 
+@Injectable({ providedIn: "root" })
+export class CheckLeadEmailUseCase {
+  private readonly repository = inject(ACQUISITION_REPOSITORY)
+  execute(params: CheckLeadEmailParams) {
+    return this.repository.checkLeadEmail(params)
+  }
+}
 @Injectable({ providedIn: "root" })
 export class ListLeadOriginsUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)

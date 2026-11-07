@@ -1,3 +1,4 @@
+import { CheckLeadEmailParams } from "../../domain/params/lead-email.params"
 import { inject, Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { AcquisitionRepository } from "../../domain/repositories/acquisition.repository"
@@ -16,6 +17,9 @@ import { AcquisitionHttpSource } from "../source/acquisition-http.source"
 @Injectable({ providedIn: "root" })
 export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   private readonly source = inject(AcquisitionHttpSource)
+  checkLeadEmail(params: CheckLeadEmailParams) {
+    return this.source.checkLeadEmail(params)
+  }
   listOrigins() {
     return this.source.listOrigins()
   }

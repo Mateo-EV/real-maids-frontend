@@ -1,3 +1,4 @@
+import { CheckLeadEmailParams, LeadEmailCheck } from "../params/lead-email.params"
 import { InjectionToken } from "@angular/core"
 import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
@@ -22,6 +23,7 @@ import {
 
 /** Confirmed acquisition actions; no inferred funnel transitions. */
 export interface AcquisitionRepository {
+  checkLeadEmail(params: CheckLeadEmailParams): Observable<Result<LeadEmailCheck, CustomerError>>
   convertLead(params: ConvertLeadParams): Observable<Result<Customer, CustomerError>>
   listOrigins(): Observable<Result<readonly LeadOrigin[], CustomerError>>
   createOrigin(params: CreateLeadOriginParams): Observable<Result<LeadOrigin, CustomerError>>

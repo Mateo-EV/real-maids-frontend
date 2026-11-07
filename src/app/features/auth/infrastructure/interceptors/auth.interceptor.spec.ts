@@ -1,4 +1,10 @@
-import { HttpClient, provideHttpClient, withInterceptors } from "@angular/common/http"
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
+import {
+  HttpClient,
+  HttpErrorResponse,
+  provideHttpClient,
+  withInterceptors
+} from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { TestBed } from "@angular/core/testing"
 import { firstValueFrom } from "rxjs"
@@ -94,6 +100,42 @@ describe("origin-scoped auth interceptor", () => {
     http.expectNone(`${origin}/api/usuarios`)
     http.expectNone(`${origin}/api/auth/refresh`)
     http.expectNone(`${origin}/api/auth/logout`)
+  })
+
+  it("delivers an opted-in conflict once without clearing credentials or replaying the write", async () => {
+    const pending = firstValueFrom(
+      client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toBeInstanceOf(HttpErrorResponse)
+    const request = http.expectOne(`${origin}/api/clientes`)
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-first")
+    request.flush(
+      { errores: { correo: "EMAIL_RESERVED" } },
+      { status: 409, statusText: "Conflict" }
+    )
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.expectNone(`${origin}/api/clientes`)
+    http.expectNone(`${origin}/api/auth/refresh`)
+  })
+
+  it("preserves existing generic conflict behavior without opt-in", async () => {
+    const pending = firstValueFrom(client.post(`${origin}/api/usuarios`, {}))
+    const assertion = expect(pending).rejects.toMatchObject({ code: "UNEXPECTED" })
+    http.expectOne(`${origin}/api/usuarios`).flush({}, { status: 409, statusText: "Conflict" })
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+  })
+
+  it("still invalidates an opted-in request on 401 without replay", async () => {
+    const pending = firstValueFrom(
+      client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" })
+    http.expectOne(`${origin}/api/clientes`).flush({}, { status: 401, statusText: "Unauthorized" })
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(false)
+    http.expectNone(`${origin}/api/clientes`)
   })
 
   it("ignores a stale 401 after a newer login", async () => {

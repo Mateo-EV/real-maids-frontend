@@ -39,6 +39,8 @@ export function customerWriteError(code: CustomerErrorCode): string {
       return "Revisa los datos del cliente."
     case "FORBIDDEN":
       return "No tienes permiso para realizar esta operación."
+    case "EMAIL_RESERVED":
+      return "El correo ya pertenece a un cliente, incluso si está inactivo. Usa otro correo; no se creó ni fusionó otro cliente."
     case "CONFLICT":
       return "Los datos entran en conflicto. Revisa el cliente antes de reintentar."
     case "UNAUTHENTICATED":

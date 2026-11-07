@@ -1,3 +1,5 @@
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
+import { reservedCustomerEmail } from "./customer-email-conflict"
 import { Injectable } from "@angular/core"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { Customer, CustomerType } from "../../domain/entities/customer.entity"
@@ -94,7 +96,10 @@ export class CustomerHttpSource {
   create(params: CreateCustomerParams) {
     const p = { ...params }
     return this.transport.request(
-      () => this.http.post<unknown>(this.url, body(p), { transferCache: false }),
+      () =>
+        this.http
+          .post<unknown>(this.url, body(p), { transferCache: false, context: apiConflictContext() })
+          .pipe(reservedCustomerEmail()),
       customerDto,
       "CUSTOMER_NOT_FOUND"
     )
@@ -104,7 +109,12 @@ export class CustomerHttpSource {
     return this.transport.request(
       () => {
         input(id(p.id))
-        return this.http.put<unknown>(`${this.url}/${p.id}`, body(p), { transferCache: false })
+        return this.http
+          .put<unknown>(`${this.url}/${p.id}`, body(p), {
+            transferCache: false,
+            context: apiConflictContext()
+          })
+          .pipe(reservedCustomerEmail())
       },
       v => sameId(customerDto(v), p.id),
       "CUSTOMER_NOT_FOUND"
