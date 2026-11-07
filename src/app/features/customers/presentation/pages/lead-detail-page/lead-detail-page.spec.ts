@@ -81,6 +81,12 @@ async function setup(url = "/admin/customers/leads/7", server = false, editing =
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       { provide: Actions.GetLeadUseCase, useValue: { execute } },
       { provide: Actions.ListLeadsUseCase, useValue: { execute: list } },
+      {
+        provide: Actions.CheckLeadEmailUseCase,
+        useValue: {
+          execute: () => of(Result.success({ customerExists: false, leadExists: false }))
+        }
+      },
       { provide: ListCustomersUseCase, useValue: { execute: customers } },
       ...[
         Actions.ListLeadOriginsUseCase,

@@ -32,13 +32,13 @@ The [session read scope](../src/app/features/auth/presentation/state/session-rea
 
 The read path is **consumer → store → read resource → use case → store adapter → readonly selector**. A fresh verified result is returned without HTTP; otherwise the resource coordinates a request. Only a successful current response renews freshness. An obsolete response cannot replace state, and cancellation is shared until the final subscriber leaves.
 
-| Owner | Responsibility kept outside the shared coordinator |
-| --- | --- |
-| Roles | Catalog changes and aggregate read/write loading. |
-| RBAC | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
-| Audit | Query identity, current-page projection and ordering between page-derived/global totals. |
-| Users | Query admission/history, effective pagination, statistics and mutation observer fan-out. |
-| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation. |
+| Owner    | Responsibility kept outside the shared coordinator                                            |
+| -------- | --------------------------------------------------------------------------------------------- |
+| Roles    | Catalog changes and aggregate read/write loading.                                             |
+| RBAC     | Retained roles, assignment copies/identity, write guards and obsolete-result `BUSY` delivery. |
+| Audit    | Query identity, current-page projection and ordering between page-derived/global totals.      |
+| Users    | Query admission/history, effective pagination, statistics and mutation observer fan-out.      |
+| Sessions | Owner queries, exact count, per-user verification markers and affected-read invalidation.     |
 
 A new cached read supplies a typed state adapter, request factory, error normalization, TTL and scope. `read()` checks admission/freshness; `invalidate()` makes verified data stale according to the consumer's cancellation policy; `reset()` cancels all flights and clears the read state. A registry may retain coordinators per key, but results stay only in the store. Do not use this mechanism to cache authentication decisions, writes or uncached exports.
 
@@ -206,19 +206,19 @@ This delivers read-only HTTP query/detail/export, not audit writes, a separate r
 
 The PDF/64-table SQL schema now has English-named domain coverage across all eleven backend areas. These are entities, explicit action/query parameters, typed errors and repository contracts, **not completed screens or integrations**. New repositories outside customers remain unwired. Existing auth/IAM behavior stays intact; customers now adds its documented HTTP sources, application actions and a source-connected P04 list with WP3 create/edit/deactivate actions; WP3 acceptance is user-reported; remaining customer screens and independent live/browser verification are pending.
 
-| Backend area | Feature and coverage reference |
-| --- | --- |
-| A — Security and access | Existing auth and [users domain](../src/app/features/users/domain/README.md); no credential hashes in frontend entities. |
-| B — Customers and acquisition | [customers](../src/app/features/customers/README.md) |
-| C — Services and pricing | [service-catalog](../src/app/features/service-catalog/README.md) |
-| D — Operations and scheduling | [operations](../src/app/features/operations/README.md) |
-| E — Field personnel and execution | [field-operations](../src/app/features/field-operations/README.md) |
-| F — Billing and collections | [billing](../src/app/features/billing/README.md) |
-| G — Customer support | [customer-support](../src/app/features/customer-support/README.md) |
-| H — Communications | [communications](../src/app/features/communications/README.md) |
-| I — Web content | [web-content](../src/app/features/web-content/README.md) |
-| J — Reports and configuration | [reports-settings](../src/app/features/reports-settings/README.md) |
-| K — Accounting integration | [quickbooks](../src/app/features/quickbooks/README.md) |
+| Backend area                      | Feature and coverage reference                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| A — Security and access           | Existing auth and [users domain](../src/app/features/users/domain/README.md); no credential hashes in frontend entities. |
+| B — Customers and acquisition     | [customers](../src/app/features/customers/README.md)                                                                     |
+| C — Services and pricing          | [service-catalog](../src/app/features/service-catalog/README.md)                                                         |
+| D — Operations and scheduling     | [operations](../src/app/features/operations/README.md)                                                                   |
+| E — Field personnel and execution | [field-operations](../src/app/features/field-operations/README.md)                                                       |
+| F — Billing and collections       | [billing](../src/app/features/billing/README.md)                                                                         |
+| G — Customer support              | [customer-support](../src/app/features/customer-support/README.md)                                                       |
+| H — Communications                | [communications](../src/app/features/communications/README.md)                                                           |
+| I — Web content                   | [web-content](../src/app/features/web-content/README.md)                                                                 |
+| J — Reports and configuration     | [reports-settings](../src/app/features/reports-settings/README.md)                                                       |
+| K — Accounting integration        | [quickbooks](../src/app/features/quickbooks/README.md)                                                                   |
 
 Each reference maps its SQL tables to entities and distinguishes actual backend operation/response contracts from schema-derived **proposals**. SQL records and partial/redacted API projections are separate: missing response fields are never synthesized. Older SQL does not replace richer existing IAM contracts. Credentials, processor tokens and backend-only integration fields are excluded explicitly.
 
@@ -380,3 +380,12 @@ Observed parent checks: Operations **1192/1192 across 37 files passed**; full su
 ### S12 local integration and deferred validation
 
 The user authorized local commits and merge into main, without push. A temporary Auth diagnostic candidate passed 3262/3262, but did not prove the original cause; it is archived under ignored tmp, and the Auth spec is restored exactly, with no Auth production changes. Therefore the retained-delivery evidence remains Operations1192/1192 and SSRexit0, with the earlier full-suite3260/3262 Auth failures explicitly deferred. Independent source review found no severe defect; its old runtime run timed out. The new browser probe remained an unexecuted draft and is not acceptance evidence. Local integration is not full WP7/live/backend/browser approval.
+
+## CRM customer email reservation
+
+M03/RF03/HU03: the approved rule reserves each nonblank customer email even while inactive.
+Customer create/update and first lead conversion enforce normalized uniqueness in the backend and
+database; conflict preserves the draft and does not merge clients. Repeating completed conversion
+still returns the existing linked customer. Lead create/edit remains permitted with duplicate
+warnings on the email field, using a permission-guarded boolean lookup rather than a catalog download.
+Missing emails remain optional. See the [customer implementation boundary](../src/app/features/customers/README.md#reserved-customer-emails-and-lead-duplicate-warnings).

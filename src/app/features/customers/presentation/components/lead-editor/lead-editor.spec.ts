@@ -2,7 +2,8 @@ import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { getDebugNode, PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
-import { BehaviorSubject, of, Subject } from "rxjs"
+import { BehaviorSubject, Observable, of, Subject } from "rxjs"
+import { CheckLeadEmailParams, LeadEmailCheck } from "../../../domain/params/lead-email.params"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -19,7 +20,13 @@ import { LeadsPage } from "../../pages/leads-page/leads-page"
 const origin = LeadOrigin.create(11, "Origen real", null, false)
 const stage = FunnelStage.create(12, "Etapa real", 9, true)
 const lead = Lead.create(7, 11, 12, "Prospecto", null, null, null, null, false, new Date(0), null)
-async function setup(server = false) {
+async function setup(
+  server = false,
+  emailRead: (
+    params: CheckLeadEmailParams
+  ) => Observable<Result<LeadEmailCheck, CustomerError>> = () =>
+    of(Result.success({ customerExists: false, leadExists: false }))
+) {
   const response = new Subject<Result<Lead, CustomerError>>()
   const origins: Subject<Result<readonly LeadOrigin[], CustomerError>>[] = []
   const stages: Subject<Result<readonly FunnelStage[], CustomerError>>[] = []
@@ -45,6 +52,7 @@ async function setup(server = false) {
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       { provide: HotToastService, useValue: { success } },
       { provide: Actions.ListLeadsUseCase, useValue: { execute: list } },
+      { provide: Actions.CheckLeadEmailUseCase, useValue: { execute: emailRead } },
       { provide: Actions.ListLeadOriginsUseCase, useValue: { execute: readOrigins } },
       { provide: Actions.ListFunnelStagesUseCase, useValue: { execute: readStages } },
       { provide: Actions.CreateLeadUseCase, useValue: { execute: create } },
@@ -121,6 +129,55 @@ async function setup(server = false) {
 }
 afterEach(() => vi.restoreAllMocks())
 describe("WP6 lead creation through inbox", () => {
+  it("warns for customer and other-lead matches without blocking lead creation", async () => {
+    const lookup = vi.fn(() => of(Result.success({ customerExists: true, leadExists: true })))
+    const s = await setup(false, lookup)
+    await s.click("Crear prospecto")
+    await s.valid()
+    await s.fill("email", " ANA@example.test ")
+    expect(lookup).toHaveBeenCalledExactlyOnceWith({ email: "ANA@example.test" })
+    expect(s.dialog().textContent).toContain("incluso si está inactivo")
+    expect(s.dialog().textContent).toContain("Otro prospecto usa este correo")
+    await s.submit()
+    expect(s.create).toHaveBeenCalledTimes(1)
+    expect(s.success).not.toHaveBeenCalled()
+  })
+  it("cancels and hides previous checks as soon as the email changes and on dialog destruction", async () => {
+    const old = new Subject<Result<LeadEmailCheck, CustomerError>>()
+    const lookup = vi.fn(() => old)
+    const s = await setup(false, lookup)
+    await s.click("Crear prospecto")
+    await s.fill("email", "old@example.test")
+    expect(old.observed).toBe(true)
+    const input = s.dialog().querySelector<HTMLInputElement>("#lead-email")!
+    input.value = "new@example.test"
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    expect(old.observed).toBe(false)
+    expect(s.dialog().textContent).not.toContain("Comprobando coincidencias")
+    old.next(Result.success({ customerExists: true, leadExists: true }))
+    expect(s.dialog().textContent).not.toContain("Otro prospecto usa este correo")
+    input.dispatchEvent(new Event("blur"))
+    await s.settle()
+    expect(old.observed).toBe(true)
+    s.fixture.destroy()
+    expect(old.observed).toBe(false)
+  })
+  it("keeps lookup failure advisory, supports explicit retry and skips malformed or absent emails", async () => {
+    const lookup = vi.fn(() => of(Result.failure<CustomerError>(new CustomerError("NETWORK"))))
+    const s = await setup(false, lookup)
+    await s.click("Crear prospecto")
+    await s.valid()
+    await s.fill("email", "bad")
+    await s.fill("email", "")
+    expect(lookup).not.toHaveBeenCalled()
+    await s.fill("email", "ana@example.test")
+    expect(s.dialog().textContent).toContain("No se pudieron comprobar")
+    await s.click("Reintentar comprobación de correo", s.dialog())
+    expect(lookup).toHaveBeenCalledTimes(2)
+    await s.submit()
+    expect(s.create).toHaveBeenCalledTimes(1)
+  })
   it("opens one create-only editor lazily, with blank required choices and actual catalog labels/IDs", async () => {
     const s = await setup()
     expect(s.readOrigins).not.toHaveBeenCalled()

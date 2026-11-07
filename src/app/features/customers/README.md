@@ -247,3 +247,25 @@ Confirmed writes invalidate affected reads and fence older completions without r
 Focused official Angular Vitest tests use `HttpTestingController`, isolated fixtures/subjects and fake auth contracts. They exercise method/path/query/body mapping, all response values, errors/invalid DTOs, owner/ID/page checks, cancellation, SSR/configuration safety, application delegation, composition and store session fencing. See the implementation handoff for observed exact commands/results rather than inferring a current pass from this document.
 
 Page tests use the real root store with controlled use-case responses; route/sidebar tests pin protected lazy navigation, the exact CRM label and existing IAM/default redirect. See the implementation handoff for focused/full Angular test and production/SSR build results. Those checks do not establish real authenticated HTTP/CORS, browser/keyboard/responsive acceptance or real MySQL concurrency/rollback; these remain **pending**. Independent sensitive-data/authorization verification also remains necessary.
+
+## Reserved customer emails and lead duplicate warnings
+
+M03/RF03/HU03: nonblank customer emails are unique across active and inactive customers.
+The backend compares trimmed, case-insensitive values; missing emails reserve nothing.
+Create/update and new lead conversion reject conflicts atomically with HTTP409 and the fixed
+`errores.correo: "EMAIL_RESERVED"` marker. Angular recognizes only that marker, never raw server copy,
+and preserves drafts with actionable inline feedback. Already-completed conversion still returns
+its linked customer; no automatic merge, stage change, customer lookup or write replay is added.
+
+Lead create/edit checks the current valid email on blur and checks a loaded email on opening.
+`POST /api/prospectos/validacion-correo` sends `{ correo, idProspectoExcluir? }` in JSON, never a URL.
+It requires existing `CLIENTE_LEER` authority, returns only `clienteExistente/prospectoExistente`
+booleans and includes inactive customers. The editor excludes only its captured lead ID.
+Warnings do not prevent saving a lead and are not authorization or a reservation guarantee.
+Read failure stays advisory with explicit retry. Editing the email cancels/clears the prior check;
+owner/session/destruction/overlay fences prevent stale feedback. SSR starts no reads.
+No catalog downloads, new store/cache/TTL, root lifetime or authentication changes are introduced.
+
+Backend Flyway V10 adds a normalized generated UNIQUE key. Historical duplicate rows stop migration;
+no automatic deletion, merge or email rewrite is permitted. Technical test results are recorded in
+`odd/tasks/crm-email-uniqueness.md`; live browser/permission acceptance is not implied by source wiring.

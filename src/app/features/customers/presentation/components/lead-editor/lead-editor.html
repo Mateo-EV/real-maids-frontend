@@ -90,6 +90,8 @@
             [id]="'lead-' + field.key"
             [type]="field.type"
             autocomplete="off"
+            (input)="field.key === 'email' && resetEmailCheck()"
+            (blur)="field.key === 'email' && checkEmail()"
             [formField]="profile[field.key]"
             [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
           />
@@ -97,6 +99,41 @@
         <p hlmFieldDescription [id]="field.key + '-help'">
           {{ field.help }} Se omiten espacios al inicio y al final.
         </p>
+        @if (field.key === "email") {
+          <div id="lead-email-check" aria-live="polite">
+            @if (visibleEmailCheck(); as check) {
+              @if (check.loading) {
+                <p role="status">Comprobando coincidencias de correo…</p>
+              } @else if (check.error) {
+                <p>
+                  No se pudieron comprobar las coincidencias. Puedes guardar el prospecto; la
+                  conversión se validará en el servidor.
+                </p>
+                <button hlmBtn type="button" variant="outline" (click)="checkEmail()">
+                  Reintentar comprobación de correo
+                </button>
+              } @else if (check.customerExists || check.leadExists) {
+                <div hlmAlert>
+                  <p hlmAlertTitle>Revisa el correo antes de continuar</p>
+                  <div hlmAlertDescription>
+                    @if (check.customerExists) {
+                      <p>
+                        El correo ya pertenece a un cliente, incluso si está inactivo. Puedes
+                        guardar el prospecto, pero no convertirlo en otro cliente con ese correo.
+                      </p>
+                    }
+                    @if (check.leadExists) {
+                      <p>
+                        Otro prospecto usa este correo. Revisa si corresponde a la misma oportunidad
+                        antes de guardar.
+                      </p>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
         <div [id]="field.key + '-errors'">
           @if (profile[field.key]().touched()) {
             @for (error of profile[field.key]().errors(); track error.kind) {

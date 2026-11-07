@@ -1,3 +1,5 @@
+import { CheckLeadEmailUseCase } from "../../../application/use-cases/acquisition.use-cases"
+import { Subscription } from "rxjs"
 import {
   ChangeDetectionStrategy,
   Component,
@@ -55,6 +57,19 @@ export class LeadEditor implements OnInit {
   private readonly dialog = inject(BrnDialogRef)
   private readonly destroyRef = inject(DestroyRef)
   private readonly acquisition = inject(CustomerAcquisitionStore)
+  private readonly emailLookup = inject(CheckLeadEmailUseCase)
+  private emailSubscription?: Subscription
+  readonly emailCheck = signal<{
+    key: string
+    loading: boolean
+    error: boolean
+    customerExists: boolean
+    leadExists: boolean
+  } | null>(null)
+  readonly visibleEmailCheck = computed(() => {
+    const state = this.emailCheck()
+    return state?.key === this.model().email.trim().toLowerCase() ? state : null
+  })
   readonly error = signal("")
   readonly target = this.context.lead
   private readonly ownerChanged$ = this.context.ownerChanged$ ?? EMPTY
@@ -168,6 +183,55 @@ export class LeadEditor implements OnInit {
   ngOnInit(): void {
     this.loadCatalog("originId")
     this.loadCatalog("stageId")
+    this.checkEmail()
+  }
+  resetEmailCheck(): void {
+    this.emailSubscription?.unsubscribe()
+    this.emailCheck.set(null)
+  }
+  checkEmail(): void {
+    if (!this.current() || this.profile().submitting()) return
+    const email = this.model().email.trim()
+    this.resetEmailCheck()
+    if (!email || email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return
+    const key = email.toLowerCase()
+    this.emailCheck.set({
+      key,
+      loading: true,
+      error: false,
+      customerExists: false,
+      leadExists: false
+    })
+    this.emailSubscription = this.emailLookup
+      .execute({ email, ...(this.target ? { excludeLeadId: this.target.id } : {}) })
+      .pipe(
+        takeUntil(this.ownerChanged$),
+        takeUntil(this.lifecycle.cancelled$),
+        takeUntilDestroyed(this.destroyRef),
+        takeUntilDestroyed(this.context.owner)
+      )
+      .subscribe({
+        next: result => {
+          if (!this.current() || this.model().email.trim().toLowerCase() !== key) return
+          this.emailCheck.set({
+            key,
+            loading: false,
+            error: !result.success,
+            customerExists: result.success && result.data.customerExists,
+            leadExists: result.success && result.data.leadExists
+          })
+        },
+        error: () => {
+          if (this.current() && this.model().email.trim().toLowerCase() === key)
+            this.emailCheck.set({
+              key,
+              loading: false,
+              error: true,
+              customerExists: false,
+              leadExists: false
+            })
+        }
+      })
   }
   loadCatalog(key: "originId" | "stageId", force = false): void {
     if (!this.current() || this.profile().submitting()) return
