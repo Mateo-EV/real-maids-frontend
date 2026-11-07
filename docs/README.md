@@ -366,3 +366,17 @@ Support states are independent of order states. Do not invent request states or 
 - Spanish/English localization and fallback, operational timezone/formatting, browser/performance acceptance measurements, E2E tooling and production hosting.
 
 Resolve these with explicit product/technical decisions and actual backend evidence. Update this guide when a route, consumer or integration changes delivery status; keep the useful identifiers without expanding this into a duplicate implementation matrix.
+
+## Current WP7 consumer integration (S10)
+
+This checkpoint supersedes earlier pending-consumer statements for T6F/T6G/T6K/T7B/T7C only; historical evidence remains historical. Protected requests, orders and agenda are connected under `/admin/operations`, preserving the requests default, sidebar labels, existing guard and complete route-owned toast scopes. The repository now retains 19 unsupported methods; agenda forwarding does not add a cache or TTL.
+
+- Verified registered request detail opens order creation with captured IDs, nullable bounded decimal/observation, guarded pending state and an explicit link to the actual returned order. No automatic navigation, duplicate reload or write retry.
+- Loaded order detail opens scheduling and destructive full-team replacement, including explicitly confirmed empty removal. Existing root write coordination serializes create/schedule/team and validates target/owner before confirmed order/detail/history invalidation. Caller-owned reason and paged staff choices, unchanged dialog lifecycle and owner/session/closing fences remain. Backend state/conflict/permission rules remain authoritative.
+- Agenda has a page-owned finite SignalStore and day/seven-day/month date cells with real order links. Date starts blank; seven days starts at the explicit selected date. No operational timezone/today, polling, cross-visit cache/TTL, inferred staff identity, availability promise, drag or recurrence writes.
+
+Observed parent checks: Operations **1192/1192 across 37 files passed**; full suite **3260 passed / 2 failed (3262 across 173)**, in the same Auth guard cases previously recorded. No cause or correction is inferred and Auth was not changed. Production/SSR **exit 0**, one prerender, initial bundle **668.47/500 kB warning**. Independent verification and browser/live API/CORS/authorization/redaction acceptance remain pending. Implementation is present, not full WP7 acceptance or native approval.
+
+### S12 local integration and deferred validation
+
+The user authorized local commits and merge into main, without push. A temporary Auth diagnostic candidate passed 3262/3262, but did not prove the original cause; it is archived under ignored tmp, and the Auth spec is restored exactly, with no Auth production changes. Therefore the retained-delivery evidence remains Operations1192/1192 and SSRexit0, with the earlier full-suite3260/3262 Auth failures explicitly deferred. Independent source review found no severe defect; its old runtime run timed out. The new browser probe remained an unexecuted draft and is not acceptance evidence. Local integration is not full WP7/live/backend/browser approval.

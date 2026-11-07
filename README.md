@@ -212,3 +212,17 @@ La fuente conserva el copyright de The Plus Jakarta Sans Project Authors y la li
 - [Instrucciones para agentes](AGENTS.md): arquitectura, herramientas MCP/CLI, seguridad y criterios de calidad; en inglés.
 
 La guía de producto describe intención funcional; el código y la configuración determinan qué está implementado. Los contratos REST deben confirmarse con el backend antes de integrar nuevas funcionalidades.
+
+## Integración actual de consumidores WP7 (S10)
+
+Este checkpoint sustituye solo las menciones anteriores de consumidores pendientes T6F/T6G/T6K/T7B/T7C; conserva la evidencia histórica. Solicitudes, órdenes y agenda están conectadas bajo `/admin/operations`, sin cambiar el destino inicial de solicitudes, los módulos, el guard ni los toasts locales. Quedan 19 métodos del repositorio sin soporte.
+
+- Crear orden desde una solicitud registrada verificada, con IDs capturados, importe/observación validados y enlace al ID real devuelto; sin navegación automática ni reenvíos.
+- Programar y reemplazar el equipo desde una orden cargada, incluida la retirada completa confirmada. Acciones raíz coordinadas, validación de destino/cliente, invalidación solo tras éxito, formularios y cancelación por propietario/sesión/destrucción. El backend decide permisos, estados y conflictos.
+- Agenda diaria, de siete días desde una fecha elegida y mensual, con celdas por fecha, enlaces reales y estado finito local. Fecha inicialmente vacía; sin zona operativa/hoy/TTL/polling, identidad de personal inferida ni escrituras por arrastre/recurrencia.
+
+Comprobaciones observadas: Operaciones **1192/1192 en 37 archivos**; suite completa **3260 pases y 2 fallos de Auth (3262 en 173)**, sin causa demostrada ni cambios en Auth. Build producción/SSR **exit 0**, una ruta prerenderizada y aviso **668,47/500 kB**. Verificación independiente y aceptación navegador/backend real/CORS/permisos/redacción pendientes; no se afirma WP7 completo ni aprobación nativa.
+
+### S12: integración local y validación diferida
+
+El usuario autorizó commits y merge local a main, sin push. La ejecución diagnóstica temporal de Auth pasó3262/3262, pero no probó la causa original: se archivó en tmp y la prueba original de Auth quedó restaurada exactamente, sin cambiar autenticación de producción. La evidencia aplicable al código entregado sigue siendo Operaciones1192/1192 y SSRexit0; los dos fallos previos de Auth en la suite completa quedan expresamente diferidos. La revisión independiente de fuente no encontró defectos graves; su ejecución anterior agotó el tiempo. El nuevo recorrido de navegador quedó como borrador no ejecutado, no como aceptación. El merge local no equivale a aceptación completa de WP7/backend/navegadores.

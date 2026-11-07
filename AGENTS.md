@@ -211,3 +211,17 @@ For code changes, compile and run relevant tests through available Angular MCP o
 No E2E or CI/CD is currently configured. Adding E2E requires an explicit tool decision, a reproducible target and documentation; prioritize login, customer CRUD, request-to-assignment, mobile assigned services, allowed/rejected transitions, customer support and backend-only QuickBooks status flows.
 
 A feature is complete only when connected to its consumer/route as applicable, compiled, proportionately tested, secure, permission-aware and equipped with the required data/UI states. Update the implemented/planned distinction and link meaningful behavior to an existing RF/RNF/HU/M/P identifier in the product guide; document missing traceability before implementation. For documentation-only changes, verify relative links, language and claims against source/configuration without asserting unrun builds or tests.
+
+## Current WP7 consumer integration (S10)
+
+This checkpoint supersedes earlier pending-consumer statements for T6F/T6G/T6K/T7B/T7C only; historical evidence remains historical. Protected requests, orders and agenda are connected under `/admin/operations`, preserving the requests default, sidebar labels, existing guard and complete route-owned toast scopes. The repository now retains 19 unsupported methods; agenda forwarding does not add a cache or TTL.
+
+- Verified registered request detail opens order creation with captured IDs, nullable bounded decimal/observation, guarded pending state and an explicit link to the actual returned order. No automatic navigation, duplicate reload or write retry.
+- Loaded order detail opens scheduling and destructive full-team replacement, including explicitly confirmed empty removal. Existing root write coordination serializes create/schedule/team and validates target/owner before confirmed order/detail/history invalidation. Caller-owned reason and paged staff choices, unchanged dialog lifecycle and owner/session/closing fences remain. Backend state/conflict/permission rules remain authoritative.
+- Agenda has a page-owned finite SignalStore and day/seven-day/month date cells with real order links. Date starts blank; seven days starts at the explicit selected date. No operational timezone/today, polling, cross-visit cache/TTL, inferred staff identity, availability promise, drag or recurrence writes.
+
+Observed parent checks: Operations **1192/1192 across 37 files passed**; full suite **3260 passed / 2 failed (3262 across 173)**, in the same Auth guard cases previously recorded. No cause or correction is inferred and Auth was not changed. Production/SSR **exit 0**, one prerender, initial bundle **668.47/500 kB warning**. Independent verification and browser/live API/CORS/authorization/redaction acceptance remain pending. Implementation is present, not full WP7 acceptance or native approval.
+
+### S12 local integration and deferred validation
+
+The user authorized local commits and merge into main, without push. A temporary Auth diagnostic candidate passed 3262/3262, but did not prove the original cause; it is archived under ignored tmp, and the Auth spec is restored exactly, with no Auth production changes. Therefore the retained-delivery evidence remains Operations1192/1192 and SSRexit0, with the earlier full-suite3260/3262 Auth failures explicitly deferred. Independent source review found no severe defect; its old runtime run timed out. The new browser probe remained an unexecuted draft and is not acceptance evidence. Local integration is not full WP7/live/backend/browser approval.
