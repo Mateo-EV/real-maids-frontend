@@ -1,7 +1,7 @@
 # CRM email uniqueness
 
 Objective: reserve customer emails across active/inactive records and warn on lead duplicates (M03/RF03/HU03; acquisition RF/HU still missing).
-Branches: feat/crm-email-uniqueness (frontend/backend); delivery: auto-chain, feature-branch-chain (user selected); runners: Angular CLI Vitest, Maven JUnit, isolated MySQL probe.
+Integrated targets: frontend main, backend mateo (backend main unchanged); feature branch: feat/crm-email-uniqueness; delivery: auto-chain, feature-branch-chain (user selected); runners: Angular CLI Vitest, Maven JUnit, isolated MySQL probe.
 
 ## Specs
 
@@ -20,17 +20,19 @@ Branches: feat/crm-email-uniqueness (frontend/backend); delivery: auto-chain, fe
 ## Tasks
 
 - T1 | S1–S4 | inline (same behavior, frontend depends on backend contract; no parallel independent writer trigger) | done | Enforce customer email uniqueness on create/update/conversion including inactive records, with database race protection and tests. Backend commit: f32f783aac88f46899d5130ca673a7375b1c26a3 (371 authored lines); nativeRisk medium, reviewDue=false/under_budget; not native approval.
-- T2 | S1,S4 | inline | done | Add permission-guarded boolean duplicate lookup and lead editor warnings, preserving drafts/lifecycle and conflict feedback. Commit: pending.
+- T2 | S1,S4 | inline | done | Add permission-guarded boolean duplicate lookup and lead editor warnings, preserving drafts/lifecycle and conflict feedback. Frontend commits: 721b392c7175bb89a9c7824b5c69ffcac82035e5 (transport), 10cfb9c94b4e47011e7fa9f65e238fdb52b4743d (isolated UI/docs).
 - T3 | S1–S5 | independent verify (Risk items 1/2/4: schema, opt-in auth error seam, concurrent writes) plus parent checks | dropped (user S6 explicitly defers remaining timeout/native proof; never counted as passed) | Verify focused/full suites, SSR, isolated database behavior and UI where available; document evidence and remaining gaps. Backend f32f783; frontend transport 721b392c7175bb89a9c7824b5c69ffcac82035e5; UI/docs remain uncommitted to preserve initial dirty work.
 
-- T4 | S1,S4,S6–S7 | inline | in_progress | Isolate and commit remaining frontend email UI/docs without pre-existing dirty catalog work. Commit: pending.
-- T5 | S6–S7 | inline | pending | Fast-forward frontend main to the complete email feature in a same-clone linked worktree; preserve dirty primary worktree and original staging. Commit: pending.
+- T4 | S1,S4,S6–S7 | inline | done | Isolate and commit remaining frontend email UI/docs without pre-existing dirty catalog work. Commit: 10cfb9c94b4e47011e7fa9f65e238fdb52b4743d; live source hashes and original staged catalog document preserved.
+- T5 | S6–S7 | inline | done | Frontend main fast-forwarded to10cfb9c after exact clean-commit111/111 check; main worktree clean. Initial source bytes and staged catalog document preserved; documentation-only closure follows, no push.
 - T6 | S7 | inline | dropped (explicit user selection leaves backend merge pending) | Backend main must remain untouched; email commit f32f783 remains on its feature branch.
 
-- T7 | S8–S9 | inline | pending | Merge backend email feature into mateo only; preserve backend main exactly. Commit: pending.
+- T7 | S8–S9 | inline | done | Backend mateo fast-forwarded to f32f783aac88f46899d5130ca673a7375b1c26a3; backend main unchanged at8293c52e949a5b6a817a8909d2f7eb974ae527f9; worktree clean, no push.
 
 ## Log
 
+L24: Backend mateo integration completed by fast-forward to f32f783; backend main checked before/after and remains8293c52; backend worktree clean. Exact isolated frontend source commit10cfb9c compiled and passed111/111 across4files (lead editor, detail, email HTTP, auth interceptor). This is new clean-candidate evidence, not a retry of deferred global/native proof. Main frontend fast-forward is next.
+L23: Remaining frontend email UI/docs committed as10cfb9c using an isolated index; three-way staging excluded initial viewport/catalog changes. Primary live source hashes and original staged readable-catalog-labels document were checked unchanged. Registered clean detached same-clone worktree tmp/crm-email-integration at that exact commit, sharing installed dependencies via local junction. Run one bounded four-file check there before fast-forwarding frontend main; do not rerun deferred global timeout/native review.
 L22: User: "el backend haz el merge con la rama mateo"; selected "Sí: emails → mateo; main intacto". Frontend target remains main, backend target is mateo, no push.
 
 L20: User: "si dejalo pendiente y has el commit y mergea al main". Existing full-suite timeout and unavailable native review are explicitly deferred, not passed. No push is authorized.
@@ -55,3 +57,5 @@ L15: Synthetic Chrome smoke found a real integration seam: existing authIntercep
 L12: Existing-test-server proof passed: historical duplicate rejection without record loss; inactive/case/trim reservation; multiple NULL/blank emails; own-email update; rejected update leaves prior value; two concurrent inserts yield exactly one winner. Controlled probe table was removed; existing customer count remained 26. Backend full `mvn -B test` passed 46/46 (including new warning service). No existing customer records were modified. T1 implementation/checks complete; final verifier and native review belong to T3.
 L11: User S5 supersedes the disposable-server requirement: existing local test MySQL is reachable, realmaids has 26 customers and zero duplicate normalized nonblank email groups (read-only aggregate check). Verify using controlled probe tables on that server, never delete or merge existing customers. Complete implementation now; preserve historical failed evidence. Frontend formatting failure needs an actual source correction, not repeated check-only runs.
 L10: Angular RED job-5 exited 1 at compilation (missing checkLeadEmail and inferred unknown result), with no tests executed. Formatting command `npx --no-install prettier --write odd/tasks/crm-email-uniqueness.md src/app/features/customers/infrastructure/source/customer-email-http.spec.ts && npx --no-install prettier --check odd/tasks/crm-email-uniqueness.md src/app/features/customers/infrastructure/source/customer-email-http.spec.ts` exited 1: write succeeded but immediate check still flagged the new HTTP spec. Formatting is not verified; no automatic retry performed.
+
+L25: Local integration completed: frontend main fast-forwarded from12446b2 to source commit10cfb9c (including transport721b392), with clean same-clone worktree and111/111 checks on that exact isolated tree. Backend mateo fast-forwarded to f32f783; backend main remains exactly8293c52. The primary frontend worktree stays on the feature branch to preserve pre-existing dirty/staged catalog UI work, excluded from the email commits. A final documentation-only commit records these observed outcomes and will be fast-forwarded to frontend main. No push/PR/release. Full-suite3277/3278 timeout, native review unavailability and unrun live/Edge/Firefox acceptance remain explicitly deferred, never passed. T3 and T6 were dropped by explicit user decisions, not fulfilled checks.
