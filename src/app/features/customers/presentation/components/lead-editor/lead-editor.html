@@ -1,4 +1,4 @@
-<hlm-dialog-header>
+<hlm-dialog-header class="shrink-0">
   <h2 hlmDialogTitle>{{ target ? "Editar prospecto" : "Crear prospecto" }}</h2>
   <p hlmDialogDescription>
     @if (target) {
@@ -9,142 +9,150 @@
     Selecciona origen y etapa del catálogo.
   </p>
 </hlm-dialog-header>
-<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
-  @if (error()) {
-    <div hlmAlert variant="destructive" role="alert">
-      <p hlmAlertTitle>No se completó el guardado</p>
-      <p hlmAlertDescription>{{ error() }}</p>
-    </div>
-  }
-  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
-    <legend hlmFieldLegend class="sr-only">Datos del prospecto</legend>
-    @for (catalog of catalogs(); track catalog.key) {
-      <div hlmField class="min-w-0 gap-1.5">
-        <label hlmFieldLabel [for]="'lead-' + catalog.key">{{ catalog.label }} (obligatorio)</label>
-        <hlm-native-select
-          [selectId]="'lead-' + catalog.key"
-          [formField]="profile[catalog.key]"
-          [attr.aria-describedby]="catalog.key + '-status ' + catalog.key + '-errors'"
-          class="w-full"
-        >
-          <option value="">Selecciona {{ catalog.label.toLowerCase() }}</option>
-          @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
-            <option [value]="model()[catalog.key]" [selected]="true">
-              ID {{ model()[catalog.key] }} · No disponible en el catálogo actual
-            </option>
-          }
-          @for (option of catalog.options; track option.id) {
-            <option [value]="'' + option.id" [selected]="model()[catalog.key] === '' + option.id">
-              {{ option.label }}
-            </option>
-          }
-        </hlm-native-select>
-        <div [id]="catalog.key + '-status'">
-          @if (catalog.entry.loading || catalog.entry.refreshing) {
-            <p role="status">
-              {{ catalog.entry.refreshing ? "Actualizando" : "Cargando" }} {{ catalog.name }}…
-            </p>
-          }
-          @if (catalog.entry.error) {
-            <div hlmAlert variant="destructive" role="alert">
-              <p hlmAlertTitle>No se pudieron cargar los {{ catalog.name }}.</p>
-              <p hlmAlertDescription>
-                Reintenta para verificar las opciones. Tu borrador se conserva.
-              </p>
-            </div>
-          } @else if (catalog.entry.loaded && !catalog.options.length) {
-            <p role="status">No hay {{ catalog.name }} en el catálogo recibido.</p>
-          }
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            [disabled]="catalog.entry.loading || catalog.entry.refreshing"
-            (click)="loadCatalog(catalog.key, true)"
-          >
-            {{ catalog.entry.error ? "Reintentar" : "Actualizar" }} {{ catalog.name }}
-          </button>
-        </div>
-        <div [id]="catalog.key + '-errors'">
-          @if (profile[catalog.key]().touched()) {
-            @for (error of profile[catalog.key]().errors(); track error.kind) {
-              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-            }
-          }
-        </div>
+<form class="mt-4 flex min-h-0 flex-1 flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  <div data-lead-editor-body class="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+    @if (error()) {
+      <div hlmAlert variant="destructive" role="alert">
+        <p hlmAlertTitle>No se completó el guardado</p>
+        <p hlmAlertDescription>{{ error() }}</p>
       </div>
     }
-    @for (field of textFields; track field.key) {
-      <div hlmField class="min-w-0 gap-1.5">
-        <label hlmFieldLabel [for]="'lead-' + field.key">{{ field.label }}</label>
-        @if (field.type === "textarea") {
-          <textarea
-            hlmTextarea
-            [id]="'lead-' + field.key"
-            [formField]="profile[field.key]"
-            [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
-          ></textarea>
-        } @else {
-          <input
-            hlmInput
-            [id]="'lead-' + field.key"
-            [type]="field.type"
-            autocomplete="off"
-            (input)="field.key === 'email' && resetEmailCheck()"
-            (blur)="field.key === 'email' && checkEmail()"
-            [formField]="profile[field.key]"
-            [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
-          />
-        }
-        <p hlmFieldDescription [id]="field.key + '-help'">
-          {{ field.help }} Se omiten espacios al inicio y al final.
-        </p>
-        @if (field.key === "email") {
-          <div id="lead-email-check" aria-live="polite">
-            @if (visibleEmailCheck(); as check) {
-              @if (check.loading) {
-                <p role="status">Comprobando coincidencias de correo…</p>
-              } @else if (check.error) {
-                <p>
-                  No se pudieron comprobar las coincidencias. Puedes guardar el prospecto; la
-                  conversión se validará en el servidor.
+    <fieldset
+      hlmFieldSet
+      class="grid min-w-0 gap-3.5 sm:grid-cols-2"
+      [disabled]="profile().submitting()"
+    >
+      <legend hlmFieldLegend class="sr-only">Datos del prospecto</legend>
+      @for (catalog of catalogs(); track catalog.key) {
+        <div hlmField class="min-w-0 gap-1.5">
+          <label hlmFieldLabel [for]="'lead-' + catalog.key"
+            >{{ catalog.label }} (obligatorio)</label
+          >
+          <hlm-native-select
+            [selectId]="'lead-' + catalog.key"
+            [formField]="profile[catalog.key]"
+            [attr.aria-describedby]="catalog.key + '-status ' + catalog.key + '-errors'"
+            class="w-full"
+          >
+            <option value="">Selecciona {{ catalog.label.toLowerCase() }}</option>
+            @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
+              <option [value]="model()[catalog.key]" [selected]="true">
+                {{ catalog.label }} no disponible en el catálogo actual
+              </option>
+            }
+            @for (option of catalog.options; track option.id) {
+              <option [value]="'' + option.id" [selected]="model()[catalog.key] === '' + option.id">
+                {{ option.label }}
+              </option>
+            }
+          </hlm-native-select>
+          <div [id]="catalog.key + '-status'">
+            @if (catalog.entry.loading || catalog.entry.refreshing) {
+              <p role="status">
+                {{ catalog.entry.refreshing ? "Actualizando" : "Cargando" }} {{ catalog.name }}…
+              </p>
+            }
+            @if (catalog.entry.error) {
+              <div hlmAlert variant="destructive" role="alert">
+                <p hlmAlertTitle>No se pudieron cargar los {{ catalog.name }}.</p>
+                <p hlmAlertDescription>
+                  Reintenta para verificar las opciones. Tu borrador se conserva.
                 </p>
-                <button hlmBtn type="button" variant="outline" (click)="checkEmail()">
-                  Reintentar comprobación de correo
-                </button>
-              } @else if (check.customerExists || check.leadExists) {
-                <div hlmAlert>
-                  <p hlmAlertTitle>Revisa el correo antes de continuar</p>
-                  <div hlmAlertDescription>
-                    @if (check.customerExists) {
-                      <p>
-                        El correo ya pertenece a un cliente, incluso si está inactivo. Puedes
-                        guardar el prospecto, pero no convertirlo en otro cliente con ese correo.
-                      </p>
-                    }
-                    @if (check.leadExists) {
-                      <p>
-                        Otro prospecto usa este correo. Revisa si corresponde a la misma oportunidad
-                        antes de guardar.
-                      </p>
-                    }
-                  </div>
-                </div>
+              </div>
+            } @else if (catalog.entry.loaded && !catalog.options.length) {
+              <p role="status">No hay {{ catalog.name }} en el catálogo recibido.</p>
+            }
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              [disabled]="catalog.entry.loading || catalog.entry.refreshing"
+              (click)="loadCatalog(catalog.key, true)"
+            >
+              {{ catalog.entry.error ? "Reintentar" : "Actualizar" }} {{ catalog.name }}
+            </button>
+          </div>
+          <div [id]="catalog.key + '-errors'">
+            @if (profile[catalog.key]().touched()) {
+              @for (error of profile[catalog.key]().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
               }
             }
           </div>
-        }
-        <div [id]="field.key + '-errors'">
-          @if (profile[field.key]().touched()) {
-            @for (error of profile[field.key]().errors(); track error.kind) {
-              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-            }
-          }
         </div>
-      </div>
-    }
-  </fieldset>
-  <hlm-dialog-footer class="border-t pt-3">
+      }
+      @for (field of textFields; track field.key) {
+        <div hlmField class="min-w-0 gap-1.5" [class.sm:col-span-2]="field.type === 'textarea'">
+          <label hlmFieldLabel [for]="'lead-' + field.key">{{ field.label }}</label>
+          @if (field.type === "textarea") {
+            <textarea
+              hlmTextarea
+              [id]="'lead-' + field.key"
+              [formField]="profile[field.key]"
+              [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
+            ></textarea>
+          } @else {
+            <input
+              hlmInput
+              [id]="'lead-' + field.key"
+              [type]="field.type"
+              autocomplete="off"
+              (input)="field.key === 'email' && resetEmailCheck()"
+              (blur)="field.key === 'email' && checkEmail()"
+              [formField]="profile[field.key]"
+              [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
+            />
+          }
+          <p hlmFieldDescription [id]="field.key + '-help'">
+            {{ field.help }} Se omiten espacios al inicio y al final.
+          </p>
+          @if (field.key === "email") {
+            <div id="lead-email-check" aria-live="polite">
+              @if (visibleEmailCheck(); as check) {
+                @if (check.loading) {
+                  <p role="status">Comprobando coincidencias de correo…</p>
+                } @else if (check.error) {
+                  <p>
+                    No se pudieron comprobar las coincidencias. Puedes guardar el prospecto; la
+                    conversión se validará en el servidor.
+                  </p>
+                  <button hlmBtn type="button" variant="outline" (click)="checkEmail()">
+                    Reintentar comprobación de correo
+                  </button>
+                } @else if (check.customerExists || check.leadExists) {
+                  <div hlmAlert>
+                    <p hlmAlertTitle>Revisa el correo antes de continuar</p>
+                    <div hlmAlertDescription>
+                      @if (check.customerExists) {
+                        <p>
+                          El correo ya pertenece a un cliente, incluso si está inactivo. Puedes
+                          guardar el prospecto, pero no convertirlo en otro cliente con ese correo.
+                        </p>
+                      }
+                      @if (check.leadExists) {
+                        <p>
+                          Otro prospecto usa este correo. Revisa si corresponde a la misma
+                          oportunidad antes de guardar.
+                        </p>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          }
+          <div [id]="field.key + '-errors'">
+            @if (profile[field.key]().touched()) {
+              @for (error of profile[field.key]().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
+            }
+          </div>
+        </div>
+      }
+    </fieldset>
+  </div>
+  <hlm-dialog-footer class="shrink-0 border-t pt-3">
     <button
       hlmBtn
       type="button"

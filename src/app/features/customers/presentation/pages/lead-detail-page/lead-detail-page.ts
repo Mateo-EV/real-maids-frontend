@@ -183,7 +183,7 @@ export class LeadDetailPage {
       },
       showCloseButton: false,
       disableClose: true,
-      contentClass: "sm:max-w-lg"
+      contentClass: "sm:max-w-2xl"
     })
   }
 

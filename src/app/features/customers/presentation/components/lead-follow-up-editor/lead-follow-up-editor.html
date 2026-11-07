@@ -25,12 +25,12 @@
         <option value="">Selecciona etapa</option>
         @if (model().stageId && !hasChoice(model().stageId)) {
           <option [value]="model().stageId" [selected]="true">
-            ID {{ model().stageId }} · No disponible en el catálogo actual
+            Etapa no disponible en el catálogo actual
           </option>
         }
         @for (stage of stages().data ?? []; track stage.id) {
           <option [value]="'' + stage.id" [selected]="model().stageId === '' + stage.id">
-            {{ stage.name }} · ID {{ stage.id }}{{ stage.isFinal ? " · Final" : "" }}
+            {{ stage.name }}{{ stage.isFinal ? " · Final" : "" }}
           </option>
         }
       </hlm-native-select>

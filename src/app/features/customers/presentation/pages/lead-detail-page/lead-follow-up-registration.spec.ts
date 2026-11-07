@@ -173,7 +173,9 @@ describe("T7 follow-up registration through verified open detail with real store
     expect(s.stages).toHaveBeenCalledTimes(1)
     expect(s.unexpected).not.toHaveBeenCalled()
     await s.valid()
-    expect(s.dialog().textContent).toContain("Etapa suministrada · ID 31 · Final")
+    expect(s.dialog().querySelector('option[value="31"]')?.textContent?.trim()).toBe(
+      "Etapa suministrada · Final"
+    )
     expect(s.dialog().querySelectorAll("input, select, textarea")).toHaveLength(2)
   })
   it.each(["", "  ", " <b>" + "x".repeat(700) + "</b> "])(
@@ -233,7 +235,7 @@ describe("T7 follow-up registration through verified open detail with real store
     await s.click("Reintentar etapas", s.dialog())
     await s.respond(s.catalogs, Result.success([FunnelStage.create(32, "Otra", 1, false)]))
     expect(s.dialog().querySelector<HTMLSelectElement>("select")!.value).toBe("31")
-    expect(s.dialog().textContent).toContain("ID 31 · No disponible")
+    expect(s.dialog().textContent).toContain("Etapa no disponible")
     await s.submit()
     expect(s.add).not.toHaveBeenCalled()
     await s.fill("stageId", "32")

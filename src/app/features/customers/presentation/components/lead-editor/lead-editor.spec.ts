@@ -178,20 +178,39 @@ describe("WP6 lead creation through inbox", () => {
     await s.submit()
     expect(s.create).toHaveBeenCalledTimes(1)
   })
+  it("keeps actions outside the scrolling form body within a viewport-bounded editor", async () => {
+    const s = await setup()
+    await s.click("Crear prospecto")
+    const editor = s.dialog()
+    expect(editor.classList.contains("max-h-[calc(100dvh-4rem)]")).toBe(true)
+    const body = editor.querySelector("[data-lead-editor-body]")!
+    expect(body.classList.contains("overflow-y-auto")).toBe(true)
+    expect(body.querySelector("fieldset")).not.toBeNull()
+    expect(body.querySelector("hlm-dialog-footer")).toBeNull()
+    expect(editor.querySelector('hlm-dialog-footer button[type="submit"]')).not.toBeNull()
+  })
   it("opens one create-only editor lazily, with blank required choices and actual catalog labels/IDs", async () => {
     const s = await setup()
-    expect(s.readOrigins).not.toHaveBeenCalled()
-    expect(s.readStages).not.toHaveBeenCalled()
+    expect(s.readOrigins).toHaveBeenCalledTimes(1)
+    expect(s.readStages).toHaveBeenCalledTimes(1)
     await s.click("Crear prospecto")
     await s.click("Crear prospecto")
     expect(document.querySelectorAll("app-lead-editor")).toHaveLength(1)
+    expect(s.readOrigins).toHaveBeenCalledTimes(1)
+    expect(s.readStages).toHaveBeenCalledTimes(1)
     expect(s.dialog().textContent).toContain("Cargando orígenes")
     expect(s.dialog().textContent).toContain("Cargando etapas")
     await s.catalogs()
     for (const field of ["originId", "stageId"])
       expect(s.dialog().querySelector<HTMLSelectElement>(`#lead-${field}`)!.value).toBe("")
-    expect(s.dialog().textContent).toContain("Origen real · ID 11 · Inactivo")
-    expect(s.dialog().textContent).toContain("Etapa real · ID 12 · Final")
+    expect(s.dialog().querySelector('option[value="11"]')?.textContent?.trim()).toBe(
+      "Origen real · Inactivo"
+    )
+    expect(s.dialog().querySelector('option[value="12"]')?.textContent?.trim()).toBe(
+      "Etapa real · Final"
+    )
+    expect(s.dialog().querySelector('option[value="11"]')?.getAttribute("value")).toBe("11")
+    expect(s.dialog().querySelector('option[value="12"]')?.getAttribute("value")).toBe("12")
     expect(s.dialog().textContent).not.toMatch(/Editar|Convertido|Registro|Cliente vinculado/)
     await s.submit()
     expect(s.create).not.toHaveBeenCalled()

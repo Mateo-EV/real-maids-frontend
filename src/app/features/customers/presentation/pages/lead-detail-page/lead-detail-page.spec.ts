@@ -88,9 +88,9 @@ async function setup(url = "/admin/customers/leads/7", server = false, editing =
         }
       },
       { provide: ListCustomersUseCase, useValue: { execute: customers } },
+      { provide: Actions.ListLeadOriginsUseCase, useValue: { execute: readOrigins } },
+      { provide: Actions.ListFunnelStagesUseCase, useValue: { execute: readStages } },
       ...[
-        Actions.ListLeadOriginsUseCase,
-        Actions.ListFunnelStagesUseCase,
         Actions.ListLeadFollowUpsUseCase,
         Actions.ConvertLeadUseCase,
         Actions.CreateLeadUseCase,
@@ -160,6 +160,8 @@ describe("Lead read-only detail and independent return context", () => {
   it("loads only the selected lead, shows provided UTC/null/plain text fields without synthetic customer linkage", async () => {
     const s = await setup()
     expect(s.execute).toHaveBeenCalledExactlyOnceWith(7)
+    expect(s.readOrigins).not.toHaveBeenCalled()
+    expect(s.readStages).not.toHaveBeenCalled()
     expect(s.element().textContent).toContain("Cargando prospecto")
     expect(s.element().textContent).not.toContain("No registrado")
     await s.respond(Result.success(lead()))
@@ -432,6 +434,8 @@ describe("Lead read-only detail and independent return context", () => {
     expect(TestBed.inject(Router).url).toBe("/admin/customers/leads?offset=10&limit=5")
     expect(s.list).toHaveBeenLastCalledWith({ offset: 10, limit: 5 })
     expect(s.list).toHaveBeenCalledTimes(2)
+    expect(s.readOrigins).toHaveBeenCalledTimes(2)
+    expect(s.readStages).toHaveBeenCalledTimes(2)
     expect(s.forbiddenAction).not.toHaveBeenCalled()
   })
 })
@@ -576,8 +580,8 @@ describe("WP6 editing a legitimately loaded lead", () => {
       ["stageId", "12"]
     ])
       expect(s.dialog().querySelector<HTMLSelectElement>(`#lead-${field}`)!.value).toBe(id)
-    expect(s.dialog().textContent).toContain("ID 11 · No disponible")
-    expect(s.dialog().textContent).toContain("ID 12 · No disponible")
+    expect(s.dialog().textContent).toContain("Origen no disponible")
+    expect(s.dialog().textContent).toContain("Etapa no disponible")
     await s.submit()
     expect(s.update).not.toHaveBeenCalled()
     await s.fill("originId", "21")

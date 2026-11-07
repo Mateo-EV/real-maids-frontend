@@ -50,6 +50,9 @@ export interface LeadEditorContext {
     HlmAlertImports,
     HlmSpinnerImports
   ],
+  host: {
+    class: "flex max-h-[calc(100dvh-4rem)] min-h-0 flex-col"
+  },
   templateUrl: "./lead-editor.html"
 })
 export class LeadEditor implements OnInit {
@@ -113,7 +116,7 @@ export class LeadEditor implements OnInit {
       options:
         this.acquisition.origins().data?.map(o => ({
           id: o.id,
-          label: `${o.name} · ID ${o.id} · ${o.isActive ? "Activo" : "Inactivo"}`
+          label: `${o.name} · ${o.isActive ? "Activo" : "Inactivo"}`
         })) ?? []
     },
     {
@@ -124,7 +127,7 @@ export class LeadEditor implements OnInit {
       options:
         this.acquisition.stages().data?.map(s => ({
           id: s.id,
-          label: `${s.name} · ID ${s.id}${s.isFinal ? " · Final" : ""}`
+          label: `${s.name}${s.isFinal ? " · Final" : ""}`
         })) ?? []
     }
   ])
