@@ -9,8 +9,15 @@
     [busy]="list().loading || list().refreshing"
   >
     <div catalogControls class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
-      <button hlmBtn size="sm" type="button" [disabled]="writePending() > 0" (click)="edit()">
-        <ng-icon name="lucidePlus" class="text-gold" aria-hidden="true" />Crear cliente
+      <button
+        hlmBtn
+        class="catalog-action-with-plus"
+        size="sm"
+        type="button"
+        [disabled]="writePending() > 0"
+        (click)="edit()"
+      >
+        <ng-icon name="lucidePlus" aria-hidden="true" />Crear cliente
       </button>
     </div>
     @if (list().loading) {

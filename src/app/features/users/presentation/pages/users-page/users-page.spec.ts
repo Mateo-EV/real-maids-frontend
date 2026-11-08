@@ -664,7 +664,13 @@ describe("UsersPage", () => {
       row.querySelector(".catalog-filter-search > [data-slot='input-group'] #user-search")
     ).not.toBeNull()
     expect(row.querySelectorAll("[data-slot='native-select']")).toHaveLength(2)
-    expect(row.querySelector("[data-slot='button']#new-user")).not.toBeNull()
+    const createButton = row.querySelector<HTMLButtonElement>("[data-slot='button']#new-user")!
+    expect(createButton).not.toBeNull()
+    expect(createButton.classList.contains("catalog-action-with-plus")).toBe(true)
+    expect(
+      createButton.querySelector('ng-icon[name="lucidePlus"]')?.getAttribute("aria-hidden")
+    ).toBe("true")
+    expect(createButton.textContent).toContain("Nuevo usuario")
     expect(row.querySelector(".h-9, .sm\\:w-60, .xl\\:w-100")).toBeNull()
   })
 
@@ -1056,9 +1062,12 @@ describe("UsersPage", () => {
       expect(surface.querySelectorAll("[data-role-tone]")).toHaveLength(10)
     }
     expect(element.querySelectorAll(".kpi-tile")).toHaveLength(4)
-    expect(element.querySelector("#new-user ng-icon")?.classList.contains("primary-plus")).toBe(
+    expect(element.querySelector("#new-user")?.classList.contains("catalog-action-with-plus")).toBe(
       true
     )
+    expect(
+      element.querySelector('#new-user ng-icon[name="lucidePlus"]')?.getAttribute("aria-hidden")
+    ).toBe("true")
   })
 
   it("keeps fallback tones deterministic and independent of record IDs and catalog ordering", async () => {
@@ -1101,6 +1110,13 @@ describe("UsersPage", () => {
       expect(block).toMatch(/--accent-foreground:\s*var\(--navy-deep\);/)
     }
   )
+
+  it("styles only opted-in catalog plus icons with the global gold accent", () => {
+    const globalCss = readFileSync("src/styles.css", "utf8")
+    expect(globalCss).toMatch(
+      /\.catalog-action-with-plus\s*>\s*ng-icon\s*\{\s*color:\s*var\(--gold\);/
+    )
+  })
 
   it("centralizes enabled default action hover without changing outline or destructive variants", () => {
     const globalCss = readFileSync("src/styles.css", "utf8")

@@ -100,7 +100,13 @@ describe("CustomersPage read-only server list", () => {
     expect(section.querySelector("header h1#customers-title")?.textContent).toContain(
       "Catálogo de Clientes"
     )
-    expect(section.querySelector("header button")?.textContent).toContain("Crear cliente")
+    const createButton = section.querySelector<HTMLButtonElement>("header button")!
+    expect(createButton.textContent).toContain("Crear cliente")
+    expect(createButton.classList.contains("catalog-action-with-plus")).toBe(true)
+    expect(
+      createButton.querySelector('ng-icon[name="lucidePlus"]')?.getAttribute("aria-hidden")
+    ).toBe("true")
+    expect(createButton.getAttribute("data-variant")).not.toBe("outline")
     expect(section.querySelector("[catalogDesktop] table")).not.toBeNull()
     expect(section.querySelector("ul[catalogMobile]")).not.toBeNull()
     expect(section.querySelector("footer app-table-pagination")).not.toBeNull()

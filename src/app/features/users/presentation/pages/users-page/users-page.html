@@ -234,12 +234,13 @@
           <button
             id="new-user"
             hlmBtn
+            class="catalog-action-with-plus"
             size="sm"
             type="button"
             [disabled]="initializing() || loadError()"
             (click)="editUser()"
           >
-            <ng-icon name="lucidePlus" class="primary-plus" aria-hidden="true" />Nuevo usuario
+            <ng-icon name="lucidePlus" aria-hidden="true" />Nuevo usuario
           </button>
         </div>
         @if (initializing()) {
