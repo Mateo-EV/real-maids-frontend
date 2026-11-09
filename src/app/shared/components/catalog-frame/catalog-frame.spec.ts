@@ -29,7 +29,6 @@ describe("CatalogFrame presentation contract", () => {
     const root = fixture.nativeElement as HTMLElement
     const section = root.querySelector('section[aria-labelledby="catalog-title"]')!
     expect(section.getAttribute("aria-busy")).toBe("true")
-    expect(section.classList.contains("rounded-xl")).toBe(true)
     expect(
       section.querySelector("header h1#catalog-title")?.textContent?.replace(/\s+/g, " ").trim()
     ).toBe("Catálogo")
@@ -46,8 +45,6 @@ describe("CatalogFrame presentation contract", () => {
   it("centralizes compact table rhythm and a container-width switch, not viewport classes", () => {
     const css = readFileSync("src/styles.css", "utf8")
     expect(css).toContain("app-catalog-frame [hlmTable]")
-    expect(css).toContain("font-size: 0.75rem")
-    expect(css).toContain("padding-block: 0.625rem")
     expect(css).toMatch(/@container \(width >= 64rem\)/)
     expect(css).toMatch(/app-catalog-frame \[catalogDesktop\]\s*\{\s*display: none/)
     expect(css).toMatch(/app-catalog-frame \[catalogMobile\]\s*\{\s*display: flex/)

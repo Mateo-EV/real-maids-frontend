@@ -27,7 +27,7 @@ The user said: “ok intenta resolver esos errores”. The authorized log attrib
 
 ## Tasks
 
-- [x] T1 — Remove the seven confirmed-unwired in-memory source/spec pairs; replace fixture dependencies in config, route, user presentation, and cancellation tests while preserving independent behavior; stop pinning the temporarily commented sidebar placeholders. Linked: S2, S3. Route: parent removal plus bounded test-harness writer. Focused evidence recorded in L5; work-unit commit pending.
+- [x] T1 — Remove the seven confirmed-unwired in-memory source/spec pairs; replace fixture dependencies in config, route, user presentation, and cancellation tests while preserving independent behavior; stop pinning the temporarily commented sidebar placeholders. Linked: S2, S3. Route: parent removal plus bounded test-harness writer. Focused evidence recorded in L5; work-unit commit: `9719b80`.
 - [x] T2 — Remove three redundant customer wrapper specs (create/get/update), retain the distinct explicit-pagination case in the list wrapper spec, remove same-test runtime tautologies and cosmetic CSS assertions while preserving distinct type, accessibility, and container-query coverage; update behavior-first agent guidance plus stale README claims. Linked: S1, S3, S4. Route: parent removes only the three verified redundant specs; one bounded writer handles disjoint test/documentation edits. Focused evidence recorded in L8; work-unit commit pending.
 - [~] T3 — Diagnose the three failing specs in L11, fix only evidence-supported issues, run focused checks and one bounded post-fix full-suite attempt plus build, record exact evidence, and close work-unit commits. Linked: S1–S5. Route: parent orchestration with one configured read-only explorer and bounded parent follow-up. Commit: pending.
 
@@ -124,3 +124,7 @@ The final full Angular test target completed once after the corrections. It pass
 ### L23 — Final verification and diff review
 
 The post-change `npx --no-install ng build` exited 0 and prerendered one route; initial bundle size is 669.81 kB against a 500 kB budget, a warning that remains open. Workspace-local Prettier `--check` passed for every changed tracked file and this task document; `git diff --check` exited 0. `.github/workflows`, `playwright.config.ts`, `tests/example.spec.ts`, and `package.json` have no diff; CI and E2E were not run. Review confirmed the remaining HTTP auth/session guarantees have separate coverage in `auth-http.source.spec.ts` (credential persistence, cancellation, and immediate local logout), while `request-cancellation.spec.ts` retains real HTTP login cancellation and audit-read cancellation. Local work-unit commits remain pending; the final outcome is blocked only by the two explicitly deferred Auth guard failures.
+
+### L24 — T1 commit boundary
+
+T1 landed as `9719b80` (`test(fixtures): retire obsolete in-memory adapters`): 23 files, 589 insertions and 2610 deletions (3199 authored changed lines), exceeding the approximately 400-line review slice. This is recorded as one deletion-heavy cleanup slice that also retargets dependent tests; the source retirement and fixture replacements were kept together. The larger-than-target review workload is acknowledged. Keep the remaining commits as separate T2, customer-preference, and Operations behavior units; do not combine them.
