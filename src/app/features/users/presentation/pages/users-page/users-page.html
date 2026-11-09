@@ -23,10 +23,7 @@
         (click)="section.set('sessions')"
       >
         Sesiones activas
-        <span
-          hlmBadge
-          variant="secondary"
-          class="bg-[var(--users-green-soft)] text-[var(--users-green)]"
+        <span hlmBadge variant="secondary" class="bg-(--users-green-soft) text-(--users-green)"
           >{{ sessions.loaded() ? sessionCount() : "—" }} vigentes
         </span>
       </button>
