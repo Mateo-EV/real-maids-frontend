@@ -39,12 +39,13 @@
       <input
         hlmInput
         id="order-schedule-start"
-        type="text"
+        type="time"
+        step="1"
         [formField]="profile.startTime"
         aria-describedby="order-schedule-clock-help order-schedule-start-errors"
       />
       <p hlmFieldDescription id="order-schedule-clock-help">
-        HH:mm o HH:mm:ss, hasta 9 decimales de segundo. Se conserva el texto literal.
+        Selecciona una hora civil. El navegador puede normalizar el valor mostrado.
       </p>
       <div id="order-schedule-start-errors">
         @if (profile.startTime().touched()) {
@@ -59,7 +60,8 @@
       <input
         hlmInput
         id="order-schedule-end"
-        type="text"
+        type="time"
+        step="1"
         [formField]="profile.endTime"
         aria-describedby="order-schedule-end-errors"
       />

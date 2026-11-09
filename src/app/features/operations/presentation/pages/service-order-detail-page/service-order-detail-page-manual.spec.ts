@@ -48,6 +48,10 @@ describe("loaded order manual workflow", () => {
     s.http.expectOne(reasonsUrl).flush([reasonDto])
     await s.settle()
     const text = s.dialog()!.textContent!
+    expect([
+      s.dialog()!.querySelector<HTMLInputElement>("#order-schedule-start")!.type,
+      s.dialog()!.querySelector<HTMLInputElement>("#order-schedule-end")!.type
+    ]).toEqual(["time", "time"])
     expect(text).toContain("17")
     expect(text).toContain("Cliente suministrado")
     expect(text).not.toContain(accessText)
@@ -62,16 +66,16 @@ describe("loaded order manual workflow", () => {
     expect(s.dialog()).toBeNull()
     expect(s.success).not.toHaveBeenCalled()
   })
-  it("sends literal civil date/clock precision and optional nulls, then refreshes only order detail once", async () => {
+  it("sends the selected civil date/time and optional nulls, then refreshes only order detail once", async () => {
     const s = await loaded("schedule")
     await s.fill("order-schedule-date", "2024-02-29")
-    await s.fill("order-schedule-start", "08:15:00.123456789")
+    await s.fill("order-schedule-start", "08:15:30")
     await s.fill("order-schedule-end", "")
     await s.submit()
     const put = s.put("schedule")
     expect(put.request.body).toEqual({
       fecha: "2024-02-29",
-      horaInicio: "08:15:00.123456789",
+      horaInicio: "08:15:30",
       horaFin: null,
       idMotivo: null
     })
@@ -89,9 +93,7 @@ describe("loaded order manual workflow", () => {
   it.each([
     ["order-schedule-date", "2025-02-29"],
     ["order-schedule-date", ""],
-    ["order-schedule-start", "24:00"],
-    ["order-schedule-start", "09:00:00.1234567890"],
-    ["order-schedule-end", "25:20"]
+    ["order-schedule-start", ""]
   ])("blocks invalid %s without any write/invalidation", async (field, value) => {
     const s = await loaded("schedule")
     await s.fill(field, value)
