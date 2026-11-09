@@ -16,15 +16,24 @@ import {
   UrlTree
 } from "@angular/router"
 import { EMPTY, firstValueFrom, isObservable, Observable, of, Subject, throwError } from "rxjs"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { authGuard, guestGuard } from "./auth.guard"
 
 describe("auth guards", () => {
+  const authPersistenceKeyPrefix = "real-maids.auth.v1:"
   const session = AuthSession.create("Demo", "demo@example.com")
   let currentUser: Subject<Result<AuthSession, AuthError>>
   const me = vi.fn()
 
+  function clearAuthPersistence() {
+    const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
+    for (const key of keys) {
+      if (key?.startsWith(authPersistenceKeyPrefix)) localStorage.removeItem(key)
+    }
+  }
+
   beforeEach(() => {
+    clearAuthPersistence()
     currentUser = new Subject()
     me.mockReset().mockReturnValue(currentUser)
     TestBed.configureTestingModule({
@@ -42,6 +51,10 @@ describe("auth guards", () => {
         }
       ]
     })
+  })
+
+  afterEach(() => {
+    clearAuthPersistence()
   })
 
   function check(guard: typeof authGuard, url = "/admin/orders?status=open") {
