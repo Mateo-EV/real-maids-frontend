@@ -11,9 +11,18 @@ import {
   staffPageDto
 } from "./service-order-manual.testing"
 
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollIntoView"
+)
+
 afterEach(() => {
   TestBed.inject(HttpTestingController).verify()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  if (originalScrollIntoView)
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView)
+  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView")
   vi.useRealTimers()
 })
 
@@ -169,8 +178,7 @@ describe("loaded order manual workflow", () => {
     expect(first.request.params.get("tamanio")).toBe("20")
     first.flush(staffPageDto([23], 0, 1, 2))
     await s.settle()
-    expect(s.dialog()!.querySelector('option[value="23"]')?.textContent?.trim()).toBe("Personal 23")
-    await s.fill("order-team-staff", "23")
+    await s.selectStaff("Personal 23")
     await s.click("Agregar al borrador", s.dialog()!)
     await s.fill("order-team-role-23", "APOYO")
     await s.click("Personal siguiente", s.dialog()!)
@@ -196,14 +204,14 @@ describe("loaded order manual workflow", () => {
   })
   it("blocks duplicate IDs and requires exactly one explicit responsible", async () => {
     const s = await loaded("team")
-    await s.fill("order-team-staff", "23")
+    await s.selectStaff("Personal 23")
     await s.click("Agregar al borrador", s.dialog()!)
     await s.fill("order-team-role-23", "RESPONSABLE")
     await s.fill("order-team-confirm", true)
     await s.submit()
     s.http.expectNone(r => r.method === "PUT")
     await s.fill("order-team-role-23", "APOYO")
-    await s.fill("order-team-staff", "23")
+    await s.selectStaff("Personal 23")
     await s.click("Agregar al borrador", s.dialog()!)
     expect(s.dialog()!.querySelectorAll("#order-team-role-23")).toHaveLength(1)
     await s.fill("order-team-confirm", true)
@@ -216,7 +224,7 @@ describe("loaded order manual workflow", () => {
   })
   it("rejects expired changed staff choices until explicit revalidation, preserving the draft", async () => {
     const s = await loaded("team")
-    await s.fill("order-team-staff", "23")
+    await s.selectStaff("Personal 23")
     await s.click("Agregar al borrador", s.dialog()!)
     await s.fill("order-team-role-23", "APOYO")
     const now = Date.now()
@@ -251,7 +259,7 @@ describe("loaded order manual workflow", () => {
     await s.open("team")
     s.staffRead().flush(staffPageDto())
     await s.settle()
-    await s.fill("order-team-staff", "23")
+    await s.selectStaff("Personal 23")
     await s.click("Agregar al borrador", s.dialog()!)
     expect(s.dialog()!.querySelectorAll('select[id^="order-team-role-"]')).toHaveLength(20)
     await s.fill("order-team-confirm", true)

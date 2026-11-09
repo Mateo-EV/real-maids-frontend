@@ -60,6 +60,19 @@ export async function setupManual(
   const success = vi.fn(),
     history = { invalidateCustomer: vi.fn() }
   const authFactory = vi.fn(() => ({ session: () => session.value }))
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+  )
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    writable: true,
+    value: () => {}
+  })
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(),
@@ -143,6 +156,15 @@ export async function setupManual(
     trigger!.click()
     await settle()
   }
+  const selectStaff = async (name: string) => {
+    await openStaffSearch()
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      item => item.textContent?.trim() === name
+    )
+    expect(option, name).toBeDefined()
+    option!.click()
+    await settle()
+  }
   const open = async (kind: "schedule" | "team") => {
     await click(kind === "schedule" ? "Programar orden" : "Reemplazar equipo")
     expect(dialog()).not.toBeNull()
@@ -171,6 +193,7 @@ export async function setupManual(
     put,
     staffRead,
     openStaffSearch,
+    selectStaff,
     open,
     navigate,
     overlay

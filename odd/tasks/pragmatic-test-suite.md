@@ -29,7 +29,7 @@ The user said: “ok intenta resolver esos errores”. The authorized log attrib
 
 - [x] T1 — Remove the seven confirmed-unwired in-memory source/spec pairs; replace fixture dependencies in config, route, user presentation, and cancellation tests while preserving independent behavior; stop pinning the temporarily commented sidebar placeholders. Linked: S2, S3. Route: parent removal plus bounded test-harness writer. Focused evidence recorded in L5; work-unit commit: `9719b80`.
 - [x] T2 — Remove three redundant customer wrapper specs (create/get/update), retain the distinct explicit-pagination case in the list wrapper spec, remove same-test runtime tautologies and cosmetic CSS assertions while preserving distinct type, accessibility, and container-query coverage; update behavior-first agent guidance plus stale README claims. Linked: S1, S3, S4. Route: parent removes only the three verified redundant specs; one bounded writer handles disjoint test/documentation edits. Focused evidence recorded in L8; work-unit commit: `d13947f`.
-- [~] T3 — Diagnose the three failing specs in L11, fix only evidence-supported issues, run focused checks and one bounded post-fix full-suite attempt plus build, record exact evidence, and close work-unit commits. Linked: S1–S5. Route: parent orchestration with one configured read-only explorer and bounded parent follow-up. Commit: pending.
+- [~] T3 — Diagnose the three failing specs in L11, fix only evidence-supported issues, run focused checks and one bounded post-fix full-suite attempt plus build, record exact evidence, and close work-unit commits. Linked: S1–S5. Route: parent orchestration with one configured read-only explorer and bounded parent follow-up. Customer-preference commit: `47ecacc`; Operations commit pending.
 
 ## Log
 
@@ -132,3 +132,7 @@ T1 landed as `9719b80` (`test(fixtures): retire obsolete in-memory adapters`): 2
 ### L25 — T2 commit boundary
 
 T2 landed as `d13947f` (`test: prune redundant assertions and document test policy`): 8 files, 36 insertions and 226 deletions (262 authored changed lines), within the approximately 400-line target. It remains separate from the fixture retirement and the customer-preference/Operations behavior fixes.
+
+### L26 — Customer-preference commit boundary
+
+The customer-preference fix landed separately as `47ecacc` (`fix(customers): restore preference editor behavior`): 5 files, 43 insertions and 55 deletions (98 authored changed lines), within the approximately 400-line target. Operations test-harness/UI restoration remains its own next slice.
