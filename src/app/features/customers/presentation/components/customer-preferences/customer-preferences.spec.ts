@@ -131,9 +131,8 @@ async function setup(server = false) {
       `#preference-${field}`
     )!
     input.value = value
-    input.dispatchEvent(
-      new Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true })
-    )
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("change", { bubbles: true }))
     input.dispatchEvent(new Event("blur"))
     await settle()
   }
@@ -266,9 +265,7 @@ describe("WP5 preferences public owner consumer", () => {
     )
     expect(s.dialog().textContent).not.toContain("PRIVATE")
     await s.fill("propertyId", "12")
-    expect(s.dialog().querySelector<HTMLSelectElement>("#preference-type")!.textContent).toContain(
-      "General libre"
-    )
+    expect(s.dialog().querySelector<HTMLSelectElement>("#preference-propertyId")!.value).toBe("12")
     await s.fill("type", "Horarios")
     await s.fill("detail", " Nuevo detalle ")
     s.dialog().querySelector<HTMLElement>("#preference-isActive")!.click()
@@ -311,21 +308,21 @@ describe("WP5 preferences public owner consumer", () => {
     expect(s.create).not.toHaveBeenCalled()
     expect(s.dialog().querySelector("hlm-field-error")).not.toBeNull()
   })
-  it("offers fixed type choices and allows long detail", async () => {
+  it("accepts free-text preference types and allows long detail", async () => {
     const s = await setup()
     await s.loaded()
     await s.valid()
-    await s.fill("type", "Otro")
+    await s.fill("type", "Tipo libre")
     await s.fill("detail", "x".repeat(12000))
     await s.submit()
     expect(s.create).toHaveBeenCalledExactlyOnceWith(7, {
       propertyId: null,
-      type: "Otro",
+      type: "Tipo libre",
       detail: "x".repeat(12000),
       isActive: true
     })
-    expect(s.dialog().querySelector("#preference-type")?.tagName).toBe("SELECT")
-    expect(s.dialog().querySelector("#preference-type")?.textContent).toContain("Mascotas")
+    expect(s.dialog().querySelector("#preference-type")?.tagName).toBe("INPUT")
+    expect(s.dialog().querySelector<HTMLInputElement>("#preference-type")?.type).toBe("text")
     expect(s.dialog().querySelector("#preference-detail")?.hasAttribute("maxlength")).toBe(false)
   })
   it.each(["pending", "failed"])(

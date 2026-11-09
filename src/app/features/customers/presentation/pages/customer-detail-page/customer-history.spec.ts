@@ -516,6 +516,13 @@ describe("WP5 lazy official history", () => {
               : Result.success(preference)
           )
         await s.settle()
+        if (action === "preference-create")
+          expect(s.preferenceWrite).toHaveBeenCalledWith(7, {
+            propertyId: null,
+            type: "Tipo",
+            detail: "Detalle",
+            isActive: true
+          })
         expect(s.read).toHaveBeenCalledTimes(before + (mode === "open" ? 1 : 0))
         expect(s.properties).toHaveBeenCalledTimes(1 + (mode !== "failed" && isProperty ? 1 : 0))
         expect(s.contacts).toHaveBeenCalledTimes(1 + (mode !== "failed" && isContact ? 1 : 0))

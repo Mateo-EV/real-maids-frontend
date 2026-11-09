@@ -18,35 +18,24 @@
     <legend hlmFieldLegend class="sr-only">Datos de la preferencia</legend>
     <div hlmField class="min-w-0 gap-1.5">
       <label hlmFieldLabel for="preference-propertyId">Alcance</label>
-      @for (choices of [context.choices()]; track choices) {
-        <hlm-native-select
-          selectId="preference-propertyId"
-          [formField]="profile.propertyId"
-          aria-describedby="preference-scope-help preference-propertyId-errors"
-        >
-          @if (unknownScope()) {
-            <option hlmNativeSelectOption [value]="model().propertyId" selected disabled>
-              Propiedad sin verificar
-            </option>
-          }
-          <option
-            hlmNativeSelectOption
-            value="general"
-            [selected]="model().propertyId === 'general'"
-          >
-            Todo el cliente
+      <select
+        hlmNativeSelect
+        id="preference-propertyId"
+        [formField]="profile.propertyId"
+        aria-describedby="preference-scope-help preference-propertyId-errors"
+      >
+        @if (unknownScope()) {
+          <option hlmNativeSelectOption [value]="model().propertyId" disabled>
+            Propiedad sin verificar
           </option>
-          @for (property of context.choices().items; track property.id) {
-            <option
-              hlmNativeSelectOption
-              [value]="'' + property.id"
-              [selected]="model().propertyId === '' + property.id"
-            >
-              {{ property.optionLabel }}
-            </option>
-          }
-        </hlm-native-select>
-      }
+        }
+        <option hlmNativeSelectOption value="general">Todo el cliente</option>
+        @for (property of context.choices().items; track property.id) {
+          <option hlmNativeSelectOption [value]="'' + property.id">
+            {{ property.optionLabel }}
+          </option>
+        }
+      </select>
       <p hlmFieldDescription id="preference-scope-help">{{ context.choices().message }}</p>
       @if (unknownScope()) {
         <p hlmFieldDescription>
@@ -64,18 +53,13 @@
     </div>
     <div hlmField class="min-w-0 gap-1.5">
       <label hlmFieldLabel for="preference-type">Tipo (obligatorio)</label>
-      <hlm-native-select
-        selectId="preference-type"
+      <input
+        hlmInput
+        id="preference-type"
+        type="text"
         aria-describedby="preference-type-errors"
         [formField]="profile.type"
-      >
-        @if (!isPreferenceType(model().type)) {
-          <option [value]="model().type">{{ model().type }}</option>
-        }
-        @for (type of preferenceTypes; track type) {
-          <option [value]="type">{{ type }}</option>
-        }
-      </hlm-native-select>
+      />
       <ng-container
         [ngTemplateOutlet]="errors"
         [ngTemplateOutletContext]="{ field: profile.type, id: 'preference-type-errors' }"
