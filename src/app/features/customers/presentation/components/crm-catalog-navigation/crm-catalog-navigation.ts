@@ -33,7 +33,7 @@ import { RouterLink, RouterLinkActive } from "@angular/router"
     a {
       display: inline-flex;
       padding-block: 0.75rem;
-      border-bottom: 2px solid transparent;
+      border-bottom: 3px solid transparent;
       font-size: 0.875rem;
       font-weight: 600;
       color: var(--muted-foreground);
@@ -43,7 +43,7 @@ import { RouterLink, RouterLinkActive } from "@angular/router"
       color: var(--primary);
     }
     .active-catalog {
-      border-bottom-color: var(--primary);
+      border-bottom-color: var(--coral);
     }
     a:focus-visible {
       outline: 2px solid var(--ring);
