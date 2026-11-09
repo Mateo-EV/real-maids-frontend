@@ -14,8 +14,8 @@ Branches: frontend `feature/crm-customer-filters`; backend target `D:\java\siste
 ## Tasks
 
 - T1 (S1-S5): Add and document backend customer list filters for case-insensitive name/email search plus customer type, preserving active-only server paging/order/metadata. Route: completed by backend worker and parent review; commit: `a6f7141`.
-- T2 (S1-S5): Integrate search/type controls into the frontend Customers catalog and propagate the normalized query through source/repository/store/cache/page behavior without changing default unfiltered listing. Route: bounded frontend worker plus parent test-helper/DOM-ID correction; backend contract committed as `a6f7141`; frontend commit pending; focused checks pass, closure blocked by full-suite failures and final build timeout.
-- T3 (S1-S5): Update feature/product documentation, run focused and proportionate full checks, and record both commit hashes. Route: parent. Documentation in progress; commit pending; final verification remains blocked.
+- T2 (S1-S5): Integrate search/type controls into the frontend Customers catalog and propagate the normalized query through source/repository/store/cache/page behavior without changing default unfiltered listing. Route: bounded frontend worker plus parent test-helper/DOM-ID correction; commit `8a524be` (includes docs/tests); Risk: item 4 (filter-aware cache keys affect shared query/in-flight identity). Focused checks pass; full-suite/build closure remains blocked as documented in L9.
+- T3 (S1-S5): Update feature/product documentation, run focused and proportionate full checks, and record both commit hashes. Route: parent. Documentation committed with T2 in `8a524be`; formatting/links and focused checks pass; full verification remains blocked as in L9.
 
 ## Log
 
@@ -54,3 +54,7 @@ The CRM page filter and customer editor both used the DOM ID `customer-type`; He
 ### L9 — Frontend verification after correction
 
 Prettier and `git diff --check` passed for the three corrected files. Angular test target with `customers-page.spec.ts` and `customers-writes.spec.ts` passed 52/52. The subsequent full suite reported 3270 passed and 18 failed out of 3288 across 174 files: admin sidebar/routes (5), operations order-detail manual (9), customer history (3), and lead conversion (1). The failures were not investigated or attributed because the user chose to keep scope limited to CRM filters. A production build attempt after the final page-ID change timed out at 60 seconds and was not retried. These outcomes do not establish a full-suite or post-change production-build pass.
+
+### L10 — Committed CRM work unit and merged branch
+
+The user authorized committing the CRM filters/docs/tests and merging all committed branch work, while preserving the pre-existing `.gitignore` and Users-page changes. The 15-file T2/T3 work unit was committed as `8a524be` (parent `9002542`); the unit contains 423 insertions and 76 deletions and isolates the item-4 cache-identity change. Exact-range ASSESS from `9002542` returned medium risk, RDD on, `reviewDue: false`; no native review was due. The branch's four commits (`a011a50`, `fcd5dda`, `9002542`, `8a524be`) were fast-forwarded into `main` in the registered worktree `tmp/crm-tabs-merge-main`; `main` is now at `8a524be`, four commits ahead of `origin/main`, and was not pushed. The original feature worktree still holds only the pre-existing unstaged `.gitignore` and Users-page edits, excluded from the merge. Focused page/write tests passed 52/52, the full suite remains 3270/3288 with 18 failures, and the post-change production build timed out at 60 seconds. No external test log was read and no retry was run.
