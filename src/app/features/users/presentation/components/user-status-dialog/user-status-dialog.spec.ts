@@ -2,12 +2,11 @@ import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { Component, getDebugNode } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { EMPTY, firstValueFrom, of, Subject, throwError } from "rxjs"
+import { EMPTY, firstValueFrom, of, Subject, throwError, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { User } from "../../../domain/entities/user.entity"
+import { Lang, User } from "../../../domain/entities/user.entity"
 import { UserError } from "../../../domain/errors/user.error"
-import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
-import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
+import { USER_REPOSITORY, UserRepository } from "../../../domain/repositories/user.repository"
 import { UserStore } from "../../state/user.store"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { UserStatusContext, UserStatusDialog } from "./user-status-dialog"
@@ -21,23 +20,77 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 }
 
 describe("UserStatusDialog", () => {
+  let user: User
+  let repository: UserRepository
   beforeEach(() => {
     vi.useFakeTimers()
+    user = User.create(
+      1,
+      "Test User",
+      "test@example.test",
+      Lang.ES,
+      true,
+      new Date(0),
+      new Date(0),
+      1
+    )
+    repository = {
+      getUserStatistics: () =>
+        of(
+          Result.success({
+            total: 1,
+            active: Number(user.isActive),
+            inactive: Number(!user.isActive)
+          })
+        ),
+      getUsersPage: () => of(Result.success({ items: [user], total: 1, offset: 0, limit: 20 })),
+      createUser: () => of(Result.failure(new UserError("UNEXPECTED"))),
+      getUserById: () => of(Result.success(user)),
+      updateUserStatusById: (_id, active) =>
+        timer(250).pipe(
+          map(() => {
+            user = User.create(
+              user.id,
+              user.name,
+              user.email,
+              user.lang,
+              active,
+              user.createdAt,
+              new Date(),
+              user.roleId,
+              user.lastAccess
+            )
+            return Result.success(user)
+          })
+        ),
+      updateUserById: () => of(Result.success(user)),
+      deleteUserById: () => of(Result.success<void>(undefined))
+    }
     TestBed.configureTestingModule({
       imports: [TestHost],
-      providers: [{ provide: USER_REPOSITORY, useExisting: UserInMemorySource }]
+      providers: [{ provide: USER_REPOSITORY, useValue: repository }]
     })
   })
   afterEach(() => vi.useRealTimers())
 
   async function records() {
-    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
-    if (!result.success) throw result.error
-    return result.data
+    return [user]
   }
   async function setup(active = true) {
     const users = TestBed.inject(UserStore)
-    const user = (await records()).find(item => item.isActive === active)!
+    if (user.isActive !== active)
+      user = User.create(
+        user.id,
+        user.name,
+        user.email,
+        user.lang,
+        active,
+        user.createdAt,
+        user.updatedAt,
+        user.roleId,
+        user.lastAccess
+      )
+    const selectedUser = user
     const fixture = TestBed.createComponent(TestHost)
     fixture.detectChanges()
     const changed = vi.fn()
@@ -51,7 +104,7 @@ describe("UserStatusDialog", () => {
     const injector = getDebugNode(element)!.injector
     return {
       users,
-      user,
+      user: selectedUser,
       changed,
       ref,
       element,

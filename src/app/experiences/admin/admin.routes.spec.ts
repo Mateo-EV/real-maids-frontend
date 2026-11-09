@@ -1,8 +1,8 @@
-import { Component, inject, signal } from "@angular/core"
+import { Component, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { firstValueFrom, of, Subject, map, BehaviorSubject } from "rxjs"
+import { firstValueFrom, of, Subject, BehaviorSubject } from "rxjs"
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { API_URL } from "@/app/core/tokens/api-url.token"
@@ -18,8 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
 import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
-import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
-import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
+import { Role } from "@/app/features/users/domain/entities/role.entity"
 import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
 import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
@@ -52,36 +51,31 @@ function setup(authenticated: boolean) {
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
       {
         provide: USER_REPOSITORY,
-        useFactory: () => {
-          const source = inject(UserInMemorySource)
-          return {
-            getUsersPage: (query: UserListQuery) =>
-              source.getUsers().pipe(
-                map(result => {
-                  if (!result.success) return result
-                  const offset = query.offset ?? 0,
-                    limit = query.limit ?? 20
-                  return Result.success({
-                    items: result.data.slice(offset, offset + limit),
-                    total: result.data.length,
-                    offset,
-                    limit
-                  })
-                })
-              ),
-            getUserStatistics: () =>
-              source.getUsers().pipe(
-                map(result => {
-                  if (!result.success) return result
-                  const total = result.data.length,
-                    active = result.data.filter(user => user.isActive).length
-                  return Result.success({ total, active, inactive: total - active })
-                })
-              )
-          }
+        useValue: {
+          getUsersPage: (query: UserListQuery) => {
+            const offset = query.offset ?? 0,
+              limit = query.limit ?? 20
+            return of(Result.success({ items: [], total: 0, offset, limit }))
+          },
+          getUserStatistics: () => of(Result.success({ total: 0, active: 0, inactive: 0 })),
+          createUser: vi.fn(),
+          getUserById: vi.fn(),
+          deleteUserById: vi.fn(),
+          updateUserById: vi.fn(),
+          updateUserStatusById: vi.fn()
         }
       },
-      { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+      {
+        provide: ROLE_REPOSITORY,
+        useValue: {
+          getRoles: () => of(Result.success([Role.create(1, "Role", "", true, new Date(0))])),
+          getRoleById: (id: number) =>
+            of(Result.success(Role.create(id, "Role", "", true, new Date(0)))),
+          createRole: vi.fn(),
+          updateRoleById: vi.fn(),
+          deleteRoleById: vi.fn()
+        }
+      },
       { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
       { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
     ]
@@ -454,7 +448,7 @@ describe("Admin users navigation", () => {
     expect(harness.routeNativeElement?.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
   })
 
-  it("keeps CRM, RRHH and Operaciones in General and IAM in Administration with three unavailable modules", async () => {
+  it("keeps active CRM, RRHH and Operaciones in General and IAM in Administration", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
     const sidebar = harness.routeNativeElement!.querySelector("app-admin-sidebar")!
@@ -463,9 +457,6 @@ describe("Admin users navigation", () => {
     const administration = nav.querySelector('[role="group"][aria-label="Administración"]')!
     expect(general).not.toBeNull()
     expect(administration).not.toBeNull()
-    expect(
-      Array.from(general.querySelectorAll("button"), button => button.textContent?.trim())
-    ).toEqual(["Landing", "Cotizaciones", "Programaciones"])
     expect(general.querySelectorAll("a")).toHaveLength(3)
     expect(general.querySelector('a[href="/admin/operations"]')?.textContent?.trim()).toBe(
       "Operaciones"
@@ -514,7 +505,7 @@ describe("Admin users navigation", () => {
     )
   })
 
-  it("renders disabled non-routing destinations and build-time environment with Spanish language default", async () => {
+  it("renders the stable disabled Landing destination, environment and Spanish language default", async () => {
     setup(true)
     const harness = await RouterTestingHarness.create("/admin/users")
     await harness.fixture.whenStable()
@@ -522,17 +513,15 @@ describe("Admin users navigation", () => {
     const element = harness.routeNativeElement!
     const nav = element.querySelector('nav[aria-label="Navegación administrativa"]')!
     expect(nav).not.toBeNull()
-    for (const label of ["Landing", "Cotizaciones", "Programaciones"]) {
-      const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find(
-        item => item.textContent?.trim() === label
-      )!
-      expect(button).toBeDefined()
-      expect(button.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
-      expect(button.disabled).toBe(true)
-      expect(button.hasAttribute("routerLink")).toBe(false)
-      button.click()
-      expect(TestBed.inject(Router).url).toBe("/admin/users")
-    }
+    const landing = Array.from(nav.querySelectorAll<HTMLButtonElement>("button")).find(
+      item => item.textContent?.trim() === "Landing"
+    )!
+    expect(landing).toBeDefined()
+    expect(landing.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
+    expect(landing.disabled).toBe(true)
+    expect(landing.hasAttribute("routerLink")).toBe(false)
+    landing.click()
+    expect(TestBed.inject(Router).url).toBe("/admin/users")
     expect(element.textContent).toContain("Sistema seguro y activo")
     expect(element.textContent).toContain("Entorno: Desarrollo")
     expect(element.querySelector(".status-header select")).toBeNull()

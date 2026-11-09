@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs"
-import { inject, signal } from "@angular/core"
+import { signal } from "@angular/core"
 import { UserListQuery } from "../../../domain/models/user-list-query"
 import { UserStatistics } from "../../../domain/models/user-statistics"
 import { provideHttpClient } from "@angular/common/http"
@@ -18,7 +18,8 @@ import { firstValueFrom, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
 import { RoleError } from "../../../domain/errors/role.error"
-import { User } from "../../../domain/entities/user.entity"
+import { Lang, User } from "../../../domain/entities/user.entity"
+import { Role } from "../../../domain/entities/role.entity"
 import { UserSessionError } from "../../../domain/errors/user-session.error"
 import { AuditLog } from "../../../domain/entities/audit-log.entity"
 import { AuditQuery } from "../../../domain/models/audit-query"
@@ -30,8 +31,6 @@ import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
 import { ROLE_REPOSITORY } from "../../../domain/repositories/role.repository"
-import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
-import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memory.source"
 import { UsersPage } from "./users-page"
 import { USER_SESSION_REPOSITORY } from "../../../domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "../../../infrastructure/repositories/user-session.repository-impl"
@@ -47,46 +46,175 @@ import {
 } from "../../components/user-status-dialog/user-status-dialog"
 
 const sessionChanges = new Subject<AuthSession | null>()
+const fixedDate = new Date("2026-09-01T00:00:00Z")
+let fixtureUsers: User[] = []
+let fixtureRoles: Role[] = []
+const providerNames = [
+  "Carlos Mendoza",
+  "Laura Sánchez",
+  "María Rodríguez",
+  "Johnathan Taylor",
+  "David Gómez"
+]
+function resetFixtures() {
+  const givenNames = ["Ana", "Luis", "Elena", "Miguel", "Sofía", "Andrés", "Lucía", "Daniel"]
+  const familyNames = ["Vargas", "Torres", "Ramos", "Castillo", "Morales", "Herrera"]
+  fixtureUsers = Array.from({ length: 48 }, (_, index) =>
+    User.create(
+      index + 1,
+      providerNames[index] ??
+        `${givenNames[(index - 5) % givenNames.length]} ${familyNames[Math.floor((index - 5) / givenNames.length)]}`,
+      `persona.${index + 1}@example.test`,
+      index === 3 || index % 7 === 6 ? Lang.EN : Lang.ES,
+      index !== 4 && index < 43,
+      fixedDate,
+      fixedDate,
+      index === 4 ? 3 : (index % 5) + 1,
+      index === 4 || index % 8 === 7
+        ? null
+        : new Date(Date.UTC(2026, 8, 1, 19 - (index % 12), index % 60))
+    )
+  )
+  fixtureRoles = [
+    "Administración",
+    "Operaciones",
+    "Personal Campo",
+    "Cliente (Portal)",
+    "Supervisión"
+  ].map((name, index) => Role.create(index + 1, name, "", true, fixedDate))
+}
+const userFake = {
+  getUserStatistics: () => of(Result.success({ total: 1200, active: 900, inactive: 300 })),
+  getUsersPage: (query: UserListQuery) => {
+    const text = query.search?.toLowerCase() ?? ""
+    const filtered = fixtureUsers.filter(
+      user =>
+        (!text ||
+          user.name.toLowerCase().includes(text) ||
+          user.email.toLowerCase().includes(text)) &&
+        (query.roleId === undefined || user.roleId === query.roleId) &&
+        (query.isActive === undefined || user.isActive === query.isActive)
+    )
+    const offset = query.offset ?? 0,
+      limit = query.limit ?? 20
+    return timer(250).pipe(
+      map(() =>
+        Result.success({
+          items: filtered.slice(offset, offset + limit),
+          total: filtered.length,
+          offset,
+          limit
+        })
+      )
+    )
+  },
+  createUser: (params: {
+    name: string
+    email: string
+    lang: Lang
+    isActive: boolean
+    roleId: number
+  }) =>
+    timer(250).pipe(
+      map(() => {
+        const now = new Date()
+        const user = User.create(
+          Math.max(0, ...fixtureUsers.map(item => item.id)) + 1,
+          params.name.trim(),
+          params.email,
+          params.lang,
+          params.isActive,
+          now,
+          now,
+          params.roleId
+        )
+        fixtureUsers = [...fixtureUsers, user]
+        return Result.success(user)
+      })
+    ),
+  updateUserById: (
+    id: number,
+    params: { name: string; email: string; lang: Lang; isActive: boolean; roleId: number }
+  ) =>
+    timer(250).pipe(
+      map(() => {
+        const previous = fixtureUsers.find(item => item.id === id)!
+        const updated = User.create(
+          id,
+          params.name.trim(),
+          params.email,
+          params.lang,
+          params.isActive,
+          previous.createdAt,
+          new Date(),
+          params.roleId,
+          previous.lastAccess
+        )
+        fixtureUsers = fixtureUsers.map(item => (item.id === id ? updated : item))
+        return Result.success(updated)
+      })
+    ),
+  updateUserStatusById: (id: number, isActive: boolean) =>
+    timer(250).pipe(
+      map(() => {
+        const previous = fixtureUsers.find(item => item.id === id)!
+        const updated = User.create(
+          id,
+          previous.name,
+          previous.email,
+          previous.lang,
+          isActive,
+          previous.createdAt,
+          new Date(),
+          previous.roleId,
+          previous.lastAccess
+        )
+        fixtureUsers = fixtureUsers.map(item => (item.id === id ? updated : item))
+        return Result.success(updated)
+      })
+    ),
+  deleteUserById: (id: number) =>
+    timer(250).pipe(
+      map(() => {
+        fixtureUsers = fixtureUsers.filter(item => item.id !== id)
+        return Result.success<void>(undefined)
+      })
+    ),
+  getUserById: (id: number) => of(Result.success(fixtureUsers.find(user => user.id === id)!))
+}
+const roleFake = {
+  getRoles: () => timer(250).pipe(map(() => Result.success(fixtureRoles))),
+  getRoleById: (id: number) =>
+    timer(250).pipe(map(() => Result.success(fixtureRoles.find(role => role.id === id)!))),
+  createRole: vi.fn((params: { name: string; description: string; isActive: boolean }) => {
+    const role = Role.create(
+      Math.max(0, ...fixtureRoles.map(item => item.id)) + 1,
+      params.name,
+      params.description,
+      params.isActive,
+      new Date()
+    )
+    fixtureRoles = [...fixtureRoles, role]
+    return of(Result.success(role))
+  }),
+  updateRoleById: vi.fn(),
+  deleteRoleById: vi.fn()
+}
 const providers = [
   { provide: ObserveAuthSessionUseCase, useValue: { execute: () => sessionChanges } },
   {
     provide: USER_REPOSITORY,
-    useFactory: () => {
-      const source = inject(UserInMemorySource)
-      return {
-        getUserStatistics: () => of(Result.success({ total: 1200, active: 900, inactive: 300 })),
-        getUsersPage: (query: UserListQuery) =>
-          source.getUsers().pipe(
-            map(result => {
-              if (!result.success) return result
-              const text = query.search?.toLowerCase() ?? ""
-              const items = result.data.filter(
-                user =>
-                  (!text ||
-                    user.name.toLowerCase().includes(text) ||
-                    user.email.toLowerCase().includes(text)) &&
-                  (query.roleId === undefined || user.roleId === query.roleId) &&
-                  (query.isActive === undefined || user.isActive === query.isActive)
-              )
-              const offset = query.offset ?? 0,
-                limit = query.limit ?? 20
-              return Result.success({
-                items: items.slice(offset, offset + limit),
-                offset,
-                limit,
-                total: items.length
-              })
-            })
-          ),
-        createUser: source.createUser.bind(source),
-        updateUserById: source.updateUserById.bind(source),
-        updateUserStatusById: source.updateUserStatusById.bind(source),
-        deleteUserById: source.deleteUserById.bind(source),
-        getUserById: source.getUserById.bind(source)
-      }
+    useValue: {
+      getUserStatistics: userFake.getUserStatistics,
+      getUsersPage: userFake.getUsersPage,
+      createUser: userFake.createUser,
+      updateUserById: userFake.updateUserById,
+      updateUserStatusById: userFake.updateUserStatusById,
+      deleteUserById: userFake.deleteUserById,
+      getUserById: userFake.getUserById
     }
   },
-  { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+  { provide: ROLE_REPOSITORY, useValue: roleFake },
   { provide: USER_SESSION_REPOSITORY, useExisting: UserSessionRepositoryImpl },
   { provide: RBAC_REPOSITORY, useExisting: RbacRepositoryImpl },
   { provide: AUDIT_LOG_REPOSITORY, useExisting: AuditLogRepositoryImpl }
@@ -99,6 +227,7 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 
 describe("UsersPage", () => {
   beforeEach(() => {
+    resetFixtures()
     vi.useFakeTimers()
     vi.stubGlobal(
       "ResizeObserver",
@@ -110,6 +239,8 @@ describe("UsersPage", () => {
     )
   })
   afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -846,7 +977,9 @@ describe("UsersPage", () => {
   })
 
   it("renders an empty catalog without creating records at page entry", async () => {
-    vi.spyOn(TestBed.inject(UserInMemorySource), "getUsers").mockReturnValue(of(Result.success([])))
+    vi.spyOn(TestBed.inject(USER_REPOSITORY), "getUsersPage").mockReturnValue(
+      of(Result.success({ items: [], total: 0, offset: 0, limit: 20 }))
+    )
     const create = vi.spyOn(TestBed.inject(UserStore), "createUser")
     const { element, page } = await setup()
     expect(element.textContent).toContain("Aún no hay usuarios")

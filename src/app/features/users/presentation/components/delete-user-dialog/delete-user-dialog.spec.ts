@@ -2,14 +2,13 @@ import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { Component, getDebugNode } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
-import { EMPTY, firstValueFrom, Subject } from "rxjs"
+import { EMPTY, of, Subject, timer, map } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
 import { UserError } from "../../../domain/errors/user.error"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
 import { ROLE_REPOSITORY } from "../../../domain/repositories/role.repository"
-import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
-import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memory.source"
+import { Lang, User } from "../../../domain/entities/user.entity"
 import { UserStore } from "../../state/user.store"
 import { DeleteUserContext, DeleteUserDialog } from "./delete-user-dialog"
 
@@ -24,19 +23,35 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 describe("DeleteUserDialog", () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
-  beforeEach(() =>
+  let data: User[]
+  beforeEach(() => {
+    data = [
+      User.create(1, "Test User", "test@example.test", Lang.ES, true, new Date(0), new Date(0), 1)
+    ]
     TestBed.configureTestingModule({
       imports: [TestHost],
       providers: [
-        { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-        { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource }
+        {
+          provide: USER_REPOSITORY,
+          useValue: {
+            getUserById: (id: number) => of(Result.success(data.find(item => item.id === id)!)),
+            deleteUserById: (id: number) =>
+              timer(250).pipe(
+                map(() => {
+                  data = data.filter(item => item.id !== id)
+                  return Result.success<void>(undefined)
+                })
+              ),
+            updateUserById: vi.fn(),
+            updateUserStatusById: vi.fn()
+          }
+        },
+        { provide: ROLE_REPOSITORY, useValue: {} }
       ]
     })
-  )
+  })
   async function records() {
-    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
-    if (!result.success) throw result.error
-    return result.data
+    return data
   }
   async function setup() {
     const fixture = TestBed.createComponent(TestHost)
@@ -90,7 +105,7 @@ describe("DeleteUserDialog", () => {
       await vi.runAllTimersAsync()
       expect(cancel).toHaveBeenCalled()
       expect(ref.state()).toBe("closed")
-      expect(await records()).toHaveLength(48)
+      expect(await records()).toHaveLength(1)
       expect(deleted).not.toHaveBeenCalled()
     }
   )
@@ -153,11 +168,11 @@ describe("DeleteUserDialog", () => {
     expect(element.textContent).toContain("Esta acción elimina el perfil del usuario.")
     expect(element.textContent).not.toMatch(/demo|demostración|en memoria|fictici/i)
     dialog.cancel()
-    expect(await records()).toHaveLength(48)
+    expect(await records()).toHaveLength(1)
     ref.forceClose()
     const next = await setup()
     await flush(next.dialog.confirm())
-    expect(await records()).toHaveLength(47)
+    expect(await records()).toHaveLength(0)
     expect(next.deleted).toHaveBeenCalledOnce()
     expect(next.ref.state()).toBe("closed")
     expect(deleted).not.toHaveBeenCalled()
@@ -188,7 +203,7 @@ describe("DeleteUserDialog", () => {
     response.complete()
     await pending
     expect(dialog.error()).toContain("No pudimos eliminar")
-    expect(await records()).toHaveLength(48)
+    expect(await records()).toHaveLength(1)
     expect(deleted).not.toHaveBeenCalled()
     expect(dialog.submitting()).toBe(false)
     TestBed.tick()

@@ -51,9 +51,7 @@ describe("AdminSidebar RRHH navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
-      "Operaciones",
-      "Cotizaciones",
-      "Programaciones"
+      "Operaciones"
     ])
     const icon = fixture.debugElement
       .queryAll(By.directive(NgIcon))
@@ -89,8 +87,8 @@ describe("AdminSidebar RRHH navigation", () => {
       expect(active.getAttribute("aria-current")).toBe("page")
       expect(rrhh!.hasAttribute("aria-current")).toBe(false)
     }
-    expect(general.querySelectorAll("button[disabled]")).toHaveLength(3)
-    for (const label of ["Landing", "Cotizaciones", "Programaciones"]) {
+    expect(general.querySelectorAll("button[disabled]")).toHaveLength(1)
+    for (const label of ["Landing"]) {
       const button = Array.from(general.querySelectorAll<HTMLButtonElement>("button")).find(
         item => item.textContent?.trim() === label
       )
@@ -137,9 +135,7 @@ describe("AdminSidebar CRM navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
-      "Operaciones",
-      "Cotizaciones",
-      "Programaciones"
+      "Operaciones"
     ])
     const crm = general.querySelector<HTMLAnchorElement>('a[href="/admin/customers"]')!
     expect(crm?.textContent?.trim()).toBe("CRM")
@@ -156,7 +152,7 @@ describe("AdminSidebar CRM navigation", () => {
     fixture.detectChanges()
     expect(iam.getAttribute("aria-current")).toBe("page")
     expect(crm.hasAttribute("aria-current")).toBe(false)
-    expect(general.querySelectorAll("button[disabled]")).toHaveLength(3)
+    expect(general.querySelectorAll("button[disabled]")).toHaveLength(1)
   })
 })
 
@@ -204,7 +200,7 @@ describe("AdminSidebar approved Operations navigation", () => {
       for (const old of ["/admin/users", "/admin/customers", "/admin/staff"])
         expect(element.querySelector(`a[href="${old}"]`)!.hasAttribute("aria-current")).toBe(false)
     }
-    for (const label of ["Landing", "Cotizaciones", "Programaciones"]) {
+    for (const label of ["Landing"]) {
       const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
         button => button.textContent?.trim() === label
       )!

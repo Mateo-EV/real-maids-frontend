@@ -16,31 +16,26 @@ import { AUTH_REPOSITORY } from "@/app/features/auth/domain/repositories/auth.re
 import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
-import { CustomerInMemorySource } from "@/app/features/customers/infrastructure/source/customer-in-memory.source"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { customerInput } from "@/app/features/customers/domain/customer.fixture"
 import { AdminShell } from "@/app/experiences/admin/presentation/components/admin-shell/admin-shell"
 
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
-import { UserInMemorySource } from "@/app/features/users/infrastructure/source/user-in-memory.source"
 import { UserHttpSource } from "@/app/features/users/infrastructure/source/user-http.source"
 import { CreateUserUseCase } from "@/app/features/users/application/use-cases/create-user.use-case"
 import { GetUserByIdUseCase } from "@/app/features/users/application/use-cases/get-user-by-id.use-case"
 import { Lang } from "@/app/features/users/domain/entities/user.entity"
 import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
-import { RoleInMemorySource } from "@/app/features/users/infrastructure/source/role-in-memory.source"
 import { RolesStore } from "@/app/features/users/presentation/state/roles.store"
 import { UserStore } from "@/app/features/users/presentation/state/user.store"
 import { GetRoleByIdUseCase } from "@/app/features/users/application/use-cases/get-role-by-id.use-case"
 
 import { AUDIT_LOG_REPOSITORY } from "@/app/features/users/domain/repositories/audit-log.repository"
 import { AuditLogRepositoryImpl } from "@/app/features/users/infrastructure/repositories/audit-log.repository-impl"
-import { AuditLogInMemorySource } from "@/app/features/users/infrastructure/source/audit-log-in-memory.source"
 import { GetAuditLogsUseCase } from "@/app/features/users/application/use-cases/get-audit-logs.use-case"
 import { UserSessionHttpSource } from "@/app/features/users/infrastructure/source/user-session-http.source"
 import { USER_SESSION_REPOSITORY } from "@/app/features/users/domain/repositories/user-session.repository"
 import { UserSessionRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user-session.repository-impl"
-import { UserSessionInMemorySource } from "@/app/features/users/infrastructure/source/user-session-in-memory.source"
 import { GetSessionCountUseCase } from "@/app/features/users/application/use-cases/get-session-count.use-case"
 
 import { FIELD_OPERATIONS_REPOSITORY } from "@/app/features/field-operations/domain/repositories/field-operations.repository"
@@ -80,7 +75,6 @@ describe("Application repository composition", () => {
     const repository = TestBed.inject(AUDIT_LOG_REPOSITORY)
     expect(AUDIT_LOG_REPOSITORY).not.toBe(USER_REPOSITORY)
     expect(repository).toBe(TestBed.inject(AuditLogRepositoryImpl))
-    expect(repository).not.toBe(TestBed.inject(AuditLogInMemorySource))
     await establishHttpAuth()
     const http = TestBed.inject(HttpTestingController)
     const pending = firstValueFrom(
@@ -108,7 +102,6 @@ describe("Application repository composition", () => {
     const repository = TestBed.inject(USER_SESSION_REPOSITORY)
     expect(repository).toBe(TestBed.inject(UserSessionRepositoryImpl))
     expect(repository).not.toBe(TestBed.inject(UserSessionHttpSource))
-    expect(repository).not.toBe(TestBed.inject(UserSessionInMemorySource))
     const pending = firstValueFrom(TestBed.inject(GetSessionCountUseCase).execute())
     const http = TestBed.inject(HttpTestingController)
     const request = http.expectOne(r => r.url === "http://localhost:8080/api/sesiones")
@@ -126,7 +119,6 @@ describe("Application repository composition", () => {
 
   it("aliases the customer token to the root implementation instance", () => {
     expect(TestBed.inject(CUSTOMER_REPOSITORY)).toBe(TestBed.inject(CustomerRepositoryImpl))
-    expect(TestBed.inject(CUSTOMER_REPOSITORY)).not.toBe(TestBed.inject(CustomerInMemorySource))
   })
 
   it("composes singleton request reads through the existing authenticated HTTP transport", async () => {
@@ -230,7 +222,6 @@ describe("Application repository composition", () => {
 
   it("aliases the user token to the root implementation instance", () => {
     expect(TestBed.inject(USER_REPOSITORY)).toBe(TestBed.inject(UserRepositoryImpl))
-    expect(TestBed.inject(USER_REPOSITORY)).not.toBe(TestBed.inject(UserInMemorySource))
   })
 
   async function establishHttpAuth() {
@@ -262,7 +253,6 @@ describe("Application repository composition", () => {
     await establishHttpAuth()
     const http = TestBed.inject(HttpTestingController)
     expect(TestBed.inject(ROLE_REPOSITORY)).toBe(TestBed.inject(RoleRepositoryImpl))
-    expect(TestBed.inject(ROLE_REPOSITORY)).not.toBe(TestBed.inject(RoleInMemorySource))
     const roles = TestBed.inject(RolesStore)
     const dto = {
       idRol: 9,

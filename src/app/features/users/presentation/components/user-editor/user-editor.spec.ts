@@ -1,7 +1,7 @@
 import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { Component, getDebugNode, inject, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
-import { EMPTY, firstValueFrom, forkJoin, of, Subject } from "rxjs"
+import { EMPTY, firstValueFrom, forkJoin, of, Subject, timer, map } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
@@ -10,11 +10,10 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { Lang, User } from "../../../domain/entities/user.entity"
+import { Role } from "../../../domain/entities/role.entity"
 import { UserError } from "../../../domain/errors/user.error"
 import { USER_REPOSITORY } from "../../../domain/repositories/user.repository"
 import { ROLE_REPOSITORY } from "../../../domain/repositories/role.repository"
-import { UserInMemorySource } from "../../../infrastructure/source/user-in-memory.source"
-import { RoleInMemorySource } from "../../../infrastructure/source/role-in-memory.source"
 import { UserStore } from "../../state/user.store"
 import { RolesStore } from "../../state/roles.store"
 async function loadCatalogs() {
@@ -46,14 +45,134 @@ async function flush<T>(pending: Promise<T>): Promise<T> {
 }
 
 describe("UserEditor Signal Forms", () => {
-  beforeEach(() => vi.useFakeTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+    const now = new Date("2026-09-01T00:00:00Z")
+    roleData = Array.from({ length: 5 }, (_, index) =>
+      Role.create(index + 1, `Role ${index + 1}`, "", true, now)
+    )
+    data = Array.from({ length: 48 }, (_, index) =>
+      User.create(
+        index + 1,
+        `User ${index + 1}`,
+        `user${index + 1}@example.test`,
+        Lang.ES,
+        true,
+        now,
+        now,
+        (index % 5) + 1,
+        null
+      )
+    )
+  })
   afterEach(() => vi.useRealTimers())
+  let data: User[]
+  let roleData: Role[]
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [TestHost],
       providers: [
-        { provide: USER_REPOSITORY, useExisting: UserInMemorySource },
-        { provide: ROLE_REPOSITORY, useExisting: RoleInMemorySource },
+        {
+          provide: USER_REPOSITORY,
+          useValue: {
+            getUserById: (id: number) => of(Result.success(data.find(item => item.id === id)!)),
+            getUsersPage: () =>
+              of(Result.success({ items: data, total: data.length, offset: 0, limit: 20 })),
+            getUserStatistics: () =>
+              of(
+                Result.success({
+                  total: data.length,
+                  active: data.filter(item => item.isActive).length,
+                  inactive: data.filter(item => !item.isActive).length
+                })
+              ),
+            createUser: (params: {
+              name: string
+              email: string
+              lang: Lang
+              isActive: boolean
+              roleId: number
+            }) =>
+              timer(250).pipe(
+                map(() => {
+                  const now = new Date()
+                  const created = User.create(
+                    data.length + 1,
+                    params.name.trim(),
+                    params.email,
+                    params.lang,
+                    params.isActive,
+                    now,
+                    now,
+                    params.roleId
+                  )
+                  data = [...data, created]
+                  return Result.success(created)
+                })
+              ),
+            updateUserById: (
+              id: number,
+              params: { name: string; email: string; lang: Lang; isActive: boolean; roleId: number }
+            ) => {
+              const previous = data.find(item => item.id === id)!
+              const updated = User.create(
+                id,
+                params.name.trim(),
+                params.email,
+                params.lang,
+                params.isActive,
+                previous.createdAt,
+                new Date(),
+                params.roleId,
+                previous.lastAccess
+              )
+              data = data.map(item => (item.id === id ? updated : item))
+              return of(Result.success(updated))
+            },
+            updateUserStatusById: (id: number, isActive: boolean) => {
+              const previous = data.find(item => item.id === id)!
+              const updated = User.create(
+                previous.id,
+                previous.name,
+                previous.email,
+                previous.lang,
+                isActive,
+                previous.createdAt,
+                new Date(),
+                previous.roleId,
+                previous.lastAccess
+              )
+              data = data.map(item => (item.id === id ? updated : item))
+              return of(Result.success(updated))
+            },
+            deleteUserById: (id: number) => {
+              data = data.filter(item => item.id !== id)
+              return of(Result.success<void>(undefined))
+            }
+          }
+        },
+        {
+          provide: ROLE_REPOSITORY,
+          useValue: {
+            getRoles: () => of(Result.success(roleData)),
+            getRoleById: (id: number) => of(Result.success(roleData.find(item => item.id === id)!)),
+            updateRoleById: (
+              id: number,
+              params: { name: string; description: string; isActive: boolean }
+            ) => {
+              const previous = roleData.find(item => item.id === id)!
+              const updated = Role.create(
+                id,
+                params.name,
+                params.description,
+                params.isActive,
+                previous.createdAt
+              )
+              roleData = roleData.map(item => (item.id === id ? updated : item))
+              return of(Result.success(updated))
+            }
+          }
+        },
         {
           provide: AuthStore,
           useValue: {
@@ -71,9 +190,7 @@ describe("UserEditor Signal Forms", () => {
   )
 
   async function records() {
-    const result = await flush(firstValueFrom(TestBed.inject(UserInMemorySource).getUsers()))
-    if (!result.success) throw result.error
-    return result.data
+    return data
   }
   async function setup(user: User | null = null) {
     await loadCatalogs()
