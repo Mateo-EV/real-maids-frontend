@@ -1,6 +1,7 @@
 import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { getDebugNode } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
+import { OverlayContainer } from "@angular/cdk/overlay"
 import { provideRouter } from "@angular/router"
 import { BehaviorSubject, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -24,6 +25,8 @@ import { CustomersStore } from "../../state/customers.store"
 type Write = Result<Customer, CustomerError>
 type Page = Result<PaginationResponse<Customer>, CustomerError>
 const customer = customerFixture(7, "Cliente seleccionado", "old@example.test", "555 0100")
+const fixtures: Array<{ destroy(): void }> = []
+const overlayContainers: OverlayContainer[] = []
 
 async function setup() {
   const pages: Subject<Page>[] = []
@@ -54,7 +57,10 @@ async function setup() {
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } }
     ]
   })
+  const overlayContainer = TestBed.inject(OverlayContainer)
+  overlayContainers.push(overlayContainer)
   const fixture = TestBed.createComponent(CustomersPage)
+  fixtures.push(fixture)
   const root = fixture.nativeElement as HTMLElement
   const settle = async () => {
     fixture.detectChanges()
@@ -73,10 +79,25 @@ async function setup() {
     button!.click()
     await settle()
   }
-  const dialog = () =>
-    document.querySelector<HTMLElement>("app-customer-editor, app-customer-status-dialog")!
+  const findDialog = () => {
+    const dialogs = overlayContainer
+      .getContainerElement()
+      .querySelectorAll<HTMLElement>("app-customer-editor, app-customer-status-dialog")
+    return dialogs.item(dialogs.length - 1)
+  }
+  const dialog = () => findDialog() as HTMLElement
+  const activeDialog = () => {
+    const current = findDialog()
+    if (!current) throw new Error("Expected an open customer editor or status dialog")
+    return current
+  }
   const fill = async (id: string, value: string) => {
-    const input = dialog().querySelector<HTMLInputElement | HTMLSelectElement>(`#customer-${id}`)!
+    const dialogElement = activeDialog()
+    const input =
+      id === "type"
+        ? dialogElement.querySelector<HTMLSelectElement>("hlm-native-select select")
+        : dialogElement.querySelector<HTMLInputElement>(`#customer-${id}`)
+    if (!input) throw new Error(`Expected the ${id} control in the active customer dialog`)
     input.value = value
     input.dispatchEvent(
       new Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true })
@@ -85,7 +106,7 @@ async function setup() {
     await settle()
   }
   const submit = async () => {
-    dialog()
+    activeDialog()
       .querySelector("form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
     await settle()
@@ -109,7 +130,13 @@ async function setup() {
   }
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  fixtures.forEach(fixture => fixture.destroy())
+  fixtures.length = 0
+  overlayContainers.forEach(container => container.getContainerElement().replaceChildren())
+  overlayContainers.length = 0
+  vi.restoreAllMocks()
+})
 
 describe("CRM WP3 writes through public UI", () => {
   it("offers labeled edit/deactivate on both desktop rows and mobile cards", async () => {

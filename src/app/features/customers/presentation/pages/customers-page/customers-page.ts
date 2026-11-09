@@ -10,11 +10,13 @@ import {
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { customerPageContext } from "./customer-page-context"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { Subject, switchMap } from "rxjs"
+import { of, Subject, switchMap, timer } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
+import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { NgTemplateOutlet } from "@angular/common"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucidePencil, lucidePlus, lucidePower } from "@ng-icons/lucide"
+import { lucidePencil, lucidePlus, lucidePower, lucideSearch } from "@ng-icons/lucide"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { HlmTableImports } from "@spartan-ng/helm/table"
@@ -23,7 +25,8 @@ import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
-import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
+import { CustomerListQuery } from "../../../domain/models/customer-list-query"
+import { CustomerType } from "../../../domain/entities/customer.entity"
 import { CustomersStore } from "../../state/customers.store"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
@@ -39,6 +42,8 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
   imports: [
     CrmCatalogNavigation,
     HlmButtonImports,
+    HlmInputGroupImports,
+    HlmNativeSelectImports,
     RouterLink,
     NgTemplateOutlet,
     NgIcon,
@@ -50,7 +55,7 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
     HlmSpinnerImports,
     TablePagination
   ],
-  providers: [provideIcons({ lucidePencil, lucidePlus, lucidePower })],
+  providers: [provideIcons({ lucidePencil, lucidePlus, lucidePower, lucideSearch })],
   templateUrl: "./customers-page.html"
 })
 export class CustomersPage implements OnInit {
@@ -64,15 +69,20 @@ export class CustomersPage implements OnInit {
     this.dialog?.close()
   })
 
-  private readonly requestedQuery = signal<NormalizedPagination>(
+  private readonly requestedQuery = signal<CustomerListQuery>(
     customerPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
+  readonly search = signal("")
+  readonly type = signal<CustomerType | "">("")
+  readonly hasFilters = computed(() => !!this.search().trim() || !!this.type())
   readonly list = computed(() => this.customers.selectQuery(this.requestedQuery()))
   readonly result = computed(() => this.list().result)
   readonly rows = computed(() => this.result()?.items ?? [])
-  readonly currentPage = computed(() => this.list().query.offset / this.list().query.limit + 1)
+  readonly currentPage = computed(
+    () => (this.list().query.offset ?? 0) / (this.list().query.limit ?? 20) + 1
+  )
   readonly pageCount = computed(() =>
-    Math.max(1, Math.ceil((this.result()?.total ?? 0) / this.list().query.limit))
+    Math.max(1, Math.ceil((this.result()?.total ?? 0) / (this.list().query.limit ?? 20)))
   )
   readonly rangeStart = computed(() => (this.rows().length ? this.result()!.offset + 1 : 0))
   readonly rangeEnd = computed(() =>
@@ -90,7 +100,11 @@ export class CustomersPage implements OnInit {
         return "No se pudieron cargar los clientes. Inténtalo de nuevo."
     }
   })
-  private readonly queries = new Subject<{ query: NormalizedPagination; force: boolean }>()
+  private readonly queries = new Subject<{
+    query: CustomerListQuery
+    delay: number
+    force: boolean
+  }>()
   private recoveryUsed = false
   private requestRevision = 0
 
@@ -99,10 +113,14 @@ export class CustomersPage implements OnInit {
     this.destroyRef.onDestroy(() => this.dialog?.close())
     this.queries
       .pipe(
-        switchMap(({ query, force }) => {
-          this.requestedQuery.set(query)
-          return this.customers.observeQuery(query, force)
-        }),
+        switchMap(({ query, delay, force }) =>
+          (delay ? timer(delay) : of(0)).pipe(
+            switchMap(() => {
+              this.requestedQuery.set(query)
+              return this.customers.observeQuery(query, force)
+            })
+          )
+        ),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(response => {
@@ -115,7 +133,11 @@ export class CustomersPage implements OnInit {
         queueMicrotask(() => {
           if (this.destroyRef.destroyed || revision !== this.requestRevision) return
           this.load(
-            { offset: Math.floor((page.total - 1) / page.limit) * page.limit, limit: page.limit },
+            {
+              ...this.requestedQuery(),
+              offset: Math.floor((page.total - 1) / page.limit) * page.limit,
+              limit: page.limit
+            },
             true
           )
         })
@@ -123,10 +145,10 @@ export class CustomersPage implements OnInit {
     this.load(this.requestedQuery())
   }
 
-  private load(query: NormalizedPagination, force = false): void {
+  private load(query: CustomerListQuery, force = false, delay = 0): void {
     if (this.destroyRef.destroyed) return
     this.requestRevision++
-    this.queries.next({ query, force })
+    this.queries.next({ query, delay, force })
   }
 
   edit(customer: Customer | null = null): void {
@@ -168,6 +190,41 @@ export class CustomersPage implements OnInit {
     })
   }
 
+  setSearch(value: string): void {
+    this.search.set(value)
+    this.applyFilters(250)
+  }
+
+  setType(value: string | null | undefined): void {
+    const type =
+      value === CustomerType.RESIDENTIAL || value === CustomerType.COMMERCIAL ? value : ""
+    this.type.set(type)
+    this.applyFilters()
+  }
+
+  clearFilters(): void {
+    this.search.set("")
+    this.type.set("")
+    this.applyFilters()
+  }
+
+  private applyFilters(delay = 0): void {
+    const current = this.list().query
+    const search = this.search().trim()
+    const type = this.type()
+    this.recoveryUsed = false
+    this.load(
+      {
+        offset: 0,
+        limit: current.limit,
+        ...(search ? { search } : {}),
+        ...(type ? { type } : {})
+      },
+      false,
+      delay
+    )
+  }
+
   retry(): void {
     this.recoveryUsed = false
     this.load(this.requestedQuery(), true)
@@ -183,7 +240,7 @@ export class CustomersPage implements OnInit {
     )
       return
     this.recoveryUsed = false
-    const limit = this.list().query.limit
-    this.load({ offset: (page - 1) * limit, limit })
+    const limit = this.list().query.limit ?? 20
+    this.load({ ...this.list().query, offset: (page - 1) * limit, limit })
   }
 }

@@ -111,14 +111,15 @@ describe("CustomersPage read-only server list", () => {
     expect(section.querySelector("ul[catalogMobile]")).not.toBeNull()
     expect(section.querySelector("footer app-table-pagination")).not.toBeNull()
   })
-  it("requests 0/20 and distinguishes loading from verified empty without future launchers", async () => {
+  it("keeps labeled filters available through loading and verified empty states", async () => {
     const s = setup()
     expect(s.execute).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
     expect(s.element.textContent).toContain("Cargando clientes")
+    expect(s.element.querySelector("input#customer-search")).not.toBeNull()
+    expect(s.element.querySelector("select#customer-filter-type")).not.toBeNull()
     expect(s.element.textContent).not.toContain("No hay clientes activos")
     await s.respond(page([], 0))
     expect(s.element.textContent).toContain("No hay clientes activos")
-    expect(s.element.querySelector("input, select")).toBeNull()
     const navigation = s.element.querySelector(
       'app-crm-catalog-navigation nav[aria-label="Catálogos CRM"]'
     )!
@@ -133,6 +134,62 @@ describe("CustomersPage read-only server list", () => {
     expect(s.element.textContent).toContain("Crear cliente")
     expect(s.element.textContent).not.toMatch(/Editar|Propiedades|Desactivar/)
     expect(s.element.textContent).not.toContain("Cargando clientes")
+  })
+
+  it("debounces search, applies type immediately, resets offset and retains effective page size", async () => {
+    const s = setup()
+    await s.respond(page([row], 45, 0, 5))
+    await s.click("Página siguiente")
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
+
+    const search = s.element.querySelector<HTMLInputElement>("#customer-search")!
+    search.value = "  Ana Pérez  "
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    expect(s.execute).toHaveBeenCalledTimes(2)
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 5, search: "Ana Pérez" })
+
+    const type = s.element.querySelector<HTMLSelectElement>("#customer-filter-type")!
+    type.value = "comercial"
+    type.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(s.execute).toHaveBeenLastCalledWith({
+      offset: 0,
+      limit: 5,
+      search: "Ana Pérez",
+      type: "comercial"
+    })
+    await s.settle()
+  })
+
+  it("keeps filters out of customer detail return URLs", async () => {
+    const s = setup()
+    const type = s.element.querySelector<HTMLSelectElement>("#customer-filter-type")!
+    type.value = "residencial"
+    type.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    await s.respond(page())
+    const detail = s.element.querySelector<HTMLAnchorElement>(
+      'a[aria-label="Ver detalle de Cliente de prueba"]'
+    )!
+    const params = new URL(detail.href).searchParams
+    expect([...params.keys()]).toEqual(["offset", "limit"])
+    expect(params.get("offset")).toBe("0")
+    expect(params.get("limit")).toBe("20")
+  })
+
+  it("renders a filtered empty state with a filter reset action", async () => {
+    const s = setup()
+    const type = s.element.querySelector<HTMLSelectElement>("#customer-filter-type")!
+    type.value = "residencial"
+    type.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 20, type: "residencial" })
+    await s.respond(page([], 0))
+    expect(s.element.textContent).toContain("Sin clientes para esos filtros")
+    await s.click("Restablecer filtros")
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 20 })
   })
 
   it("renders official fields, actual ranges and effective metadata for next/previous", async () => {
@@ -162,6 +219,8 @@ describe("CustomersPage read-only server list", () => {
     const s = setup()
     await s.respond(Result.failure(new CustomerError("FORBIDDEN")))
     expect(s.element.querySelector('[role="alert"]')?.textContent).toContain("No tienes permiso")
+    expect(s.element.querySelector("input#customer-search")).not.toBeNull()
+    expect(s.element.querySelector("select#customer-filter-type")).not.toBeNull()
     expect(s.element.textContent).not.toContain("No hay clientes activos")
     await s.click("Reintentar")
     expect(s.execute).toHaveBeenCalledTimes(2)

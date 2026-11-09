@@ -18,7 +18,7 @@ import {
   tap
 } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { PaginationParams, NormalizedPagination } from "@/app/shared/pagination/pagination.params"
+import { CustomerListQuery } from "../../domain/models/customer-list-query"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import {
   createReadResource,
@@ -53,7 +53,7 @@ export interface CustomerReadEntry<T> {
   readonly expires: number
 }
 export interface CustomerPageEntry extends CustomerReadEntry<Page> {
-  readonly query: NormalizedPagination
+  readonly query: CustomerListQuery
 }
 const emptyEntry = <T>(): CustomerReadEntry<T> => ({
   result: undefined,
@@ -62,13 +62,18 @@ const emptyEntry = <T>(): CustomerReadEntry<T> => ({
   error: undefined,
   expires: 0
 })
-const normalizeQuery = (query: PaginationParams): NormalizedPagination => ({
-  offset: query.offset ?? 0,
-  limit: query.limit ?? 20
-})
-export const customerQueryKey = (query: PaginationParams) => {
+const normalizeQuery = (query: CustomerListQuery): CustomerListQuery => {
+  const search = query.search?.trim()
+  return {
+    offset: query.offset ?? 0,
+    limit: query.limit ?? 20,
+    ...(search ? { search } : {}),
+    ...(query.type !== undefined ? { type: query.type } : {})
+  }
+}
+export const customerQueryKey = (query: CustomerListQuery) => {
   const q = normalizeQuery(query)
-  return JSON.stringify([String(q.offset), String(q.limit)])
+  return JSON.stringify([q.offset, q.limit, q.search ?? null, q.type ?? null])
 }
 const resourceState = <T>(
   entry: CustomerReadEntry<T>
@@ -152,7 +157,7 @@ export const CustomersStore = signalStore(
       previous.forEach(resource => resource.reset())
       invalidations.next(null)
     })
-    const admitPage = (key: string, query: NormalizedPagination) => {
+    const admitPage = (key: string, query: CustomerListQuery) => {
       if (store.entries()[key]) return
       const entries = { ...store.entries() }
       if (Object.keys(entries).length >= 20) {
@@ -184,7 +189,7 @@ export const CustomersStore = signalStore(
     }
     const readPageKey = (
       key: string,
-      query: NormalizedPagination,
+      query: CustomerListQuery,
       force = false
     ): Observable<PageResult> =>
       defer(() => {
@@ -207,7 +212,7 @@ export const CustomersStore = signalStore(
                     [key]: {
                       result: next.data,
                       query: patch.data
-                        ? { offset: patch.data.offset, limit: patch.data.limit }
+                        ? { ...entry.query, offset: patch.data.offset, limit: patch.data.limit }
                         : entry.query,
                       loading:
                         !settled &&
@@ -241,7 +246,7 @@ export const CustomersStore = signalStore(
         }
         return resource.read(force) as Observable<PageResult>
       })
-    const readPage = (query: PaginationParams = {}, force = false) => {
+    const readPage = (query: CustomerListQuery = {}, force = false) => {
       const snapshot = normalizeQuery(query)
       return readPageKey(customerQueryKey(snapshot), snapshot, force)
     }
@@ -376,14 +381,14 @@ export const CustomersStore = signalStore(
     return {
       readPage,
       readCustomer,
-      selectQuery: (query: PaginationParams = {}): CustomerPageEntry =>
+      selectQuery: (query: CustomerListQuery = {}): CustomerPageEntry =>
         store.entries()[customerQueryKey(query)] ?? {
           ...emptyEntry<Page>(),
           query: normalizeQuery(query)
         },
       selectCustomer: (id: number): CustomerReadEntry<Customer> =>
         store.details()[id] ?? emptyEntry<Customer>(),
-      loadCustomers(query?: PaginationParams, force = false): Observable<PageResult> {
+      loadCustomers(query?: CustomerListQuery, force = false): Observable<PageResult> {
         const snapshot = query === undefined ? undefined : normalizeQuery(query)
         return defer(() => {
           if (!scope.check()) return of(Result.failure(new CustomerError("UNAUTHENTICATED")))
@@ -402,7 +407,7 @@ export const CustomersStore = signalStore(
           return readCustomer(id, force)
         })
       },
-      observeQuery(query: PaginationParams = {}, force = false): Observable<PageResult> {
+      observeQuery(query: CustomerListQuery = {}, force = false): Observable<PageResult> {
         const snapshot = normalizeQuery(query),
           key = customerQueryKey(snapshot)
         return defer(() => {

@@ -12,10 +12,10 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { GetCustomerByIdUseCase } from "../../application/use-cases/get-customer-by-id.use-case"
 import { ListCustomersUseCase } from "../../application/use-cases/list-customers.use-case"
 import { UpdateCustomerUseCase } from "../../application/use-cases/update-customer.use-case"
-import { Customer } from "../../domain/entities/customer.entity"
+import { Customer, CustomerType } from "../../domain/entities/customer.entity"
 import { customerFixture, customerInput } from "../../domain/customer.fixture"
 import { CustomerError } from "../../domain/errors/customer.error"
-import { CustomersStore } from "./customers.store"
+import { customerQueryKey, CustomersStore } from "./customers.store"
 import { CustomerHistoryStore } from "./customer-history.store"
 import { LinkCustomerAccountUseCase } from "../../application/use-cases/link-customer-account.use-case"
 
@@ -66,6 +66,31 @@ describe("CustomersStore", () => {
   })
 
   afterEach(() => vi.restoreAllMocks())
+
+  it("keys customer pages by normalized search and type as well as pagination", () => {
+    expect(customerQueryKey({ offset: 0, limit: 20, search: "  Ana  " })).toBe(
+      customerQueryKey({ offset: 0, limit: 20, search: "Ana" })
+    )
+    expect(customerQueryKey({ offset: 0, limit: 20, search: "Ana" })).not.toBe(
+      customerQueryKey({ offset: 0, limit: 20, search: "ana" })
+    )
+    expect(customerQueryKey({ offset: 0, limit: 20, type: CustomerType.RESIDENTIAL })).not.toBe(
+      customerQueryKey({ offset: 0, limit: 20, type: CustomerType.COMMERCIAL })
+    )
+    expect(customerQueryKey({ offset: 0, limit: 20, search: "  " })).toBe(
+      customerQueryKey({ offset: 0, limit: 20 })
+    )
+  })
+
+  it("keeps different customer filters in independent read entries and flights", () => {
+    const first = new Subject<PageResult>()
+    list.mockReturnValue(first)
+    store.observeQuery({ offset: 0, limit: 20, search: "Ana" }).subscribe()
+    store.observeQuery({ offset: 0, limit: 20, search: "Bea" }).subscribe()
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenNthCalledWith(1, { offset: 0, limit: 20, search: "Ana" })
+    expect(list).toHaveBeenNthCalledWith(2, { offset: 0, limit: 20, search: "Bea" })
+  })
 
   it("shares same-key detail reads and caches only successful results", () => {
     const customer = customerFixture(7, "Shared")

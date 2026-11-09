@@ -9,6 +9,35 @@
     [busy]="list().loading || list().refreshing"
   >
     <div catalogControls class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
+      <div class="catalog-filter-search flex flex-col gap-1">
+        <label for="customer-search" class="text-xs font-medium">Buscar nombre o correo</label>
+        <hlm-input-group>
+          <input
+            #searchInput
+            hlmInputGroupInput
+            id="customer-search"
+            type="search"
+            placeholder="Buscar nombre o correo…"
+            [value]="search()"
+            (input)="setSearch(searchInput.value)"
+          />
+          <hlm-input-group-addon>
+            <ng-icon name="lucideSearch" aria-hidden="true" />
+          </hlm-input-group-addon>
+        </hlm-input-group>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="customer-filter-type" class="text-xs font-medium">Tipo de cliente</label>
+        <hlm-native-select
+          selectId="customer-filter-type"
+          [value]="type()"
+          (valueChange)="setType($event)"
+        >
+          <option value="">Todos los tipos</option>
+          <option value="residencial">Residencial</option>
+          <option value="comercial">Comercial</option>
+        </hlm-native-select>
+      </div>
       <button
         hlmBtn
         class="catalog-action-with-plus"
@@ -115,17 +144,28 @@
           <div hlmEmptyHeader>
             <h2 hlmEmptyTitle>
               {{
-                page.total === 0 ? "No hay clientes activos" : "Esta página ya no tiene registros"
+                page.total === 0
+                  ? hasFilters()
+                    ? "Sin clientes para esos filtros"
+                    : "No hay clientes activos"
+                  : "Esta página ya no tiene registros"
               }}
             </h2>
             <p hlmEmptyDescription>
               {{
                 page.total === 0
-                  ? "El servidor no devolvió clientes activos."
+                  ? hasFilters()
+                    ? "Prueba otra búsqueda o restablece los filtros."
+                    : "El servidor no devolvió clientes activos."
                   : "El catálogo cambió. Selecciona otra página o reintenta."
               }}
             </p>
           </div>
+          @if (page.total === 0 && hasFilters()) {
+            <button hlmBtn type="button" variant="outline" (click)="clearFilters()">
+              Restablecer filtros
+            </button>
+          }
           @if (page.total > 0 && !list().error) {
             <button
               hlmBtn
@@ -165,7 +205,7 @@
       variant="outline"
       size="sm"
       [routerLink]="['/admin/customers', customer.id]"
-      [queryParams]="list().query"
+      [queryParams]="{ offset: list().query.offset, limit: list().query.limit }"
       [attr.aria-label]="'Ver detalle de ' + customer.name"
       >Ver detalle</a
     >

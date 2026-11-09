@@ -4,8 +4,10 @@ import { HttpTestingController, provideHttpClientTesting } from "@angular/common
 import { firstValueFrom } from "rxjs"
 import { beforeEach, afterEach, describe, it, expect } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { CustomerType } from "../../domain/entities/customer.entity"
 import { CustomerRepositoryImpl } from "../repositories/customer.repository-impl"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { CustomerListQuery } from "../../domain/models/customer-list-query"
 
 export const customerDto = {
   idCliente: 7,
@@ -119,6 +121,52 @@ describe("Customer real HTTP boundary", () => {
     }
   )
 
+  it("maps normalized optional search and type filters without changing server pagination", async () => {
+    const pending = firstValueFrom(
+      repository.findPage({
+        offset: 20,
+        limit: 5,
+        search: "  Ana Pérez  ",
+        type: CustomerType.COMMERCIAL
+      })
+    )
+    const request = http.expectOne(
+      "http://localhost:8080/api/clientes?pagina=4&tamanio=5&busqueda=Ana%20P%C3%A9rez&tipo=comercial"
+    )
+    expect(request.request.params.keys()).toEqual(["pagina", "tamanio", "busqueda", "tipo"])
+    request.flush(wirePage([], 4, 5, 0))
+    expect(await pending).toMatchObject({ success: true, data: { offset: 20, limit: 5 } })
+  })
+
+  it("preserves search metacharacters literally for the backend to interpret", async () => {
+    const pending = firstValueFrom(repository.findPage({ search: " A%_\\\\B " }))
+    const request = http.expectOne(
+      "http://localhost:8080/api/clientes?pagina=0&tamanio=20&busqueda=A%25_%5C%5CB"
+    )
+    expect(request.request.params.get("busqueda")).toBe("A%_\\\\B")
+    request.flush(wirePage([]))
+    expect(await pending).toMatchObject({ success: true })
+  })
+
+  it("rejects invalid runtime customer types before HTTP", async () => {
+    const query = { offset: 0, limit: 20, type: "unknown" } as unknown as CustomerListQuery
+    expect(await firstValueFrom(repository.findPage(query))).toMatchObject({
+      success: false,
+      error: { code: "INVALID_INPUT" }
+    })
+    http.expectNone(() => true)
+  })
+
+  it("omits blank and absent filters for the default listing", async () => {
+    const pending = firstValueFrom(
+      repository.findPage({ offset: 0, limit: 20, search: "  ", type: undefined })
+    )
+    const request = http.expectOne("http://localhost:8080/api/clientes?pagina=0&tamanio=20")
+    expect(request.request.params.keys()).toEqual(["pagina", "tamanio"])
+    request.flush(wirePage([]))
+    expect(await pending).toMatchObject({ success: true, data: { total: 0, offset: 0, limit: 20 } })
+  })
+
   it.each<PaginationParams>([
     { offset: -1 },
     { offset: 1, limit: 20 },
@@ -136,6 +184,16 @@ describe("Customer real HTTP boundary", () => {
       error: { code: "INVALID_INPUT" }
     })
     http.expectNone(() => true)
+  })
+
+  it("accepts customer-specific filter query typing without widening shared pagination", () => {
+    const query: CustomerListQuery = {
+      offset: 15,
+      limit: 5,
+      search: " Ana ",
+      type: CustomerType.RESIDENTIAL
+    }
+    expect(query).toMatchObject({ offset: 15, limit: 5, search: " Ana ", type: "residencial" })
   })
 
   it.each(

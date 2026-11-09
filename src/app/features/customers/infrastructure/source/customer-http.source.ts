@@ -1,7 +1,7 @@
 import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { reservedCustomerEmail } from "./customer-email-conflict"
 import { Injectable } from "@angular/core"
-import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { CustomerListQuery } from "../../domain/models/customer-list-query"
 import { Customer, CustomerType } from "../../domain/entities/customer.entity"
 import {
   CreateCustomerParams,
@@ -66,14 +66,20 @@ export class CustomerHttpSource {
   private readonly transport = customerTransport()
   private readonly http = this.transport.http
   private readonly url = `${this.transport.origin}/api/clientes`
-  findPage(query: PaginationParams = {}) {
+  findPage(query: CustomerListQuery = {}) {
     const { offset, limit } = query
+    const search = query.search?.trim()
+    const type = query.type
     return this.transport.request(
-      () =>
-        this.http.get<unknown>(this.url, {
-          params: pagination(offset, limit),
-          transferCache: false
-        }),
+      () => {
+        input(type === undefined || Object.values(CustomerType).includes(type))
+        const params = {
+          ...pagination(offset, limit),
+          ...(search ? { busqueda: search } : {}),
+          ...(type ? { tipo: type } : {})
+        }
+        return this.http.get<unknown>(this.url, { params, transferCache: false })
+      },
       v => {
         const requested = pagination(offset, limit)
         const customers = page(v, customerDto, requested.pagina, requested.tamanio)
