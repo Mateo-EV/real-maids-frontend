@@ -54,3 +54,8 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 .env
+
+# Windows cache and filesystem
+Microsoft/
+AppData/
+*ModuleAnalysisCache*
