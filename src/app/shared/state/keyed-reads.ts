@@ -59,6 +59,22 @@ export interface KeyedReadsOptions<Q, T, E> {
   noSessionObserve?: NoSession
   /** Error used by failure mode; falls back to `overflow()` when absent. */
   noSessionError?(): E
+  /** Extra eviction protection beyond active and in-flight keys, e.g. retained or written keys. */
+  isPinned?(key: string, entry: KeyedEntry<Q, T, E>): boolean
+  /** Maps the result of a read superseded by its own revision; forwarded to each coordinator. */
+  obsoleteResult?(result: Result<T | undefined, E>): Result<T | undefined, E>
+  /**
+   * Bounds the inactive part of the history instead of its total size: active, in-flight and
+   * pinned entries are never dropped and admission never refuses for capacity.
+   */
+  inactiveHistoryLimit?: number
+  /** Drops an entry that never produced verified data once its last observer leaves. */
+  dropUnverifiedOnIdle?: boolean
+  /**
+   * Ends an in-flight read when a key is invalidated; when false the flight is detached and its
+   * result is mapped through `obsoleteResult`. Defaults to true.
+   */
+  cancelOnInvalidate?: boolean
 }
 
 export interface KeyedReads<Q, T, E> {
@@ -68,6 +84,8 @@ export interface KeyedReads<Q, T, E> {
   /** Tracks entries only when `state.source` is supplied; otherwise it follows the query. */
   selectReactive(query: Signal<Q>): Signal<KeyedEntry<Q, T, E> | undefined>
   markMutated(filter?: (entry: KeyedEntry<Q, T, E>) => boolean): void
+  /** Expires one entry without refreshing it; a key that is not cached is never admitted. */
+  invalidate(key: string): void
   reset(): void
   readonly keys: string[]
 }
@@ -116,8 +134,27 @@ export function createKeyedReads<Q, T, E>(
   const isPending = (key: string) => resources.get(key)?.isPending() ?? false
   const oldestEvictable = (next: Entries<Q, T, E>, keep: string) =>
     Object.keys(next).find(
-      candidate => candidate !== keep && !active.has(candidate) && !isPending(candidate)
+      candidate =>
+        candidate !== keep &&
+        !active.has(candidate) &&
+        !isPending(candidate) &&
+        !options.isPinned?.(candidate, next[candidate])
     )
+  /** Inactive-only history: the newest entries stay, whatever the active view count is. */
+  const pruneInactive = (next: Entries<Q, T, E>) => {
+    const limit = options.inactiveHistoryLimit
+    if (limit === undefined) return
+    const inactive = Object.keys(next).filter(
+      candidate =>
+        !active.has(candidate) &&
+        !isPending(candidate) &&
+        !options.isPinned?.(candidate, next[candidate])
+    )
+    for (const candidate of inactive.slice(0, Math.max(0, inactive.length - limit))) {
+      delete next[candidate]
+      resources.delete(candidate)
+    }
+  }
   const refuse = (path: "read" | "observe"): Observable<Result<T, E>> => {
     const mode = path === "observe" ? (options.noSessionObserve ?? noSession) : noSession
     return mode === "empty"
@@ -130,13 +167,14 @@ export function createKeyedReads<Q, T, E>(
     const current = entries()
     if (current[key]) return true
     const next = { ...current }
-    if (Object.keys(next).length >= maxEntries) {
+    if (options.inactiveHistoryLimit === undefined && Object.keys(next).length >= maxEntries) {
       const candidate = oldestEvictable(next, key)
       if (candidate === undefined) return false
       delete next[candidate]
       resources.delete(candidate)
     }
     next[key] = emptyEntry<Q, T, E>(query)
+    pruneInactive(next)
     options.state.update(next)
     return true
   }
@@ -145,6 +183,7 @@ export function createKeyedReads<Q, T, E>(
     const current = entries()
     if (!current[key]) return
     const next = { ...current, [key]: entry }
+    if (options.inactiveHistoryLimit !== undefined) pruneInactive(next)
     while (Object.keys(next).length > maxEntries) {
       const candidate = oldestEvictable(next, key)
       if (candidate === undefined) break
@@ -202,7 +241,8 @@ export function createKeyedReads<Q, T, E>(
       ttl: options.ttl,
       scope: options.scope,
       forcePolicy: "join",
-      cancelOnInvalidate: true
+      cancelOnInvalidate: options.cancelOnInvalidate ?? true,
+      ...(options.obsoleteResult ? { obsoleteResult: options.obsoleteResult } : {})
     })
     return coordinator
   }
@@ -264,6 +304,14 @@ export function createKeyedReads<Q, T, E>(
           else {
             active.delete(key)
             const current = entries()[key]
+            // A placeholder that never became verified data is history the consumer never saw.
+            if (current && options.dropUnverifiedOnIdle && current.result === undefined) {
+              const next = { ...entries() }
+              delete next[key]
+              resources.delete(key)
+              options.state.update(next)
+              return
+            }
             if (current && !isPending(key))
               writeEntry(key, { ...current, loading: false, refreshing: false })
           }
@@ -295,6 +343,10 @@ export function createKeyedReads<Q, T, E>(
     }
     if (current()) refreshes.next(batch)
   }
+  const invalidate = (key: string) => {
+    if (!entries()[key]) return
+    resources.get(key)?.invalidate()
+  }
   const reset = () => {
     const previous = [...resources.values()]
     resources.clear()
@@ -314,6 +366,7 @@ export function createKeyedReads<Q, T, E>(
         : computed(() => select(query()))
     },
     markMutated,
+    invalidate,
     reset,
     get keys() {
       return Object.keys(entries())

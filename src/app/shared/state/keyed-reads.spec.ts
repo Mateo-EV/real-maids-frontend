@@ -421,4 +421,54 @@ describe("keyed read registry", () => {
       now.mockRestore()
     }
   })
+
+  it("protects pinned keys from eviction and refuses admission instead", () => {
+    const h = setup({ maxEntries: 1, isPinned: (_key, entry) => entry.query.offset === 0 })
+    h.reads.read({ offset: 0 }).subscribe()
+    const refused: unknown[] = []
+    h.reads.read({ offset: 20 }).subscribe(value => refused.push(value))
+    expect(refused).toEqual([expect.objectContaining({ success: false, error: "overflow" })])
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 0 })])
+  })
+
+  it("maps a detached obsolete flight through obsoleteResult", () => {
+    const flight = new Subject<Result<Page, string>>()
+    const h = setup({ cancelOnInvalidate: false, obsoleteResult: () => Result.failure("busy") })
+    const received: unknown[] = []
+    h.source.mockReturnValueOnce(flight)
+    h.reads.read({}).subscribe(value => received.push(value))
+    h.reads.invalidate(cacheKey({}))
+    flight.next(Result.success(page()))
+    expect(received).toEqual([Result.failure("busy")])
+  })
+
+  it("bounds inactive history without refusing admission", () => {
+    const h = setup({ inactiveHistoryLimit: 2 })
+    for (const offset of [0, 20, 40]) h.reads.observe({ offset }).subscribe().unsubscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 20 }), cacheKey({ offset: 40 })])
+    expect(h.source).toHaveBeenCalledTimes(3)
+  })
+
+  it("drops an unverified entry when its last observer leaves", () => {
+    const h = setup({ dropUnverifiedOnIdle: true })
+    h.source.mockReturnValue(new Subject())
+    h.reads.observe({}).subscribe().unsubscribe()
+    expect(h.reads.keys).toEqual([])
+  })
+
+  it("expires one cached key without refreshing it or admitting a missing one", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    try {
+      const h = setup({ ttl: 100 })
+      h.reads.read({}).subscribe()
+      expect(h.reads.select({})?.expires).toBe(1100)
+      h.reads.invalidate(cacheKey({}))
+      expect(h.reads.select({})).toMatchObject({ result: page(), expires: 0 })
+      h.reads.invalidate(cacheKey({ offset: 20 }))
+      expect(h.reads.keys).toEqual([cacheKey({})])
+      expect(h.source).toHaveBeenCalledTimes(1)
+    } finally {
+      now.mockRestore()
+    }
+  })
 })
