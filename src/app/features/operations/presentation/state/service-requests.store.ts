@@ -6,16 +6,11 @@ import {
   defer,
   EMPTY,
   finalize,
-  filter,
   map,
-  merge,
   Observable,
   of,
   take,
   takeUntil,
-  shareReplay,
-  Subject,
-  switchMap,
   tap
 } from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
@@ -26,11 +21,7 @@ import {
   UpdateServiceRequestUseCase
 } from "../../application/use-cases/service-request-write.use-cases"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
-import {
-  createReadResource,
-  ReadResource,
-  ReadResourceState
-} from "@/app/shared/state/read-resource"
+import { createKeyedReads, keyedState, KeyedEntry } from "@/app/shared/state/keyed-reads"
 import { Result } from "@/app/shared/utils/result"
 import {
   GetServiceRequestByIdUseCase,
@@ -54,7 +45,6 @@ export interface ServiceRequestsReadEntry<T> {
 }
 
 type Page = PaginationResponse<ServiceRequestSummary>
-type Entries<T> = Readonly<Record<string, ServiceRequestsReadEntry<T>>>
 const empty = <T>(): ServiceRequestsReadEntry<T> => ({
   result: undefined,
   loading: false,
@@ -77,27 +67,35 @@ const calendar = (value: unknown): value is string => {
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
   return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]
 }
+const bounds = (query: ServiceRequestQuery) => ({
+  offset: query.offset === undefined ? 0 : query.offset,
+  limit: query.limit === undefined ? 20 : query.limit
+})
+const REQUEST_STATES = ["registrada", "atendida", "cancelada"]
 // Validate before registry admission, so rejected inputs cannot evict verified history.
 // Transport validation remains authoritative; this only protects presentation keys/admission.
-const normalize = (query: ServiceRequestQuery): ServiceRequestQuery | undefined => {
-  const offset = query.offset === undefined ? 0 : query.offset
-  const limit = query.limit === undefined ? 20 : query.limit
-  if (
-    typeof offset !== "number" ||
-    !Number.isSafeInteger(offset) ||
-    offset < 0 ||
-    !positiveId(limit) ||
-    offset % limit !== 0 ||
-    offset / limit > 2147483647 ||
-    (query.customerId !== undefined && !positiveId(query.customerId)) ||
-    (query.status !== undefined && typeof query.status !== "string") ||
-    (query.from !== undefined && !calendar(query.from)) ||
-    (query.until !== undefined && !calendar(query.until)) ||
-    (query.from !== undefined && query.until !== undefined && query.from > query.until)
-  )
-    return undefined
+const supported = (query: ServiceRequestQuery): boolean => {
+  const { offset, limit } = bounds(query)
   const status = query.status?.trim().toLowerCase()
-  if (status && !["registrada", "atendida", "cancelada"].includes(status)) return undefined
+  return (
+    typeof offset === "number" &&
+    Number.isSafeInteger(offset) &&
+    offset >= 0 &&
+    positiveId(limit) &&
+    offset % limit === 0 &&
+    offset / limit <= 2147483647 &&
+    (query.customerId === undefined || positiveId(query.customerId)) &&
+    (query.status === undefined || typeof query.status === "string") &&
+    (query.from === undefined || calendar(query.from)) &&
+    (query.until === undefined || calendar(query.until)) &&
+    (query.from === undefined || query.until === undefined || query.from <= query.until) &&
+    (!status || REQUEST_STATES.includes(status))
+  )
+}
+// Canonical form for registry keys and requests; every entry point validates first.
+const normalize = (query: ServiceRequestQuery): ServiceRequestQuery => {
+  const { offset, limit } = bounds(query)
+  const status = query.status?.trim().toLowerCase()
   return {
     offset,
     limit,
@@ -107,6 +105,8 @@ const normalize = (query: ServiceRequestQuery): ServiceRequestQuery | undefined 
     ...(query.until !== undefined ? { until: query.until } : {})
   }
 }
+const snapshotOf = (query: ServiceRequestQuery): ServiceRequestQuery | undefined =>
+  supported(query) ? normalize(query) : undefined
 const queryKey = (query: ServiceRequestQuery) =>
   JSON.stringify([
     query.offset,
@@ -116,19 +116,12 @@ const queryKey = (query: ServiceRequestQuery) =>
     query.from ?? null,
     query.until ?? null
   ])
-const resourceState = <T>(
-  entry: ServiceRequestsReadEntry<T>
-): ReadResourceState<T | undefined, OperationsError> => ({
-  data: entry.result,
-  loaded: entry.result !== undefined,
-  refreshing: entry.refreshing,
-  error: entry.error,
-  expires: entry.expires
-})
 const initialState = {
   _pendingWrites: 0,
-  _pages: {} as Entries<Page>,
-  _details: {} as Entries<ServiceRequestSummary>
+  _pages: {} as Readonly<Record<string, KeyedEntry<ServiceRequestQuery, Page, OperationsError>>>,
+  _details: {} as Readonly<
+    Record<string, KeyedEntry<number, ServiceRequestSummary, OperationsError>>
+  >
 }
 
 export const ServiceRequestsStore = signalStore(
@@ -142,135 +135,49 @@ export const ServiceRequestsStore = signalStore(
       resets.forEach(reset => reset())
       patchState(store, initialState)
     })
-    // Only coordinators/pins live here. Reactive results live exclusively in SignalStore.
-    function registry<T>(get: () => Entries<T>, set: (entries: Entries<T>) => void) {
-      const resources = new Map<string, ReadResource<T | undefined, OperationsError>>()
-      const active = new Map<string, number>()
-      const refreshes = new Subject<Map<string, Observable<Result<T, OperationsError>>>>()
-      resets.push(() => {
-        const previous = [...resources.values()]
-        resources.clear()
-        previous.forEach(resource => resource.reset())
-      })
-      const admit = (key: string) => {
-        if (get()[key]) return true
-        const entries = { ...get() }
-        if (Object.keys(entries).length >= 20) {
-          const oldest = Object.keys(entries).find(
-            key => !active.has(key) && !resources.get(key)?.isPending()
-          )
-          if (oldest === undefined) return false
-          delete entries[oldest]
-          resources.delete(oldest)
-        }
-        set({ ...entries, [key]: empty<T>() })
-        return true
-      }
-      const read = (
-        key: string,
-        request: () => Observable<Result<T, OperationsError>>,
-        force: boolean
-      ): Observable<Result<T, OperationsError>> =>
-        defer(() => {
-          if (!scope.check()) return failure<T>("UNAUTHENTICATED")
-          if (!admit(key)) return failure<T>("UNAVAILABLE")
-          let resource = resources.get(key)
-          if (!resource) {
-            const coordinator = createReadResource<T | undefined, OperationsError>({
-              state: {
-                get: () => resourceState(get()[key]),
-                update: update => {
-                  const entry = get()[key]
-                  if (!entry || resources.get(key) !== coordinator) return
-                  const patch = update(resourceState(entry))
-                  const next = { ...resourceState(entry), ...patch }
-                  const settled = "data" in patch || patch.error !== undefined
-                  set({
-                    ...get(),
-                    [key]: {
-                      result: next.data,
-                      loading:
-                        !settled &&
-                        (next.pendingReads ?? coordinator.pendingReads) > 0 &&
-                        !next.loaded,
-                      refreshing: !settled && next.refreshing,
-                      error: next.error,
-                      expires: patch.error ? 0 : next.expires
-                    }
-                  })
-                }
-              },
-              initialData: () => undefined,
-              request: () =>
-                request().pipe(take(1), defaultIfEmpty(Result.failure(error("INVALID_RESPONSE")))),
-              normalizeError: value =>
-                value instanceof OperationsError ? value : error("UNKNOWN"),
-              ttl: 30000,
-              scope,
-              forcePolicy: "join",
-              cancelOnInvalidate: true
-            })
-            resources.set(key, coordinator)
-            resource = coordinator
-          }
-          return resource.read(force) as Observable<Result<T, OperationsError>>
-        })
-      return {
-        invalidate(predicate: (key: string) => boolean = () => true) {
-          const generation = scope.generation()
-          const current = () => scope.check() && generation === scope.generation()
-          const keys = [...resources.keys()].filter(predicate)
-          for (const key of keys) {
-            if (!current()) return
-            resources.get(key)?.invalidate()
-          }
-          const batch = new Map<string, Observable<Result<T, OperationsError>>>()
-          for (const key of keys) {
-            if (!current()) return
-            const resource = resources.get(key)
-            if (active.has(key) && resource) {
-              // Forced reads call the T-valued request; undefined is only the unloaded state.
-              const refresh = resource.read(true) as Observable<Result<T, OperationsError>>
-              batch.set(key, refresh.pipe(shareReplay({ bufferSize: 1, refCount: true })))
-            }
-          }
-          if (current()) refreshes.next(batch)
-        },
-        select: (key: string) => get()[key] ?? empty<T>(),
-        observe: (
-          key: string,
-          request: () => Observable<Result<T, OperationsError>>,
-          force = false
-        ): Observable<Result<T, OperationsError>> =>
-          defer(() => {
-            if (!scope.check()) return EMPTY
-            if (!admit(key)) return failure<T>("UNAVAILABLE")
-            active.set(key, (active.get(key) ?? 0) + 1)
-            return merge(
-              refreshes.pipe(
-                map(batch => batch.get(key)),
-                filter(value => value !== undefined)
-              ),
-              of(read(key, request, force))
-            ).pipe(
-              switchMap(request => request),
-              takeUntil(scope.cancelled$),
-              finalize(() => {
-                const count = (active.get(key) ?? 1) - 1
-                if (count) active.set(key, count)
-                else active.delete(key)
-              })
-            )
-          })
-      }
-    }
-    const pages = registry(
-      () => store._pages(),
-      entries => patchState(store, { _pages: entries })
-    )
-    const details = registry(
-      () => store._details(),
-      entries => patchState(store, { _details: entries })
+    // Verified results live exclusively in SignalStore; the registries retain coordination.
+    // Cold, single-emission requests; an empty completion is an invalid response.
+    const settle = <T>(source: Observable<Result<T, OperationsError>>) =>
+      source.pipe(take(1), defaultIfEmpty(Result.failure(error("INVALID_RESPONSE"))))
+    const pages = createKeyedReads<ServiceRequestQuery, Page, OperationsError>({
+      key: queryKey,
+      normalize,
+      request: query => settle(injector.get(ListServiceRequestsUseCase).execute(query)),
+      state: keyedState(
+        () => store._pages(),
+        next => patchState(store, { _pages: next })
+      ),
+      scope,
+      ttl: 30000,
+      normalizeError: value => (value instanceof OperationsError ? value : error("UNKNOWN")),
+      // Admission refuses instead of throwing: the documented unavailability failure is kept.
+      overflow: () => error("UNAVAILABLE"),
+      // A direct read fails closed; observation simply completes without a session.
+      noSession: "failure",
+      noSessionError: () => error("UNAUTHENTICATED"),
+      noSessionObserve: "empty",
+      // A failed read rescinds freshness instead of leaving the entry verified.
+      expireOnError: true
+    })
+    const details = createKeyedReads<number, ServiceRequestSummary, OperationsError>({
+      key: id => String(id),
+      request: id => settle(injector.get(GetServiceRequestByIdUseCase).execute(id)),
+      state: keyedState(
+        () => store._details(),
+        next => patchState(store, { _details: next })
+      ),
+      scope,
+      ttl: 30000,
+      normalizeError: value => (value instanceof OperationsError ? value : error("UNKNOWN")),
+      overflow: () => error("UNAVAILABLE"),
+      noSession: "failure",
+      noSessionError: () => error("UNAUTHENTICATED"),
+      noSessionObserve: "empty",
+      expireOnError: true
+    })
+    resets.push(
+      () => pages.reset(),
+      () => details.reset()
     )
     return {
       // Order creation owns history invalidation. This seam affects only
@@ -278,9 +185,9 @@ export const ServiceRequestsStore = signalStore(
       invalidateAfterOrderCreation(linkedRequestId: number): void {
         if (!positiveId(linkedRequestId) || !scope.check()) return
         const generation = scope.generation()
-        pages.invalidate()
+        pages.markMutated()
         if (!scope.check() || generation !== scope.generation()) return
-        details.invalidate(key => key === String(linkedRequestId))
+        details.markMutated(entry => entry.query === linkedRequestId)
       },
       cancelRequest(
         id: number,
@@ -311,9 +218,9 @@ export const ServiceRequestsStore = signalStore(
             ),
             tap(result => {
               if (!result.success || !current()) return
-              pages.invalidate()
+              pages.markMutated()
               if (!current()) return
-              details.invalidate(key => key === String(id))
+              details.markMutated(entry => entry.query === id)
               if (!current()) return
               injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
             }),
@@ -356,9 +263,9 @@ export const ServiceRequestsStore = signalStore(
             ),
             tap(result => {
               if (!result.success || !current()) return
-              pages.invalidate()
+              pages.markMutated()
               if (!current()) return
-              details.invalidate(key => key === String(id))
+              details.markMutated(entry => entry.query === id)
               if (!current()) return
               injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
             }),
@@ -390,9 +297,9 @@ export const ServiceRequestsStore = signalStore(
             ),
             tap(result => {
               if (!result.success || !current()) return
-              pages.invalidate()
+              pages.markMutated()
               if (!current()) return
-              details.invalidate(key => key === String(result.data.id))
+              details.markMutated(entry => entry.query === result.data.id)
               if (!current()) return
               injector.get(CustomerHistoryStore).invalidateCustomer(result.data.customerId)
             }),
@@ -405,33 +312,27 @@ export const ServiceRequestsStore = signalStore(
         })
       },
       selectRequests(query: ServiceRequestQuery = {}): ServiceRequestsReadEntry<Page> {
-        const snapshot = normalize(query)
-        return snapshot ? pages.select(queryKey(snapshot)) : empty<Page>()
+        const snapshot = snapshotOf(query)
+        return snapshot ? (pages.select(snapshot) ?? empty<Page>()) : empty<Page>()
       },
       observeRequests(
         query: ServiceRequestQuery = {},
         force = false
       ): Observable<Result<Page, OperationsError>> {
-        const snapshot = normalize(query)
+        const snapshot = snapshotOf(query)
         if (!snapshot) return failure<Page>("INVALID_DATA")
-        return pages.observe(
-          queryKey(snapshot),
-          () => injector.get(ListServiceRequestsUseCase).execute(snapshot),
-          force
-        )
+        return pages.observe(snapshot, { force })
       },
       selectRequest: (id: number): ServiceRequestsReadEntry<ServiceRequestSummary> =>
-        positiveId(id) ? details.select(String(id)) : empty<ServiceRequestSummary>(),
+        positiveId(id)
+          ? (details.select(id) ?? empty<ServiceRequestSummary>())
+          : empty<ServiceRequestSummary>(),
       observeRequest(
         id: number,
         force = false
       ): Observable<Result<ServiceRequestSummary, OperationsError>> {
         if (!positiveId(id)) return failure<ServiceRequestSummary>("INVALID_DATA")
-        return details.observe(
-          String(id),
-          () => injector.get(GetServiceRequestByIdUseCase).execute(id),
-          force
-        )
+        return details.observe(id, { force })
       }
     }
   })
