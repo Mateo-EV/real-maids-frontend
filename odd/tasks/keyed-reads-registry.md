@@ -27,12 +27,36 @@ The migrated store must keep its existing public read API, TTLs, entry caps, pin
 
 Run workspace-local Prettier on changed files, the focused registry and consumer specs, and the full unit suite. Report exact commands and observed outcomes, including any failure. Do not claim live backend, CORS, browser or native review evidence.
 
+### S6 — Close the registry's own test gaps
+
+The user said: “ok vamos con c y b”, accepting option (c) as the first step. Add registry specs for: isolated `reset()`, `initialData` placeholder versus verified data, a filter-targeted `markMutated` that invalidates an inactive entry without refreshing it, static `select()`, `selectReactive` without `state.source`, and `keys`. Additive only: no production change to `keyed-reads.ts` unless a test proves the current behavior wrong, in which case the deviation is reported instead of silently fixed.
+
+### S7 — Migrate the three clone stores
+
+The user said: “ok vamos con c y b”, accepting option (b) as the second step. Migrate `service-requests.store.ts`, `service-orders.store.ts` and `field-staff.store.ts` to the registry, each with its existing spec byte-identical and its TTL, entry cap, admission outcome, no-session outcome, shared flights, session fencing and mutation targeting preserved. `agenda.store.ts` stays out of scope as page-owned. An additive registry hook is allowed only if a migrated store's no-session outcome differs from its admission error; the single admission semantic of S3 does not change.
+
+### S8 — Local merge to main
+
+The user said: “mergeas al main”. Merge the feature branch into `main` locally once S6 and S7 are committed and verified. No push, no pull request, no tag.
+
+### S9 — Then the IAM group
+
+The user said: “y luego vamos por b y a”. After the merge, continue with the four IAM stores: `user.store.ts`, `user-sessions.store.ts`, `rbac.store.ts` and `audit-logs.store.ts`. `roles.store.ts` and `agenda.store.ts` remain out of scope.
+
 ## Tasks
 
 - [x] T1 — Add the shared keyed read registry and its state adapter helper with their own focused specs. Linked: S1, S3. Route: bounded writer. Surfaces: `src/app/shared/state/keyed-reads.ts`, `src/app/shared/state/keyed-reads.spec.ts`. Commit `d4c2075`; registry 309 lines, 14/14 specs reproduced by the parent (L10).
 - [x] T2 — Migrate `customer-acquisition.store.ts` to the registry, preserving its public API and behavior; keep its existing spec green. Linked: S1, S2, S4. Route: bounded writer, after T1. Surfaces: `src/app/features/customers/presentation/state/customer-acquisition.store.ts`, `src/app/features/customers/presentation/state/customer-acquisition.store.spec.ts`. Commit `cb7f572`; store 493 -> 329 lines with a byte-identical spec (L11).
 - [x] T3 — Run formatting, focused and full verification; record exact evidence and any deviation. Linked: S5. Route: parent with re-run of reported commands, plus independent verifier because the Risk line names high-risk items. Partial by environment: the full suite is unreachable (L12); directed verification passed (L10, L11, L13).
 - [x] T4 — Commit the work units and report the stage-1 outcome with the explicit list of stores not yet migrated. Linked: S2, S5. Route: parent. Stage-2/3 stores remain explicitly unmigrated (L13).
+- [ ] T5 — Add the missing registry specs. Linked: S6. Route: bounded writer. Surfaces: `src/app/shared/state/keyed-reads.spec.ts`.
+- [ ] T6 — Map the three clone stores' read contracts before handoff. Linked: S7. Route: bounded explorer, read-only.
+- [ ] T7 — Migrate `service-requests.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
+- [ ] T8 — Migrate `service-orders.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
+- [ ] T9 — Migrate `field-staff.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
+- [ ] T10 — Format, focused and full verification for S6 and S7. Linked: S5, S6, S7. Route: parent with command re-run.
+- [ ] T11 — Merge the feature branch into `main` locally, without push. Linked: S8. Route: parent, after T10.
+- [ ] T12 — Map and migrate the four IAM stores. Linked: S9. Route: explorer, then bounded writers.
 
 ## Log
 
@@ -116,3 +140,53 @@ Outcome against the estimates: the store shrank by 164 lines rather than the pro
 Open items carried forward, none of them blocking this stage: `selectReactive` and `keyedState`'s `source` have no production consumer yet; `noSession: "failure"` reuses the admission error, which needs a dedicated hook before stage 3; entry object identity changes for sibling keys on write, which is bounded recomputation and not a data defect; and the remaining six query-keyed stores are explicitly unmigrated.
 
 Stage 1 is the registry plus one migrated store (`customer-acquisition.store.ts`, the largest consumer with three keyed families and mixed TTLs). Remaining stores are stage 2 (IAM) and stage 3 (operations) and are explicitly not authorized here. `docs/architecture/keyed-reads.md` was offered and not authorized; no documentation file is created by this delivery.
+
+### L14 — Scope extended to (c), (b), the local merge and then (a)
+
+“ok vamos con c y b, mergeas al main, y luego vamos por b y a”
+
+Sequencing taken: (c) the registry test gaps, then (b) the three clone stores, then the local merge into `main`, then (a) the IAM group. The repeated “b” in the last clause is read as redundant, and the merge boundary sits after S6 and S7 so `main` receives the registry with four consumers instead of a half-migrated state. Push and pull request are not authorized. The stage-1-only restriction of S2 is superseded for S6–S9; the rest of S2 (no HTTP, auth, storage, dependency or route change) still holds.
+
+### L15 — Stop after (b); the merge and (a) are deferred
+
+“despues de que hagas b detente”
+
+This supersedes the merge and IAM ordering of L14 for this cycle. Executed here: S6 (c) and S7 (b), committed as work units on `feature/keyed-reads-registry`. Not executed: S8 (local merge into `main`) and S9 (IAM), both requiring a new explicit request. The feature branch stays where it is, with no push.
+
+### L16 — Incident: the field-staff writer died on host memory, and two additive hooks were required
+
+The T9 writer (`field-staff.store.ts`) exited with code 134 before `agent_settled`. `git status` and `git diff --stat` on `src/app/features/field-operations` showed no modification at all, so the crash landed before its first edit and lost no work. Cause is the L12 host allocation failure, amplified by four concurrent heavy processes (one spec writer plus three store writers each building and running Angular tests). No orphaned process was left behind. Mitigation: field-staff is migrated inline by the parent and every focused test run is serialized from here; the remaining writers were not relaunched.
+
+Migrating the three clone stores required two additive registry options, each forced by evidence rather than preference:
+
+- No-session outcome is not uniform. `service-requests.store.ts:175` and `field-staff.store.ts:114` fail `UNAUTHENTICATED` on a direct read while their observation completes empty (`:246` and `:165`), and `service-orders.store.ts` completes empty on both (`:184`, `:257`). The single `noSession` value could not express that, so the registry gained `noSessionObserve` and `noSessionError`. The single admission semantic of S3 is unchanged.
+- Freshness on failure is not uniform either. These three stores zero `expires` when a read fails (`field-staff.store.ts:130`), and `field-staff.store.spec.ts:171` pins `expires: 0` after a failed forced revalidation, while the migrated acquisition store retains the previous expiry. Without a hook that assertion would fail, so the registry gained `expireOnError`.
+
+Both options are opt-in and default to the previous behavior, so the acquisition consumer and its untouched spec are unaffected.
+
+### L17 — (c) closed at 23/23, with two writer tests corrected
+
+The T5 writer was killed with the parent process after writing eight specs. Two of them asserted behavior the registry does not have, so both were corrected rather than forced green (S6: report, never silently fix):
+
+- The `initialData` placeholder test failed because the registry accepts `initialData` but never surfaces it: `createReadResource` uses `initialData()` only inside `reset()` (`read-resource.ts:151`), while the registry exposes its own entry state, so `select()` can only ever return request-owned data. No consumer passes `initialData` today (acquisition omits it, field-staff and the operations clones pass `() => undefined`). The test was deleted instead of pinned, and the option is recorded here as dead surface: either remove it, or implement a verified-versus-placeholder distinction if a consumer ever needs a visible placeholder. Making `result` hold the placeholder would flip `loaded` for an unverified entry and change `refreshing` versus `loading`, so it is not a one-line fix and was not attempted under S6.
+- The `selectReactive`-without-`source` test failed because the fallback projection reads `state.get()`, which is reactive whenever the consumer's state is signal-backed, so it tracks entry writes too. The documented contract is that only the query is followed when there is no source, so the test was rewritten over an inert state: entry writes do not invalidate the projection, and a query change resolves the already-stored entry.
+
+Final focused evidence after the corrections: `npx --no-install ng test --watch=false --include=src/app/shared/state/keyed-reads.spec.ts` → 1 file, **23/23 passed**, exit 0. Prettier `--check` clean on the three touched source files. field-staff: **21/21 passed** with its spec file untouched, and `npx --no-install tsc -p tsconfig.app.json --noEmit` exit 0.
+
+### L18 — (b) delivered: three stores migrated with every consumer spec untouched
+
+Two more writer launches ended with “parent process terminated while task was in flight”, and the human reported blocking the harness by accident, which is consistent with the parent dying rather than with a test or code failure. One of them had already migrated `service-requests.store.ts` before dying but never compiled it: it had dropped `map` from the rxjs import while rewriting the registry region, which surfaced as `Cannot find name 'map'` and a cascade of `unknown` results in the write paths. The parent caught it with `tsc --noEmit` before running any test and restored the import; the store then type-checked and its spec passed. The second writer never touched `service-orders.store.ts`, so that migration was done inline by the parent.
+
+Result of (b), measured against `c4e6549`:
+
+| Store | Before | After | Consumer spec |
+| --- | ---: | ---: | --- |
+| `field-staff.store.ts` | 213 | 139 | 21/21, untouched |
+| `service-requests.store.ts` | 437 | 339 | 16/16, untouched |
+| `service-orders.store.ts` | 475 | 352 | 25/25, untouched |
+
+Totals: 1125 → 830 lines (+219/−517), and `git diff --name-only c4e6549..HEAD -- "*store.spec.ts"` is empty, so all three consumer suites are byte-identical rather than rewritten. `service-orders-manual.store.spec.ts`, which pins the refresh batch that the registry replaced, also passes 44/44 untouched. `tsc --noEmit` exits 0 and Prettier `--check` is clean on all three stores.
+
+One behavioral asymmetry worth recording: the local order registry did not run `admit` inside its `read`, only inside `observe`, because the public API exposes only observers. The shared registry admits in both paths. Nothing observable changes for the current public API, since only `observeOrders`/`observeOrder` reach it and they admit first, but a future direct read would now admit or refuse rather than reading a missing entry.
+
+Still unverified, and not claimed: the full unit suite remains unreachable on this host (L12), consumer-level component specs for these two features were not run, and there is no native review, live backend, CORS or browser evidence for this stage.
