@@ -1,4 +1,4 @@
-import { computed, inject, Injector } from "@angular/core"
+import { computed, inject, Injector, Signal } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import {
   catchError,
@@ -6,24 +6,15 @@ import {
   defer,
   EMPTY,
   finalize,
-  filter,
-  map,
-  merge,
   Observable,
   of,
-  shareReplay,
-  Subject,
-  switchMap,
   take,
   takeUntil,
   tap
 } from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
-import {
-  createReadResource,
-  ReadResource,
-  ReadResourceState
-} from "@/app/shared/state/read-resource"
+import { createKeyedReads, KeyedEntry, keyedState } from "@/app/shared/state/keyed-reads"
+import { ReadResourceState } from "@/app/shared/state/read-resource"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
@@ -50,8 +41,19 @@ export interface AcquisitionReadEntry<T> extends Readonly<
 > {
   readonly loading: boolean
 }
+/**
+ * Stored entry: the registry state plus the read projection the consumers already use.
+ * `query` is the effective query the registry adopted for that key.
+ */
+interface AcquisitionEntry<Q, T> extends AcquisitionReadEntry<T> {
+  readonly query: Q
+}
 type Page = PaginationResponse<Lead>
-type Flight<T> = ReadResource<T | undefined, CustomerError>
+type FollowUpList = readonly LeadFollowUp[]
+type PageQuery = Required<PaginationParams>
+/** Catalogs are single-key registries; the query only carries the fixed cache key. */
+type CatalogQuery = null
+const catalogKey = "catalog"
 const emptyEntry = <T>(): AcquisitionReadEntry<T> => ({
   data: undefined,
   loaded: false,
@@ -61,17 +63,62 @@ const emptyEntry = <T>(): AcquisitionReadEntry<T> => ({
   expires: 0,
   error: undefined
 })
+const emptyCatalog = <T>(): AcquisitionEntry<CatalogQuery, T> => ({
+  ...emptyEntry<T>(),
+  query: null
+})
+// A typed boundary only: the registry owns coordination and stores `result`, while the
+// presentation surface keeps reading `data`/`loaded`/`pendingReads`.
+const toKeyed = <Q, T>(entry: AcquisitionEntry<Q, T>): KeyedEntry<Q, T, CustomerError> => ({
+  query: entry.query,
+  result: entry.data,
+  loading: entry.loading,
+  refreshing: entry.refreshing,
+  error: entry.error,
+  expires: entry.expires
+})
+const fromKeyed = <Q, T>(entry: KeyedEntry<Q, T, CustomerError>): AcquisitionEntry<Q, T> => ({
+  query: entry.query,
+  data: entry.result,
+  loaded: entry.result !== undefined,
+  loading: entry.loading,
+  // A key shares one joined flight, so a pending read is exactly one.
+  pendingReads: entry.loading || entry.refreshing ? 1 : 0,
+  refreshing: entry.refreshing,
+  expires: entry.expires,
+  error: entry.error
+})
+const toKeyedRecord = <Q, T>(
+  entries: Readonly<Record<string, AcquisitionEntry<Q, T>>>
+): Record<string, KeyedEntry<Q, T, CustomerError>> => {
+  const keyed: Record<string, KeyedEntry<Q, T, CustomerError>> = {}
+  for (const key of Object.keys(entries)) keyed[key] = toKeyed(entries[key])
+  return keyed
+}
+const fromKeyedRecord = <Q, T>(
+  entries: Readonly<Record<string, KeyedEntry<Q, T, CustomerError>>>
+): Record<string, AcquisitionEntry<Q, T>> => {
+  const stored: Record<string, AcquisitionEntry<Q, T>> = {}
+  for (const key of Object.keys(entries)) stored[key] = fromKeyed(entries[key])
+  return stored
+}
+const storedCatalog = <T>(
+  entries: Readonly<Record<string, KeyedEntry<CatalogQuery, T, CustomerError>>>
+): AcquisitionEntry<CatalogQuery, T> => {
+  const entry = entries[catalogKey]
+  return entry ? fromKeyed(entry) : emptyCatalog<T>()
+}
 const initialState = {
-  origins: emptyEntry<readonly LeadOrigin[]>(),
-  stages: emptyEntry<readonly FunnelStage[]>(),
-  pages: {} as Readonly<Record<string, AcquisitionReadEntry<Page>>>,
-  leads: {} as Readonly<Record<string, AcquisitionReadEntry<Lead>>>,
-  followUps: {} as Readonly<Record<string, AcquisitionReadEntry<readonly LeadFollowUp[]>>>,
+  origins: emptyCatalog<readonly LeadOrigin[]>(),
+  stages: emptyCatalog<readonly FunnelStage[]>(),
+  pages: {} as Readonly<Record<string, AcquisitionEntry<PageQuery, Page>>>,
+  leads: {} as Readonly<Record<string, AcquisitionEntry<number, Lead>>>,
+  followUps: {} as Readonly<Record<string, AcquisitionEntry<number, FollowUpList>>>,
   _pendingWrites: 0,
   writeError: undefined as CustomerError | undefined,
   mutationRevision: 0
 }
-const querySnapshot = (query: PaginationParams): Required<PaginationParams> => ({
+const querySnapshot = (query: PaginationParams): PageQuery => ({
   offset: query.offset ?? 0,
   limit: query.limit ?? 20
 })
@@ -96,309 +143,96 @@ export const CustomerAcquisitionStore = signalStore(
   })),
   withMethods(store => {
     const injector = inject(Injector)
-    // Registries retain coordinators only. Verified results live exclusively in SignalStore.
-    const pages = new Map<string, Flight<Page>>()
-    const leads = new Map<string, Flight<Lead>>()
-    const followUps = new Map<string, Flight<readonly LeadFollowUp[]>>()
-    const activePages = new Map<string, number>()
-    const activeLeads = new Map<string, number>()
-    const activeFollowUps = new Map<string, number>()
-    // Event-local shared flights, not a second result cache. Even synchronous failures
-    // fan out once per mutation, and only caller-owned observers subscribe.
-    const refreshes = new Subject<{
-      pages: ReadonlyMap<string, Observable<Result<Page | undefined, CustomerError>>>
-      leads: ReadonlyMap<string, Observable<Result<Lead | undefined, CustomerError>>>
-      followUps: ReadonlyMap<
-        string,
-        Observable<Result<readonly LeadFollowUp[] | undefined, CustomerError>>
-      >
-    }>()
-    const scope = createSessionReadScope(() => {
-      origins.reset()
-      stages.reset()
-      pages.forEach(resource => resource.reset())
-      leads.forEach(resource => resource.reset())
-      followUps.forEach(resource => resource.reset())
-      pages.clear()
-      leads.clear()
-      followUps.clear()
-      patchState(store, { ...initialState, mutationRevision: store.mutationRevision() })
-    })
+    // Verified results live exclusively in SignalStore; registries retain coordinators.
+    let resetReads: () => void = () => undefined
+    const scope = createSessionReadScope(() => resetReads())
     const normalizeError = (error: unknown) =>
       error instanceof CustomerError ? error : new CustomerError("UNEXPECTED")
-    // A typed adapter only: sharing/freshness/cancellation stay in the existing coordinator.
-    const bindRead = <T>(
-      get: () => AcquisitionReadEntry<T>,
-      set: (entry: AcquisitionReadEntry<T>) => void,
-      request: () => Observable<Result<T, CustomerError>>,
-      ttl: number
-    ): Flight<T> => {
-      const resource = createReadResource<T | undefined, CustomerError>({
-        state: {
-          get,
-          update: update => {
-            const current = get(),
-              patch = update(current),
-              next = { ...current, ...patch }
-            const settled = "data" in patch || patch.error !== undefined
-            set({
-              ...next,
-              loading: !settled && !next.loaded && (next.pendingReads ?? resource.pendingReads) > 0,
-              refreshing: !settled && next.refreshing
-            })
-          }
-        },
-        initialData: () => undefined,
-        request: () =>
-          defer(request).pipe(
-            take(1),
-            defaultIfEmpty(Result.failure(new CustomerError("INVALID_RESPONSE")))
-          ),
-        normalizeError,
-        ttl,
-        scope,
-        forcePolicy: "join",
-        cancelOnInvalidate: true
-      })
-      return resource
-    }
-    const origins = bindRead(
-      () => store.origins(),
-      entry => patchState(store, { origins: entry }),
-      () => injector.get(Actions.ListLeadOriginsUseCase).execute(),
-      120000
-    )
-    const stages = bindRead(
-      () => store.stages(),
-      entry => patchState(store, { stages: entry }),
-      () => injector.get(Actions.ListFunnelStagesUseCase).execute(),
-      120000
-    )
-
-    // Hard cap of twenty per context. In-flight views cannot be evicted to admit a new key.
-    const admit = <T>(
-      registry: Map<string, Flight<T>>,
-      key: string,
-      active: ReadonlyMap<string, number>,
-      evict: (key: string) => void
-    ): boolean => {
-      if (registry.has(key) || registry.size < 20) return true
-      const candidate = [...registry.keys()].find(
-        key => !active.has(key) && !registry.get(key)!.isPending()
+    /** Admission refuses instead of throwing: the documented conflict failure is kept. */
+    const conflict = () => new CustomerError("CONFLICT")
+    /** Cold, single-emission requests; an empty completion is an invalid response. */
+    const request = <T>(factory: () => Observable<Result<T, CustomerError>>) =>
+      defer(factory).pipe(
+        take(1),
+        defaultIfEmpty(Result.failure(new CustomerError("INVALID_RESPONSE")))
       )
-      if (candidate === undefined) return false
-      registry.delete(candidate)
-      evict(candidate)
-      return true
+    const origins = createKeyedReads<CatalogQuery, readonly LeadOrigin[], CustomerError>({
+      key: () => catalogKey,
+      request: () => request(() => injector.get(Actions.ListLeadOriginsUseCase).execute()),
+      state: keyedState<CatalogQuery, readonly LeadOrigin[], CustomerError>(
+        () => ({ [catalogKey]: toKeyed(store.origins()) }),
+        next => patchState(store, { origins: storedCatalog(next) })
+      ),
+      scope,
+      ttl: 120000,
+      normalizeError,
+      overflow: conflict
+    })
+    const stages = createKeyedReads<CatalogQuery, readonly FunnelStage[], CustomerError>({
+      key: () => catalogKey,
+      request: () => request(() => injector.get(Actions.ListFunnelStagesUseCase).execute()),
+      state: keyedState<CatalogQuery, readonly FunnelStage[], CustomerError>(
+        () => ({ [catalogKey]: toKeyed(store.stages()) }),
+        next => patchState(store, { stages: storedCatalog(next) })
+      ),
+      scope,
+      ttl: 120000,
+      normalizeError,
+      overflow: conflict
+    })
+    const pages = createKeyedReads<PageQuery, Page, CustomerError>({
+      key: pageKey,
+      normalize: querySnapshot,
+      request: query => request(() => injector.get(Actions.ListLeadsUseCase).execute(query)),
+      // Effective server paging is remembered without changing the requested cache key.
+      adopt: (_, page) => ({ offset: page.offset, limit: page.limit }),
+      state: keyedState<PageQuery, Page, CustomerError>(
+        () => toKeyedRecord(store.pages()),
+        next => patchState(store, { pages: fromKeyedRecord(next) })
+      ),
+      scope,
+      ttl: 30000,
+      normalizeError,
+      overflow: conflict
+    })
+    const leads = createKeyedReads<number, Lead, CustomerError>({
+      key: String,
+      request: id => request(() => injector.get(Actions.GetLeadUseCase).execute(id)),
+      state: keyedState<number, Lead, CustomerError>(
+        () => toKeyedRecord(store.leads()),
+        next => patchState(store, { leads: fromKeyedRecord(next) })
+      ),
+      scope,
+      ttl: 30000,
+      normalizeError,
+      overflow: conflict
+    })
+    const followUps = createKeyedReads<number, FollowUpList, CustomerError>({
+      key: String,
+      request: leadId =>
+        request(() => injector.get(Actions.ListLeadFollowUpsUseCase).execute(leadId)),
+      state: keyedState<number, FollowUpList, CustomerError>(
+        () => toKeyedRecord(store.followUps()),
+        next => patchState(store, { followUps: fromKeyedRecord(next) })
+      ),
+      scope,
+      ttl: 30000,
+      normalizeError,
+      overflow: conflict
+    })
+    resetReads = () => {
+      origins.reset()
+      stages.reset()
+      pages.reset()
+      leads.reset()
+      followUps.reset()
+      patchState(store, { _pendingWrites: 0, writeError: undefined })
     }
-    const loadLeads = (query: PaginationParams = {}, force = false) => {
-      const snapshot = querySnapshot(query),
-        key = pageKey(snapshot)
-      return defer(() => {
-        if (!scope.check()) return EMPTY
-        if (
-          !admit(pages, key, activePages, key => {
-            const entries = { ...store.pages() }
-            delete entries[key]
-            patchState(store, { pages: entries })
-          })
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        let resource = pages.get(key)
-        if (!resource) {
-          patchState(store, { pages: { ...store.pages(), [key]: emptyEntry<Page>() } })
-          resource = bindRead(
-            () => store.pages()[key] ?? emptyEntry<Page>(),
-            entry => patchState(store, { pages: { ...store.pages(), [key]: entry } }),
-            () => {
-              const effective = store.pages()[key]?.data
-              return injector
-                .get(Actions.ListLeadsUseCase)
-                .execute(
-                  effective ? { offset: effective.offset, limit: effective.limit } : snapshot
-                )
-            },
-            30000
-          )
-          pages.set(key, resource)
-        }
-        return resource.read(force)
-      })
-    }
-    const loadLead = (id: number, force = false) =>
-      defer(() => {
-        if (!scope.check()) return EMPTY
-        const key = String(id)
-        if (
-          !admit(leads, key, activeLeads, key => {
-            const entries = { ...store.leads() }
-            delete entries[key]
-            patchState(store, { leads: entries })
-          })
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        let resource = leads.get(key)
-        if (!resource) {
-          patchState(store, { leads: { ...store.leads(), [key]: emptyEntry<Lead>() } })
-          resource = bindRead(
-            () => store.leads()[key] ?? emptyEntry<Lead>(),
-            entry => patchState(store, { leads: { ...store.leads(), [key]: entry } }),
-            () => injector.get(Actions.GetLeadUseCase).execute(id),
-            30000
-          )
-          leads.set(key, resource)
-        }
-        return resource.read(force)
-      })
-    const loadFollowUps = (leadId: number, force = false) =>
-      defer(() => {
-        if (!scope.check()) return EMPTY
-        const key = String(leadId)
-        if (
-          !admit(followUps, key, activeFollowUps, key => {
-            const entries = { ...store.followUps() }
-            delete entries[key]
-            patchState(store, { followUps: entries })
-          })
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        let resource = followUps.get(key)
-        if (!resource) {
-          patchState(store, {
-            followUps: { ...store.followUps(), [key]: emptyEntry<readonly LeadFollowUp[]>() }
-          })
-          resource = bindRead(
-            () => store.followUps()[key] ?? emptyEntry<readonly LeadFollowUp[]>(),
-            entry => patchState(store, { followUps: { ...store.followUps(), [key]: entry } }),
-            () => injector.get(Actions.ListLeadFollowUpsUseCase).execute(leadId),
-            30000
-          )
-          followUps.set(key, resource)
-        }
-        return resource.read(force)
-      })
-    /** Keep this subscription for the mounted view; selectors alone do not pin history. */
-    const observeLeads = (query: PaginationParams = {}, force = false) => {
-      const snapshot = querySnapshot(query),
-        key = pageKey(snapshot)
-      return defer(() => {
-        if (!scope.check()) return EMPTY
-        if (
-          !pages.has(key) &&
-          pages.size >= 20 &&
-          [...pages.keys()].every(key => activePages.has(key) || pages.get(key)!.isPending())
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        activePages.set(key, (activePages.get(key) ?? 0) + 1)
-        return merge(
-          refreshes.pipe(
-            map(batch => batch.pages.get(key)),
-            filter(batch => batch !== undefined)
-          ),
-          of(loadLeads(snapshot, force))
-        ).pipe(
-          switchMap(read => read),
-          takeUntil(scope.cancelled$),
-          finalize(() => {
-            const remaining = (activePages.get(key) ?? 1) - 1
-            if (remaining) activePages.set(key, remaining)
-            else activePages.delete(key)
-          })
-        )
-      })
-    }
-    const observeLead = (id: number, force = false) =>
-      defer(() => {
-        if (!scope.check()) return EMPTY
-        const key = String(id)
-        if (
-          !leads.has(key) &&
-          leads.size >= 20 &&
-          [...leads.keys()].every(key => activeLeads.has(key) || leads.get(key)!.isPending())
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        activeLeads.set(key, (activeLeads.get(key) ?? 0) + 1)
-        return merge(
-          refreshes.pipe(
-            map(batch => batch.leads.get(key)),
-            filter(batch => batch !== undefined)
-          ),
-          of(loadLead(id, force))
-        ).pipe(
-          switchMap(read => read),
-          takeUntil(scope.cancelled$),
-          finalize(() => {
-            const remaining = (activeLeads.get(key) ?? 1) - 1
-            if (remaining) activeLeads.set(key, remaining)
-            else activeLeads.delete(key)
-          })
-        )
-      })
-    const observeFollowUps = (leadId: number, force = false) =>
-      defer(() => {
-        if (!scope.check()) return EMPTY
-        const key = String(leadId)
-        if (
-          !followUps.has(key) &&
-          followUps.size >= 20 &&
-          [...followUps.keys()].every(
-            key => activeFollowUps.has(key) || followUps.get(key)!.isPending()
-          )
-        )
-          return of(Result.failure(new CustomerError("CONFLICT")))
-        activeFollowUps.set(key, (activeFollowUps.get(key) ?? 0) + 1)
-        return merge(
-          refreshes.pipe(
-            map(batch => batch.followUps.get(key)),
-            filter(batch => batch !== undefined)
-          ),
-          of(loadFollowUps(leadId, force))
-        ).pipe(
-          switchMap(read => read),
-          takeUntil(scope.cancelled$),
-          finalize(() => {
-            const remaining = (activeFollowUps.get(key) ?? 1) - 1
-            if (remaining) activeFollowUps.set(key, remaining)
-            else activeFollowUps.delete(key)
-          })
-        )
-      })
+    // Lead writes expire every page plus only the affected lead and follow-up list.
     const invalidateLead = (id: number, appendedFollowUp = false) => {
-      const key = String(id)
-      pages.forEach(resource => resource.invalidate())
-      leads.get(key)?.invalidate()
-      if (appendedFollowUp) followUps.get(key)?.invalidate()
-      const pageBatch = new Map<string, Observable<Result<Page | undefined, CustomerError>>>()
-      const leadBatch = new Map<string, Observable<Result<Lead | undefined, CustomerError>>>()
-      const followUpBatch = new Map<
-        string,
-        Observable<Result<readonly LeadFollowUp[] | undefined, CustomerError>>
-      >()
-      activePages.forEach((_, key) => {
-        const resource = pages.get(key)
-        if (resource)
-          pageBatch.set(
-            key,
-            resource.read(true).pipe(shareReplay({ bufferSize: 1, refCount: true }))
-          )
-      })
-      if (activeLeads.has(key) && leads.has(key))
-        leadBatch.set(
-          key,
-          leads
-            .get(key)!
-            .read(true)
-            .pipe(shareReplay({ bufferSize: 1, refCount: true }))
-        )
-      if (appendedFollowUp && activeFollowUps.has(key) && followUps.has(key))
-        followUpBatch.set(
-          key,
-          followUps
-            .get(key)!
-            .read(true)
-            .pipe(shareReplay({ bufferSize: 1, refCount: true }))
-        )
-      refreshes.next({ pages: pageBatch, leads: leadBatch, followUps: followUpBatch })
+      pages.markMutated()
+      leads.markMutated(entry => entry.query === id)
+      if (appendedFollowUp) followUps.markMutated(entry => entry.query === id)
     }
     // Writes are caller-owned, never cached, retried, or subscribed by this root store.
     const write = <T>(
@@ -430,40 +264,42 @@ export const CustomerAcquisitionStore = signalStore(
         )
       })
     return {
-      loadOrigins: (force = false) => origins.read(force),
-      loadStages: (force = false) => stages.read(force),
-      loadLeads,
-      loadLead,
-      loadFollowUps,
-      observeLeads,
-      observeLead,
-      observeFollowUps,
-      selectLeads: (query: PaginationParams = {}) => {
-        const key = pageKey(query)
-        return computed(() => store.pages()[key] ?? emptyEntry<Page>())
-      },
-      selectLead: (id: number) => computed(() => store.leads()[String(id)] ?? emptyEntry<Lead>()),
-      selectFollowUps: (leadId: number) =>
-        computed(() => store.followUps()[String(leadId)] ?? emptyEntry<readonly LeadFollowUp[]>()),
+      loadOrigins: (force = false) => origins.read(null, force),
+      loadStages: (force = false) => stages.read(null, force),
+      loadLeads: (query: PaginationParams = {}, force = false) =>
+        pages.read(querySnapshot(query), force),
+      loadLead: (id: number, force = false) => leads.read(id, force),
+      loadFollowUps: (leadId: number, force = false) => followUps.read(leadId, force),
+      /** Keep this subscription for the mounted view; selectors alone do not pin history. */
+      observeLeads: (query: PaginationParams = {}, force = false) =>
+        pages.observe(querySnapshot(query), { force }),
+      observeLead: (id: number, force = false) => leads.observe(id, { force }),
+      observeFollowUps: (leadId: number, force = false) => followUps.observe(leadId, { force }),
+      selectLeads: (query: PaginationParams = {}): Signal<AcquisitionReadEntry<Page>> =>
+        computed(() => store.pages()[pageKey(query)] ?? emptyEntry<Page>()),
+      selectLead: (id: number): Signal<AcquisitionReadEntry<Lead>> =>
+        computed(() => store.leads()[String(id)] ?? emptyEntry<Lead>()),
+      selectFollowUps: (leadId: number): Signal<AcquisitionReadEntry<FollowUpList>> =>
+        computed(() => store.followUps()[String(leadId)] ?? emptyEntry<FollowUpList>()),
       createOrigin: (params: CreateLeadOriginParams) =>
         write(
           () => injector.get(Actions.CreateLeadOriginUseCase).execute(params),
-          () => origins.invalidate()
+          () => origins.markMutated()
         ),
       updateOrigin: (params: UpdateLeadOriginParams) =>
         write(
           () => injector.get(Actions.UpdateLeadOriginUseCase).execute(params),
-          () => origins.invalidate()
+          () => origins.markMutated()
         ),
       createStage: (params: CreateFunnelStageParams) =>
         write(
           () => injector.get(Actions.CreateFunnelStageUseCase).execute(params),
-          () => stages.invalidate()
+          () => stages.markMutated()
         ),
       updateStage: (params: UpdateFunnelStageParams) =>
         write(
           () => injector.get(Actions.UpdateFunnelStageUseCase).execute(params),
-          () => stages.invalidate()
+          () => stages.markMutated()
         ),
       createLead: (params: CreateLeadParams) =>
         write(
