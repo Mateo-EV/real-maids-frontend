@@ -55,7 +55,7 @@ The user said: “y luego vamos por b y a”. After the merge, continue with the
 - [x] T8 — Migrate `service-orders.store.ts`. Linked: S7. Route: parent inline after two writers died untouched. Commit `1888313`; 475 → 352, spec 25/25 and manual 44/44 untouched.
 - [x] T9 — Migrate `field-staff.store.ts`. Linked: S7. Route: parent inline after the writer died. Commit `7fef925`; 213 → 139, spec 21/21 untouched.
 - [x] T10 — Format, focused and full verification for S6 and S7. Linked: S5, S6, S7. Route: parent with command re-run. Focused and consumer specs green; the full suite and the operations group run are unreachable (L12, L18).
-- [ ] T11 — Merge the feature branch into `main` locally, without push. Linked: S8. Route: parent, after T10.
+- [x] T11 — Merge the feature branch into `main` locally, without push. Linked: S8. Route: parent, after T10. Fast-forward `e117747 → 1203717`; nothing pushed; `main` still matches `origin/main` at 0/0 divergent commits.
 - [ ] T12 — Map and migrate the four IAM stores. Linked: S9. Route: explorer, then bounded writers.
 
 ## Log
@@ -192,3 +192,15 @@ One behavioral asymmetry worth recording: the local order registry did not run `
 Consumer-level evidence, run one file per invocation because a folder-level group dies with the host allocation failure: `service-requests-order-invalidation` 11/11, `service-requests-update.store` 21/21, `service-orders-create.store` 24/24, `service-order-detail-page` 31/31, `service-requests-page` 21/21 and `staff-page` 24/24, all untouched and all green (132 tests). These cover the write targeting, the cross-store request invalidation and two consumer pages, which is where an extra `query` field on an entry or a changed invalidation seam would surface.
 
 Still unverified, and not claimed: `ng test --include='src/app/features/operations/presentation/**/*.spec.ts'` died with the L12 memory failure and is recorded as unexecuted, not green or red; ten of the twenty specs that reference these stores were not run at all (`app.config`, `admin.routes`, both feature route specs, `staff-detail-page`, `service-request-editor`, `service-orders-page`, `service-request-detail-page`, `service-requests-cancel.store`, `service-requests-create.store`); the full unit suite remains unreachable on this host; and there is no native review, live backend, CORS or browser evidence for this stage.
+
+### L19 — Merged to main, and the IAM branch opened
+
+“mergea al main por favor y crea una nueva rama para poder seguir con iam”
+
+`feature/keyed-reads-registry` fast-forwarded into `main` (`e117747 → 1203717`), locally only: nothing was pushed, no pull request was opened, and `main` still reports `0 0` divergent commits against `origin/main`. `main` therefore now carries the registry, all four migrated stores and the evidence in L14–L18. `feature/iam-keyed-reads` was branched from that merge and carries no work of its own; it exists so the IAM stage can start later under S9 and T12, whose scope remains `user.store.ts`, `user-sessions.store.ts`, `rbac.store.ts` and `audit-logs.store.ts`, with `roles.store.ts` (a single unkeyed catalog) and `agenda.store.ts` (page-owned) out of scope.
+
+### L20 — IAM explicitly not started
+
+“no hagas nada de iam porfa solo te pido que crees la rama para empezar”
+
+This supersedes the continuation implied at the end of L19. No IAM migration was performed: no store was read into a plan, no writer was launched, nothing was edited. The only IAM-adjacent action was a read-only contract-mapping survey launched moments before this instruction; it was cancelled and nothing from it was applied, committed or reused. S9 and T12 remain unstarted and T12 stays unchecked. Creating the branch is the whole deliverable of this step.
