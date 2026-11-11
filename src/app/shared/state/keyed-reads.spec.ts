@@ -113,6 +113,18 @@ describe("keyed read registry", () => {
     pinned.unsubscribe()
   })
 
+  it("reflects admitted keys and drops evicted or reset ones", () => {
+    const h = setup({ maxEntries: 2 })
+    expect(h.reads.keys).toEqual([])
+    h.reads.read({ offset: 0 }).subscribe()
+    h.reads.read({ offset: 20 }).subscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 0 }), cacheKey({ offset: 20 })])
+    h.reads.read({ offset: 40 }).subscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 20 }), cacheKey({ offset: 40 })])
+    h.reads.reset()
+    expect(h.reads.keys).toEqual([])
+  })
+
   it("returns a failed result instead of throwing when no entry can be evicted", () => {
     const h = setup({ maxEntries: 2 })
     const first = h.reads.observe({ offset: 0 }).subscribe()
@@ -205,6 +217,44 @@ describe("keyed read registry", () => {
     expect(targeted).toHaveBeenCalledTimes(2)
   })
 
+  it("invalidates a filter-matched entry without refreshing an unobserved key", () => {
+    const h = setup()
+    h.reads.read({ offset: 0 }).subscribe()
+    h.reads.read({ offset: 20 }).subscribe()
+    expect(h.source).toHaveBeenCalledTimes(2)
+    h.reads.markMutated(entry => entry.query.offset === 20)
+    expect(h.source).toHaveBeenCalledTimes(2)
+    expect(h.reads.select({ offset: 20 })).toMatchObject({
+      result: page(20, 20),
+      expires: 0,
+      refreshing: false
+    })
+    expect(h.reads.select({ offset: 0 })?.expires).toBeGreaterThan(0)
+  })
+
+  it("refetches an invalidated unobserved entry instead of reading it as fresh", () => {
+    const h = setup()
+    h.reads.read({ offset: 20 }).subscribe()
+    h.reads.markMutated(entry => entry.query.offset === 20)
+    const flight = new Subject<Result<Page, string>>()
+    h.source.mockReturnValue(flight)
+    const observed = h.reads.observe({ offset: 20 }).subscribe()
+    expect(h.source).toHaveBeenCalledTimes(2)
+    expect(h.reads.select({ offset: 20 })).toMatchObject({
+      result: page(20, 20),
+      loading: false,
+      refreshing: true,
+      expires: 0
+    })
+    flight.next(Result.success(page(20, 20, ["fresh"])))
+    flight.complete()
+    expect(h.reads.select({ offset: 20 })).toMatchObject({
+      result: page(20, 20, ["fresh"]),
+      refreshing: false
+    })
+    observed.unsubscribe()
+  })
+
   it("cancels session-old flights and fences late commits", () => {
     const h = setup()
     const flight = new Subject<Result<Page, string>>()
@@ -223,6 +273,27 @@ describe("keyed read registry", () => {
     stale.next(Result.success(page()))
     stale.complete()
     expect(h.reads.select({})).toMatchObject({ result: undefined, expires: 0 })
+  })
+
+  it("resets entries, keys and pending flights without resurrecting them", () => {
+    const h = setup()
+    const flight = new Subject<Result<Page, string>>()
+    h.source.mockReturnValue(flight)
+    h.reads.read({ offset: 0 }).subscribe()
+    const pinned = h.reads.observe({ offset: 20 }).subscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 0 }), cacheKey({ offset: 20 })])
+    expect(flight.observed).toBe(true)
+    h.reads.reset()
+    expect(h.reads.keys).toEqual([])
+    expect(h.entries()).toEqual({})
+    expect(h.reads.select({ offset: 0 })).toBeUndefined()
+    expect(h.reads.select({ offset: 20 })).toBeUndefined()
+    expect(flight.observed).toBe(false)
+    flight.next(Result.success(page()))
+    flight.complete()
+    expect(h.reads.keys).toEqual([])
+    expect(h.entries()).toEqual({})
+    pinned.unsubscribe()
   })
 
   it("returns an empty stream without a session", () => {
@@ -265,6 +336,14 @@ describe("keyed read registry", () => {
     }
   })
 
+  it("selects the normalized entry and nothing for an unknown query", () => {
+    const h = setup()
+    h.reads.read({ offset: 0 }).subscribe()
+    expect(h.reads.select({ offset: 0 })).toBe(h.entries()[cacheKey({ offset: 0 })])
+    expect(h.reads.select({ offset: 0, limit: 20 })?.query).toEqual({ offset: 0, limit: 20 })
+    expect(h.reads.select({ offset: 20 })).toBeUndefined()
+  })
+
   it("selects the current entry for a signal query", () => {
     const h = setup()
     const query = signal<Query>({ offset: 0 })
@@ -274,5 +353,72 @@ describe("keyed read registry", () => {
     expect(selection()?.query).toEqual({ offset: 0, limit: 20 })
     query.set({ offset: 20 })
     expect(selection()).toBeUndefined()
+  })
+
+  it("follows the query signal for selectReactive when the state exposes no reactive source", () => {
+    let current: Record<string, KeyedEntry<Query, Page, string>> = {}
+    const h = setup({
+      state: keyedState(
+        () => current,
+        next => (current = next)
+      )
+    })
+    const query = signal<Query>({ offset: 0 })
+    const selection = h.reads.selectReactive(query)
+    expect(selection()).toBeUndefined()
+    h.reads.read({ offset: 0 }).subscribe()
+    expect(current[cacheKey({ offset: 0 })]?.result).toEqual(page(0, 20))
+    // Without a source, entry writes alone never invalidate the cached projection.
+    expect(selection()).toBeUndefined()
+    query.set({ offset: 20 })
+    expect(selection()).toBeUndefined()
+    // A query change re-reads the same state, so the projection resolves the stored entry.
+    query.set({ offset: 0 })
+    expect(selection()?.query).toEqual({ offset: 0, limit: 20 })
+  })
+
+  it("fails a sessionless read with the dedicated error instead of the admission one", () => {
+    const overflow = vi.fn(() => "overflow")
+    const noSessionError = vi.fn(() => "denied")
+    const h = setup({ noSession: "failure", noSessionError, overflow })
+    h.deny()
+    const emitted: unknown[] = []
+    h.reads.read({}).subscribe(value => emitted.push(value))
+    expect(noSessionError).toHaveBeenCalledTimes(1)
+    expect(overflow).not.toHaveBeenCalled()
+    expect(emitted).toEqual([expect.objectContaining({ success: false, error: "denied" })])
+  })
+
+  it("completes observation empty without a session while the same store still fails a read", () => {
+    const h = setup({
+      noSession: "failure",
+      noSessionError: () => "denied",
+      noSessionObserve: "empty"
+    })
+    h.deny()
+    let emitted = 0
+    let completed = false
+    h.reads.observe({}).subscribe({
+      next: () => emitted++,
+      complete: () => (completed = true)
+    })
+    expect([emitted, completed]).toEqual([0, true])
+    const read: unknown[] = []
+    h.reads.read({}).subscribe(value => read.push(value))
+    expect(read).toEqual([expect.objectContaining({ success: false, error: "denied" })])
+  })
+
+  it("rescinds freshness on a failed read when expireOnError is set", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    try {
+      const h = setup({ ttl: 100, expireOnError: true })
+      h.reads.read({}).subscribe()
+      expect(h.reads.select({})?.expires).toBe(1100)
+      h.source.mockReturnValue(of(Result.failure("down")))
+      h.reads.read({}, true).subscribe()
+      expect(h.reads.select({})).toMatchObject({ result: page(), error: "down", expires: 0 })
+    } finally {
+      now.mockRestore()
+    }
   })
 })

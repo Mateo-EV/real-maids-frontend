@@ -34,6 +34,8 @@ export interface KeyedState<Q, T, E> {
   source?(): Signal<Readonly<Record<string, KeyedEntry<Q, T, E>>>>
 }
 
+export type NoSession = "empty" | "failure"
+
 export interface KeyedReadsOptions<Q, T, E> {
   key(query: Q): string
   normalize?(query: Q): Q
@@ -49,7 +51,14 @@ export interface KeyedReadsOptions<Q, T, E> {
   /** Records effective metadata on success without changing the cache key. */
   adopt?(query: Q, data: T): Q
   overflow(): E
-  noSession?: "empty" | "failure"
+  /** Zero an entry's freshness when a read fails instead of retaining it. */
+  expireOnError?: boolean
+  /** No-session outcome; defaults to `"empty"` for both paths. */
+  noSession?: NoSession
+  /** Overrides `noSession` for observation, e.g. a failing read with an empty stream. */
+  noSessionObserve?: NoSession
+  /** Error used by failure mode; falls back to `overflow()` when absent. */
+  noSessionError?(): E
 }
 
 export interface KeyedReads<Q, T, E> {
@@ -109,8 +118,12 @@ export function createKeyedReads<Q, T, E>(
     Object.keys(next).find(
       candidate => candidate !== keep && !active.has(candidate) && !isPending(candidate)
     )
-  const refuse = (): Observable<Result<T, E>> =>
-    noSession === "empty" ? EMPTY : of(Result.failure(options.overflow()))
+  const refuse = (path: "read" | "observe"): Observable<Result<T, E>> => {
+    const mode = path === "observe" ? (options.noSessionObserve ?? noSession) : noSession
+    return mode === "empty"
+      ? EMPTY
+      : of(Result.failure(options.noSessionError ? options.noSessionError() : options.overflow()))
+  }
 
   /** Single admission behavior: prune one oldest inactive entry or refuse the key. */
   const admit = (key: string, query: Q): boolean => {
@@ -173,7 +186,7 @@ export function createKeyedReads<Q, T, E>(
             refreshing: !settled && next.refreshing,
             error: next.error,
             // Only a successful current result renews freshness.
-            expires: next.expires
+            expires: options.expireOnError && patch.error !== undefined ? 0 : next.expires
           })
         }
       },
@@ -202,7 +215,7 @@ export function createKeyedReads<Q, T, E>(
     return resource
   }
   const readDeferred = (snapshot: Q, key: string, force: boolean): Observable<ItemResult<T, E>> => {
-    if (!options.scope.check()) return refuse()
+    if (!options.scope.check()) return refuse("read")
     if (!admit(key, snapshot)) return of(Result.failure(options.overflow()))
     return ensure(key, snapshot).read(force)
   }
@@ -221,7 +234,7 @@ export function createKeyedReads<Q, T, E>(
     const delayMs = opts.delayMs ?? 0
     const force = opts.force ?? false
     return defer((): Observable<ItemResult<T, E>> => {
-      if (!options.scope.check()) return refuse()
+      if (!options.scope.check()) return refuse("observe")
       if (!active.has(key) && active.size >= maxEntries)
         return of(Result.failure(options.overflow()))
       if (!admit(key, snapshot)) return of(Result.failure(options.overflow()))
