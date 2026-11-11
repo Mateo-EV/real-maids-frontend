@@ -49,12 +49,12 @@ The user said: “y luego vamos por b y a”. After the merge, continue with the
 - [x] T2 — Migrate `customer-acquisition.store.ts` to the registry, preserving its public API and behavior; keep its existing spec green. Linked: S1, S2, S4. Route: bounded writer, after T1. Surfaces: `src/app/features/customers/presentation/state/customer-acquisition.store.ts`, `src/app/features/customers/presentation/state/customer-acquisition.store.spec.ts`. Commit `cb7f572`; store 493 -> 329 lines with a byte-identical spec (L11).
 - [x] T3 — Run formatting, focused and full verification; record exact evidence and any deviation. Linked: S5. Route: parent with re-run of reported commands, plus independent verifier because the Risk line names high-risk items. Partial by environment: the full suite is unreachable (L12); directed verification passed (L10, L11, L13).
 - [x] T4 — Commit the work units and report the stage-1 outcome with the explicit list of stores not yet migrated. Linked: S2, S5. Route: parent. Stage-2/3 stores remain explicitly unmigrated (L13).
-- [ ] T5 — Add the missing registry specs. Linked: S6. Route: bounded writer. Surfaces: `src/app/shared/state/keyed-reads.spec.ts`.
-- [ ] T6 — Map the three clone stores' read contracts before handoff. Linked: S7. Route: bounded explorer, read-only.
-- [ ] T7 — Migrate `service-requests.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
-- [ ] T8 — Migrate `service-orders.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
-- [ ] T9 — Migrate `field-staff.store.ts`. Linked: S7. Route: bounded writer after T5/T6. Surfaces: that store and its spec.
-- [ ] T10 — Format, focused and full verification for S6 and S7. Linked: S5, S6, S7. Route: parent with command re-run.
+- [x] T5 — Add the missing registry specs. Linked: S6. Route: bounded writer that died mid-flight; the parent finished and corrected two of its assertions (L17). Commit `c4e6549`; 23/23.
+- [x] T6 — Map the three clone stores' read contracts before handoff. Linked: S7. Route: bounded explorer, read-only.
+- [x] T7 — Migrate `service-requests.store.ts`. Linked: S7. Route: bounded writer that died after editing; the parent fixed the mangled rxjs import and verified (L18). Commit `5c2f04d`; 437 → 339, spec 16/16 untouched.
+- [x] T8 — Migrate `service-orders.store.ts`. Linked: S7. Route: parent inline after two writers died untouched. Commit `1888313`; 475 → 352, spec 25/25 and manual 44/44 untouched.
+- [x] T9 — Migrate `field-staff.store.ts`. Linked: S7. Route: parent inline after the writer died. Commit `7fef925`; 213 → 139, spec 21/21 untouched.
+- [x] T10 — Format, focused and full verification for S6 and S7. Linked: S5, S6, S7. Route: parent with command re-run. Focused and consumer specs green; the full suite and the operations group run are unreachable (L12, L18).
 - [ ] T11 — Merge the feature branch into `main` locally, without push. Linked: S8. Route: parent, after T10.
 - [ ] T12 — Map and migrate the four IAM stores. Linked: S9. Route: explorer, then bounded writers.
 
@@ -189,4 +189,6 @@ Totals: 1125 → 830 lines (+219/−517), and `git diff --name-only c4e6549..HEA
 
 One behavioral asymmetry worth recording: the local order registry did not run `admit` inside its `read`, only inside `observe`, because the public API exposes only observers. The shared registry admits in both paths. Nothing observable changes for the current public API, since only `observeOrders`/`observeOrder` reach it and they admit first, but a future direct read would now admit or refuse rather than reading a missing entry.
 
-Still unverified, and not claimed: the full unit suite remains unreachable on this host (L12), consumer-level component specs for these two features were not run, and there is no native review, live backend, CORS or browser evidence for this stage.
+Consumer-level evidence, run one file per invocation because a folder-level group dies with the host allocation failure: `service-requests-order-invalidation` 11/11, `service-requests-update.store` 21/21, `service-orders-create.store` 24/24, `service-order-detail-page` 31/31, `service-requests-page` 21/21 and `staff-page` 24/24, all untouched and all green (132 tests). These cover the write targeting, the cross-store request invalidation and two consumer pages, which is where an extra `query` field on an entry or a changed invalidation seam would surface.
+
+Still unverified, and not claimed: `ng test --include='src/app/features/operations/presentation/**/*.spec.ts'` died with the L12 memory failure and is recorded as unexecuted, not green or red; ten of the twenty specs that reference these stores were not run at all (`app.config`, `admin.routes`, both feature route specs, `staff-detail-page`, `service-request-editor`, `service-orders-page`, `service-request-detail-page`, `service-requests-cancel.store`, `service-requests-create.store`); the full unit suite remains unreachable on this host; and there is no native review, live backend, CORS or browser evidence for this stage.
