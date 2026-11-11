@@ -86,7 +86,8 @@ describe("UserStore query projections and interface controls", () => {
       const refresh = new Subject<Result<PaginationResponse<User>, UserError>>()
       read.execute.mockReturnValueOnce(refresh)
       store.load(query).subscribe()
-      expect(read.execute).toHaveBeenLastCalledWith(query)
+      // A revisit revalidates the effective page recorded by `adopt`, not the raw request.
+      expect(read.execute).toHaveBeenLastCalledWith(effectiveQuery)
       expect(store.result()).toEqual(page)
       expect(store.query()).toEqual(effectiveQuery)
       expect(store.loaded()).toBe(true)

@@ -250,8 +250,10 @@ describe("shared reactive query ownership", () => {
       store.observeQuery({ roleId }).subscribe()
     )
     const denied = vi.fn()
-    store.observeQuery({ roleId: 21 }).subscribe({ error: denied })
+    store.observeQuery({ roleId: 21 }).subscribe({ next: denied })
+    // Unified admission returns a failed Result instead of throwing.
     expect(denied).toHaveBeenCalledOnce()
+    expect(denied.mock.calls[0][0]).toMatchObject({ success: false })
     expect(Object.keys(store.entries())).toHaveLength(20)
     expect(store.entries()[userQueryKey({ roleId: 0 })]?.loading).toBe(true)
     subscriptions[0].unsubscribe()
