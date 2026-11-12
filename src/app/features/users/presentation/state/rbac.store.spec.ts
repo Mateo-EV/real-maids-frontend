@@ -293,6 +293,27 @@ describe("RbacStore", () => {
     expect(store.matrices()[19].permissions).toEqual([])
     expect(store.loading()).toBe(false)
   })
+  it("publishes a confirmed write and evicts one role when the history is full", async () => {
+    const repository = {
+      getPermissions: vi.fn(() => of(Result.success([]))),
+      getRolePermissions: vi.fn((roleId: number) =>
+        of(Result.success({ roleId, permissions: [] }))
+      ),
+      saveRolePermissions: vi.fn((roleId: number) =>
+        of(Result.success({ roleId, permissions: [] }))
+      )
+    }
+    TestBed.configureTestingModule({
+      providers: [{ provide: RBAC_REPOSITORY, useValue: repository }]
+    })
+    const store = TestBed.inject(RbacStore)
+    for (let roleId = 1; roleId <= 20; roleId++) await firstValueFrom(store.loadPermissions(roleId))
+    expect(Object.keys(store.assignmentEntries())).toHaveLength(20)
+    await firstValueFrom(store.savePermissionIds(99, []))
+    expect(store.assignmentEntries()[99]?.result).toMatchObject({ roleId: 99 })
+    expect(store.matrices()[99].roleId).toBe(99)
+    expect(Object.keys(store.assignmentEntries())).toHaveLength(20)
+  })
   it("rejects earlier role loads after a newer load completes", () => {
     const first = new Subject<Result<PermissionAssignment, RbacError>>()
     const second = new Subject<Result<PermissionAssignment, RbacError>>()

@@ -471,4 +471,16 @@ describe("keyed read registry", () => {
       now.mockRestore()
     }
   })
+
+  it("drops one cached key so admission can make room for a replacement", () => {
+    const h = setup({ maxEntries: 1 })
+    h.reads.read({ offset: 0 }).subscribe()
+    h.reads.read({ offset: 20 }).subscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 20 })])
+    h.reads.evict(cacheKey({ offset: 20 }))
+    expect(h.reads.keys).toEqual([])
+    h.reads.read({ offset: 40 }).subscribe()
+    expect(h.reads.keys).toEqual([cacheKey({ offset: 40 })])
+    expect(h.source).toHaveBeenCalledTimes(3)
+  })
 })

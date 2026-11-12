@@ -228,15 +228,26 @@ export const RbacStore = signalStore(
       })
       /**
        * A confirmed write publishes its own verified data; it is not a successful cache read.
-       * Admission and eviction belong to the registry, so a write never evicts another role.
+       * When the role is not cached and the history is full, the oldest role that no write, open
+       * dialog or open flight pins makes room, so a confirmed save is never left invisible.
        */
       function publishAssignment(roleId: number, data: PermissionAssignment) {
-        const entries = toKeyed(store.assignmentEntries())
-        const room = Object.keys(entries).length < RBAC_ROLE_HISTORY_LIMIT
-        if (!entries[String(roleId)] && !room) return
+        const key = String(roleId)
+        let entries = toKeyed(store.assignmentEntries())
+        if (!entries[key] && Object.keys(entries).length >= RBAC_ROLE_HISTORY_LIMIT) {
+          const evictable = Object.keys(entries).find(
+            candidate =>
+              !writes.has(Number(candidate)) &&
+              !retained.has(Number(candidate)) &&
+              (flights.get(Number(candidate)) ?? 0) === 0
+          )
+          if (evictable === undefined) return
+          assignments.evict(evictable)
+          entries = toKeyed(store.assignmentEntries())
+        }
         adaptAssignments.update({
           ...entries,
-          [String(roleId)]: {
+          [key]: {
             query: roleId,
             result: data,
             loading: false,

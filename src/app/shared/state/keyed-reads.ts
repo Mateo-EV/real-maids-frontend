@@ -86,6 +86,8 @@ export interface KeyedReads<Q, T, E> {
   markMutated(filter?: (entry: KeyedEntry<Q, T, E>) => boolean): void
   /** Expires one entry without refreshing it; a key that is not cached is never admitted. */
   invalidate(key: string): void
+  /** Drops one cached key and its coordinator so admission can make room for a replacement. */
+  evict(key: string): void
   reset(): void
   readonly keys: string[]
 }
@@ -347,6 +349,14 @@ export function createKeyedReads<Q, T, E>(
     if (!entries()[key]) return
     resources.get(key)?.invalidate()
   }
+  /** Drops a key outright; a cleared or evicted key never resurrects from a late teardown write. */
+  const evict = (key: string) => {
+    if (!entries()[key]) return
+    const next = { ...entries() }
+    delete next[key]
+    resources.delete(key)
+    options.state.update(next)
+  }
   const reset = () => {
     const previous = [...resources.values()]
     resources.clear()
@@ -367,6 +377,7 @@ export function createKeyedReads<Q, T, E>(
     },
     markMutated,
     invalidate,
+    evict,
     reset,
     get keys() {
       return Object.keys(entries())
