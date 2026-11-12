@@ -52,3 +52,18 @@ Tabs `Prospectos | Orígenes | Etapas` with `hlmBadge` counts, read-only catalog
 ### L7 — T4 deletion and commits
 
 `Eliminar prospecto <nombre>` renders only for `isConverted === false` rows (desktop `Acciones` column and mobile cards) and always opens the confirm-only `LeadDeleteDialog`, which blocks duplicate confirmation and Cancel/Escape/outside dismissal while pending, keeps a safe inline error for explicit retry and emits one generic route-local toast only on confirmed success. `deleteLead` reuses the existing `write()` coordination and `invalidateLead(id)`, so a confirmed success expires every page variant, the target detail and the statistics entry and refreshes mounted observers once, with no optimistic removal or write replay; 409/404 map to the existing CONFLICT/LEAD_NOT_FOUND codes and raw backend text never reaches the UI. Evidence: writer 89/89 (mutation-checked guards), parent 6 files / 145 tests, prettier clean. Frontend committed as `e17b54a` directly on `main`; backend committed as `05b49bd` and fast-forwarded into `mateo` (not pushed; backend `main` remains 12 commits behind `mateo` by design of that repo's PR flow).
+
+### L8 — Scope correction: tabs and KPIs belong to the CRM, not to the leads page
+
+User correction (verbatim): “ok me entendiste mal, me psiste todo en la pagina de leads, yo me referia a que me lo pusieras en la pagina del crm, los tabs que faltaban xd y los kpis ahi. No quiero que los tabs solo aparezcan en la pagina de leads sino del crm, por eso te pedi kpis de clientes leads y los catalogos que faltaban xd”.
+
+Then, when asked how to shape the tabs, the user rejected unifying URLs and chose own routes: “no, mejor rutas propias ya luego haremos lo mismo en users”.
+
+Corrected design (supersedes the leads-page tabs of T2/T3, which are removed):
+- S8 — The CRM itself is tabbed with REAL ROUTES and a persistent shell: `/admin/customers` (Clientes), `/admin/customers/leads` (Prospectos), `/admin/customers/origins` (Orígenes) and `/admin/customers/stages` (Etapas). The shared CRM navigation gains the two catalog links. Detail routes stay where they are.
+- S9 — Four KPI cards live in the CRM shell — Clientes, Prospectos, Convertidos, Pendientes — outside the router outlet, mounted once, so switching tabs neither re-creates nor re-reads them. Clientes needs a new server aggregate (`GET /api/clientes/estadisticas`); the prospect counts reuse the existing `/api/prospectos/estadisticas`.
+- The read-only Orígenes/Etapas tables move out of the leads page into their own CRM pages.
+- The pattern must be reusable so IAM can adopt the same shape later (no IAM changes in this slice).
+
+- T6 (S9): Backend `GET /api/clientes/estadisticas` (total/activos/inactivos) mirroring `/api/usuarios/estadisticas`, with focused tests. Route: backend writer. Commit: pending.
+- T7 (S8, S9): Frontend CRM shell with persistent KPIs, real Orígenes/Etapas routes, extended CRM navigation, read-only catalog pages relocated, and the leads page losing its internal tabs/KPI block. Route: bounded frontend writer. Commit: pending.
