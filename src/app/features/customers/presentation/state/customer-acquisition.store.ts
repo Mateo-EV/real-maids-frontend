@@ -20,6 +20,7 @@ import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import * as Actions from "../../application/use-cases/acquisition.use-cases"
 import { LeadListQuery } from "../../domain/models/lead-list-query"
+import { ProspectoEstadisticas } from "../../domain/params/prospecto-estadisticas.params"
 import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
 import { FunnelStage } from "../../domain/entities/funnel-stage.entity"
 import { Lead } from "../../domain/entities/lead.entity"
@@ -113,6 +114,7 @@ const storedCatalog = <T>(
 const initialState = {
   origins: emptyCatalog<readonly LeadOrigin[]>(),
   stages: emptyCatalog<readonly FunnelStage[]>(),
+  statistics: emptyCatalog<ProspectoEstadisticas>(),
   pages: {} as Readonly<Record<string, AcquisitionEntry<PageQuery, Page>>>,
   leads: {} as Readonly<Record<string, AcquisitionEntry<number, Lead>>>,
   followUps: {} as Readonly<Record<string, AcquisitionEntry<number, FollowUpList>>>,
@@ -207,6 +209,19 @@ export const CustomerAcquisitionStore = signalStore(
       normalizeError,
       overflow: conflict
     })
+    const statistics = createKeyedReads<CatalogQuery, ProspectoEstadisticas, CustomerError>({
+      key: () => catalogKey,
+      request: () => request(() => injector.get(Actions.GetLeadStatisticsUseCase).execute()),
+      state: keyedState<CatalogQuery, ProspectoEstadisticas, CustomerError>(
+        () => ({ [catalogKey]: toKeyed(store.statistics()) }),
+        next => patchState(store, { statistics: storedCatalog(next) })
+      ),
+      scope,
+      // Same policy group as the lead reads: counts are presentation data, not authorization.
+      ttl: 30000,
+      normalizeError,
+      overflow: conflict
+    })
     const pages = createKeyedReads<PageQuery, Page, CustomerError>({
       key: pageKey,
       normalize: querySnapshot,
@@ -251,14 +266,17 @@ export const CustomerAcquisitionStore = signalStore(
     resetReads = () => {
       origins.reset()
       stages.reset()
+      statistics.reset()
       pages.reset()
       leads.reset()
       followUps.reset()
       patchState(store, { _pendingWrites: 0, writeError: undefined })
     }
-    // Lead writes expire every page plus only the affected lead and follow-up list.
+    // Lead writes expire every page plus only the affected lead and follow-up list. The KPI
+    // aggregate follows the same confirmed write so the cards never keep rejected counts.
     const invalidateLead = (id: number, appendedFollowUp = false) => {
       pages.markMutated()
+      statistics.markMutated()
       leads.markMutated(entry => entry.query === id)
       if (appendedFollowUp) followUps.markMutated(entry => entry.query === id)
     }
@@ -296,6 +314,9 @@ export const CustomerAcquisitionStore = signalStore(
       loadStages: (force = false) => stages.read(null, force),
       loadLeads: (query: LeadListQuery = {}, force = false) =>
         pages.read(querySnapshot(query), force),
+      loadStatistics: (force = false) => statistics.read(null, force),
+      /** Keeps the mounted KPI block revalidated once after confirmed lead writes. */
+      observeStatistics: (force = false) => statistics.observe(null, { force }),
       loadLead: (id: number, force = false) => leads.read(id, force),
       loadFollowUps: (leadId: number, force = false) => followUps.read(leadId, force),
       /** Keep this subscription for the mounted view; selectors alone do not pin history. */
@@ -338,6 +359,12 @@ export const CustomerAcquisitionStore = signalStore(
         write(
           () => injector.get(Actions.UpdateLeadUseCase).execute(params),
           () => invalidateLead(params.id)
+        ),
+      /** Physical delete by captured id: the server alone decides whether it is allowed. */
+      deleteLead: (id: number) =>
+        write(
+          () => injector.get(Actions.DeleteLeadUseCase).execute(id),
+          () => invalidateLead(id)
         ),
       addFollowUp: (params: CreateLeadFollowUpParams) =>
         write(

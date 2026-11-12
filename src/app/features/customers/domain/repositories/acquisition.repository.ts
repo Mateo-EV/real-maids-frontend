@@ -1,4 +1,5 @@
 import { CheckLeadEmailParams, LeadEmailCheck } from "../params/lead-email.params"
+import { ProspectoEstadisticas } from "../params/prospecto-estadisticas.params"
 import { InjectionToken } from "@angular/core"
 import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
@@ -32,9 +33,11 @@ export interface AcquisitionRepository {
   createStage(params: CreateFunnelStageParams): Observable<Result<FunnelStage, CustomerError>>
   updateStage(params: UpdateFunnelStageParams): Observable<Result<FunnelStage, CustomerError>>
   listLeads(params: LeadListQuery): Observable<Result<PaginationResponse<Lead>, CustomerError>>
+  getLeadStatistics(): Observable<Result<ProspectoEstadisticas, CustomerError>>
   findLead(id: number): Observable<Result<Lead, CustomerError>>
   createLead(params: CreateLeadParams): Observable<Result<Lead, CustomerError>>
   updateLead(params: UpdateLeadParams): Observable<Result<Lead, CustomerError>>
+  deleteLead(id: number): Observable<Result<void, CustomerError>>
   listFollowUps(leadId: number): Observable<Result<readonly LeadFollowUp[], CustomerError>>
   addFollowUp(params: CreateLeadFollowUpParams): Observable<Result<LeadFollowUp, CustomerError>>
 }

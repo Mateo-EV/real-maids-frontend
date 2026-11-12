@@ -14,7 +14,7 @@ Paths below start at `/api`. No DELETE endpoint is used.
 | [CustomerCapabilitiesRepository](domain/repositories/customer-capabilities.repository.ts) / same source             | PATCH `clientes/{id}/estado` with `{ activo }` (`SetCustomerStatusUseCase`); PUT `clientes/{id}/cuenta` with `{ idUsuario }`, including null to unlink (`LinkCustomerAccountUseCase`).                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | [PropertyRepository](domain/repositories/property.repository.ts) / `PropertyHttpSource`                             | GET/POST `clientes/{id}/propiedades`; PUT `clientes/{id}/propiedades/{propertyId}`; PATCH its `/estado`. `ListCustomerPropertiesUseCase`, `CreatePropertyUseCase`, `UpdatePropertyUseCase`, `SetPropertyStatusUseCase`. Lists include inactive properties.                                                                                                                                                                                                                                                                                                                                                                   |
 | [AcquisitionRepository](domain/repositories/acquisition.repository.ts) / `AcquisitionHttpSource`                    | GET/POST `catalogos/origenes-prospecto`, PUT `catalogos/origenes-prospecto/{id}`: `ListLeadOriginsUseCase`, `CreateLeadOriginUseCase`, `UpdateLeadOriginUseCase`. GET/POST `catalogos/etapas-embudo`, PUT `catalogos/etapas-embudo/{id}`: `ListFunnelStagesUseCase`, `CreateFunnelStageUseCase`, `UpdateFunnelStageUseCase`. No catalog deletion. Origins include inactive; stages have no active flag.                                                                                                                                                                                                                      |
-| Same acquisition boundary                                                                                           | GET `prospectos?pagina&tamanio&busqueda&idOrigen&idEtapa&convertido`, GET `prospectos/{id}`, POST `prospectos`, PUT `prospectos/{id}`: `ListLeadsUseCase`, `GetLeadUseCase`, `CreateLeadUseCase`, `UpdateLeadUseCase`. GET/POST `prospectos/{id}/seguimientos`: `ListLeadFollowUpsUseCase`, `AddLeadFollowUpUseCase`. POST `prospectos/{id}/conversion`: `ConvertLeadUseCase`.                                                                                                                                                                                                                                               |
+| Same acquisition boundary                                                                                           | GET `prospectos?pagina&tamanio&busqueda&idOrigen&idEtapa&convertido`, GET `prospectos/{id}`, POST `prospectos`, PUT `prospectos/{id}`, DELETE `prospectos/{id}`, GET `prospectos/estadisticas`: `ListLeadsUseCase`, `GetLeadUseCase`, `CreateLeadUseCase`, `UpdateLeadUseCase`, `DeleteLeadUseCase`, `GetLeadStatisticsUseCase`. GET/POST `prospectos/{id}/seguimientos`: `ListLeadFollowUpsUseCase`, `AddLeadFollowUpUseCase`. POST `prospectos/{id}/conversion`: `ConvertLeadUseCase`.                                                                                                                                     |
 | [CustomerRelationsRepository](domain/repositories/customer-relations.repository.ts) / `CustomerRelationsHttpSource` | GET/POST `clientes/{id}/contactos`, PUT `clientes/{id}/contactos/{contactId}`: `ListCustomerContactsUseCase`, `CreateCustomerContactUseCase`, `UpdateCustomerContactUseCase`. GET/POST `clientes/{id}/preferencias`, PUT `clientes/{id}/preferencias/{preferenceId}`: corresponding `ListCustomerPreferencesUseCase`, `CreateCustomerPreferenceUseCase`, `UpdateCustomerPreferenceUseCase`. Both lists include inactive entries.                                                                                                                                                                                             |
 | [CustomerHistoryRepository](domain/repositories/customer-history.repository.ts) / `CustomerHistoryHttpSource`       | GET `clientes/{id}/historial?tamanio` (`GetCustomerHistoryUseCase`): real customer plus independent recent requests/orders/support pages with each module's independent total. The current projection has no module restriction marker. No aggregate activity total, fabricated empty outcome or SQL-entity reuse.                                                                                                                                                                                                                                                                                                           |
 
@@ -294,6 +294,47 @@ parameters using a JPA `Specification` that mirrors the customer-filter preceden
 escaping helper and `ReglaNegocioException` for invalid ids. Its tests are mocked service tests plus
 MockMvc routing tests, so real SQL/MySQL behavior, live OpenAPI rendering, CORS and browser acceptance
 remain **pending**; the API currently served on localhost:8080 predates that commit.
+
+## Lead admin: catalog tabs, KPIs and deletion
+
+M03/RF03/HU03 (RNF09/RNF10/RNF12): the inbox at `/admin/customers/leads` is now a tabbed page.
+`Prospectos` keeps the existing frame, filters, table/cards, states and pagination; `Orígenes` and
+`Etapas` are read-only catalog tables driven by the existing root catalog reads (120000ms, ref-counted,
+caller-cancelled) with their own loading/refreshing/error/verified-empty states and explicit retry.
+No create/edit/activate action, no new endpoint and no pagination is invented for those catalogs.
+Each tab carries an `hlmBadge` count: the server total for prospectos and the loaded catalog counts.
+
+The four KPI cards (`Prospectos`, `Convertidos`, `Pendientes`, `Orígenes activos`) live in ONE
+`catalog-metrics` section that is a sibling outside the switchable tab content, so changing tabs
+neither destroys nor re-reads them. `kpi-label`, `kpi-value`, `kpi-tile` with its `data-kpi-tone`
+tones and the `catalog-metrics` rhythm are now defined once in `src/styles.css`; the IAM page consumes
+the same tokens through `--users-*` aliases. The first three numbers come from
+`GET /api/prospectos/estadisticas` → `{total, convertidos, pendientes}` (`CLIENTE_LEER`), stored in a
+root single-key entry with success-only 30000ms freshness, ref-counted flights, forced retry, session
+fencing and confirmed-write invalidation; they are never computed from the loaded page. The fourth is
+the count of loaded active origins, mirroring IAM's “Roles definidos”. Unverified values render `—`,
+refreshing and stale/error states stay visible and retryable, and no polling or invented arithmetic
+appears beyond joining the server counts in a description.
+
+Deletion is physical and server-authoritative: `DELETE /api/prospectos/{id}` (`CLIENTE_ACTUALIZAR`)
+returns 204, 404 when missing and 409 when the prospecto is already converted or another aggregate
+still references it. The inbox only offers `Eliminar prospecto <nombre>` on rows whose `isConverted`
+is false, in the desktop `Acciones` column and on mobile cards, always through a confirm-only dialog
+that captures name/ID, states the action is irreversible, blocks duplicate confirmation and
+Cancel/Escape/outside dismissal while pending, keeps a safe inline error for explicit retry and emits
+one generic route-local toast only on confirmed success. `deleteLead` runs inside the existing write
+coordination; a confirmed success expires every lead page variant, the target detail and the
+statistics entry and refreshes mounted observers once, with no optimistic row removal, totals patching,
+write replay or rollback promise. Raw backend conflict text never reaches the UI, and cancellation
+cannot undo a dispatched delete.
+
+Backend counterpart (separately authorized repository): `05b49bd` adds the DELETE endpoint, a
+dedicated 409 `OperacionEnConflictoException` (the shared 403 `OperacionNoPermitidaException` stays
+untouched), follow-up release inside the same transaction and the single statistics aggregate. Its
+evidence is mocked service tests plus MockMvc (focused 34/34); the full Maven suite could not complete
+on this machine (JVM native OOM, Mockito `MockMaker` init and a forked VM crash, with a partial run of
+81 tests green), and real MySQL FK/rollback behaviour, rendered Swagger, live CORS and browser
+acceptance remain **pending**.
 
 ## Reserved customer emails and lead duplicate blocking
 

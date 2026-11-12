@@ -19,6 +19,7 @@ import { CustomerAcquisitionStore } from "./customer-acquisition.store"
 
 const lead = Lead.create(7, 1, 2, "Lead", null, null, null, null, false, new Date(0), null)
 const page = { items: [lead], total: 53, offset: 5, limit: 5 }
+const statistics = { total: 53, convertidos: 12, pendientes: 41 }
 const params = {
   originId: 1,
   stageId: 2,
@@ -46,11 +47,13 @@ describe("CustomerAcquisitionStore", () => {
       createStage: vi.fn(),
       updateStage: vi.fn(),
       listLeads: vi.fn(),
+      getLeadStatistics: vi.fn(),
       findLead: vi.fn(),
       createLead: vi.fn(),
       updateLead: vi.fn(),
       listFollowUps: vi.fn(),
       addFollowUp: vi.fn(),
+      deleteLead: vi.fn(),
       convertLead: vi.fn()
     }
     changes = new Subject()
@@ -267,9 +270,11 @@ describe("CustomerAcquisitionStore", () => {
     store.loadOrigins().subscribe()
     store.loadLead(7).subscribe()
     store.createLead(params).subscribe()
+    store.deleteLead(7).subscribe()
     expect(repository.listOrigins).not.toHaveBeenCalled()
     expect(repository.findLead).not.toHaveBeenCalled()
     expect(repository.createLead).not.toHaveBeenCalled()
+    expect(repository.deleteLead).not.toHaveBeenCalled()
     expect(construct).not.toHaveBeenCalled()
   })
 
@@ -485,6 +490,151 @@ describe("CustomerAcquisitionStore", () => {
     expect(received).not.toHaveBeenCalled()
     expect(store.writing()).toBe(false)
     observer.unsubscribe()
+  })
+
+  it("reads prospect statistics with 30000ms success-only freshness, sharing one flight and never deriving counts from a page", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    repository.getLeadStatistics.mockReturnValue(of(Result.success(statistics)))
+    store.loadStatistics().subscribe()
+    expect(repository.getLeadStatistics).toHaveBeenCalledOnce()
+    expect(store.statistics().data).toEqual(statistics)
+    now.mockReturnValue(30999)
+    store.loadStatistics().subscribe()
+    expect(repository.getLeadStatistics).toHaveBeenCalledOnce()
+    now.mockReturnValue(31000)
+    store.loadStatistics().subscribe()
+    expect(repository.getLeadStatistics).toHaveBeenCalledTimes(2)
+    repository.listLeads.mockReturnValue(
+      of(Result.success({ items: [lead], total: 900, offset: 0, limit: 20 }))
+    )
+    store.loadLeads().subscribe()
+    expect(store.statistics().data).toEqual(statistics)
+  })
+
+  it("retains verified statistics on a failed forced retry and clears them on session replacement", () => {
+    repository.getLeadStatistics.mockReturnValueOnce(of(Result.success(statistics)))
+    store.loadStatistics().subscribe()
+    const expiry = store.statistics().expires
+    const pending = new Subject<Result<typeof statistics, CustomerError>>()
+    repository.getLeadStatistics.mockReturnValue(pending)
+    const sub = store.loadStatistics(true).subscribe()
+    expect(store.statistics().refreshing).toBe(true)
+    pending.next(Result.failure(new CustomerError("NETWORK")))
+    pending.complete()
+    expect(store.statistics().data).toEqual(statistics)
+    expect(store.statistics().error?.code).toBe("NETWORK")
+    expect(store.statistics().expires).toBe(expiry)
+    sub.unsubscribe()
+    changes.next(AuthSession.create("Other", "other@example.test"))
+    expect(store.statistics().data).toBeUndefined()
+    expect(store.statistics().loaded).toBe(false)
+    expect(repository.getLeadStatistics).toHaveBeenCalledTimes(2)
+  })
+
+  it("revalidates observed statistics exactly once after a confirmed lead write", () => {
+    const response = new Subject<Result<typeof statistics, CustomerError>>()
+    repository.getLeadStatistics.mockReturnValue(response)
+    const observed = store.observeStatistics().subscribe(),
+      plain = store.loadStatistics().subscribe()
+    expect(repository.getLeadStatistics).toHaveBeenCalledOnce()
+    response.next(Result.success(statistics))
+    response.complete()
+    expect(store.statistics().data).toEqual(statistics)
+    repository.getLeadStatistics.mockReturnValue(
+      of(Result.success({ total: 54, convertidos: 13, pendientes: 41 }))
+    )
+    repository.createLead.mockReturnValue(of(Result.success(lead)))
+    store.createLead(params).subscribe()
+    expect(repository.getLeadStatistics).toHaveBeenCalledTimes(2)
+    expect(store.statistics().data).toEqual({ total: 54, convertidos: 13, pendientes: 41 })
+    observed.unsubscribe()
+    plain.unsubscribe()
+  })
+
+  it("deletes a lead through its use case and expires every lead page, the target detail and statistics without removing verified rows", () => {
+    repository.listLeads.mockReturnValue(of(Result.success(page)))
+    repository.findLead.mockReturnValue(of(Result.success(lead)))
+    repository.getLeadStatistics.mockReturnValue(of(Result.success(statistics)))
+    store.loadLeads({ search: "Ana" }).subscribe()
+    store.loadLeads({}).subscribe()
+    store.loadLead(7).subscribe()
+    store.loadLead(8).subscribe()
+    store.loadStatistics().subscribe()
+    repository.deleteLead.mockReturnValue(of(Result.success(undefined)))
+    const received = vi.fn()
+    store.deleteLead(7).subscribe(received)
+    expect(repository.deleteLead).toHaveBeenCalledExactlyOnceWith(7)
+    expect(received).toHaveBeenCalledOnce()
+    expect(store.selectLeads({})().expires).toBe(0)
+    expect(store.selectLeads({ search: "Ana" })().expires).toBe(0)
+    // Server membership stays authoritative: the confirmed row is never spliced out locally.
+    expect(store.selectLeads({})().data).toEqual(page)
+    expect(store.selectLeads({})().data?.total).toBe(53)
+    expect(store.selectLead(7)().expires).toBe(0)
+    expect(store.selectLead(8)().expires).toBeGreaterThan(0)
+    expect(store.statistics().expires).toBe(0)
+    expect(repository.listLeads).toHaveBeenCalledTimes(2)
+    expect(repository.findLead).toHaveBeenCalledTimes(2)
+    expect(repository.getLeadStatistics).toHaveBeenCalledOnce()
+    expect(store.mutationRevision()).toBe(1)
+    expect(store.writing()).toBe(false)
+  })
+
+  it("refreshes each observed lead read exactly once after a confirmed deletion and keeps stale rows on failed revalidation", () => {
+    repository.listLeads.mockReturnValue(of(Result.success(page)))
+    repository.findLead.mockReturnValue(of(Result.success(lead)))
+    repository.getLeadStatistics.mockReturnValue(of(Result.success(statistics)))
+    const pages = store.observeLeads({}).subscribe(),
+      detail = store.observeLead(7).subscribe(),
+      counts = store.observeStatistics().subscribe()
+    repository.deleteLead.mockReturnValue(of(Result.success(undefined)))
+    repository.listLeads.mockReturnValue(of(Result.failure(new CustomerError("NETWORK"))))
+    store.deleteLead(7).subscribe()
+    expect(repository.deleteLead).toHaveBeenCalledOnce()
+    expect(repository.listLeads).toHaveBeenCalledTimes(2)
+    expect(repository.findLead).toHaveBeenCalledTimes(2)
+    expect(repository.getLeadStatistics).toHaveBeenCalledTimes(2)
+    expect(store.selectLeads({})().data).toEqual(page)
+    expect(store.selectLeads({})().error?.code).toBe("NETWORK")
+    expect(store.selectLead(7)().data).toBe(lead)
+    pages.unsubscribe()
+    detail.unsubscribe()
+    counts.unsubscribe()
+  })
+
+  it("never invalidates or refreshes reads when the server refuses the deletion", () => {
+    repository.listLeads.mockReturnValue(of(Result.success(page)))
+    repository.findLead.mockReturnValue(of(Result.success(lead)))
+    repository.deleteLead.mockReturnValue(of(Result.failure(new CustomerError("CONFLICT"))))
+    const pages = store.observeLeads({}).subscribe()
+    store.loadLead(7).subscribe()
+    const listCalls = repository.listLeads.mock.calls.length,
+      detailCalls = repository.findLead.mock.calls.length
+    store.deleteLead(7).subscribe()
+    expect(repository.deleteLead).toHaveBeenCalledExactlyOnceWith(7)
+    expect(store.writeError()?.code).toBe("CONFLICT")
+    expect(store.selectLeads({})().expires).toBeGreaterThan(0)
+    expect(store.selectLead(7)().expires).toBeGreaterThan(0)
+    expect(repository.listLeads).toHaveBeenCalledTimes(listCalls)
+    expect(repository.findLead).toHaveBeenCalledTimes(detailCalls)
+    expect(store.mutationRevision()).toBe(0)
+    expect(store.writing()).toBe(false)
+    pages.unsubscribe()
+  })
+
+  it("does not dispatch SSR statistics reads", () => {
+    TestBed.resetTestingModule()
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PLATFORM_ID, useValue: "server" },
+        { provide: ACQUISITION_REPOSITORY, useValue: repository },
+        { provide: CustomersStore, useFactory: customerFactory }
+      ]
+    })
+    store = TestBed.inject(CustomerAcquisitionStore)
+    store.loadStatistics().subscribe()
+    store.observeStatistics().subscribe()
+    expect(repository.getLeadStatistics).not.toHaveBeenCalled()
   })
 
   it("normalizes thrown errors and empty completions and settles cancellation", () => {

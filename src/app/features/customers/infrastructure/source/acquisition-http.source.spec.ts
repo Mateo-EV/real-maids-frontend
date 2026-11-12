@@ -134,3 +134,130 @@ describe("Acquisition lead list HTTP boundary", () => {
     expect(await pending).toMatchObject({ success: true })
   })
 })
+
+describe("Acquisition lead deletion HTTP boundary", () => {
+  let repository: AcquisitionRepositoryImpl, http: HttpTestingController
+  const leadUrl = "http://localhost:8080/api/prospectos/7"
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" }
+      ]
+    })
+    repository = TestBed.inject(AcquisitionRepositoryImpl)
+    http = TestBed.inject(HttpTestingController)
+  })
+  afterEach(() => http.verify())
+
+  it("sends one cold bodyless DELETE and confirms success on 204", async () => {
+    const pending = firstValueFrom(repository.deleteLead(7))
+    const request = http.expectOne(leadUrl)
+    expect(request.request.method).toBe("DELETE")
+    expect(request.request.body).toBeNull()
+    expect(request.request.transferCache).toBe(false)
+    expect(request.request.params.keys()).toEqual([])
+    request.flush(null, { status: 204, statusText: "No Content" })
+    expect(await pending).toMatchObject({ success: true })
+    expect(request.request.url).toBe(leadUrl)
+    http.expectNone(leadUrl)
+  })
+
+  it.each([
+    [404, "LEAD_NOT_FOUND", "Not Found"],
+    [409, "CONFLICT", "Conflict"],
+    [403, "FORBIDDEN", "Forbidden"],
+    [401, "UNAUTHENTICATED", "Unauthorized"]
+  ])("maps HTTP %s to %s without exposing the backend message", async (status, code, text) => {
+    const pending = firstValueFrom(repository.deleteLead(7))
+    http
+      .expectOne(leadUrl)
+      .flush(
+        { mensaje: "El prospecto 7 está convertido y no puede eliminarse" },
+        { status, statusText: text }
+      )
+    const result = await pending
+    expect(result).toMatchObject({ success: false, error: { code } })
+    expect(JSON.stringify(result)).not.toContain("convertido y no puede eliminarse")
+    http.expectNone(leadUrl)
+  })
+
+  it("maps a network failure safely and rejects malformed ids before any request", async () => {
+    const offline = firstValueFrom(repository.deleteLead(7))
+    http
+      .expectOne(leadUrl)
+      .error(new ProgressEvent("error"), { status: 0, statusText: "Unknown Error" })
+    expect(await offline).toMatchObject({ success: false, error: { code: "NETWORK" } })
+    for (const id of [0, -3, 1.5, 2147483648]) {
+      expect(await firstValueFrom(repository.deleteLead(id))).toMatchObject({
+        success: false,
+        error: { code: "INVALID_INPUT" }
+      })
+    }
+    // afterEach verify() also fails if a malformed id produced any unmatched request.
+    http.expectNone(leadUrl)
+  })
+})
+
+describe("Acquisition prospect statistics HTTP boundary", () => {
+  let repository: AcquisitionRepositoryImpl, http: HttpTestingController
+  const statisticsUrl = "http://localhost:8080/api/prospectos/estadisticas"
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" }
+      ]
+    })
+    repository = TestBed.inject(AcquisitionRepositoryImpl)
+    http = TestBed.inject(HttpTestingController)
+  })
+  afterEach(() => http.verify())
+
+  it("reads the frozen aggregate from GET /api/prospectos/estadisticas without deriving its counts", async () => {
+    const pending = firstValueFrom(repository.getLeadStatistics())
+    const request = http.expectOne(statisticsUrl)
+    expect(request.request.method).toBe("GET")
+    expect(request.request.params.keys()).toEqual([])
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ total: 42, convertidos: 12, pendientes: 30 })
+    expect(await pending).toEqual({
+      success: true,
+      data: { total: 42, convertidos: 12, pendientes: 30 }
+    })
+  })
+
+  it("rejects incomplete, negative or non-integer counts and unknown payload shapes", async () => {
+    const payloads: (object | null)[] = [
+      {},
+      { total: 1, convertidos: 1 },
+      { convertidos: 1, pendientes: 0 },
+      { total: -1, convertidos: 0, pendientes: 0 },
+      { total: 1.5, convertidos: 1, pendientes: 0 },
+      { total: "2", convertidos: 1, pendientes: 1 },
+      null,
+      []
+    ]
+    for (const payload of payloads) {
+      const pending = firstValueFrom(repository.getLeadStatistics())
+      http.expectOne(statisticsUrl).flush(payload)
+      expect(await pending).toMatchObject({
+        success: false,
+        error: { code: "INVALID_RESPONSE" }
+      })
+    }
+  })
+
+  it("maps server denials and returns no borrowed counts", async () => {
+    const denied = firstValueFrom(repository.getLeadStatistics())
+    http.expectOne(statisticsUrl).flush({}, { status: 403, statusText: "Forbidden" })
+    expect(await denied).toMatchObject({ success: false, error: { code: "FORBIDDEN" } })
+    const offline = firstValueFrom(repository.getLeadStatistics())
+    http
+      .expectOne(statisticsUrl)
+      .error(new ProgressEvent("error"), { status: 0, statusText: "Unknown Error" })
+    expect(await offline).toMatchObject({ success: false, error: { code: "NETWORK" } })
+  })
+})

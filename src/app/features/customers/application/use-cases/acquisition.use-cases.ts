@@ -12,6 +12,9 @@ import {
   CreateLeadFollowUpParams,
   ConvertLeadParams
 } from "../../domain/params/acquisition.params"
+import { CustomerError } from "../../domain/errors/customer.error"
+import { Result } from "@/app/shared/utils/result"
+import { Observable } from "rxjs"
 
 @Injectable({ providedIn: "root" })
 export class CheckLeadEmailUseCase {
@@ -70,6 +73,13 @@ export class ListLeadsUseCase {
   }
 }
 @Injectable({ providedIn: "root" })
+export class GetLeadStatisticsUseCase {
+  private readonly repository = inject(ACQUISITION_REPOSITORY)
+  execute() {
+    return this.repository.getLeadStatistics()
+  }
+}
+@Injectable({ providedIn: "root" })
 export class GetLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
   execute(id: number) {
@@ -88,6 +98,13 @@ export class UpdateLeadUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
   execute(params: UpdateLeadParams) {
     return this.repository.updateLead(params)
+  }
+}
+@Injectable({ providedIn: "root" })
+export class DeleteLeadUseCase {
+  private readonly repository = inject(ACQUISITION_REPOSITORY)
+  execute(id: number): Observable<Result<void, CustomerError>> {
+    return this.repository.deleteLead(id)
   }
 }
 @Injectable({ providedIn: "root" })

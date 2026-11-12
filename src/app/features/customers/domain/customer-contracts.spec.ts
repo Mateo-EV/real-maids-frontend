@@ -133,11 +133,13 @@ describe("Customer domain contracts", () => {
       createStage: vi.fn(() => failed),
       updateStage: vi.fn(() => failed),
       listLeads: vi.fn(() => failed),
+      getLeadStatistics: vi.fn(() => failed),
       findLead: vi.fn(() => failed),
       createLead: vi.fn(() => failed),
       updateLead: vi.fn(() => failed),
       listFollowUps: vi.fn(() => failed),
       addFollowUp: vi.fn(() => failed),
+      deleteLead: vi.fn(() => failed),
       convertLead: vi.fn(() => failed)
     }
     TestBed.configureTestingModule({
@@ -185,6 +187,8 @@ describe("Customer domain contracts", () => {
     expect(
       await firstValueFrom(injected.addFollowUp({ leadId: 3, stageId: 2, comment: null }))
     ).toEqual(Result.failure(failure))
+    expect(await firstValueFrom(injected.deleteLead(3))).toEqual(Result.failure(failure))
+    expect(repository.deleteLead).toHaveBeenCalledExactlyOnceWith(3)
   })
 
   it("owns contacts/preferences through customer IDs and permits general preferences", async () => {

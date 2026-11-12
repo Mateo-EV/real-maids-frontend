@@ -3,6 +3,7 @@ import { CheckLeadEmailParams, LeadEmailCheck } from "../../domain/params/lead-e
 import { reservedCustomerEmail } from "./customer-email-conflict"
 import { Injectable } from "@angular/core"
 import { LeadListQuery } from "../../domain/models/lead-list-query"
+import { ProspectoEstadisticas } from "../../domain/params/prospecto-estadisticas.params"
 import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
 import { FunnelStage } from "../../domain/entities/funnel-stage.entity"
 import { Lead } from "../../domain/entities/lead.entity"
@@ -37,7 +38,8 @@ import {
   optional,
   invalid,
   pagination,
-  page
+  page,
+  integer
 } from "./customer-http.validation"
 
 export function originDto(v: unknown): LeadOrigin {
@@ -88,6 +90,18 @@ function followUpDto(v: unknown, leadId: number): LeadFollowUp {
     nullableText(p["comentario"]),
     date(p["fecha"])
   )
+}
+/** Server counts are nonnegative integers; no cross-count arithmetic is asserted here. */
+function count(v: unknown): number {
+  return integer(v) ? v : invalid()
+}
+export function statisticsDto(v: unknown): ProspectoEstadisticas {
+  const p = record(v)
+  return {
+    total: count(p["total"]),
+    convertidos: count(p["convertidos"]),
+    pendientes: count(p["pendientes"])
+  }
 }
 function originBody(p: CreateLeadOriginParams) {
   input(required(p.name, 60) && optional(p.description, 150) && typeof p.isActive === "boolean")
@@ -226,6 +240,12 @@ export class AcquisitionHttpSource {
       "LEAD_NOT_FOUND"
     )
   }
+  getLeadStatistics() {
+    return this.t.request(
+      () => this.http.get<unknown>(`${this.leads}/estadisticas`, { transferCache: false }),
+      statisticsDto
+    )
+  }
   findLead(leadId: number) {
     return this.t.request(
       () => {
@@ -254,6 +274,17 @@ export class AcquisitionHttpSource {
         })
       },
       v => sameId(leadDto(v), p.id),
+      "LEAD_NOT_FOUND"
+    )
+  }
+  /** Frozen physical delete: no body, no payload; 204 alone confirms it. */
+  deleteLead(leadId: number) {
+    return this.t.request(
+      () => {
+        input(id(leadId))
+        return this.http.delete<unknown>(`${this.leads}/${leadId}`, { transferCache: false })
+      },
+      () => undefined,
       "LEAD_NOT_FOUND"
     )
   }

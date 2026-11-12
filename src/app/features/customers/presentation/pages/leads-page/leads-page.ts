@@ -16,13 +16,21 @@ import { LeadEditor } from "../../components/lead-editor/lead-editor"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { leadPageContext } from "./lead-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmCardImports } from "@spartan-ng/helm/card"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucidePlus } from "@ng-icons/lucide"
+import {
+  lucideCircleCheck,
+  lucideClock,
+  lucidePlus,
+  lucideTag,
+  lucideTrash2,
+  lucideUsers
+} from "@ng-icons/lucide"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import {
   CatalogFilterSelect,
@@ -32,8 +40,10 @@ import { TablePagination } from "@/app/shared/components/table-pagination/table-
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { LeadListQuery } from "../../../domain/models/lead-list-query"
+import { Lead } from "../../../domain/entities/lead.entity"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
 import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/crm-catalog-navigation"
+import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delete-dialog"
 
 @Component({
   selector: "app-leads-page",
@@ -45,6 +55,7 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
     CatalogFilters,
     TablePagination,
     HlmButtonImports,
+    HlmCardImports,
     HlmTableImports,
     HlmBadgeImports,
     HlmEmptyImports,
@@ -52,8 +63,18 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
     HlmSpinnerImports,
     NgIcon
   ],
-  providers: [provideIcons({ lucidePlus })],
-  templateUrl: "./leads-page.html"
+  providers: [
+    provideIcons({
+      lucidePlus,
+      lucideUsers,
+      lucideCircleCheck,
+      lucideClock,
+      lucideTag,
+      lucideTrash2
+    })
+  ],
+  templateUrl: "./leads-page.html",
+  styleUrl: "./leads-page.css"
 })
 export class LeadsPage implements OnInit {
   private readonly acquisition = inject(CustomerAcquisitionStore)
@@ -62,8 +83,28 @@ export class LeadsPage implements OnInit {
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   readonly writing = this.acquisition.writing
+  /** The tab body swaps; the KPI block above it is mounted once and keeps its own read. */
+  readonly section = signal<"prospects" | "origins" | "stages">("prospects")
   readonly origins = computed(() => this.acquisition.origins())
   readonly stages = computed(() => this.acquisition.stages())
+  readonly statistics = computed(() => this.acquisition.statistics())
+  readonly statisticsTotal = computed(() => this.statistics().data?.total)
+  readonly convertedCount = computed(() => this.statistics().data?.convertidos)
+  readonly pendingCount = computed(() => this.statistics().data?.pendientes)
+  readonly originCount = computed(() => this.origins().data?.length)
+  readonly stageCount = computed(() => this.stages().data?.length)
+  readonly activeOrigins = computed(() =>
+    (this.origins().data ?? []).filter(origin => origin.isActive)
+  )
+  /** Unverified catalogs stay unknown: a zero is only shown once the server returned rows. */
+  readonly activeOriginCount = computed(() =>
+    this.origins().data ? this.activeOrigins().length : undefined
+  )
+  readonly activeOriginNames = computed(() =>
+    this.activeOrigins()
+      .map(origin => origin.name)
+      .join(", ")
+  )
   private readonly requestedQuery = signal<LeadListQuery>(
     leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
@@ -153,6 +194,11 @@ export class LeadsPage implements OnInit {
   retryStages(): void {
     this.readCatalog(force => this.acquisition.loadStages(force), true)
   }
+  /** One explicit retry; the mounted observer keeps the same single entry and pinned key. */
+  retryStatistics(): void {
+    this.readCatalog(force => this.acquisition.loadStatistics(force), true)
+  }
+  readonly statisticsErrorMessage = "No se pudieron cargar las estadísticas. Inténtalo de nuevo."
   readonly errorMessage = computed(() => {
     switch (this.list().error?.code) {
       case "FORBIDDEN":
@@ -200,8 +246,44 @@ export class LeadsPage implements OnInit {
     })
   }
 
+  /**
+   * Only a loaded non-converted row exposes this action, and only the captured id reaches the
+   * server: it stays the deletion authority. The route-local toast announces confirmed success.
+   */
+  deleteLead(lead: Lead): void {
+    if (
+      this.destroyRef.destroyed ||
+      !this.scope.check() ||
+      this.writing() ||
+      this.dialog?.open ||
+      lead.isConverted
+    )
+      return
+    const generation = this.scope.generation()
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    this.dialog = this.dialogs.open(LeadDeleteDialog, {
+      context: {
+        lead,
+        owner: this.destroyRef,
+        current,
+        onDeleted: () => {
+          if (current()) this.toast.success("Prospecto eliminado correctamente.")
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      contentClass: "sm:max-w-lg"
+    })
+  }
+
   ngOnInit(): void {
     this.scope.check()
+    // Observed once: confirmed lead writes revalidate it and tab switches never re-mount it.
+    this.readCatalog(force => this.acquisition.observeStatistics(force))
     this.readCatalog(force => this.acquisition.loadOrigins(force))
     this.readCatalog(force => this.acquisition.loadStages(force))
     this.destroyRef.onDestroy(() => this.dialog?.close())

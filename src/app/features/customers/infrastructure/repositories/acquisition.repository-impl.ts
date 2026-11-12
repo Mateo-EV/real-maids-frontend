@@ -41,6 +41,9 @@ export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   listLeads(params: LeadListQuery) {
     return this.source.listLeads(params)
   }
+  getLeadStatistics() {
+    return this.source.getLeadStatistics()
+  }
   findLead(id: number) {
     return this.source.findLead(id)
   }
@@ -49,6 +52,9 @@ export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   }
   updateLead(params: UpdateLeadParams) {
     return this.source.updateLead(params)
+  }
+  deleteLead(id: number) {
+    return this.source.deleteLead(id)
   }
   listFollowUps(leadId: number) {
     return this.source.listFollowUps(leadId)

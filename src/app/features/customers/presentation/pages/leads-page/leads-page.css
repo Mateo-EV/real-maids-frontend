@@ -1,0 +1,8 @@
+:host {
+  display: block;
+}
+
+/* IAM tab affordance with the shared coral accent; no IAM soft tone variables are imported. */
+.active-section {
+  border-bottom: 3px solid var(--coral);
+}

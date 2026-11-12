@@ -1,261 +1,622 @@
 <app-crm-catalog-navigation />
-<main
-  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6"
->
-  <app-catalog-frame
-    titleId="leads-title"
-    title="Bandeja de Prospectos"
-    description="Consulta de prospectos registrados"
-    [busy]="list().loading || list().refreshing"
-  >
-    <app-catalog-filters
-      catalogControls
-      searchInputId="lead-filter-search"
-      searchLabel="Buscar nombre, correo o teléfono"
-      searchPlaceholder="Buscar nombre, correo o teléfono…"
-      [searchValue]="search()"
-      [selects]="filterSelects()"
-      (searchChange)="setSearch($event)"
-      (selectChange)="setSelect($event.id, $event.value)"
-    >
+<div class="bg-background text-foreground">
+  <nav class="border-b bg-card px-4 sm:px-6 lg:px-6" aria-label="Secciones de prospectos">
+    <div class="mx-auto flex w-full flex-wrap items-center gap-x-4">
       <button
-        hlmBtn
-        class="catalog-action-with-plus"
-        size="sm"
+        data-prospects-tab
         type="button"
-        [disabled]="writing()"
-        (click)="create()"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'prospects'"
+        [attr.aria-current]="section() === 'prospects' ? 'page' : null"
+        (click)="section.set('prospects')"
       >
-        <ng-icon name="lucidePlus" aria-hidden="true" />Crear prospecto
+        Prospectos
+        <span hlmBadge variant="secondary">{{ statisticsTotal() ?? "—" }}</span>
       </button>
-    </app-catalog-filters>
-    @if (list().loading) {
-      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
-        <hlm-spinner />Cargando prospectos…
-      </div>
-    }
-    @if (list().refreshing) {
-      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando prospectos…</p>
-    }
-    @if (origins().loading || origins().refreshing) {
-      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
-        {{ origins().refreshing ? "Actualizando orígenes…" : "Cargando orígenes…" }}
-      </p>
-    }
-    @if (origins().error) {
-      <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
-        <span>
-          {{
-            origins().data
-              ? "No se pudieron actualizar los orígenes."
-              : "No se pudieron cargar los orígenes."
-          }}
-          @if (origins().data) {
-            Se conservan las etiquetas verificadas disponibles.
-          }
-        </span>
-        <button
-          hlmBtn
-          type="button"
-          variant="outline"
-          (click)="retryOrigins()"
-          [disabled]="origins().loading || origins().refreshing"
-        >
-          Reintentar orígenes
-        </button>
-      </div>
-    }
-    @if (stages().loading || stages().refreshing) {
-      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
-        {{ stages().refreshing ? "Actualizando etapas…" : "Cargando etapas…" }}
-      </p>
-    }
-    @if (stages().error) {
-      <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
-        <span>
-          {{
-            stages().data
-              ? "No se pudieron actualizar las etapas."
-              : "No se pudieron cargar las etapas."
-          }}
-          @if (stages().data) {
-            Se conservan las etiquetas verificadas disponibles.
-          }
-        </span>
-        <button
-          hlmBtn
-          type="button"
-          variant="outline"
-          (click)="retryStages()"
-          [disabled]="stages().loading || stages().refreshing"
-        >
-          Reintentar etapas
-        </button>
-      </div>
-    }
-    @if (list().error) {
-      <div class="p-5">
-        <div hlmAlert variant="destructive" role="alert">
-          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
-          <div hlmAlertDescription>
-            @if (result()) {
-              <p>Los datos pueden estar desactualizados.</p>
+      <button
+        data-origins-tab
+        type="button"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'origins'"
+        [attr.aria-current]="section() === 'origins' ? 'page' : null"
+        (click)="section.set('origins')"
+      >
+        Orígenes
+        <span hlmBadge variant="secondary">{{ originCount() ?? "—" }}</span>
+      </button>
+      <button
+        data-stages-tab
+        type="button"
+        class="flex items-center gap-2 py-3 text-sm font-semibold"
+        [class.active-section]="section() === 'stages'"
+        [attr.aria-current]="section() === 'stages' ? 'page' : null"
+        (click)="section.set('stages')"
+      >
+        Etapas
+        <span hlmBadge variant="secondary">{{ stageCount() ?? "—" }}</span>
+      </button>
+    </div>
+  </nav>
+  <main class="mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6">
+    <section
+      class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      aria-label="Resumen del catálogo"
+    >
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Prospectos</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
+            ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-prospect-metric>{{ statisticsTotal() ?? "—" }}</p>
+          <p hlmCardDescription>
+            @if (statistics().loaded) {
+              {{ convertedCount() }} convertidos · {{ pendingCount() }} pendientes
+            } @else {
+              {{ statistics().loading ? "Cargando estadísticas…" : "Estadísticas sin verificar" }}
             }
-          </div>
-        </div>
-        <button
-          hlmBtn
-          type="button"
-          variant="outline"
-          class="mt-4"
-          (click)="retry()"
-          [disabled]="list().loading || list().refreshing"
-        >
-          Reintentar
-        </button>
-      </div>
-    }
-    @if (result(); as page) {
-      @if (rows().length) {
-        <div hlmTableContainer catalogDesktop>
-          <table hlmTable>
-            <caption class="sr-only">
-              Prospectos registrados
-            </caption>
-            <thead hlmTHead class="bg-background">
-              <tr hlmTr>
-                <th hlmTh scope="col">Nombre</th>
-                <th hlmTh scope="col">Correo</th>
-                <th hlmTh scope="col">Teléfono</th>
-                <th hlmTh scope="col">Origen</th>
-                <th hlmTh scope="col">Etapa</th>
-                <th hlmTh scope="col">Conversión</th>
-              </tr>
-            </thead>
-            <tbody hlmTBody>
-              @for (lead of rows(); track lead.id) {
-                <tr hlmTr>
-                  <td hlmTd class="font-semibold">
-                    <a
-                      hlmBtn
-                      variant="link"
-                      class="h-auto max-w-full text-left whitespace-normal break-words"
-                      [routerLink]="['/admin/customers/leads', lead.id]"
-                      [queryParams]="query()"
-                      [attr.aria-label]="'Ver prospecto ' + lead.name"
-                      >{{ lead.name }}</a
-                    >
-                  </td>
-                  <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
-                  <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
-                  <td hlmTd>
-                    <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
-                  </td>
-                  <td hlmTd>
-                    <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
-                  </td>
-                  <td hlmTd>
-                    <span hlmBadge variant="outline">{{
-                      lead.isConverted ? "Convertido" : "No convertido"
-                    }}</span>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Prospectos registrados">
-          @for (lead of rows(); track lead.id) {
-            <li class="min-w-0 rounded-xl border p-4">
-              <div class="flex flex-wrap items-center gap-3">
-                <h2 class="min-w-0 flex-1 font-semibold break-words">
-                  <a
-                    hlmBtn
-                    variant="link"
-                    class="h-auto max-w-full text-left whitespace-normal break-words"
-                    [routerLink]="['/admin/customers/leads', lead.id]"
-                    [queryParams]="query()"
-                    [attr.aria-label]="'Ver prospecto ' + lead.name"
-                    >{{ lead.name }}</a
-                  >
-                </h2>
-                <span hlmBadge variant="outline">{{
-                  lead.isConverted ? "Convertido" : "No convertido"
-                }}</span>
-              </div>
-              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-                <dt class="text-muted-foreground">Correo</dt>
-                <dd class="break-all">{{ lead.email ?? "No registrado" }}</dd>
-                <dt class="text-muted-foreground">Teléfono</dt>
-                <dd class="break-words">{{ lead.phone ?? "No registrado" }}</dd>
-                <dt class="text-muted-foreground">Origen</dt>
-                <dd>
-                  <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
-                </dd>
-                <dt class="text-muted-foreground">Etapa</dt>
-                <dd>
-                  <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
-                </dd>
-              </dl>
-            </li>
+          </p>
+          @if (statistics().refreshing) {
+            <p role="status" class="text-sm">Actualizando estadísticas…</p>
           }
-        </ul>
-      } @else {
-        <div hlmEmpty class="min-h-64">
-          <div hlmEmptyHeader>
-            <h2 hlmEmptyTitle>
-              {{
-                page.total === 0
-                  ? hasFilters()
-                    ? "Sin prospectos para esos filtros"
-                    : "No hay prospectos"
-                  : "Esta página ya no tiene registros"
-              }}
-            </h2>
-            <p hlmEmptyDescription>
-              {{
-                page.total === 0
-                  ? hasFilters()
-                    ? "Prueba otra búsqueda o restablece los filtros."
-                    : "El servidor no devolvió prospectos."
-                  : "El catálogo cambió. Selecciona otra página o reintenta."
-              }}
-            </p>
-          </div>
-          @if (page.total === 0 && hasFilters()) {
-            <button hlmBtn type="button" variant="outline" (click)="clearFilters()">
-              Restablecer filtros
-            </button>
-          }
-          @if (page.total > 0 && !list().error) {
+          @if (statistics().error) {
+            @if (statistics().loaded) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">{{ statisticsErrorMessage }}</p>
             <button
               hlmBtn
               type="button"
               variant="outline"
-              (click)="retry()"
-              [disabled]="list().refreshing"
+              size="sm"
+              (click)="retryStatistics()"
+              [disabled]="statistics().loading || statistics().refreshing"
             >
-              Reintentar
+              Reintentar estadísticas
             </button>
           }
         </div>
-      }
-    }
-    <ng-container catalogFooter>
-      <p class="text-xs text-muted-foreground" role="status">
-        @if (result(); as page) {
-          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} prospectos
-        } @else {
-          Resultados sin verificar
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Convertidos</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="amber"
+            ><ng-icon name="lucideCircleCheck" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-converted-metric>{{ convertedCount() ?? "—" }}</p>
+          <p hlmCardDescription>
+            {{ statistics().loaded ? "Del total del servidor" : "Estadísticas sin verificar" }}
+          </p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Pendientes</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="blue"
+            ><ng-icon name="lucideClock" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-pending-metric>{{ pendingCount() ?? "—" }}</p>
+          <p hlmCardDescription>
+            {{ statistics().loaded ? "Del total del servidor" : "Estadísticas sin verificar" }}
+          </p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Orígenes activos</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="green"
+            ><ng-icon name="lucideTag" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-origin-metric>{{ activeOriginCount() ?? "—" }}</p>
+          <p hlmCardDescription>
+            @if (origins().data) {
+              {{ activeOriginNames() || "Sin orígenes activos" }}
+            } @else {
+              {{ origins().loading ? "Cargando orígenes…" : "Orígenes sin verificar" }}
+            }
+          </p>
+        </div>
+      </article>
+    </section>
+    @if (section() === "prospects") {
+      <app-catalog-frame
+        titleId="leads-title"
+        title="Bandeja de Prospectos"
+        description="Consulta de prospectos registrados"
+        [busy]="list().loading || list().refreshing"
+      >
+        <app-catalog-filters
+          catalogControls
+          searchInputId="lead-filter-search"
+          searchLabel="Buscar nombre, correo o teléfono"
+          searchPlaceholder="Buscar nombre, correo o teléfono…"
+          [searchValue]="search()"
+          [selects]="filterSelects()"
+          (searchChange)="setSearch($event)"
+          (selectChange)="setSelect($event.id, $event.value)"
+        >
+          <button
+            hlmBtn
+            class="catalog-action-with-plus"
+            size="sm"
+            type="button"
+            [disabled]="writing()"
+            (click)="create()"
+          >
+            <ng-icon name="lucidePlus" aria-hidden="true" />Crear prospecto
+          </button>
+        </app-catalog-filters>
+        @if (list().loading) {
+          <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+            <hlm-spinner />Cargando prospectos…
+          </div>
         }
-      </p>
-      <app-table-pagination
-        label="Paginación de prospectos"
-        [currentPage]="currentPage()"
-        [pageCount]="pageCount()"
-        [disabled]="list().loading || !result()"
-        (pageSelected)="goToPage($event)"
-      />
-    </ng-container>
-  </app-catalog-frame>
-</main>
+        @if (list().refreshing) {
+          <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+            Actualizando prospectos…
+          </p>
+        }
+        @if (origins().loading || origins().refreshing) {
+          <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+            {{ origins().refreshing ? "Actualizando orígenes…" : "Cargando orígenes…" }}
+          </p>
+        }
+        @if (origins().error) {
+          <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
+            <span>
+              {{
+                origins().data
+                  ? "No se pudieron actualizar los orígenes."
+                  : "No se pudieron cargar los orígenes."
+              }}
+              @if (origins().data) {
+                Se conservan las etiquetas verificadas disponibles.
+              }
+            </span>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retryOrigins()"
+              [disabled]="origins().loading || origins().refreshing"
+            >
+              Reintentar orígenes
+            </button>
+          </div>
+        }
+        @if (stages().loading || stages().refreshing) {
+          <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+            {{ stages().refreshing ? "Actualizando etapas…" : "Cargando etapas…" }}
+          </p>
+        }
+        @if (stages().error) {
+          <div role="alert" class="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
+            <span>
+              {{
+                stages().data
+                  ? "No se pudieron actualizar las etapas."
+                  : "No se pudieron cargar las etapas."
+              }}
+              @if (stages().data) {
+                Se conservan las etiquetas verificadas disponibles.
+              }
+            </span>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retryStages()"
+              [disabled]="stages().loading || stages().refreshing"
+            >
+              Reintentar etapas
+            </button>
+          </div>
+        }
+        @if (list().error) {
+          <div class="p-5">
+            <div hlmAlert variant="destructive" role="alert">
+              <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+              <div hlmAlertDescription>
+                @if (result()) {
+                  <p>Los datos pueden estar desactualizados.</p>
+                }
+              </div>
+            </div>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="mt-4"
+              (click)="retry()"
+              [disabled]="list().loading || list().refreshing"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+        @if (result(); as page) {
+          @if (rows().length) {
+            <div hlmTableContainer catalogDesktop>
+              <table hlmTable>
+                <caption class="sr-only">
+                  Prospectos registrados
+                </caption>
+                <thead hlmTHead class="bg-background">
+                  <tr hlmTr>
+                    <th hlmTh scope="col">Nombre</th>
+                    <th hlmTh scope="col">Correo</th>
+                    <th hlmTh scope="col">Teléfono</th>
+                    <th hlmTh scope="col">Origen</th>
+                    <th hlmTh scope="col">Etapa</th>
+                    <th hlmTh scope="col">Conversión</th>
+                    <th hlmTh scope="col">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (lead of rows(); track lead.id) {
+                    <tr hlmTr>
+                      <td hlmTd class="font-semibold">
+                        <a
+                          hlmBtn
+                          variant="link"
+                          class="h-auto max-w-full text-left whitespace-normal break-words"
+                          [routerLink]="['/admin/customers/leads', lead.id]"
+                          [queryParams]="query()"
+                          [attr.aria-label]="'Ver prospecto ' + lead.name"
+                          >{{ lead.name }}</a
+                        >
+                      </td>
+                      <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
+                      <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
+                      <td hlmTd>
+                        <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                      </td>
+                      <td hlmTd>
+                        <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                      </td>
+                      <td hlmTd>
+                        <span hlmBadge variant="outline">{{
+                          lead.isConverted ? "Convertido" : "No convertido"
+                        }}</span>
+                      </td>
+                      <td hlmTd>
+                        @if (!lead.isConverted) {
+                          <button
+                            hlmBtn
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            [disabled]="writing()"
+                            [attr.aria-label]="'Eliminar prospecto ' + lead.name"
+                            (click)="deleteLead(lead)"
+                          >
+                            <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Prospectos registrados">
+              @for (lead of rows(); track lead.id) {
+                <li class="min-w-0 rounded-xl border p-4">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h2 class="min-w-0 flex-1 font-semibold break-words">
+                      <a
+                        hlmBtn
+                        variant="link"
+                        class="h-auto max-w-full text-left whitespace-normal break-words"
+                        [routerLink]="['/admin/customers/leads', lead.id]"
+                        [queryParams]="query()"
+                        [attr.aria-label]="'Ver prospecto ' + lead.name"
+                        >{{ lead.name }}</a
+                      >
+                    </h2>
+                    <span hlmBadge variant="outline">{{
+                      lead.isConverted ? "Convertido" : "No convertido"
+                    }}</span>
+                  </div>
+                  <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                    <dt class="text-muted-foreground">Correo</dt>
+                    <dd class="break-all">{{ lead.email ?? "No registrado" }}</dd>
+                    <dt class="text-muted-foreground">Teléfono</dt>
+                    <dd class="break-words">{{ lead.phone ?? "No registrado" }}</dd>
+                    <dt class="text-muted-foreground">Origen</dt>
+                    <dd>
+                      <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                    </dd>
+                    <dt class="text-muted-foreground">Etapa</dt>
+                    <dd>
+                      <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                    </dd>
+                  </dl>
+                  @if (!lead.isConverted) {
+                    <button
+                      hlmBtn
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      class="mt-4"
+                      [disabled]="writing()"
+                      [attr.aria-label]="'Eliminar prospecto ' + lead.name"
+                      (click)="deleteLead(lead)"
+                    >
+                      <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <div hlmEmpty class="min-h-64">
+              <div hlmEmptyHeader>
+                <h2 hlmEmptyTitle>
+                  {{
+                    page.total === 0
+                      ? hasFilters()
+                        ? "Sin prospectos para esos filtros"
+                        : "No hay prospectos"
+                      : "Esta página ya no tiene registros"
+                  }}
+                </h2>
+                <p hlmEmptyDescription>
+                  {{
+                    page.total === 0
+                      ? hasFilters()
+                        ? "Prueba otra búsqueda o restablece los filtros."
+                        : "El servidor no devolvió prospectos."
+                      : "El catálogo cambió. Selecciona otra página o reintenta."
+                  }}
+                </p>
+              </div>
+              @if (page.total === 0 && hasFilters()) {
+                <button hlmBtn type="button" variant="outline" (click)="clearFilters()">
+                  Restablecer filtros
+                </button>
+              }
+              @if (page.total > 0 && !list().error) {
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  (click)="retry()"
+                  [disabled]="list().refreshing"
+                >
+                  Reintentar
+                </button>
+              }
+            </div>
+          }
+        }
+        <ng-container catalogFooter>
+          <p class="text-xs text-muted-foreground" role="status">
+            @if (result(); as page) {
+              {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} prospectos
+            } @else {
+              Resultados sin verificar
+            }
+          </p>
+          <app-table-pagination
+            label="Paginación de prospectos"
+            [currentPage]="currentPage()"
+            [pageCount]="pageCount()"
+            [disabled]="list().loading || !result()"
+            (pageSelected)="goToPage($event)"
+          />
+        </ng-container>
+      </app-catalog-frame>
+    }
+    @if (section() === "origins") {
+      <app-catalog-frame
+        titleId="lead-origins-title"
+        title="Orígenes de prospecto"
+        description="Catálogo de orígenes en sólo lectura"
+        [busy]="origins().loading || origins().refreshing"
+      >
+        @if (origins().loading) {
+          <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+            <hlm-spinner />Cargando orígenes…
+          </div>
+        }
+        @if (origins().refreshing) {
+          <p role="status" class="px-4 py-2 text-xs text-muted-foreground">
+            Actualizando orígenes…
+          </p>
+        }
+        @if (origins().error) {
+          <div class="p-5">
+            <div hlmAlert variant="destructive" role="alert">
+              <h2 hlmAlertTitle>
+                {{
+                  origins().data
+                    ? "No se pudieron actualizar los orígenes."
+                    : "No se pudieron cargar los orígenes."
+                }}
+              </h2>
+              <div hlmAlertDescription>
+                @if (origins().data) {
+                  <p>Se conservan los orígenes verificados disponibles.</p>
+                }
+              </div>
+            </div>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="mt-4"
+              (click)="retryOrigins()"
+              [disabled]="origins().loading || origins().refreshing"
+            >
+              Reintentar orígenes
+            </button>
+          </div>
+        }
+        @if (origins().data; as items) {
+          @if (items.length) {
+            <div hlmTableContainer catalogDesktop>
+              <table hlmTable>
+                <caption class="sr-only">
+                  Orígenes de prospecto
+                </caption>
+                <thead hlmTHead class="bg-background">
+                  <tr hlmTr>
+                    <th hlmTh scope="col">Origen</th>
+                    <th hlmTh scope="col">Descripción</th>
+                    <th hlmTh scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (origin of items; track origin.id) {
+                    <tr hlmTr>
+                      <td hlmTd class="font-semibold">{{ origin.name }}</td>
+                      <td hlmTd>{{ origin.description ?? "Sin descripción" }}</td>
+                      <td hlmTd>
+                        <span hlmBadge variant="outline">{{
+                          origin.isActive ? "Activo" : "Inactivo"
+                        }}</span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Orígenes de prospecto">
+              @for (origin of items; track origin.id) {
+                <li class="min-w-0 rounded-xl border p-4">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h2 class="min-w-0 flex-1 font-semibold break-words">{{ origin.name }}</h2>
+                    <span hlmBadge variant="outline">{{
+                      origin.isActive ? "Activo" : "Inactivo"
+                    }}</span>
+                  </div>
+                  <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                    <dt class="text-muted-foreground">Descripción</dt>
+                    <dd class="break-words">{{ origin.description ?? "Sin descripción" }}</dd>
+                    <dt class="text-muted-foreground">Estado</dt>
+                    <dd>{{ origin.isActive ? "Activo" : "Inactivo" }}</dd>
+                  </dl>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div hlmEmpty class="min-h-64">
+              <div hlmEmptyHeader>
+                <h2 hlmEmptyTitle>No hay orígenes registrados</h2>
+                <p hlmEmptyDescription>El servidor no devolvió orígenes de prospecto.</p>
+              </div>
+            </div>
+          }
+        }
+        <ng-container catalogFooter>
+          <p class="text-xs text-muted-foreground">Catálogo de sólo lectura</p>
+        </ng-container>
+      </app-catalog-frame>
+    }
+    @if (section() === "stages") {
+      <app-catalog-frame
+        titleId="lead-stages-title"
+        title="Etapas del embudo"
+        description="Catálogo de etapas en sólo lectura"
+        [busy]="stages().loading || stages().refreshing"
+      >
+        @if (stages().loading) {
+          <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+            <hlm-spinner />Cargando etapas…
+          </div>
+        }
+        @if (stages().refreshing) {
+          <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando etapas…</p>
+        }
+        @if (stages().error) {
+          <div class="p-5">
+            <div hlmAlert variant="destructive" role="alert">
+              <h2 hlmAlertTitle>
+                {{
+                  stages().data
+                    ? "No se pudieron actualizar las etapas."
+                    : "No se pudieron cargar las etapas."
+                }}
+              </h2>
+              <div hlmAlertDescription>
+                @if (stages().data) {
+                  <p>Se conservan las etapas verificadas disponibles.</p>
+                }
+              </div>
+            </div>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="mt-4"
+              (click)="retryStages()"
+              [disabled]="stages().loading || stages().refreshing"
+            >
+              Reintentar etapas
+            </button>
+          </div>
+        }
+        @if (stages().data; as items) {
+          @if (items.length) {
+            <div hlmTableContainer catalogDesktop>
+              <table hlmTable>
+                <caption class="sr-only">
+                  Etapas del embudo de prospectos
+                </caption>
+                <thead hlmTHead class="bg-background">
+                  <tr hlmTr>
+                    <th hlmTh scope="col">Etapa</th>
+                    <th hlmTh scope="col">Orden</th>
+                    <th hlmTh scope="col">Final</th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (stage of items; track stage.id) {
+                    <tr hlmTr>
+                      <td hlmTd class="font-semibold">{{ stage.name }}</td>
+                      <td hlmTd>{{ stage.order }}</td>
+                      <td hlmTd>
+                        <span hlmBadge variant="outline">{{ stage.isFinal ? "Sí" : "No" }}</span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Etapas del embudo">
+              @for (stage of items; track stage.id) {
+                <li class="min-w-0 rounded-xl border p-4">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h2 class="min-w-0 flex-1 font-semibold break-words">{{ stage.name }}</h2>
+                    <span hlmBadge variant="outline">{{
+                      stage.isFinal ? "Final" : "No final"
+                    }}</span>
+                  </div>
+                  <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                    <dt class="text-muted-foreground">Orden</dt>
+                    <dd>{{ stage.order }}</dd>
+                    <dt class="text-muted-foreground">Final</dt>
+                    <dd>{{ stage.isFinal ? "Sí" : "No" }}</dd>
+                  </dl>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div hlmEmpty class="min-h-64">
+              <div hlmEmptyHeader>
+                <h2 hlmEmptyTitle>No hay etapas registradas</h2>
+                <p hlmEmptyDescription>El servidor no devolvió etapas del embudo.</p>
+              </div>
+            </div>
+          }
+        }
+        <ng-container catalogFooter>
+          <p class="text-xs text-muted-foreground">Catálogo de sólo lectura</p>
+        </ng-container>
+      </app-catalog-frame>
+    }
+  </main>
+</div>

@@ -1,9 +1,10 @@
-import { PLATFORM_ID } from "@angular/core"
+import { PLATFORM_ID, DestroyRef, getDebugNode } from "@angular/core"
+import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { TestBed } from "@angular/core/testing"
 import { ActivatedRoute, convertToParamMap, provideRouter } from "@angular/router"
-import { BehaviorSubject, Subject } from "rxjs"
+import { BehaviorSubject, of, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
@@ -11,6 +12,9 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import {
+  CreateLeadUseCase,
+  DeleteLeadUseCase,
+  GetLeadStatisticsUseCase,
   ListFunnelStagesUseCase,
   ListLeadOriginsUseCase,
   ListLeadsUseCase
@@ -18,8 +22,10 @@ import {
 import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
 import { LeadOrigin } from "../../../domain/entities/lead-origin.entity"
 import { Lead } from "../../../domain/entities/lead.entity"
+import { ProspectoEstadisticas } from "../../../domain/params/prospecto-estadisticas.params"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
+import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delete-dialog"
 import { LeadsPage } from "./leads-page"
 
 type PageResult = Result<PaginationResponse<Lead>, CustomerError>
@@ -42,11 +48,14 @@ const page = (items: Lead[] = [row], total = 45, offset = 0, limit = 20): PageRe
   Result.success({ items, total, offset, limit })
 
 type CatalogResult<T> = Result<readonly T[], CustomerError>
+type StatisticsResult = Result<ProspectoEstadisticas, CustomerError>
+const totals: ProspectoEstadisticas = { total: 45, convertidos: 5, pendientes: 40 }
 
 function setup(server = false, query: Record<string, string> = {}) {
   const requests: Subject<PageResult>[] = []
   const originRequests: Subject<CatalogResult<LeadOrigin>>[] = []
   const stageRequests: Subject<CatalogResult<FunnelStage>>[] = []
+  const statisticsRequests: Subject<StatisticsResult>[] = []
   const execute = vi.fn(() => {
     const response = new Subject<PageResult>()
     requests.push(response)
@@ -62,11 +71,23 @@ function setup(server = false, query: Record<string, string> = {}) {
     stageRequests.push(response)
     return response
   })
+  const loadStatistics = vi.fn(() => {
+    const response = new Subject<StatisticsResult>()
+    statisticsRequests.push(response)
+    return response
+  })
   const session = new BehaviorSubject<AuthSession | null>(
     AuthSession.create("Test", "identity@example.test", null, Date.now() + 600000, 7)
   )
   const dialogRef = { open: true, close: vi.fn() }
   const openDialog = vi.fn((_component: unknown, _config: unknown) => dialogRef)
+  const toast = vi.fn()
+  const createRequests: Subject<Result<Lead, CustomerError>>[] = []
+  const createLead = vi.fn(() => {
+    const response = new Subject<Result<Lead, CustomerError>>()
+    createRequests.push(response)
+    return response
+  })
   TestBed.configureTestingModule({
     imports: [LeadsPage],
     providers: [
@@ -75,11 +96,13 @@ function setup(server = false, query: Record<string, string> = {}) {
         provide: ActivatedRoute,
         useValue: { snapshot: { queryParamMap: convertToParamMap(query) } }
       },
-      { provide: HotToastService, useValue: { success: vi.fn() } },
+      { provide: HotToastService, useValue: { success: toast } },
       { provide: HlmDialogService, useValue: { open: openDialog } },
       { provide: ListLeadsUseCase, useValue: { execute } },
+      { provide: CreateLeadUseCase, useValue: { execute: createLead } },
       { provide: ListLeadOriginsUseCase, useValue: { execute: loadOrigins } },
       { provide: ListFunnelStagesUseCase, useValue: { execute: loadStages } },
+      { provide: GetLeadStatisticsUseCase, useValue: { execute: loadStatistics } },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       ...(server ? [{ provide: PLATFORM_ID, useValue: "server" }] : [])
@@ -108,6 +131,19 @@ function setup(server = false, query: Record<string, string> = {}) {
     stageRequests.at(-1)!.complete()
     await settle()
   }
+  const respondStatistics = async (value: StatisticsResult) => {
+    statisticsRequests.at(-1)!.next(value)
+    statisticsRequests.at(-1)!.complete()
+    await settle()
+  }
+  const clickTab = async (tab: "prospects" | "origins" | "stages") => {
+    const button = element.querySelector<HTMLButtonElement>(`[data-${tab}-tab]`)
+    expect(button, tab).not.toBeNull()
+    button!.click()
+    await settle()
+  }
+  const badge = (tab: "prospects" | "origins" | "stages") =>
+    element.querySelector(`[data-${tab}-tab] span`)?.textContent?.trim()
   const click = async (label: string) => {
     const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
       item => item.getAttribute("aria-label") === label || item.textContent?.trim() === label
@@ -123,14 +159,22 @@ function setup(server = false, query: Record<string, string> = {}) {
     requests,
     originRequests,
     stageRequests,
+    statisticsRequests,
     loadOrigins,
     loadStages,
+    loadStatistics,
     openDialog,
+    toast,
+    createLead,
+    createRequests,
     session,
     respond,
     respondOrigins,
     respondStages,
+    respondStatistics,
     click,
+    clickTab,
+    badge,
     settle
   }
 }
@@ -332,7 +376,8 @@ describe("LeadsPage read-only inbox", () => {
       expect(records.querySelector("a")?.getAttribute("href")).toBe(
         "/admin/customers/leads/7?offset=0&limit=20"
       )
-      expect(records.querySelector("button")).toBeNull()
+      // Only the non-converted row offers the delete action in each layout.
+      expect(records.querySelectorAll("button")).toHaveLength(1)
     }
     expect(frame.querySelector("th")?.textContent).toBe("Nombre")
     expect(frame.textContent).toContain("Origen")
@@ -347,6 +392,81 @@ describe("LeadsPage read-only inbox", () => {
     await s.click("Crear prospecto")
     expect(s.openDialog).toHaveBeenCalledOnce()
     expect(s.openDialog.mock.calls[0][1]).toMatchObject({ contentClass: "sm:max-w-2xl" })
+  })
+
+  it("offers the delete action only on non-converted rows with an accessible name on both layouts", async () => {
+    const s = setup()
+    await s.respond(page([row, lead(8, "Convertido real", true)]))
+    const desktop = s.element.querySelector("[catalogDesktop]")!
+    expect([...desktop.querySelectorAll("th")].map(th => th.textContent?.trim())).toContain(
+      "Acciones"
+    )
+    const tableRows = [...desktop.querySelectorAll("tbody tr")]
+    expect(tableRows).toHaveLength(2)
+    const openAction = tableRows[0].querySelector("button")!
+    expect(openAction.getAttribute("aria-label")).toBe("Eliminar prospecto Prospecto de prueba")
+    expect(openAction.textContent).toContain("Eliminar")
+    expect(tableRows[1].querySelector("button")).toBeNull()
+    const cards = [...s.element.querySelectorAll("[catalogMobile] li")]
+    expect(cards).toHaveLength(2)
+    expect(cards[0].querySelector("button")?.getAttribute("aria-label")).toBe(
+      "Eliminar prospecto Prospecto de prueba"
+    )
+    expect(cards[1].querySelector("button")).toBeNull()
+    // The converted row keeps its own labels untouched, without a hidden second action.
+    expect(tableRows[1].textContent).toContain("Convertido")
+    expect(s.element.textContent).not.toContain("Eliminar prospecto Convertido real")
+  })
+
+  it("opens one confirmation dialog for the captured lead and emits feedback only from its confirmed callback", async () => {
+    const s = setup()
+    await s.respond(page([row]))
+    await s.click("Eliminar prospecto Prospecto de prueba")
+    expect(s.openDialog).toHaveBeenCalledOnce()
+    const config = s.openDialog.mock.calls[0][1] as {
+      context: {
+        lead: Lead
+        owner: unknown
+        current: () => boolean
+        onDeleted: () => void
+      }
+    }
+    expect(s.openDialog.mock.calls[0][0]).toBe(LeadDeleteDialog)
+    expect(config).toMatchObject({ showCloseButton: false, disableClose: true })
+    expect(config.context.lead).toBe(row)
+    expect(config.context.owner).toBeInstanceOf(DestroyRef)
+    expect(config.context.current()).toBe(true)
+    await s.click("Eliminar prospecto Prospecto de prueba")
+    expect(s.openDialog).toHaveBeenCalledOnce()
+    expect(s.toast).not.toHaveBeenCalled()
+    config.context.onDeleted()
+    expect(s.toast).toHaveBeenCalledExactlyOnceWith("Prospecto eliminado correctamente.")
+  })
+
+  it("does not open the confirmation while another lead write is pending", async () => {
+    const s = setup()
+    await s.respond(page([row]))
+    TestBed.inject(CustomerAcquisitionStore)
+      .createLead({
+        originId: 11,
+        stageId: 12,
+        name: "Pendiente",
+        email: null,
+        phone: null,
+        referenceAddress: null,
+        observation: null
+      })
+      .subscribe()
+    await s.settle()
+    expect(s.fixture.componentInstance.writing()).toBe(true)
+    expect(
+      s.element.querySelector<HTMLButtonElement>(
+        "button[aria-label='Eliminar prospecto Prospecto de prueba']"
+      )!.disabled
+    ).toBe(true)
+    s.fixture.componentInstance.deleteLead(row)
+    await s.settle()
+    expect(s.openDialog).not.toHaveBeenCalled()
   })
 
   it("preserves null contacts as unregistered without fabricating metadata or interpreting text", async () => {
@@ -419,7 +539,9 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.execute).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
     await s.respond(page([row], 45, 2, 2))
     expect(s.element.textContent).toContain("3–3 de 45 prospectos")
-    expect(s.element.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe("2")
+    expect(
+      s.element.querySelector('app-table-pagination [aria-current="page"]')?.textContent?.trim()
+    ).toBe("2")
     await s.click("Página siguiente")
     expect(s.execute).toHaveBeenLastCalledWith({ offset: 4, limit: 2 })
     await s.respond(page([row], 45, 4, 2))
@@ -603,5 +725,345 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.execute).not.toHaveBeenCalled()
     expect(s.loadOrigins).not.toHaveBeenCalled()
     expect(s.loadStages).not.toHaveBeenCalled()
+    expect(s.loadStatistics).not.toHaveBeenCalled()
+  })
+
+  it("renders one KPI block with four cards and switches tabs without re-rendering or re-reading it", async () => {
+    const s = setup()
+    await s.respond(page([row], 45))
+    await s.respondStatistics(Result.success(totals))
+    await s.respondOrigins(
+      Result.success([
+        LeadOrigin.create(11, "Formulario web", "Sitio web", true),
+        LeadOrigin.create(13, "Feria", null, false)
+      ])
+    )
+    await s.respondStages(
+      Result.success([
+        FunnelStage.create(12, "Contactado", 1, false),
+        FunnelStage.create(14, "Cerrado", 2, true)
+      ])
+    )
+    const nav = s.element.querySelector('nav[aria-label="Secciones de prospectos"]')!
+    expect(nav).not.toBeNull()
+    const metrics = s.element.querySelector('.catalog-metrics[aria-label="Resumen del catálogo"]')!
+    expect(metrics).not.toBeNull()
+    expect(metrics.querySelectorAll("article")).toHaveLength(4)
+    expect(
+      [...metrics.querySelectorAll(".kpi-value")].map(value => value.textContent?.trim())
+    ).toEqual(["45", "5", "40", "1"])
+    expect(
+      [...metrics.querySelectorAll(".kpi-tile")].map(tile => tile.getAttribute("data-kpi-tone"))
+    ).toEqual(["navy", "amber", "blue", "green"])
+    expect(
+      metrics.querySelectorAll("[hlmCardDescription]")[0].textContent?.replace(/\s+/g, " ").trim()
+    ).toBe("5 convertidos · 40 pendientes")
+    expect(
+      metrics.querySelectorAll("[hlmCardDescription]")[3].textContent?.replace(/\s+/g, " ").trim()
+    ).toBe("Formulario web")
+    expect(s.badge("prospects")).toBe("45")
+    expect(s.badge("origins")).toBe("2")
+    expect(s.badge("stages")).toBe("2")
+    expect(nav.querySelector("[data-prospects-tab]")?.getAttribute("aria-current")).toBe("page")
+    expect(nav.querySelector("[data-origins-tab]")?.getAttribute("aria-current")).toBeNull()
+    const firstCard = metrics.firstElementChild
+    await s.clickTab("origins")
+    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
+    expect(metrics.firstElementChild).toBe(firstCard)
+    expect(s.loadStatistics).toHaveBeenCalledOnce()
+    expect(s.execute).toHaveBeenCalledOnce()
+    expect(nav.querySelector("[data-origins-tab]")?.getAttribute("aria-current")).toBe("page")
+    expect(s.element.textContent).toContain("Orígenes de prospecto")
+    expect(s.element.querySelector("#lead-filter-search")).toBeNull()
+    await s.clickTab("stages")
+    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
+    expect(metrics.firstElementChild).toBe(firstCard)
+    expect(s.element.textContent).toContain("Etapas del embudo")
+    expect(s.loadStatistics).toHaveBeenCalledOnce()
+    await s.clickTab("prospects")
+    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
+    expect(metrics.firstElementChild).toBe(firstCard)
+    expect(s.element.querySelector("#lead-filter-search")).not.toBeNull()
+    expect(s.loadStatistics).toHaveBeenCalledOnce()
+    expect(s.execute).toHaveBeenCalledOnce()
+  })
+
+  it("shows unverified tab badges as — until the server counts are verified", async () => {
+    const s = setup()
+    expect(s.badge("prospects")).toBe("—")
+    expect(s.badge("origins")).toBe("—")
+    expect(s.badge("stages")).toBe("—")
+    await s.respondOrigins(Result.success([]))
+    expect(s.badge("origins")).toBe("0")
+    expect(s.badge("prospects")).toBe("—")
+  })
+
+  it("surfaces statistics loading, refreshing, stale errors and one forced retry outside the tab body", async () => {
+    const s = setup()
+    const metric = () => s.element.querySelector("[data-prospect-metric]")?.textContent?.trim()
+    expect(metric()).toBe("—")
+    expect(s.element.textContent).toContain("Cargando estadísticas")
+    await s.respondStatistics(Result.failure(new CustomerError("NETWORK")))
+    expect(metric()).toBe("—")
+    expect(s.element.textContent).toContain("No se pudieron cargar las estadísticas")
+    expect(s.loadStatistics).toHaveBeenCalledOnce()
+    await s.click("Reintentar estadísticas")
+    expect(s.loadStatistics).toHaveBeenCalledTimes(2)
+    await s.respondStatistics(Result.success(totals))
+    expect(metric()).toBe("45")
+    expect(s.element.textContent).toContain("5 convertidos · 40 pendientes")
+    expect(s.element.textContent).not.toContain("No se pudieron cargar las estadísticas")
+    s.fixture.componentInstance.retryStatistics()
+    await s.settle()
+    expect(s.element.textContent).toContain("Actualizando estadísticas")
+    expect(metric()).toBe("45")
+    expect(s.loadStatistics).toHaveBeenCalledTimes(3)
+    await s.respondStatistics(Result.failure(new CustomerError("NETWORK")))
+    expect(metric()).toBe("45")
+    expect(s.element.textContent).toContain("Las estadísticas pueden estar desactualizadas")
+    expect(s.element.textContent).not.toContain("Actualizando estadísticas")
+  })
+
+  it("renders the read-only origins catalog with loading, safe error retry and verified rows", async () => {
+    const s = setup()
+    await s.clickTab("origins")
+    expect(s.element.textContent).toContain("Cargando orígenes")
+    await s.respondOrigins(Result.failure(new CustomerError("NETWORK")))
+    expect(s.element.textContent).toContain("No se pudieron cargar los orígenes")
+    await s.click("Reintentar orígenes")
+    expect(s.loadOrigins).toHaveBeenCalledTimes(2)
+    await s.respondOrigins(
+      Result.success([
+        LeadOrigin.create(11, "Formulario web", "Sitio web", true),
+        LeadOrigin.create(13, "Feria", null, false)
+      ])
+    )
+    const frame = s.element.querySelector(
+      'app-catalog-frame section[aria-labelledby="lead-origins-title"]'
+    )!
+    expect(frame).not.toBeNull()
+    expect([...frame.querySelectorAll("th")].map(th => th.textContent?.trim())).toEqual([
+      "Origen",
+      "Descripción",
+      "Estado"
+    ])
+    const table = frame.querySelector("[catalogDesktop] table")!
+    expect(
+      [...table.querySelectorAll("tbody tr")].map(row =>
+        [...row.querySelectorAll("td")].map(cell => cell.textContent?.trim())
+      )
+    ).toEqual([
+      ["Formulario web", "Sitio web", "Activo"],
+      ["Feria", "Sin descripción", "Inactivo"]
+    ])
+    expect(frame.querySelector("ul[catalogMobile]")?.textContent).toContain("Feria")
+    expect(frame.querySelectorAll("button")).toHaveLength(0)
+    expect(frame.textContent).not.toMatch(/Crear|Editar|Activar|Desactivar/)
+  })
+
+  it("renders the read-only stage catalog with order, final labels and a verified empty state", async () => {
+    const s = setup()
+    await s.respondStages(
+      Result.success([
+        FunnelStage.create(12, "Contactado", 1, false),
+        FunnelStage.create(14, "Cerrado", 2, true)
+      ])
+    )
+    await s.clickTab("stages")
+    const frame = s.element.querySelector(
+      'app-catalog-frame section[aria-labelledby="lead-stages-title"]'
+    )!
+    expect([...frame.querySelectorAll("th")].map(th => th.textContent?.trim())).toEqual([
+      "Etapa",
+      "Orden",
+      "Final"
+    ])
+    const table = frame.querySelector("[catalogDesktop] table")!
+    expect(
+      [...table.querySelectorAll("tbody tr")].map(row =>
+        [...row.querySelectorAll("td")].map(cell => cell.textContent?.trim())
+      )
+    ).toEqual([
+      ["Contactado", "1", "No"],
+      ["Cerrado", "2", "Sí"]
+    ])
+    expect(frame.querySelectorAll("button")).toHaveLength(0)
+    await s.clickTab("origins")
+    await s.respondOrigins(Result.success([]))
+    expect(s.element.textContent).toContain("No hay orígenes registrados")
+    expect(s.element.textContent).not.toContain("No se pudieron cargar los orígenes")
+  })
+
+  it("keeps the prospect inbox controls and server page when returning from a catalog tab", async () => {
+    const s = setup()
+    await s.respond(page([row], 45))
+    const search = s.element.querySelector<HTMLInputElement>("#lead-filter-search")!
+    search.value = "Ana"
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    await s.respond(page([row], 7))
+    expect(s.execute).toHaveBeenCalledTimes(2)
+    await s.clickTab("origins")
+    expect(s.element.querySelector("#lead-filter-search")).toBeNull()
+    await s.clickTab("prospects")
+    expect(s.element.querySelector<HTMLInputElement>("#lead-filter-search")!.value).toBe("Ana")
+    expect(s.element.textContent).toContain("1–1 de 7 prospectos")
+    expect(s.execute).toHaveBeenCalledTimes(2)
+  })
+})
+
+function deletionSetup() {
+  const requests: Subject<PageResult>[] = []
+  const deletions: Subject<Result<void, CustomerError>>[] = []
+  const list = vi.fn(() => {
+    const response = new Subject<PageResult>()
+    requests.push(response)
+    return response
+  })
+  const remove = vi.fn(() => {
+    const response = new Subject<Result<void, CustomerError>>()
+    deletions.push(response)
+    return response
+  })
+  const toast = vi.fn()
+  const session = new BehaviorSubject<AuthSession | null>(
+    AuthSession.create("Test", "identity@example.test", null, Date.now() + 600000, 7)
+  )
+  TestBed.configureTestingModule({
+    imports: [LeadsPage],
+    providers: [
+      provideRouter([]),
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap({}) } }
+      },
+      { provide: HotToastService, useValue: { success: toast } },
+      { provide: ListLeadsUseCase, useValue: { execute: list } },
+      { provide: DeleteLeadUseCase, useValue: { execute: remove } },
+      { provide: ListLeadOriginsUseCase, useValue: { execute: () => of(Result.success([])) } },
+      { provide: ListFunnelStagesUseCase, useValue: { execute: () => of(Result.success([])) } },
+      {
+        provide: GetLeadStatisticsUseCase,
+        useValue: { execute: () => of(Result.success(totals)) }
+      },
+      { provide: AuthStore, useValue: { session: () => session.value } },
+      { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } }
+    ]
+  })
+  const fixture = TestBed.createComponent(LeadsPage)
+  fixture.detectChanges()
+  const element = fixture.nativeElement as HTMLElement
+  const settle = async () => {
+    fixture.detectChanges()
+    await fixture.whenStable()
+    fixture.detectChanges()
+  }
+  const dialog = () => document.querySelector<HTMLElement>("app-lead-delete-dialog")
+  const respond = async (value: PageResult) => {
+    requests.at(-1)!.next(value)
+    requests.at(-1)!.complete()
+    await settle()
+  }
+  const click = async (label: string, within: ParentNode = element) => {
+    const button = [...within.querySelectorAll<HTMLButtonElement>("button")].find(
+      item => item.getAttribute("aria-label") === label || item.textContent?.trim() === label
+    )
+    expect(button, label).toBeDefined()
+    button!.click()
+    await settle()
+  }
+  const respondDeletion = async (value: Result<void, CustomerError>) => {
+    deletions.at(-1)!.next(value)
+    deletions.at(-1)!.complete()
+    await settle()
+  }
+  return {
+    fixture,
+    element,
+    dialog,
+    respond,
+    respondDeletion,
+    click,
+    settle,
+    list,
+    remove,
+    deletions,
+    toast,
+    session
+  }
+}
+
+describe("LeadsPage lead deletion confirmation", () => {
+  it("identifies the captured prospecto, warns about irreversibility and blocks pending duplicates/dismissal", async () => {
+    const s = deletionSetup()
+    await s.settle()
+    await s.respond(page([row]))
+    await s.click("Eliminar prospecto Prospecto de prueba")
+    const panel = s.dialog()!
+    expect(panel).not.toBeNull()
+    expect(panel.textContent).toContain("Prospecto de prueba")
+    expect(panel.textContent).toContain("#7")
+    expect(panel.textContent).toContain("irreversible")
+    expect(panel.textContent!.replace(/\s+/g, " ")).toContain(
+      "Sólo los prospectos no convertidos pueden eliminarse"
+    )
+    await s.click("Confirmar eliminación", panel)
+    expect(s.remove).toHaveBeenCalledExactlyOnceWith(7)
+    const cdk = getDebugNode(panel)!.injector.get(CdkDialogRef)
+    expect([...panel.querySelectorAll("button")].every(button => button.disabled)).toBe(true)
+    panel.querySelectorAll("button")[1].dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    cdk.overlayRef.backdropElement!.click()
+    document.body.click()
+    panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true }))
+    await s.settle()
+    expect(s.dialog()).toBe(panel)
+    expect(s.remove).toHaveBeenCalledOnce()
+    expect(s.toast).not.toHaveBeenCalled()
+    await s.respondDeletion(Result.success(undefined))
+    expect(s.dialog()).toBeNull()
+    expect(s.toast).toHaveBeenCalledExactlyOnceWith("Prospecto eliminado correctamente.")
+    // The already observed inbox revalidates once through store invalidation, never locally.
+    expect(s.list).toHaveBeenCalledTimes(2)
+    expect(s.remove).toHaveBeenCalledOnce()
+  })
+
+  it("keeps the dialog open with safe actionable server refusals and allows an explicit retry", async () => {
+    const s = deletionSetup()
+    await s.settle()
+    await s.respond(page([row]))
+    await s.click("Eliminar prospecto Prospecto de prueba")
+    await s.click("Confirmar eliminación", s.dialog()!)
+    const raw = new CustomerError("CONFLICT")
+    raw.message = "RAW_PRIVATE_VALUE"
+    await s.respondDeletion(Result.failure(raw))
+    expect(s.dialog()).not.toBeNull()
+    expect(s.dialog()!.querySelector("[role=alert]")).not.toBeNull()
+    expect(s.dialog()!.textContent).toContain("convertido")
+    expect(s.dialog()!.textContent).not.toContain("RAW_PRIVATE_VALUE")
+    expect(s.toast).not.toHaveBeenCalled()
+    expect(s.list).toHaveBeenCalledOnce()
+    await s.click("Confirmar eliminación", s.dialog()!)
+    expect(s.remove).toHaveBeenCalledTimes(2)
+    await s.respondDeletion(Result.failure(new CustomerError("LEAD_NOT_FOUND")))
+    expect(s.dialog()!.textContent).toContain("ya no está disponible")
+    expect(s.toast).not.toHaveBeenCalled()
+    expect(s.remove).toHaveBeenCalledTimes(2)
+  })
+
+  it("cancels and fences a pending deletion when the session is replaced", async () => {
+    const s = deletionSetup()
+    await s.settle()
+    await s.respond(page([row]))
+    await s.click("Eliminar prospecto Prospecto de prueba")
+    await s.click("Confirmar eliminación", s.dialog()!)
+    expect(s.deletions[0].observed).toBe(true)
+    s.session.next(AuthSession.create("Other", "other@example.test", null, Date.now() + 600000, 8))
+    await s.settle()
+    expect(s.dialog()).toBeNull()
+    expect(s.deletions[0].observed).toBe(false)
+    await s.respondDeletion(Result.success(undefined))
+    expect(s.toast).not.toHaveBeenCalled()
+    expect(s.list).toHaveBeenCalledOnce()
   })
 })

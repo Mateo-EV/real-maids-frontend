@@ -2,14 +2,15 @@
   display: block;
   container-type: inline-size;
   --users-tab-accent: var(--coral);
-  --users-green: oklch(0.43 0.1 165);
-  --users-green-soft: var(--fresh);
-  --users-amber: oklch(0.43 0.1 60);
-  --users-amber-soft: color-mix(in oklch, var(--gold) 22%, var(--paper));
+  /* Metric tones are shared with CRM through the :root tokens in src/styles.css. */
+  --users-green: var(--kpi-green);
+  --users-green-soft: var(--kpi-green-soft);
+  --users-amber: var(--kpi-amber);
+  --users-amber-soft: var(--kpi-amber-soft);
   --users-purple: oklch(0.43 0.19 290);
   --users-purple-soft: oklch(0.96 0.025 290);
-  --users-blue: oklch(0.43 0.19 262);
-  --users-blue-soft: oklch(0.97 0.018 262);
+  --users-blue: var(--kpi-blue);
+  --users-blue-soft: var(--kpi-blue-soft);
   --users-pink: oklch(0.46 0.17 5);
   --users-pink-soft: oklch(0.96 0.025 5);
   --users-neutral: var(--muted-ink);
@@ -50,19 +51,16 @@
   --decoration: var(--users-purple-soft);
   --decoration-foreground: var(--users-purple);
 }
-.role-chip[data-role-tone="blue"],
-.kpi-tile[data-kpi-tone="blue"] {
+.role-chip[data-role-tone="blue"] {
   --decoration: var(--users-blue-soft);
   --decoration-foreground: var(--users-blue);
 }
 .role-chip[data-role-tone="green"],
-.status-chip[data-status="active"],
-.kpi-tile[data-kpi-tone="green"] {
+.status-chip[data-status="active"] {
   --decoration: var(--users-green-soft);
   --decoration-foreground: var(--users-green);
 }
-.role-chip[data-role-tone="amber"],
-.kpi-tile[data-kpi-tone="amber"] {
+.role-chip[data-role-tone="amber"] {
   --decoration: var(--users-amber-soft);
   --decoration-foreground: var(--users-amber);
 }
@@ -74,15 +72,10 @@
   --decoration: var(--users-pink-soft);
   --decoration-foreground: var(--users-pink);
 }
-.kpi-tile[data-kpi-tone="navy"] {
-  --decoration: var(--fresh);
-  --decoration-foreground: var(--navy);
-}
 
 .user-avatar,
 .role-chip,
-.status-chip,
-.kpi-tile {
+.status-chip {
   background: var(--decoration);
   color: var(--decoration-foreground);
 }
@@ -100,55 +93,9 @@
   background: currentColor;
 }
 
-.kpi-tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.625rem;
-}
-
 .future-tab {
   padding-block: 0.75rem;
   color: var(--muted-foreground);
   font-size: 0.875rem;
   cursor: not-allowed;
-}
-
-.kpi-label {
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  line-height: 1.5;
-}
-
-.kpi-value {
-  color: var(--primary);
-  font-size: 1.5rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.25;
-}
-
-/* Keep the metric label/value/detail together opposite a centered icon surface. */
-.catalog-metrics [hlmCardHeader] {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto;
-  column-gap: 0.75rem;
-}
-
-.catalog-metrics .kpi-tile {
-  grid-row: 1 / 4;
-  align-self: center;
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.catalog-metrics [hlmCardDescription] {
-  grid-column: 1;
-  font-size: 0.75rem;
-  line-height: 1.5;
 }
