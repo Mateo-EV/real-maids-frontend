@@ -1,12 +1,9 @@
 import { computed, inject } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
-import { defer, EMPTY, map, Observable, of, tap } from "rxjs"
+import { defer, EMPTY, map, Observable, tap } from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
-import {
-  createReadResource,
-  ReadResource,
-  ReadResourceState
-} from "@/app/shared/state/read-resource"
+import { createKeyedReads, KeyedEntry, keyedState } from "@/app/shared/state/keyed-reads"
+import { createReadResource, ReadResourceState } from "@/app/shared/state/read-resource"
 import { Result } from "@/app/shared/utils/result"
 import { GetAuditLogsUseCase } from "../../application/use-cases/get-audit-logs.use-case"
 import { AuditLogError } from "../../domain/errors/audit-log.error"
@@ -14,6 +11,7 @@ import { AuditQuery } from "../../domain/models/audit-query"
 import { AuditPage } from "../../domain/models/audit-page"
 
 type Response = Result<AuditPage, AuditLogError>
+type PageEntry = KeyedEntry<AuditQuery, AuditPage, AuditLogError>
 interface AuditEntry {
   readonly result?: AuditPage
   readonly loading: boolean
@@ -72,19 +70,55 @@ export const AuditLogsStore = signalStore(
     }
   }),
   withMethods((store, query = inject(GetAuditLogsUseCase)) => {
-    const resources = new Map<string, ReadResource<AuditPage | undefined, AuditLogError>>()
     let latest = 0,
       sequence = 0,
       globalSequence = 0,
       globalRequest = 0
+    // The key keeps contradictory paging aliases apart, so the caller's own shape is remembered:
+    // a retained key must dispatch what the latest caller asked for, not its first input.
+    const inputs = new Map<string, AuditQuery>()
+    const remember = (key: string, input: AuditQuery) => {
+      const entries = store.entries()
+      for (const cached of [...inputs.keys()])
+        if (cached !== key && !entries[cached]) inputs.delete(cached)
+      inputs.set(key, input)
+    }
+    /** Public entries stay `AuditEntry`; the registry adapter alone speaks `KeyedEntry`. */
+    const toKeyed = (entries: Readonly<Record<string, AuditEntry>>): Record<string, PageEntry> => {
+      const keyed: Record<string, PageEntry> = {}
+      for (const [key, entry] of Object.entries(entries))
+        keyed[key] = {
+          query: inputs.get(key) ?? {},
+          result: entry.result,
+          loading: entry.loading,
+          refreshing: entry.refreshing,
+          error: entry.error,
+          expires: entry.expires
+        }
+      return keyed
+    }
+    const fromKeyed = (entries: Readonly<Record<string, PageEntry>>) => {
+      const pages: Record<string, AuditEntry> = {}
+      for (const [key, entry] of Object.entries(entries))
+        pages[key] = {
+          result: entry.result,
+          loading: entry.loading,
+          refreshing: entry.refreshing,
+          error: entry.error,
+          expires: entry.expires
+        }
+      return pages
+    }
+    /** The displayed page: switching it fences older requests from adopting the global total. */
+    const switchKey = (key: string) => {
+      if (store.currentKey() === key) return
+      latest++
+      patchState(store, { currentKey: key })
+    }
     const scope = createSessionReadScope(() => {
       latest++
-      const previous = [...resources.values()]
-      resources.clear()
-      previous.forEach(resource => resource.reset())
-      globalResource.reset()
+      inputs.clear()
       patchState(store, {
-        entries: {},
         currentKey: "",
         globalTotal: null,
         globalResult: undefined,
@@ -94,34 +128,10 @@ export const AuditLogsStore = signalStore(
         globalError: undefined,
         sessionRevision: store.sessionRevision() + 1
       })
+      // Clears keyed entries before their coordinators reset, so no teardown write reappears.
+      pages.reset()
+      globalResource.reset()
     })
-    const project = (
-      entry: AuditEntry
-    ): ReadResourceState<AuditPage | undefined, AuditLogError> => ({
-      data: entry.result,
-      loaded: entry.result !== undefined,
-      refreshing: entry.refreshing,
-      expires: entry.expires,
-      error: entry.error
-    })
-    const update = (key: string, entry: AuditEntry) =>
-      patchState(store, { entries: { ...store.entries(), [key]: entry } })
-    const admit = (key: string) => {
-      if (store.entries()[key]) return true
-      const entries = { ...store.entries() }
-      if (Object.keys(entries).length >= 20) {
-        const oldest = Object.keys(entries).find(
-          candidate => candidate !== store.currentKey() && !resources.get(candidate)?.isPending()
-        )
-        if (!oldest) return false
-        delete entries[oldest]
-        const resource = resources.get(oldest)
-        resources.delete(oldest)
-        resource?.reset()
-      }
-      patchState(store, { entries: { ...entries, [key]: emptyEntry } })
-      return true
-    }
     // Global identity/order is a capability policy spanning distinct resources, not a cache rule.
     const acceptGlobal = (result: AuditPage, request: number) => {
       if (request < globalSequence) return
@@ -168,49 +178,33 @@ export const AuditLogsStore = signalStore(
       forcePolicy: "join",
       scope
     })
-    function requestPage(input: AuditQuery) {
+    function requestPage(input: AuditQuery): Observable<Response> {
+      switchKey(queryKey(input))
       const request = ++latest,
-        globalRequest = ++sequence,
+        pageRequest = ++sequence,
         epoch = scope.generation()
       return query.execute(input).pipe(
         tap(result => {
           if (epoch === scope.generation() && result.success && request === latest)
-            acceptGlobal(result.data, globalRequest)
+            acceptGlobal(result.data, pageRequest)
         })
       )
     }
-    function pageResource(key: string, input: AuditQuery) {
-      let resource = resources.get(key)
-      if (resource) return resource
-      resource = createReadResource<AuditPage | undefined, AuditLogError>({
-        state: {
-          get: () => project(store.entries()[key] ?? emptyEntry),
-          update: updateState => {
-            if (resources.get(key) !== resource || !store.entries()[key]) return
-            const entry = store.entries()[key],
-              patch = updateState(project(entry))
-            update(key, {
-              result: "data" in patch ? patch.data : entry.result,
-              loading:
-                patch.pendingReads !== undefined
-                  ? patch.pendingReads > 0 && entry.result === undefined
-                  : entry.loading,
-              refreshing: patch.refreshing ?? entry.refreshing,
-              error: "error" in patch ? patch.error : entry.error,
-              expires: patch.expires ?? entry.expires
-            })
-          }
-        },
-        initialData: () => undefined,
-        request: () => requestPage(input),
-        normalizeError: () => new AuditLogError("UNEXPECTED"),
-        ttl,
-        forcePolicy: "join",
-        scope
-      })
-      resources.set(key, resource)
-      return resource
-    }
+    const pages = createKeyedReads<AuditQuery, AuditPage, AuditLogError>({
+      key: queryKey,
+      // Resolved per flight: a forced or expired retained key dispatches the latest caller input.
+      request: input => requestPage(inputs.get(queryKey(input)) ?? input),
+      state: keyedState(
+        () => toKeyed(store.entries()),
+        next => patchState(store, { entries: fromKeyed(next) })
+      ),
+      scope,
+      ttl,
+      // The projection on screen is never evicted to admit another query.
+      isPinned: key => key === store.currentKey(),
+      normalizeError: () => new AuditLogError("UNEXPECTED"),
+      overflow: () => new AuditLogError("UNEXPECTED")
+    })
     const verified = (result: Result<AuditPage | undefined, AuditLogError>): Response =>
       result.success
         ? result.data === undefined
@@ -223,14 +217,11 @@ export const AuditLogsStore = signalStore(
           key = queryKey(input)
         return defer(() => {
           if (!scope.check()) return EMPTY
-          if (!admit(key)) return of(Result.failure(new AuditLogError("UNEXPECTED")))
-          if (store.currentKey() !== key) {
-            latest++
-            patchState(store, { currentKey: key })
-          }
-          return pageResource(key, input)
-            .read(force, () => requestPage(input))
-            .pipe(map(verified))
+          remember(key, input)
+          // An admitted key is displayed before its read; a new one is displayed when its own
+          // request dispatches, so a refused admission never becomes the current projection.
+          if (pages.select(input)) switchKey(key)
+          return pages.read(input, force).pipe(map(verified))
         })
       },
       loadGlobalTotal(force = false): Observable<Response> {

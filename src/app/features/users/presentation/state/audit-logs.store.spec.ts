@@ -256,6 +256,8 @@ describe("Audit shared state", () => {
     const store = TestBed.inject(AuditLogsStore)
     store.load({ size: 5 }).subscribe()
     store.load({ entity: "usuario", size: 5 }).subscribe()
+    // The current page has no verified result yet and its first read is still open.
+    expect(store.loading()).toBe(true)
     newer.next(Result.success(page(6)))
     older.next(Result.success(page(48, 48)))
     older.next(Result.failure(new AuditLogError("INVALID_FILTER")))
@@ -264,7 +266,8 @@ describe("Audit shared state", () => {
     expect(store.totalPages()).toBe(2)
     expect(store.globalTotal()).toBe(90)
     expect(store.error()).toBeUndefined()
-    expect(store.loading()).toBe(true)
+    // Verified data settles the current page while its own flight is still open.
+    expect(store.loading()).toBe(false)
     newer.complete()
     expect(store.loading()).toBe(false)
   })
