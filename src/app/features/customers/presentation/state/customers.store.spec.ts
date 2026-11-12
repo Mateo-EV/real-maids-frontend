@@ -614,11 +614,12 @@ describe("CustomersStore", () => {
       store.observeQuery({ offset: i * 20 }).subscribe(),
       store.observeCustomer(i + 1).subscribe()
     ]).flat()
-    let pageError: unknown, detailError: unknown
-    store.observeQuery({ offset: 400 }).subscribe({ error: e => (pageError = e) })
-    store.observeCustomer(21).subscribe({ error: e => (detailError = e) })
-    expect(pageError).toBeInstanceOf(Error)
-    expect(detailError).toBeInstanceOf(Error)
+    let pageResult: PageResult | undefined, detailResult: ProfileResult | undefined
+    store.observeQuery({ offset: 400 }).subscribe(result => (pageResult = result))
+    store.observeCustomer(21).subscribe(result => (detailResult = result))
+    // Unified admission: a refused key reports a failed result instead of throwing.
+    expect(pageResult).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
+    expect(detailResult).toMatchObject({ success: false, error: { code: "UNEXPECTED" } })
     expect(Object.keys(store.entries())).toHaveLength(20)
     expect(Object.keys(store.details())).toHaveLength(20)
     subscriptions.forEach(s => s.unsubscribe())
