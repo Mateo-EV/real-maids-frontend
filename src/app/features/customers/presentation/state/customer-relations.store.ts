@@ -2,11 +2,8 @@ import { computed, inject, Injector } from "@angular/core"
 import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
 import { catchError, defer, EMPTY, finalize, Observable, of, takeUntil, tap } from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
-import {
-  createReadResource,
-  ReadResource,
-  ReadResourceState
-} from "@/app/shared/state/read-resource"
+import { createKeyedReads, KeyedEntry, keyedState } from "@/app/shared/state/keyed-reads"
+import { ReadResourceState } from "@/app/shared/state/read-resource"
 import { Result } from "@/app/shared/utils/result"
 import {
   CreateCustomerContactUseCase,
@@ -27,17 +24,17 @@ import {
 } from "../../domain/params/customer-relations.params"
 import { CustomerHistoryStore } from "./customer-history.store"
 
-type ContactRead = ReadResourceState<readonly CustomerContact[], CustomerError>
-type PreferenceRead = ReadResourceState<readonly CustomerPreference[], CustomerError>
-const emptyContacts = (): ContactRead => ({
-  data: [],
-  loaded: false,
-  pendingReads: 0,
-  refreshing: false,
-  expires: 0,
-  error: undefined
-})
-const emptyPreferences = (): PreferenceRead => ({
+type RelationRead<T> = ReadResourceState<readonly T[], CustomerError>
+type RelationEntry<T> = KeyedEntry<number, readonly T[], CustomerError>
+type ContactRead = RelationRead<CustomerContact>
+type PreferenceRead = RelationRead<CustomerPreference>
+
+const RELATION_READ_TTL_MS = 120000
+/** Only the inactive part of the history is bounded: an active or in-flight owner is kept. */
+const UNBOUNDED_ACTIVE_READS = Number.POSITIVE_INFINITY
+const RELATION_INACTIVE_HISTORY_LIMIT = 20
+
+const emptyRead = <T>(): RelationRead<T> => ({
   data: [],
   loaded: false,
   pendingReads: 0,
@@ -52,6 +49,44 @@ const initialState = {
   pendingPreferenceWrites: 0,
   contactWriteError: undefined as CustomerError | undefined,
   preferenceWriteError: undefined as CustomerError | undefined
+}
+
+/** One shared flight per key, whatever the number of subscribers of that flight. */
+const pendingReads = (entry: { loading: boolean; refreshing: boolean }): number =>
+  entry.loading || entry.refreshing ? 1 : 0
+/** Only a verified response produces `loaded` data; an unverified key reads as empty. */
+const readOf = <T>(entry: RelationEntry<T> | undefined): RelationRead<T> =>
+  entry
+    ? {
+        data: entry.result ?? [],
+        loaded: entry.result !== undefined,
+        pendingReads: pendingReads(entry),
+        refreshing: entry.refreshing,
+        expires: entry.expires,
+        error: entry.error
+      }
+    : emptyRead<T>()
+const toEntries = <T>(
+  entries: Readonly<Record<number, RelationRead<T>>>
+): Record<string, RelationEntry<T>> => {
+  const keyed: Record<string, RelationEntry<T>> = {}
+  for (const [key, entry] of Object.entries(entries))
+    keyed[key] = {
+      query: Number(key),
+      result: entry.loaded ? entry.data : undefined,
+      loading: !entry.loaded && (entry.pendingReads ?? 0) > 0,
+      refreshing: entry.refreshing,
+      error: entry.error,
+      expires: entry.expires
+    }
+  return keyed
+}
+const fromEntries = <T>(
+  entries: Readonly<Record<string, RelationEntry<T>>>
+): Record<number, RelationRead<T>> => {
+  const reads: Record<number, RelationRead<T>> = {}
+  for (const [key, entry] of Object.entries(entries)) reads[Number(key)] = readOf(entry)
+  return reads
 }
 
 export const CustomerRelationsStore = signalStore(
@@ -80,97 +115,44 @@ export const CustomerRelationsStore = signalStore(
       updatePreference = inject(UpdateCustomerPreferenceUseCase),
       injector = inject(Injector)
     ) => {
-      const contacts = new Map<number, ReadResource<readonly CustomerContact[], CustomerError>>()
-      const preferences = new Map<
-        number,
-        ReadResource<readonly CustomerPreference[], CustomerError>
-      >()
-      const scope = createSessionReadScope(() => {
-        contacts.forEach(resource => resource.reset())
-        preferences.forEach(resource => resource.reset())
-        contacts.clear()
-        preferences.clear()
-        patchState(store, initialState)
-      })
       const normalizeError = (error: unknown) =>
         error instanceof CustomerError ? error : new CustomerError("UNEXPECTED")
-      const selectContacts = (id: number): ContactRead => store.contacts()[id] ?? emptyContacts()
-      const selectPreferences = (id: number): PreferenceRead =>
-        store.preferences()[id] ?? emptyPreferences()
-      function trimContacts() {
-        const inactive = [...contacts].filter(([, value]) => !value.isPending())
-        for (const [id] of inactive.slice(0, Math.max(0, inactive.length - 20))) {
-          contacts.delete(id)
-          patchState(store, state => {
-            const entries = { ...state.contacts }
-            delete entries[id]
-            return { contacts: entries }
-          })
-        }
-      }
-      function trimPreferences() {
-        const inactive = [...preferences].filter(([, value]) => !value.isPending())
-        for (const [id] of inactive.slice(0, Math.max(0, inactive.length - 20))) {
-          preferences.delete(id)
-          patchState(store, state => {
-            const entries = { ...state.preferences }
-            delete entries[id]
-            return { preferences: entries }
-          })
-        }
-      }
-      function contactResource(id: number) {
-        let value = contacts.get(id)
-        if (!value)
-          value = createReadResource<readonly CustomerContact[], CustomerError>({
-            state: {
-              get: () => selectContacts(id),
-              update: update =>
-                patchState(store, state => {
-                  const current = state.contacts[id] ?? emptyContacts()
-                  return {
-                    contacts: { ...state.contacts, [id]: { ...current, ...update(current) } }
-                  }
-                })
-            },
-            initialData: () => [],
-            request: () => listContacts.execute(id),
-            normalizeError,
-            ttl: 120000,
-            scope,
-            forcePolicy: "join",
-            cancelOnInvalidate: true
-          })
-        contacts.delete(id)
-        contacts.set(id, value)
-        return value
-      }
-      function preferenceResource(id: number) {
-        let value = preferences.get(id)
-        if (!value)
-          value = createReadResource<readonly CustomerPreference[], CustomerError>({
-            state: {
-              get: () => selectPreferences(id),
-              update: update =>
-                patchState(store, state => {
-                  const current = state.preferences[id] ?? emptyPreferences()
-                  return {
-                    preferences: { ...state.preferences, [id]: { ...current, ...update(current) } }
-                  }
-                })
-            },
-            initialData: () => [],
-            request: () => listPreferences.execute(id),
-            normalizeError,
-            ttl: 120000,
-            scope,
-            forcePolicy: "join",
-            cancelOnInvalidate: true
-          })
-        preferences.delete(id)
-        preferences.set(id, value)
-        return value
-      }
+      // Registry scopes check the auth session themselves; the reset keeps both families.
+      const scope = createSessionReadScope(() => {
+        contacts.reset()
+        preferences.reset()
+        patchState(store, initialState)
+      })
+      const contacts = createKeyedReads<number, readonly CustomerContact[], CustomerError>({
+        key: id => String(id),
+        request: id => listContacts.execute(id),
+        state: keyedState(
+          () => toEntries(store.contacts()),
+          next => patchState(store, { contacts: fromEntries(next) })
+        ),
+        scope,
+        ttl: RELATION_READ_TTL_MS,
+        maxEntries: UNBOUNDED_ACTIVE_READS,
+        inactiveHistoryLimit: RELATION_INACTIVE_HISTORY_LIMIT,
+        normalizeError,
+        overflow: () => new CustomerError("UNEXPECTED")
+      })
+      const preferences = createKeyedReads<number, readonly CustomerPreference[], CustomerError>({
+        key: id => String(id),
+        request: id => listPreferences.execute(id),
+        state: keyedState(
+          () => toEntries(store.preferences()),
+          next => patchState(store, { preferences: fromEntries(next) })
+        ),
+        scope,
+        ttl: RELATION_READ_TTL_MS,
+        maxEntries: UNBOUNDED_ACTIVE_READS,
+        inactiveHistoryLimit: RELATION_INACTIVE_HISTORY_LIMIT,
+        normalizeError,
+        overflow: () => new CustomerError("UNEXPECTED")
+      })
+      const selectContacts = (id: number): ContactRead => readOf(contacts.select(id))
+      const selectPreferences = (id: number): PreferenceRead => readOf(preferences.select(id))
       function mutate<T>(
         kind: "contact" | "preference",
         id: number,
@@ -196,8 +178,9 @@ export const CustomerRelationsStore = signalStore(
               if (generation !== scope.generation()) return
               result.either(
                 () => {
-                  if (kind === "contact") contacts.get(id)?.invalidate()
-                  else preferences.get(id)?.invalidate()
+                  // Only the written relation expires; a write never refreshes its key.
+                  if (kind === "contact") contacts.invalidate(String(id))
+                  else preferences.invalidate(String(id))
                   // Cancelling readers invokes caller completion callbacks synchronously.
                   if (!scope.check() || generation !== scope.generation()) return
                   const history = injector.get(CustomerHistoryStore)
@@ -232,19 +215,13 @@ export const CustomerRelationsStore = signalStore(
           id: number,
           force = false
         ): Observable<Result<readonly CustomerContact[], CustomerError>> {
-          return defer(() => {
-            if (!scope.check()) return EMPTY
-            return contactResource(id).read(force).pipe(finalize(trimContacts))
-          })
+          return contacts.read(id, force)
         },
         loadPreferences(
           id: number,
           force = false
         ): Observable<Result<readonly CustomerPreference[], CustomerError>> {
-          return defer(() => {
-            if (!scope.check()) return EMPTY
-            return preferenceResource(id).read(force).pipe(finalize(trimPreferences))
-          })
+          return preferences.read(id, force)
         },
         createContact(id: number, params: CreateCustomerContactParams) {
           return mutate("contact", id, () => createContact.execute(id, params))
