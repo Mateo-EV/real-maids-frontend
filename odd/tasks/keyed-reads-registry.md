@@ -280,3 +280,11 @@ Two reported nuances, neither a behavior change anyone consumes. Entries in the 
 Evidence, every run bounded to `NG_BUILD_MAX_WORKERS=1 NODE_OPTIONS=--max-old-space-size=3072`: the four store specs 71/71, the two customer pages plus the writes and history consumers 106/106, the four component consumers 134/134, `tsc -p tsconfig.app.json --noEmit` exit 0, and Prettier clean on every touched file. The four Prettier warnings that remain under `customers/presentation/state` are pre-existing style debt in files this stage did not touch and were deliberately left alone.
 
 Not executed and not claimed: the full unit suite (this host OOMs on large invocations), and any live backend, CORS, authorization, redaction, browser or native review evidence for this stage.
+
+### L26 — Native review of stage 3: approved with both findings refuted
+
+Review lineage `review-1323f5d210018437` ran on the committed range `a41f3bb..` (6 paths, 851 lines, tier medium) with three lenses: risk, resilience and reliability. Note that `assess` had reported `reviewDue: false` with reason `under_budget` for the same range; the harness gate offered the review anyway, and it was started and completed.
+
+The reliability and resilience lenses each filed one CRITICAL finding at `customers.store.ts:297` (`R3-001`, `R4-001`). The provider refuter examined both and **refuted** them, so no correction opened, no correction transition was offered, and the review closed `approved` on the last admitted event. The approval was acknowledged and its authority burned. Neither finding is a reason to re-review this candidate; if either describes real later work, it is follow-up work with its own evidence.
+
+Evidence for the stage remains the bounded grouped runs in L25: 71 store tests, 106 page and consumer tests, 134 component tests, `tsc` exit 0 and Prettier clean on every touched file. Still unexecuted and unclaimed: the full unit suite, live backend, CORS, authorization/redaction, browser and keyboard/responsive proof.
