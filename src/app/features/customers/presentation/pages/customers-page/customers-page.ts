@@ -12,13 +12,15 @@ import { customerPageContext } from "./customer-page-context"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { of, Subject, switchMap, timer } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmInputGroupImports } from "@spartan-ng/helm/input-group"
-import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { NgTemplateOutlet } from "@angular/common"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucidePencil, lucidePlus, lucidePower, lucideSearch } from "@ng-icons/lucide"
+import { lucidePencil, lucidePlus, lucidePower } from "@ng-icons/lucide"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
+import {
+  CatalogFilterSelect,
+  CatalogFilters
+} from "@/app/shared/components/catalog-filters/catalog-filters"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -42,12 +44,11 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
   imports: [
     CrmCatalogNavigation,
     HlmButtonImports,
-    HlmInputGroupImports,
-    HlmNativeSelectImports,
     RouterLink,
     NgTemplateOutlet,
     NgIcon,
     CatalogFrame,
+    CatalogFilters,
     HlmTableImports,
     HlmBadgeImports,
     HlmEmptyImports,
@@ -55,7 +56,7 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
     HlmSpinnerImports,
     TablePagination
   ],
-  providers: [provideIcons({ lucidePencil, lucidePlus, lucidePower, lucideSearch })],
+  providers: [provideIcons({ lucidePencil, lucidePlus, lucidePower })],
   templateUrl: "./customers-page.html"
 })
 export class CustomersPage implements OnInit {
@@ -74,6 +75,18 @@ export class CustomersPage implements OnInit {
   )
   readonly search = signal("")
   readonly type = signal<CustomerType | "">("")
+  readonly typeFilters = computed<readonly CatalogFilterSelect[]>(() => [
+    {
+      id: "customer-filter-type",
+      label: "Tipo de cliente",
+      allLabel: "Todos los tipos",
+      value: this.type(),
+      options: [
+        { value: CustomerType.RESIDENTIAL, label: "Residencial" },
+        { value: CustomerType.COMMERCIAL, label: "Comercial" }
+      ]
+    }
+  ])
   readonly hasFilters = computed(() => !!this.search().trim() || !!this.type())
   readonly list = computed(() => this.customers.selectQuery(this.requestedQuery()))
   readonly result = computed(() => this.list().result)

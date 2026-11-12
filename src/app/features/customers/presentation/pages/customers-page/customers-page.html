@@ -8,36 +8,16 @@
     description="Gestión de clientes activos"
     [busy]="list().loading || list().refreshing"
   >
-    <div catalogControls class="catalog-filter-row flex min-w-0 flex-wrap items-end gap-2">
-      <div class="catalog-filter-search flex flex-col gap-1">
-        <label for="customer-search" class="text-xs font-medium">Buscar nombre o correo</label>
-        <hlm-input-group>
-          <input
-            #searchInput
-            hlmInputGroupInput
-            id="customer-search"
-            type="search"
-            placeholder="Buscar nombre o correo…"
-            [value]="search()"
-            (input)="setSearch(searchInput.value)"
-          />
-          <hlm-input-group-addon>
-            <ng-icon name="lucideSearch" aria-hidden="true" />
-          </hlm-input-group-addon>
-        </hlm-input-group>
-      </div>
-      <div class="flex flex-col gap-1">
-        <label for="customer-filter-type" class="text-xs font-medium">Tipo de cliente</label>
-        <hlm-native-select
-          selectId="customer-filter-type"
-          [value]="type()"
-          (valueChange)="setType($event)"
-        >
-          <option value="">Todos los tipos</option>
-          <option value="residencial">Residencial</option>
-          <option value="comercial">Comercial</option>
-        </hlm-native-select>
-      </div>
+    <app-catalog-filters
+      catalogControls
+      searchInputId="customer-search"
+      searchLabel="Buscar nombre o correo"
+      searchPlaceholder="Buscar nombre o correo…"
+      [searchValue]="search()"
+      [selects]="typeFilters()"
+      (searchChange)="setSearch($event)"
+      (selectChange)="setType($event.value)"
+    >
       <button
         hlmBtn
         class="catalog-action-with-plus"
@@ -48,7 +28,7 @@
       >
         <ng-icon name="lucidePlus" aria-hidden="true" />Crear cliente
       </button>
-    </div>
+    </app-catalog-filters>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando clientes…

@@ -1,0 +1,33 @@
+<div class="catalog-filter-search flex flex-col gap-1">
+  <label [for]="searchInputId()" class="text-xs font-medium">{{ searchLabel() }}</label>
+  <hlm-input-group>
+    <input
+      #searchInput
+      hlmInputGroupInput
+      [id]="searchInputId()"
+      type="search"
+      [placeholder]="searchPlaceholder()"
+      [value]="searchValue()"
+      (input)="searchChange.emit(searchInput.value)"
+    />
+    <hlm-input-group-addon>
+      <ng-icon name="lucideSearch" aria-hidden="true" />
+    </hlm-input-group-addon>
+  </hlm-input-group>
+</div>
+@for (select of selects(); track select.id) {
+  <div class="flex flex-col gap-1">
+    <label [for]="select.id" class="text-xs font-medium">{{ select.label }}</label>
+    <hlm-native-select
+      [selectId]="select.id"
+      [value]="select.value"
+      (valueChange)="selectChange.emit({ id: select.id, value: $event ?? '' })"
+    >
+      <option value="">{{ select.allLabel }}</option>
+      @for (option of select.options; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </hlm-native-select>
+  </div>
+}
+<ng-content />
