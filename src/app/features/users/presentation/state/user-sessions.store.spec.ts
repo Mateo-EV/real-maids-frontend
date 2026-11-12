@@ -251,7 +251,7 @@ describe("UserSessionsStore", () => {
       vi.useRealTimers()
     }
   })
-  it("retains verified rows but restores the retried request query on owner failure", () => {
+  it("retains verified rows and revalidates the adopted effective query on owner failure", () => {
     const store = TestBed.inject(UserSessionsStore)
     const effective = { ...page, offset: 2, limit: 2, total: 3 }
     repository["getSessionOwners"].mockReturnValueOnce(of(Result.success(effective)))
@@ -261,7 +261,9 @@ describe("UserSessionsStore", () => {
     const activity = store.observeOwners(query(), 0, true).subscribe()
     const selected = store.selectOwners(query)
     expect(selected.result()).toBe(effective)
-    expect(selected.query()).toEqual(query())
+    // The registry records the effective page on success; a forced retry re-requests it.
+    expect(selected.query()).toEqual({ offset: 2, limit: 2 })
+    expect(repository["getSessionOwners"]).toHaveBeenLastCalledWith({ offset: 2, limit: 2 })
     expect(selected.loaded()).toBe(true)
     expect(selected.error()?.code).toBe("UNEXPECTED")
     activity.unsubscribe()
