@@ -8,7 +8,8 @@ import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject, of, Subject } from "rxjs"
+import { BehaviorSubject, Observable, of, Subject } from "rxjs"
+import { CheckLeadEmailParams, LeadEmailCheck } from "../../../domain/params/lead-email.params"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
@@ -42,7 +43,15 @@ const lead = (
     null
   )
 
-async function setup(url = "/admin/customers/leads/7", server = false, editing = false) {
+async function setup(
+  url = "/admin/customers/leads/7",
+  server = false,
+  editing = false,
+  emailCheck: (
+    params: CheckLeadEmailParams
+  ) => Observable<Result<LeadEmailCheck, CustomerError>> = () =>
+    of(Result.success({ customerExists: false, leadExists: false }))
+) {
   const writeResponse = new Subject<DetailResult>()
   const update = vi.fn(() => writeResponse),
     success = vi.fn()
@@ -83,9 +92,7 @@ async function setup(url = "/admin/customers/leads/7", server = false, editing =
       { provide: Actions.ListLeadsUseCase, useValue: { execute: list } },
       {
         provide: Actions.CheckLeadEmailUseCase,
-        useValue: {
-          execute: () => of(Result.success({ customerExists: false, leadExists: false }))
-        }
+        useValue: { execute: emailCheck }
       },
       { provide: ListCustomersUseCase, useValue: { execute: customers } },
       { provide: Actions.ListLeadOriginsUseCase, useValue: { execute: readOrigins } },
@@ -440,8 +447,12 @@ describe("Lead read-only detail and independent return context", () => {
   })
 })
 
-async function editSetup(server = false, record = lead()) {
-  const s = await setup("/admin/customers/leads/7?offset=10&limit=5", server, true)
+async function editSetup(
+  server = false,
+  record = lead(),
+  emailCheck?: (params: CheckLeadEmailParams) => Observable<Result<LeadEmailCheck, CustomerError>>
+) {
+  const s = await setup("/admin/customers/leads/7?offset=10&limit=5", server, true, emailCheck)
   const dialog = () => document.querySelector<HTMLElement>("app-lead-editor")!
   const clickDialog = async (text: string) => {
     const button = [...dialog().querySelectorAll<HTMLButtonElement>("button")].find(
@@ -519,6 +530,68 @@ describe("WP6 editing a legitimately loaded lead", () => {
     expect(
       s.dialog().querySelector("#lead-isConverted, #lead-registeredAt, #lead-registeredByUserId")
     ).toBeNull()
+    expect(s.update).not.toHaveBeenCalled()
+  })
+
+  it("keeps saving an edit that preserves the stored email while blocking a changed duplicate", async () => {
+    const record = Lead.create(
+      7,
+      11,
+      12,
+      "Nombre cargado",
+      "ana@example.test",
+      null,
+      null,
+      null,
+      false,
+      new Date(0),
+      15
+    )
+    const customerMatch = () => of(Result.success({ customerExists: true, leadExists: false }))
+    const s = await editSetup(false, record, customerMatch)
+    await s.open()
+    await s.click("Editar prospecto")
+    await s.catalogs()
+    expect(s.dialog().querySelector("#lead-email-conflict")).toBeNull()
+    await s.fill("name", "Nombre actualizado")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 12,
+      name: "Nombre actualizado",
+      email: "ana@example.test",
+      phone: null,
+      referenceAddress: null,
+      observation: null
+    })
+  })
+
+  it("blocks an edit that changes the email to one already registered", async () => {
+    const record = Lead.create(
+      7,
+      11,
+      12,
+      "Nombre cargado",
+      "ana@example.test",
+      null,
+      null,
+      null,
+      false,
+      new Date(0),
+      15
+    )
+    const s = await editSetup(false, record, () =>
+      of(Result.success({ customerExists: true, leadExists: false }))
+    )
+    await s.open()
+    await s.click("Editar prospecto")
+    await s.catalogs()
+    await s.fill("email", "otro@example.test")
+    expect(s.dialog().querySelector("#lead-email-conflict")?.textContent).toContain(
+      "Este correo ya está registrado en un cliente."
+    )
+    await s.submit()
     expect(s.update).not.toHaveBeenCalled()
   })
 

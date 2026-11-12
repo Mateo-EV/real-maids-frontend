@@ -12,7 +12,10 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { form, FormField, FormRoot, submit, validate } from "@angular/forms/signals"
 import { EMPTY, firstValueFrom, Observable, takeUntil } from "rxjs"
+import { Result } from "@/app/shared/utils/result"
 import { Lead } from "../../../domain/entities/lead.entity"
+import { LeadEmailCheck } from "../../../domain/params/lead-email.params"
+import { CustomerError } from "../../../domain/errors/customer.error"
 import { BrnDialogRef, injectBrnDialogContext } from "@spartan-ng/brain/dialog"
 import { HlmDialogImports } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -72,6 +75,20 @@ export class LeadEditor implements OnInit {
   readonly visibleEmailCheck = computed(() => {
     const state = this.emailCheck()
     return state?.key === this.model().email.trim().toLowerCase() ? state : null
+  })
+  readonly emailConflict = computed(() => {
+    const check = this.visibleEmailCheck()
+    return check && this.isBlocking(check) ? check : null
+  })
+  readonly emailBlocked = computed(() => this.emailConflict() !== null)
+  readonly emailConflictMessage = computed(() => {
+    const check = this.emailConflict()
+    if (!check) return ""
+    return check.customerExists && check.leadExists
+      ? "Este correo ya está registrado en un cliente y en otro prospecto."
+      : check.customerExists
+        ? "Este correo ya está registrado en un cliente."
+        : "Otro prospecto ya usa este correo."
   })
   readonly error = signal("")
   readonly target = this.context.lead
@@ -188,6 +205,47 @@ export class LeadEditor implements OnInit {
     this.loadCatalog("stageId")
     this.checkEmail()
   }
+  private validEmail(email: string): boolean {
+    return email.length > 0 && email.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+  private isBlocking(check: {
+    key: string
+    customerExists: boolean
+    leadExists: boolean
+  }): boolean {
+    if (!check.customerExists && !check.leadExists) return false
+    return (this.target?.email ?? "").trim().toLowerCase() !== check.key
+  }
+  private emailRequest(email: string): Observable<Result<LeadEmailCheck, CustomerError>> {
+    return this.emailLookup
+      .execute({ email, ...(this.target ? { excludeLeadId: this.target.id } : {}) })
+      .pipe(
+        takeUntil(this.ownerChanged$),
+        takeUntil(this.lifecycle.cancelled$),
+        takeUntilDestroyed(this.destroyRef),
+        takeUntilDestroyed(this.context.owner)
+      )
+  }
+  private async emailAllowed(): Promise<boolean> {
+    if (!this.current()) return false
+    const email = this.model().email.trim()
+    if (!this.validEmail(email)) return true
+    const key = email.toLowerCase()
+    const known = this.emailCheck()
+    if (known?.key === key && !known.loading) return !this.isBlocking(known)
+    const result = await firstValueFrom(this.emailRequest(email), { defaultValue: undefined })
+    if (!this.current() || this.model().email.trim().toLowerCase() !== key) return false
+    if (!result || !result.success) return true
+    const check = {
+      key,
+      loading: false,
+      error: false,
+      customerExists: result.data.customerExists,
+      leadExists: result.data.leadExists
+    }
+    this.emailCheck.set(check)
+    return !this.isBlocking(check)
+  }
   resetEmailCheck(): void {
     this.emailSubscription?.unsubscribe()
     this.emailCheck.set(null)
@@ -196,7 +254,7 @@ export class LeadEditor implements OnInit {
     if (!this.current() || this.profile().submitting()) return
     const email = this.model().email.trim()
     this.resetEmailCheck()
-    if (!email || email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return
+    if (!this.validEmail(email)) return
     const key = email.toLowerCase()
     this.emailCheck.set({
       key,
@@ -205,36 +263,28 @@ export class LeadEditor implements OnInit {
       customerExists: false,
       leadExists: false
     })
-    this.emailSubscription = this.emailLookup
-      .execute({ email, ...(this.target ? { excludeLeadId: this.target.id } : {}) })
-      .pipe(
-        takeUntil(this.ownerChanged$),
-        takeUntil(this.lifecycle.cancelled$),
-        takeUntilDestroyed(this.destroyRef),
-        takeUntilDestroyed(this.context.owner)
-      )
-      .subscribe({
-        next: result => {
-          if (!this.current() || this.model().email.trim().toLowerCase() !== key) return
+    this.emailSubscription = this.emailRequest(email).subscribe({
+      next: result => {
+        if (!this.current() || this.model().email.trim().toLowerCase() !== key) return
+        this.emailCheck.set({
+          key,
+          loading: false,
+          error: !result.success,
+          customerExists: result.success && result.data.customerExists,
+          leadExists: result.success && result.data.leadExists
+        })
+      },
+      error: () => {
+        if (this.current() && this.model().email.trim().toLowerCase() === key)
           this.emailCheck.set({
             key,
             loading: false,
-            error: !result.success,
-            customerExists: result.success && result.data.customerExists,
-            leadExists: result.success && result.data.leadExists
+            error: true,
+            customerExists: false,
+            leadExists: false
           })
-        },
-        error: () => {
-          if (this.current() && this.model().email.trim().toLowerCase() === key)
-            this.emailCheck.set({
-              key,
-              loading: false,
-              error: true,
-              customerExists: false,
-              leadExists: false
-            })
-        }
-      })
+      }
+    })
   }
   loadCatalog(key: "originId" | "stageId", force = false): void {
     if (!this.current() || this.profile().submitting()) return
@@ -254,6 +304,7 @@ export class LeadEditor implements OnInit {
       return Promise.resolve(false)
     this.error.set("")
     return submit(this.profile, async () => {
+      if (!this.current() || !(await this.emailAllowed())) return
       const v = this.model()
       if (
         !this.current() ||

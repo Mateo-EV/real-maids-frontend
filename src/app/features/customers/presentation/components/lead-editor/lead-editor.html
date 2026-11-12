@@ -101,43 +101,40 @@
               (blur)="field.key === 'email' && checkEmail()"
               [formField]="profile[field.key]"
               [attr.aria-describedby]="field.key + '-help ' + field.key + '-errors'"
+              [attr.aria-invalid]="field.key === 'email' && emailBlocked() ? 'true' : null"
             />
           }
           <p hlmFieldDescription [id]="field.key + '-help'">
             {{ field.help }} Se omiten espacios al inicio y al final.
           </p>
           @if (field.key === "email") {
-            <div id="lead-email-check" aria-live="polite">
+            <div id="lead-email-check" class="grid gap-1.5" aria-live="polite">
               @if (visibleEmailCheck(); as check) {
                 @if (check.loading) {
-                  <p role="status">Comprobando coincidencias de correo…</p>
-                } @else if (check.error) {
-                  <p>
-                    No se pudieron comprobar las coincidencias. Puedes guardar el prospecto; la
-                    conversión se validará en el servidor.
+                  <p class="text-muted-foreground text-xs" role="status">
+                    Comprobando coincidencias de correo…
                   </p>
-                  <button hlmBtn type="button" variant="outline" (click)="checkEmail()">
+                } @else if (check.error) {
+                  <p class="text-muted-foreground text-xs">
+                    No se pudieron comprobar las coincidencias. Puedes guardar; el servidor validará
+                    el correo.
+                  </p>
+                  <button
+                    hlmBtn
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    class="justify-self-start"
+                    (click)="checkEmail()"
+                  >
                     Reintentar comprobación de correo
                   </button>
-                } @else if (check.customerExists || check.leadExists) {
-                  <div hlmAlert>
-                    <p hlmAlertTitle>Revisa el correo antes de continuar</p>
-                    <div hlmAlertDescription>
-                      @if (check.customerExists) {
-                        <p>
-                          El correo ya pertenece a un cliente, incluso si está inactivo. Puedes
-                          guardar el prospecto, pero no convertirlo en otro cliente con ese correo.
-                        </p>
-                      }
-                      @if (check.leadExists) {
-                        <p>
-                          Otro prospecto usa este correo. Revisa si corresponde a la misma
-                          oportunidad antes de guardar.
-                        </p>
-                      }
-                    </div>
-                  </div>
                 }
+              }
+              @if (emailBlocked()) {
+                <hlm-field-error forceShow id="lead-email-conflict">
+                  {{ emailConflictMessage() }}
+                </hlm-field-error>
               }
             </div>
           }
@@ -165,7 +162,7 @@
     <button
       hlmBtn
       type="submit"
-      [disabled]="profile().submitting()"
+      [disabled]="profile().submitting() || emailBlocked()"
       [attr.aria-busy]="profile().submitting()"
     >
       @if (profile().submitting()) {

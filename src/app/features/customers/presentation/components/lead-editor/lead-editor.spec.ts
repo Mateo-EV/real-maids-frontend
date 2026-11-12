@@ -129,18 +129,42 @@ async function setup(
 }
 afterEach(() => vi.restoreAllMocks())
 describe("WP6 lead creation through inbox", () => {
-  it("warns for customer and other-lead matches without blocking lead creation", async () => {
+  it("blocks creation with one compact inline error for customer and other-lead matches", async () => {
     const lookup = vi.fn(() => of(Result.success({ customerExists: true, leadExists: true })))
     const s = await setup(false, lookup)
     await s.click("Crear prospecto")
     await s.valid()
     await s.fill("email", " ANA@example.test ")
     expect(lookup).toHaveBeenCalledExactlyOnceWith({ email: "ANA@example.test" })
-    expect(s.dialog().textContent).toContain("incluso si está inactivo")
-    expect(s.dialog().textContent).toContain("Otro prospecto usa este correo")
+    const conflict = s.dialog().querySelector("#lead-email-conflict")!
+    expect(conflict.textContent).toContain(
+      "Este correo ya está registrado en un cliente y en otro prospecto."
+    )
+    expect(conflict.classList.contains("text-destructive")).toBe(true)
+    expect(s.dialog().querySelector("[hlmAlertTitle]")).toBeNull()
+    const email = s.dialog().querySelector<HTMLInputElement>("#lead-email")!
+    expect(email.getAttribute("aria-invalid")).toBe("true")
+    expect(s.dialog().querySelector("#lead-email-check")!.getAttribute("aria-live")).toBe("polite")
+    expect(s.dialog().querySelector<HTMLButtonElement>("button[type=submit]")!.disabled).toBe(true)
     await s.submit()
-    expect(s.create).toHaveBeenCalledTimes(1)
+    expect(s.create).not.toHaveBeenCalled()
     expect(s.success).not.toHaveBeenCalled()
+  })
+  it("verifies an unchecked email before dispatching so a duplicate cannot be saved", async () => {
+    const lookup = vi.fn(() => of(Result.success({ customerExists: false, leadExists: true })))
+    const s = await setup(false, lookup)
+    await s.click("Crear prospecto")
+    await s.valid()
+    const input = s.dialog().querySelector<HTMLInputElement>("#lead-email")!
+    input.value = "ana@example.test"
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    expect(lookup).not.toHaveBeenCalled()
+    await s.submit()
+    await s.settle()
+    expect(lookup).toHaveBeenCalledExactlyOnceWith({ email: "ana@example.test" })
+    expect(s.create).not.toHaveBeenCalled()
+    expect(s.dialog().textContent).toContain("Otro prospecto ya usa este correo.")
   })
   it("cancels and hides previous checks as soon as the email changes and on dialog destruction", async () => {
     const old = new Subject<Result<LeadEmailCheck, CustomerError>>()
@@ -156,7 +180,7 @@ describe("WP6 lead creation through inbox", () => {
     expect(old.observed).toBe(false)
     expect(s.dialog().textContent).not.toContain("Comprobando coincidencias")
     old.next(Result.success({ customerExists: true, leadExists: true }))
-    expect(s.dialog().textContent).not.toContain("Otro prospecto usa este correo")
+    expect(s.dialog().querySelector("#lead-email-conflict")).toBeNull()
     input.dispatchEvent(new Event("blur"))
     await s.settle()
     expect(old.observed).toBe(true)
