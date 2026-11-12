@@ -19,6 +19,7 @@ import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import * as Actions from "../../application/use-cases/acquisition.use-cases"
+import { LeadListQuery } from "../../domain/models/lead-list-query"
 import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
 import { FunnelStage } from "../../domain/entities/funnel-stage.entity"
 import { Lead } from "../../domain/entities/lead.entity"
@@ -50,7 +51,8 @@ interface AcquisitionEntry<Q, T> extends AcquisitionReadEntry<T> {
 }
 type Page = PaginationResponse<Lead>
 type FollowUpList = readonly LeadFollowUp[]
-type PageQuery = Required<PaginationParams>
+/** Normalized page query: paging is required and only verified filters survive. */
+type PageQuery = LeadListQuery & Required<PaginationParams>
 /** Catalogs are single-key registries; the query only carries the fixed cache key. */
 type CatalogQuery = null
 const catalogKey = "catalog"
@@ -118,11 +120,36 @@ const initialState = {
   writeError: undefined as CustomerError | undefined,
   mutationRevision: 0
 }
-const querySnapshot = (query: PaginationParams): PageQuery => ({
-  offset: query.offset ?? 0,
-  limit: query.limit ?? 20
-})
-const pageKey = (query: PaginationParams) => JSON.stringify([query.offset ?? 0, query.limit ?? 20])
+/** Only verified positive int32 filter ids survive normalization; malformed input is dropped. */
+const filterId = (value: number | undefined): number | undefined =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 2147483647
+    ? value
+    : undefined
+const querySnapshot = (query: LeadListQuery): PageQuery => {
+  const search = query.search?.trim(),
+    originId = filterId(query.originId),
+    stageId = filterId(query.stageId)
+  return {
+    offset: query.offset ?? 0,
+    limit: query.limit ?? 20,
+    ...(search ? { search } : {}),
+    ...(originId === undefined ? {} : { originId }),
+    ...(stageId === undefined ? {} : { stageId }),
+    ...(typeof query.converted === "boolean" ? { converted: query.converted } : {})
+  }
+}
+/** Active filters are part of the cache identity, so listings never collide. */
+const pageKey = (query: LeadListQuery) => {
+  const q = querySnapshot(query)
+  return JSON.stringify([
+    q.offset,
+    q.limit,
+    q.search ?? null,
+    q.originId ?? null,
+    q.stageId ?? null,
+    q.converted ?? null
+  ])
+}
 
 /** Acquisition presentation data only; cached catalogs are never permission decisions. */
 export const CustomerAcquisitionStore = signalStore(
@@ -184,8 +211,9 @@ export const CustomerAcquisitionStore = signalStore(
       key: pageKey,
       normalize: querySnapshot,
       request: query => request(() => injector.get(Actions.ListLeadsUseCase).execute(query)),
-      // Effective server paging is remembered without changing the requested cache key.
-      adopt: (_, page) => ({ offset: page.offset, limit: page.limit }),
+      // Effective server paging is remembered without changing the requested key; the
+      // active filters stay part of the adopted query so revalidation keeps filtering.
+      adopt: (query, page) => ({ ...query, offset: page.offset, limit: page.limit }),
       state: keyedState<PageQuery, Page, CustomerError>(
         () => toKeyedRecord(store.pages()),
         next => patchState(store, { pages: fromKeyedRecord(next) })
@@ -266,16 +294,16 @@ export const CustomerAcquisitionStore = signalStore(
     return {
       loadOrigins: (force = false) => origins.read(null, force),
       loadStages: (force = false) => stages.read(null, force),
-      loadLeads: (query: PaginationParams = {}, force = false) =>
+      loadLeads: (query: LeadListQuery = {}, force = false) =>
         pages.read(querySnapshot(query), force),
       loadLead: (id: number, force = false) => leads.read(id, force),
       loadFollowUps: (leadId: number, force = false) => followUps.read(leadId, force),
       /** Keep this subscription for the mounted view; selectors alone do not pin history. */
-      observeLeads: (query: PaginationParams = {}, force = false) =>
+      observeLeads: (query: LeadListQuery = {}, force = false) =>
         pages.observe(querySnapshot(query), { force }),
       observeLead: (id: number, force = false) => leads.observe(id, { force }),
       observeFollowUps: (leadId: number, force = false) => followUps.observe(leadId, { force }),
-      selectLeads: (query: PaginationParams = {}): Signal<AcquisitionReadEntry<Page>> =>
+      selectLeads: (query: LeadListQuery = {}): Signal<AcquisitionReadEntry<Page>> =>
         computed(() => store.pages()[pageKey(query)] ?? emptyEntry<Page>()),
       selectLead: (id: number): Signal<AcquisitionReadEntry<Lead>> =>
         computed(() => store.leads()[String(id)] ?? emptyEntry<Lead>()),

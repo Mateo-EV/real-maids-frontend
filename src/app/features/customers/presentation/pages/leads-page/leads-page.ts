@@ -8,7 +8,7 @@ import {
   signal
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { Observable, Subject, switchMap, takeUntil } from "rxjs"
+import { Observable, of, Subject, switchMap, takeUntil, timer } from "rxjs"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
@@ -21,10 +21,17 @@ import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
+import { NgIcon, provideIcons } from "@ng-icons/core"
+import { lucidePlus } from "@ng-icons/lucide"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
+import {
+  CatalogFilterSelect,
+  CatalogFilters
+} from "@/app/shared/components/catalog-filters/catalog-filters"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import { LeadListQuery } from "../../../domain/models/lead-list-query"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
 import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/crm-catalog-navigation"
 
@@ -35,14 +42,17 @@ import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/cr
     RouterLink,
     CrmCatalogNavigation,
     CatalogFrame,
+    CatalogFilters,
     TablePagination,
     HlmButtonImports,
     HlmTableImports,
     HlmBadgeImports,
     HlmEmptyImports,
     HlmAlertImports,
-    HlmSpinnerImports
+    HlmSpinnerImports,
+    NgIcon
   ],
+  providers: [provideIcons({ lucidePlus })],
   templateUrl: "./leads-page.html"
 })
 export class LeadsPage implements OnInit {
@@ -54,17 +64,68 @@ export class LeadsPage implements OnInit {
   readonly writing = this.acquisition.writing
   readonly origins = computed(() => this.acquisition.origins())
   readonly stages = computed(() => this.acquisition.stages())
-  private readonly requestedQuery = signal<NormalizedPagination>(
+  private readonly requestedQuery = signal<LeadListQuery>(
     leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
+  )
+  readonly search = signal("")
+  readonly originId = signal<number | "">("")
+  readonly stageId = signal<number | "">("")
+  readonly converted = signal<boolean | "">("")
+  /** Options come from the existing root catalog reads; no extra read contract is added. */
+  readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => {
+    const converted = this.converted()
+    return [
+      {
+        id: "lead-filter-origin",
+        label: "Origen",
+        allLabel: "Todos los orígenes",
+        value: this.originId() === "" ? "" : String(this.originId()),
+        options: (this.origins().data ?? []).map(origin => ({
+          value: String(origin.id),
+          label: `${origin.name} · ${origin.isActive ? "Activo" : "Inactivo"}`
+        }))
+      },
+      {
+        id: "lead-filter-stage",
+        label: "Etapa",
+        allLabel: "Todas las etapas",
+        value: this.stageId() === "" ? "" : String(this.stageId()),
+        options: (this.stages().data ?? []).map(stage => ({
+          value: String(stage.id),
+          label: `${stage.name}${stage.isFinal ? " · Final" : ""}`
+        }))
+      },
+      {
+        id: "lead-filter-converted",
+        label: "Conversión",
+        allLabel: "Todos",
+        value: converted === "" ? "" : converted ? "true" : "false",
+        options: [
+          { value: "false", label: "No convertido" },
+          { value: "true", label: "Convertido" }
+        ]
+      }
+    ]
+  })
+  readonly hasFilters = computed(
+    () =>
+      !!this.search().trim() ||
+      this.originId() !== "" ||
+      this.stageId() !== "" ||
+      this.converted() !== ""
   )
   private readonly selection = computed(() => this.acquisition.selectLeads(this.requestedQuery()))
   readonly list = computed(() => this.selection()())
   readonly result = computed(() => this.list().data)
   readonly rows = computed(() => this.result()?.items ?? [])
   // Effective metadata drives navigation without changing the store's independent query keys.
-  readonly query = computed(() => {
-    const page = this.result()
-    return page ? { offset: page.offset, limit: page.limit } : this.requestedQuery()
+  // Only paging is return context: filters never reach the list/detail URLs.
+  readonly query = computed<NormalizedPagination>(() => {
+    const page = this.result(),
+      requested = this.requestedQuery()
+    return page
+      ? { offset: page.offset, limit: page.limit }
+      : { offset: requested.offset ?? 0, limit: requested.limit ?? 20 }
   })
   readonly currentPage = computed(() => this.query().offset / this.query().limit + 1)
   readonly pageCount = computed(() =>
@@ -104,7 +165,11 @@ export class LeadsPage implements OnInit {
         return "No se pudieron cargar los prospectos. Inténtalo de nuevo."
     }
   })
-  private readonly queries = new Subject<{ query: NormalizedPagination; force: boolean }>()
+  private readonly queries = new Subject<{
+    query: LeadListQuery
+    delay: number
+    force: boolean
+  }>()
   private recoveryUsed = false
   private requestRevision = 0
   private readonly scope = createSessionReadScope(() => {
@@ -142,10 +207,14 @@ export class LeadsPage implements OnInit {
     this.destroyRef.onDestroy(() => this.dialog?.close())
     this.queries
       .pipe(
-        switchMap(({ query, force }) => {
-          this.requestedQuery.set(query)
-          return this.acquisition.observeLeads(query, force)
-        }),
+        switchMap(({ query, delay, force }) =>
+          (delay ? timer(delay) : of(0)).pipe(
+            switchMap(() => {
+              this.requestedQuery.set(query)
+              return this.acquisition.observeLeads(query, force)
+            })
+          )
+        ),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(response => {
@@ -158,7 +227,11 @@ export class LeadsPage implements OnInit {
         queueMicrotask(() => {
           if (this.destroyRef.destroyed || revision !== this.requestRevision) return
           this.load(
-            { offset: Math.floor((page.total - 1) / page.limit) * page.limit, limit: page.limit },
+            {
+              ...this.requestedQuery(),
+              offset: Math.floor((page.total - 1) / page.limit) * page.limit,
+              limit: page.limit
+            },
             true
           )
         })
@@ -166,10 +239,63 @@ export class LeadsPage implements OnInit {
     this.load(this.requestedQuery())
   }
 
-  private load(query: NormalizedPagination, force = false): void {
+  private load(query: LeadListQuery, force = false, delay = 0): void {
     if (this.destroyRef.destroyed || !this.scope.check()) return
     this.requestRevision++
-    this.queries.next({ query, force })
+    this.queries.next({ query, delay, force })
+  }
+
+  setSearch(value: string): void {
+    this.search.set(value)
+    this.applyFilters(250)
+  }
+
+  setSelect(id: string, value: string): void {
+    if (id === "lead-filter-origin") this.originId.set(this.filterId(value))
+    else if (id === "lead-filter-stage") this.stageId.set(this.filterId(value))
+    else if (id === "lead-filter-converted")
+      this.converted.set(value === "true" ? true : value === "false" ? false : "")
+    else return
+    this.applyFilters()
+  }
+
+  clearFilters(): void {
+    this.search.set("")
+    this.originId.set("")
+    this.stageId.set("")
+    this.converted.set("")
+    this.applyFilters()
+  }
+
+  private filterId(value: string): number | "" {
+    const numeric = Number(value)
+    return /^\d+$/.test(value) &&
+      Number.isSafeInteger(numeric) &&
+      numeric > 0 &&
+      numeric <= 2147483647
+      ? numeric
+      : ""
+  }
+
+  /** Every filter change returns to the first page of the effective server page size. */
+  private applyFilters(delay = 0): void {
+    const search = this.search().trim(),
+      originId = this.originId(),
+      stageId = this.stageId(),
+      converted = this.converted()
+    this.recoveryUsed = false
+    this.load(
+      {
+        offset: 0,
+        limit: this.query().limit,
+        ...(search ? { search } : {}),
+        ...(originId === "" ? {} : { originId }),
+        ...(stageId === "" ? {} : { stageId }),
+        ...(converted === "" ? {} : { converted })
+      },
+      false,
+      delay
+    )
   }
 
   retry(): void {
@@ -188,6 +314,10 @@ export class LeadsPage implements OnInit {
     )
       return
     this.recoveryUsed = false
-    this.load({ offset: (page - 1) * this.query().limit, limit: this.query().limit })
+    this.load({
+      ...this.requestedQuery(),
+      offset: (page - 1) * this.query().limit,
+      limit: this.query().limit
+    })
   }
 }

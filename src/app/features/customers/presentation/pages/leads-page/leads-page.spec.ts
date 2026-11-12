@@ -2,7 +2,7 @@ import { PLATFORM_ID } from "@angular/core"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { TestBed } from "@angular/core/testing"
-import { provideRouter } from "@angular/router"
+import { ActivatedRoute, convertToParamMap, provideRouter } from "@angular/router"
 import { BehaviorSubject, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -43,7 +43,7 @@ const page = (items: Lead[] = [row], total = 45, offset = 0, limit = 20): PageRe
 
 type CatalogResult<T> = Result<readonly T[], CustomerError>
 
-function setup(server = false) {
+function setup(server = false, query: Record<string, string> = {}) {
   const requests: Subject<PageResult>[] = []
   const originRequests: Subject<CatalogResult<LeadOrigin>>[] = []
   const stageRequests: Subject<CatalogResult<FunnelStage>>[] = []
@@ -71,6 +71,10 @@ function setup(server = false) {
     imports: [LeadsPage],
     providers: [
       provideRouter([]),
+      {
+        provide: ActivatedRoute,
+        useValue: { snapshot: { queryParamMap: convertToParamMap(query) } }
+      },
       { provide: HotToastService, useValue: { success: vi.fn() } },
       { provide: HlmDialogService, useValue: { open: openDialog } },
       { provide: ListLeadsUseCase, useValue: { execute } },
@@ -142,11 +146,160 @@ describe("LeadsPage read-only inbox", () => {
     await s.respond(page([], 0))
     expect(s.element.textContent).toContain("No hay prospectos")
     expect(s.element.querySelector("app-crm-catalog-navigation")).not.toBeNull()
-    expect(s.element.querySelector("input, select, app-catalog-frame a")).toBeNull()
+    expect(s.element.querySelector("input#lead-filter-search")).not.toBeNull()
+    expect(
+      s.element.querySelector("select#lead-filter-origin, select#lead-filter-stage")
+    ).not.toBeNull()
+    expect(s.element.querySelector("app-catalog-frame a")).toBeNull()
     expect(
       s.element.querySelector("app-catalog-frame header [catalogControls]")?.textContent
     ).toContain("Crear prospecto")
     expect(s.element.textContent).not.toMatch(/Editar|Convertir|Seguimiento|Ver detalle/)
+  })
+
+  it("restores only validated paging from the route and never reads filters from the URL", () => {
+    const s = setup(false, {
+      offset: "20",
+      limit: "5",
+      search: "Ana",
+      originId: "11",
+      converted: "true"
+    })
+    expect(s.execute).toHaveBeenCalledExactlyOnceWith({ offset: 20, limit: 5 })
+    expect(s.element.querySelector<HTMLInputElement>("#lead-filter-search")!.value).toBe("")
+  })
+
+  it("renders the shared filter row with distinct labeled controls and verified catalog options", async () => {
+    const s = setup()
+    await s.respondOrigins(
+      Result.success([
+        LeadOrigin.create(11, "Formulario web", null, true),
+        LeadOrigin.create(13, "Feria", null, false)
+      ])
+    )
+    await s.respondStages(
+      Result.success([
+        FunnelStage.create(12, "Contactado", 1, false),
+        FunnelStage.create(14, "Cerrado", 2, true)
+      ])
+    )
+    const row = s.element.querySelector("app-catalog-filters")!
+    expect(row).not.toBeNull()
+    expect(row.querySelector("label[for=lead-filter-search]")?.textContent).toContain(
+      "Buscar nombre, correo o teléfono"
+    )
+    const search = row.querySelector<HTMLInputElement>("#lead-filter-search")!
+    expect(search.getAttribute("type")).toBe("search")
+    expect(search.placeholder).toBe("Buscar nombre, correo o teléfono…")
+    const origin = row.querySelector<HTMLSelectElement>("select#lead-filter-origin")!
+    expect(origin.getAttribute("aria-label") ?? "").not.toBe("lead-filter-stage")
+    expect(row.querySelector("label[for=lead-filter-origin]")?.textContent).toContain("Origen")
+    expect([...origin.options].map(option => option.textContent?.trim())).toEqual([
+      "Todos los orígenes",
+      "Formulario web · Activo",
+      "Feria · Inactivo"
+    ])
+    const stage = row.querySelector<HTMLSelectElement>("select#lead-filter-stage")!
+    expect(row.querySelector("label[for=lead-filter-stage]")?.textContent).toContain("Etapa")
+    expect([...stage.options].map(option => option.textContent?.trim())).toEqual([
+      "Todas las etapas",
+      "Contactado",
+      "Cerrado · Final"
+    ])
+    const converted = row.querySelector<HTMLSelectElement>("select#lead-filter-converted")!
+    expect(row.querySelector("label[for=lead-filter-converted]")?.textContent).toContain(
+      "Conversión"
+    )
+    expect(
+      [...converted.options].map(option => [option.value, option.textContent?.trim()])
+    ).toEqual([
+      ["", "Todos"],
+      ["false", "No convertido"],
+      ["true", "Convertido"]
+    ])
+    expect(row.querySelector("button")?.textContent).toContain("Crear prospecto")
+  })
+
+  it("debounces search, applies selects immediately, resets offset and retains the effective limit", async () => {
+    const s = setup()
+    await s.respond(page([row], 45, 0, 5))
+    await s.respondOrigins(Result.success([LeadOrigin.create(11, "Formulario web", null, true)]))
+    await s.respondStages(Result.success([FunnelStage.create(12, "Contactado", 1, false)]))
+    await s.click("Página siguiente")
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
+    const search = s.element.querySelector<HTMLInputElement>("#lead-filter-search")!
+    search.value = "  Ana Pérez  "
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    expect(s.execute).toHaveBeenCalledTimes(2)
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 5, search: "Ana Pérez" })
+    const origin = s.element.querySelector<HTMLSelectElement>("#lead-filter-origin")!
+    origin.value = "11"
+    origin.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(s.execute).toHaveBeenLastCalledWith({
+      offset: 0,
+      limit: 5,
+      search: "Ana Pérez",
+      originId: 11
+    })
+    await s.settle()
+    const stage = s.element.querySelector<HTMLSelectElement>("#lead-filter-stage")!
+    stage.value = "12"
+    stage.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(s.execute).toHaveBeenLastCalledWith({
+      offset: 0,
+      limit: 5,
+      search: "Ana Pérez",
+      originId: 11,
+      stageId: 12
+    })
+    await s.settle()
+    const converted = s.element.querySelector<HTMLSelectElement>("#lead-filter-converted")!
+    converted.value = "true"
+    converted.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(s.execute).toHaveBeenLastCalledWith({
+      offset: 0,
+      limit: 5,
+      search: "Ana Pérez",
+      originId: 11,
+      stageId: 12,
+      converted: true
+    })
+    await s.settle()
+  })
+
+  it("keeps filters out of lead detail return URLs while preserving effective paging", async () => {
+    const s = setup()
+    const converted = s.element.querySelector<HTMLSelectElement>("#lead-filter-converted")!
+    converted.value = "false"
+    converted.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    await s.respond(page())
+    const detail = s.element.querySelector<HTMLAnchorElement>(
+      'a[aria-label="Ver prospecto Prospecto de prueba"]'
+    )!
+    const params = new URL(detail.href).searchParams
+    expect([...params.keys()]).toEqual(["offset", "limit"])
+    expect(params.get("offset")).toBe("0")
+    expect(params.get("limit")).toBe("20")
+  })
+
+  it("renders a filtered empty state whose reset restores the unfiltered listing", async () => {
+    const s = setup()
+    await s.respondOrigins(Result.success([LeadOrigin.create(11, "Formulario web", null, true)]))
+    const origin = s.element.querySelector<HTMLSelectElement>("#lead-filter-origin")!
+    origin.value = "11"
+    origin.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 20, originId: 11 })
+    await s.respond(page([], 0))
+    expect(s.element.textContent).toContain("Sin prospectos para esos filtros")
+    expect(s.element.textContent).toContain("Prueba otra búsqueda o restablece los filtros.")
+    expect(s.element.textContent).not.toContain("No hay prospectos")
+    await s.click("Restablecer filtros")
+    expect(s.execute).toHaveBeenLastCalledWith({ offset: 0, limit: 20 })
   })
 
   it("renders actual lead fields and converted state in container-responsive records with working detail links", async () => {

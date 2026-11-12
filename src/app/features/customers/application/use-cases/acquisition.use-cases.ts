@@ -1,6 +1,6 @@
 import { CheckLeadEmailParams } from "../../domain/params/lead-email.params"
 import { inject, Injectable } from "@angular/core"
-import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { LeadListQuery } from "../../domain/models/lead-list-query"
 import { ACQUISITION_REPOSITORY } from "../../domain/repositories/acquisition.repository"
 import {
   CreateLeadOriginParams,
@@ -65,7 +65,7 @@ export class UpdateFunnelStageUseCase {
 @Injectable({ providedIn: "root" })
 export class ListLeadsUseCase {
   private readonly repository = inject(ACQUISITION_REPOSITORY)
-  execute(params: PaginationParams = {}) {
+  execute(params: LeadListQuery = {}) {
     return this.repository.listLeads(params)
   }
 }

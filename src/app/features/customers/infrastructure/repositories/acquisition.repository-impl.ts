@@ -1,6 +1,6 @@
 import { CheckLeadEmailParams } from "../../domain/params/lead-email.params"
 import { inject, Injectable } from "@angular/core"
-import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { LeadListQuery } from "../../domain/models/lead-list-query"
 import { AcquisitionRepository } from "../../domain/repositories/acquisition.repository"
 import {
   CreateLeadOriginParams,
@@ -38,7 +38,7 @@ export class AcquisitionRepositoryImpl implements AcquisitionRepository {
   updateStage(params: UpdateFunnelStageParams) {
     return this.source.updateStage(params)
   }
-  listLeads(params: PaginationParams) {
+  listLeads(params: LeadListQuery) {
     return this.source.listLeads(params)
   }
   findLead(id: number) {

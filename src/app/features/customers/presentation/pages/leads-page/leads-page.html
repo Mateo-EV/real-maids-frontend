@@ -8,9 +8,27 @@
     description="Consulta de prospectos registrados"
     [busy]="list().loading || list().refreshing"
   >
-    <button catalogControls hlmBtn type="button" [disabled]="writing()" (click)="create()">
-      Crear prospecto
-    </button>
+    <app-catalog-filters
+      catalogControls
+      searchInputId="lead-filter-search"
+      searchLabel="Buscar nombre, correo o teléfono"
+      searchPlaceholder="Buscar nombre, correo o teléfono…"
+      [searchValue]="search()"
+      [selects]="filterSelects()"
+      (searchChange)="setSearch($event)"
+      (selectChange)="setSelect($event.id, $event.value)"
+    >
+      <button
+        hlmBtn
+        class="catalog-action-with-plus"
+        size="sm"
+        type="button"
+        [disabled]="writing()"
+        (click)="create()"
+      >
+        <ng-icon name="lucidePlus" aria-hidden="true" />Crear prospecto
+      </button>
+    </app-catalog-filters>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando prospectos…
@@ -186,16 +204,29 @@
         <div hlmEmpty class="min-h-64">
           <div hlmEmptyHeader>
             <h2 hlmEmptyTitle>
-              {{ page.total === 0 ? "No hay prospectos" : "Esta página ya no tiene registros" }}
+              {{
+                page.total === 0
+                  ? hasFilters()
+                    ? "Sin prospectos para esos filtros"
+                    : "No hay prospectos"
+                  : "Esta página ya no tiene registros"
+              }}
             </h2>
             <p hlmEmptyDescription>
               {{
                 page.total === 0
-                  ? "El servidor no devolvió prospectos."
+                  ? hasFilters()
+                    ? "Prueba otra búsqueda o restablece los filtros."
+                    : "El servidor no devolvió prospectos."
                   : "El catálogo cambió. Selecciona otra página o reintenta."
               }}
             </p>
           </div>
+          @if (page.total === 0 && hasFilters()) {
+            <button hlmBtn type="button" variant="outline" (click)="clearFilters()">
+              Restablecer filtros
+            </button>
+          }
           @if (page.total > 0 && !list().error) {
             <button
               hlmBtn

@@ -14,7 +14,7 @@ Paths below start at `/api`. No DELETE endpoint is used.
 | [CustomerCapabilitiesRepository](domain/repositories/customer-capabilities.repository.ts) / same source             | PATCH `clientes/{id}/estado` with `{ activo }` (`SetCustomerStatusUseCase`); PUT `clientes/{id}/cuenta` with `{ idUsuario }`, including null to unlink (`LinkCustomerAccountUseCase`).                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | [PropertyRepository](domain/repositories/property.repository.ts) / `PropertyHttpSource`                             | GET/POST `clientes/{id}/propiedades`; PUT `clientes/{id}/propiedades/{propertyId}`; PATCH its `/estado`. `ListCustomerPropertiesUseCase`, `CreatePropertyUseCase`, `UpdatePropertyUseCase`, `SetPropertyStatusUseCase`. Lists include inactive properties.                                                                                                                                                                                                                                                                                                                                                                   |
 | [AcquisitionRepository](domain/repositories/acquisition.repository.ts) / `AcquisitionHttpSource`                    | GET/POST `catalogos/origenes-prospecto`, PUT `catalogos/origenes-prospecto/{id}`: `ListLeadOriginsUseCase`, `CreateLeadOriginUseCase`, `UpdateLeadOriginUseCase`. GET/POST `catalogos/etapas-embudo`, PUT `catalogos/etapas-embudo/{id}`: `ListFunnelStagesUseCase`, `CreateFunnelStageUseCase`, `UpdateFunnelStageUseCase`. No catalog deletion. Origins include inactive; stages have no active flag.                                                                                                                                                                                                                      |
-| Same acquisition boundary                                                                                           | GET `prospectos?pagina&tamanio`, GET `prospectos/{id}`, POST `prospectos`, PUT `prospectos/{id}`: `ListLeadsUseCase`, `GetLeadUseCase`, `CreateLeadUseCase`, `UpdateLeadUseCase`. GET/POST `prospectos/{id}/seguimientos`: `ListLeadFollowUpsUseCase`, `AddLeadFollowUpUseCase`. POST `prospectos/{id}/conversion`: `ConvertLeadUseCase`.                                                                                                                                                                                                                                                                                    |
+| Same acquisition boundary                                                                                           | GET `prospectos?pagina&tamanio&busqueda&idOrigen&idEtapa&convertido`, GET `prospectos/{id}`, POST `prospectos`, PUT `prospectos/{id}`: `ListLeadsUseCase`, `GetLeadUseCase`, `CreateLeadUseCase`, `UpdateLeadUseCase`. GET/POST `prospectos/{id}/seguimientos`: `ListLeadFollowUpsUseCase`, `AddLeadFollowUpUseCase`. POST `prospectos/{id}/conversion`: `ConvertLeadUseCase`.                                                                                                                                                                                                                                               |
 | [CustomerRelationsRepository](domain/repositories/customer-relations.repository.ts) / `CustomerRelationsHttpSource` | GET/POST `clientes/{id}/contactos`, PUT `clientes/{id}/contactos/{contactId}`: `ListCustomerContactsUseCase`, `CreateCustomerContactUseCase`, `UpdateCustomerContactUseCase`. GET/POST `clientes/{id}/preferencias`, PUT `clientes/{id}/preferencias/{preferenceId}`: corresponding `ListCustomerPreferencesUseCase`, `CreateCustomerPreferenceUseCase`, `UpdateCustomerPreferenceUseCase`. Both lists include inactive entries.                                                                                                                                                                                             |
 | [CustomerHistoryRepository](domain/repositories/customer-history.repository.ts) / `CustomerHistoryHttpSource`       | GET `clientes/{id}/historial?tamanio` (`GetCustomerHistoryUseCase`): real customer plus independent recent requests/orders/support pages with each module's independent total. The current projection has no module restriction marker. No aggregate activity total, fabricated empty outcome or SQL-entity reuse.                                                                                                                                                                                                                                                                                                           |
 
@@ -143,9 +143,9 @@ Public detail tests use real stores and controlled use cases for lazy reads, TTL
 
 The explicit continuation authorizes the [read-only inbox](presentation/pages/leads-page/leads-page.ts) at `/admin/customers/leads`, ordered before customer `:id`. The existing auth guard protects deep links. Customer and lead lists both consume [CrmCatalogNavigation](presentation/components/crm-catalog-navigation/crm-catalog-navigation.ts), with real Clientes/Prospectos links and active-page semantics. Sidebar **CRM**, customer profile actions/detail, IAM/default users redirect and official theme remain unchanged. M03/RF03/HU03 supplies customer context; dedicated acquisition RF/HU is still missing, not invented.
 
-Root CustomerAcquisitionStore remains authoritative: the page selects the requested query entry, owns observeLeads subscriptions through switchMap/DestroyRef and never stores a writable result copy. GET `/api/prospectos?pagina&tamanio` maps shared offset/limit (initial 0/20) to actual returned effective metadata, with backend size cap 100. Ranges/navigation use server total/offset/limit, never local slicing/filtering. One successful positive-total empty out-of-range page allows one corrective read per user navigation/retry using the effective limit. A second empty response cannot loop; zero total is verified empty, and transport/store responses are never rewritten.
+Root CustomerAcquisitionStore remains authoritative: the page selects the requested query entry, owns observeLeads subscriptions through switchMap/DestroyRef and never stores a writable result copy. GET `/api/prospectos?pagina&tamanio` maps shared offset/limit (initial 0/20) to actual returned effective metadata, with backend size cap 100. The optional server filters documented below add `busqueda`, `idOrigen`, `idEtapa` and `convertido` without changing that paging contract. Ranges/navigation use server total/offset/limit, never local slicing/filtering. One successful positive-total empty out-of-range page allows one corrective read per user navigation/retry using the effective limit. A second empty response cannot loop; zero total is verified empty, and transport/store responses are never rewritten.
 
-CatalogFrame/Helm table/cards show actual name/email/phone, converted-state labels and origin/stage name badges. The inbox resolves names through the existing root catalog reads (120000ms TTL), shared with editors and cancelled by the consumer/session lifetime; failures have independent retry, preserve lead rows and retain verified labels, while absent references are explicitly unavailable without raw IDs or invented names. Missing contacts remain unregistered. No row-specific catalog calls or invented statuses/linked-customer IDs; no search/status filters, KPIs, dead row links or write actions. The next bounded slice below connects read-only lead detail; editor/create, follow-ups, conversion and catalog administration remain next slices; public quote/pricing/landing/SMTP remains separately gated.
+CatalogFrame/Helm table/cards show actual name/email/phone, converted-state labels and origin/stage name badges. The inbox resolves names through the existing root catalog reads (120000ms TTL), shared with editors and cancelled by the consumer/session lifetime; failures have independent retry, preserve lead rows and retain verified labels, while absent references are explicitly unavailable without raw IDs or invented names. Missing contacts remain unregistered. No row-specific catalog calls or invented statuses/linked-customer IDs; no KPIs, dead row links or write actions. The next bounded slice below connects read-only lead detail; editor/create, follow-ups, conversion and catalog administration remain next slices; public quote/pricing/landing/SMTP remains separately gated. Filters were added later by the dedicated slice documented under “Shared catalog filter row and lead inbox filters”.
 
 Loading/unverified, verified empty, safe initial failure/retry and same-query stale refresh/error are distinct; unrelated queries show no borrowed rows. Existing 30000ms success TTL and root session fencing remain unchanged, without polling. Page destruction/query changes release owned reads; session loss/replacement cancels and clears old data, queued recovery checks its captured revision and same-session renewal preserves work. SSR dispatches no reads.
 
@@ -258,7 +258,44 @@ Focused official Angular Vitest tests use `HttpTestingController`, isolated fixt
 
 Page tests use the real root store with controlled use-case responses; route/sidebar tests pin protected lazy navigation, the exact CRM label and existing IAM/default redirect. See the implementation handoff for focused/full Angular test and production/SSR build results. Those checks do not establish real authenticated HTTP/CORS, browser/keyboard/responsive acceptance or real MySQL concurrency/rollback; these remain **pending**. Independent sensitive-data/authorization verification also remains necessary.
 
-## Reserved customer emails and lead duplicate warnings
+## Shared catalog filter row and lead inbox filters
+
+M03/RF03/HU03 (RNF09/RNF10/RNF12): the customers filter row was extracted into one shared
+presentational component, [CatalogFilters](../../../shared/components/catalog-filters/catalog-filters.ts),
+consumed by `/admin/customers` and `/admin/customers/leads`. The component host _is_ the
+`catalog-filter-row` element, so the global `.catalog-filter-row > *` rules in `src/styles.css` keep
+targeting the search block, each select wrapper and the consumer action button, which is projected
+into the row. The component owns only markup: the search input id/label/placeholder, one native
+extendable select per supplied filter, and `searchChange`/`selectChange` outputs. Debounce, offset
+reset, clearing, empty states and queries stay consumer-owned, so a future list reuses the row instead
+of copying classes. Customers keeps its ids `customer-search`/`customer-filter-type` and behavior.
+
+The lead inbox sends four optional server filters to `GET /api/prospectos`, all applied server-side
+before pagination with unchanged `pagina`/`tamanio`, stable order and effective metadata:
+
+- `busqueda`: trimmed, case-insensitive substring over name, email or phone, with `%`, `_` and `\`
+  literal and absent/blank values omitted.
+- `idOrigen`, `idEtapa`: exact match on the stored origin and funnel stage; non-positive ids are
+  rejected with 400 before any repository access, and the UI only ever sends verified positive ids.
+- `convertido`: exact `true`/`false`; absent means both.
+
+A dedicated `LeadListQuery extends PaginationParams` carries the filters; the normalized cache key is
+`[offset, limit, search, originId, stageId, converted]`, so filtered and unfiltered listings never
+share cached entries, in-flight reads or observers. The established 30000ms success-only freshness,
+ref-counted flights, 20-entry pinned registry, write invalidation, one bounded out-of-range recovery
+and consumer-owned cancellation are unchanged. Search debounces 250ms, selects apply immediately,
+every change resets offset to 0 retaining the effective limit, and filters stay in page state, never
+in list/detail URLs, so the existing offset/limit return context is preserved. A verified empty page
+with active filters offers `Restablecer filtros`; malformed filter ids are dropped instead of sent, and
+no local slicing, borrowed rows or invented totals are introduced.
+
+Backend counterpart (separate authorized repository): commit `6886f13` adds the same four optional
+parameters using a JPA `Specification` that mirrors the customer-filter precedent, the literal LIKE
+escaping helper and `ReglaNegocioException` for invalid ids. Its tests are mocked service tests plus
+MockMvc routing tests, so real SQL/MySQL behavior, live OpenAPI rendering, CORS and browser acceptance
+remain **pending**; the API currently served on localhost:8080 predates that commit.
+
+## Reserved customer emails and lead duplicate blocking
 
 M03/RF03/HU03: nonblank customer emails are unique across active and inactive customers.
 The backend compares trimmed, case-insensitive values; missing emails reserve nothing.
@@ -271,7 +308,14 @@ Lead create/edit checks the current valid email on blur and checks a loaded emai
 `POST /api/prospectos/validacion-correo` sends `{ correo, idProspectoExcluir? }` in JSON, never a URL.
 It requires existing `CLIENTE_LEER` authority, returns only `clienteExistente/prospectoExistente`
 booleans and includes inactive customers. The editor excludes only its captured lead ID.
-Warnings do not prevent saving a lead and are not authorization or a reservation guarantee.
+A confirmed match on either flag blocks the write and shows one compact inline field error under the
+email input (destructive text, `aria-invalid`, live region) instead of a large warning card; there is
+no separate dismissible alert and no second confirmation. Dispatch re-verifies an email whose check is
+missing, pending or older than the current value, so typing and submitting without blurring cannot
+skip the block. The only exception is an edit that keeps the captured lead's stored email (compared
+trimmed and case-insensitively); that value is already persisted by the backend, so it stays saveable
+while any changed email is treated as a new conflict. Backend 409 `EMAIL_RESERVED` remains the
+atomic authority; the frontend check is still neither authorization nor a reservation guarantee.
 Read failure stays advisory with explicit retry. Editing the email cancels/clears the prior check;
 owner/session/destruction/overlay fences prevent stale feedback. SSR starts no reads.
 No catalog downloads, new store/cache/TTL, root lifetime or authentication changes are introduced.

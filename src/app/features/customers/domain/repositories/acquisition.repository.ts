@@ -2,9 +2,9 @@ import { CheckLeadEmailParams, LeadEmailCheck } from "../params/lead-email.param
 import { InjectionToken } from "@angular/core"
 import { Observable } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Customer } from "../entities/customer.entity"
+import { LeadListQuery } from "../models/lead-list-query"
 import { LeadOrigin } from "../entities/lead-origin.entity"
 import { FunnelStage } from "../entities/funnel-stage.entity"
 import { Lead } from "../entities/lead.entity"
@@ -31,7 +31,7 @@ export interface AcquisitionRepository {
   listStages(): Observable<Result<readonly FunnelStage[], CustomerError>>
   createStage(params: CreateFunnelStageParams): Observable<Result<FunnelStage, CustomerError>>
   updateStage(params: UpdateFunnelStageParams): Observable<Result<FunnelStage, CustomerError>>
-  listLeads(params: PaginationParams): Observable<Result<PaginationResponse<Lead>, CustomerError>>
+  listLeads(params: LeadListQuery): Observable<Result<PaginationResponse<Lead>, CustomerError>>
   findLead(id: number): Observable<Result<Lead, CustomerError>>
   createLead(params: CreateLeadParams): Observable<Result<Lead, CustomerError>>
   updateLead(params: UpdateLeadParams): Observable<Result<Lead, CustomerError>>

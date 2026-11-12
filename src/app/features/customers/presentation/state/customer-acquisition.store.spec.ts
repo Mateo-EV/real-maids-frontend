@@ -6,6 +6,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { Result } from "@/app/shared/utils/result"
+import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import {
   ACQUISITION_REPOSITORY,
   AcquisitionRepository
@@ -109,6 +110,77 @@ describe("CustomerAcquisitionStore", () => {
     expect(repository.listLeads).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
     expect(store.selectLeads({ offset: 20, limit: 20 })().data).toEqual(page)
     expect(store.selectLeads({ offset: 40, limit: 20 })().data).toBeUndefined()
+  })
+
+  it("keys page reads by normalized filter identity so filtered and unfiltered listings never collide", () => {
+    const response = new Subject<Result<PaginationResponse<Lead>, CustomerError>>()
+    repository.listLeads.mockReturnValueOnce(response)
+    const a = store.loadLeads({ offset: 0, limit: 20, search: "  Ana  " }).subscribe(),
+      b = store.loadLeads({ offset: 0, limit: 20, search: "Ana" }).subscribe()
+    expect(repository.listLeads).toHaveBeenCalledExactlyOnceWith({
+      offset: 0,
+      limit: 20,
+      search: "Ana"
+    })
+    repository.listLeads.mockReturnValueOnce(of(Result.success(page)))
+    store.loadLeads({ offset: 0, limit: 20 }).subscribe()
+    expect(repository.listLeads).toHaveBeenCalledTimes(2)
+    response.next(Result.success({ items: [lead], total: 1, offset: 0, limit: 20 }))
+    response.complete()
+    a.unsubscribe()
+    b.unsubscribe()
+    expect(store.selectLeads({ search: "Ana" })().data?.total).toBe(1)
+    expect(store.selectLeads({})().data?.total).toBe(53)
+    expect(store.selectLeads({ converted: false })().data).toBeUndefined()
+    repository.listLeads.mockReturnValueOnce(of(Result.success(page)))
+    store.loadLeads({ originId: 11, stageId: 12, converted: false }).subscribe()
+    expect(repository.listLeads).toHaveBeenLastCalledWith({
+      offset: 0,
+      limit: 20,
+      originId: 11,
+      stageId: 12,
+      converted: false
+    })
+    expect(store.selectLeads({})().data?.total).toBe(53)
+    expect(store.selectLeads({ originId: 11, stageId: 12, converted: false })().data?.total).toBe(
+      53
+    )
+    expect(store.selectLeads({ converted: false })().data).toBeUndefined()
+  })
+
+  it("keeps active filters when a forced revalidation adopts effective server metadata", () => {
+    repository.listLeads.mockReturnValueOnce(
+      of(Result.success({ items: [lead], total: 53, offset: 20, limit: 5 }))
+    )
+    const query = { offset: 20, limit: 20, originId: 11, converted: true }
+    store.loadLeads(query).subscribe()
+    expect(repository.listLeads).toHaveBeenLastCalledWith({
+      offset: 20,
+      limit: 20,
+      originId: 11,
+      converted: true
+    })
+    store.loadLeads(query, true).subscribe()
+    expect(repository.listLeads).toHaveBeenLastCalledWith({
+      offset: 20,
+      limit: 5,
+      originId: 11,
+      converted: true
+    })
+    expect(store.selectLeads(query)().data?.total).toBe(53)
+  })
+
+  it("expires every filtered page variant on a confirmed write without replaying reads", () => {
+    repository.listLeads.mockReturnValue(of(Result.success(page)))
+    store.loadLeads({ search: "Ana" }).subscribe()
+    store.loadLeads({}).subscribe()
+    expect(store.selectLeads({ search: "Ana" })().expires).toBeGreaterThan(0)
+    repository.createLead.mockReturnValue(of(Result.success(lead)))
+    store.createLead(params).subscribe()
+    expect(store.selectLeads({ search: "Ana" })().expires).toBe(0)
+    expect(store.selectLeads({ search: "Ana" })().data).toEqual(page)
+    expect(store.selectLeads({})().data).toEqual(page)
+    expect(repository.listLeads).toHaveBeenCalledTimes(2)
   })
 
   it("rejects a new detail read when twenty flights are pinned, then admits after cancellation", () => {

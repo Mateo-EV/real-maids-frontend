@@ -2,7 +2,7 @@ import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { CheckLeadEmailParams, LeadEmailCheck } from "../../domain/params/lead-email.params"
 import { reservedCustomerEmail } from "./customer-email-conflict"
 import { Injectable } from "@angular/core"
-import { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { LeadListQuery } from "../../domain/models/lead-list-query"
 import { LeadOrigin } from "../../domain/entities/lead-origin.entity"
 import { FunnelStage } from "../../domain/entities/funnel-stage.entity"
 import { Lead } from "../../domain/entities/lead.entity"
@@ -207,12 +207,19 @@ export class AcquisitionHttpSource {
       v => sameId(stageDto(v), p.id)
     )
   }
-  listLeads(params: PaginationParams) {
+  listLeads(params: LeadListQuery) {
     const p = { ...params }
     return this.t.request(
       () =>
         this.http.get<unknown>(this.leads, {
-          params: pagination(p.offset, p.limit),
+          // Blank filters are omitted and malformed ids are never sent; paging is unchanged.
+          params: {
+            ...pagination(p.offset, p.limit),
+            ...(p.search?.trim() ? { busqueda: p.search.trim() } : {}),
+            ...(id(p.originId) ? { idOrigen: p.originId } : {}),
+            ...(id(p.stageId) ? { idEtapa: p.stageId } : {}),
+            ...(typeof p.converted === "boolean" ? { convertido: p.converted } : {})
+          },
           transferCache: false
         }),
       v => page(v, leadDto, (p.offset ?? 0) / (p.limit ?? 20), p.limit ?? 20),
