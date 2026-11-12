@@ -254,3 +254,29 @@ Review lineage `review-588e7828db651b0a` ran on the committed range (`15a0dd7..`
 The defect was real and already flagged by the T14 writer as a risk, with no spec covering it: the migration dropped the pre-migration admission from the confirmed-write path, so `savePermissionIds` for an uncached role reported success while leaving the saved assignment and its `matrices` entry invisible once all twenty role entries were present. Commit `6644432` restores it by giving the registry an `evict(key)` primitive and evicting the oldest role that no write, open dialog or open flight pins; it adds the missing coverage at both boundaries (a registry case for `evict` and an RBAC case proving publication and mirroring at the twenty-role cap). Focused evidence: rbac 25/25, registry 29/29, `tsc` exit 0, Prettier clean.
 
 The targeted validator approved the correction; the approval was acknowledged and its authority burned. One advisory finding remains, non-blocking and informational: `R3-002` (WARNING, `audit-logs.store.spec.ts:270`). It is later work and never a reason to re-review this candidate. Nothing was pushed; delivery follows ordinary repository policy.
+
+### S12 — Finish the stores that still hand-roll keyed reads
+
+The user said: “ok termina con los pendientes”. After the IAM stage, four stores still keep their own `Map<key, ReadResource>` coordination: `customers.store.ts` (paged customers plus customer details), `customer-relations.store.ts` (contacts and preferences), `customer-properties.store.ts` and `customer-history.store.ts`. Migrate those four onto the shared registry under the S11 preservation rules, without changing their public read APIs, entry shapes, TTLs, caps, fencing or consumer behavior. `roles.store.ts`, `service-catalog.store.ts` (single unkeyed catalogs) and `agenda.store.ts` (page-owned) stay out of scope, as decided in S9. Extend the registry only if a store's policy genuinely cannot be expressed with its current options, and report each addition instead of silently tightening a store.
+
+## Tasks
+
+- [x] T17 — 350 lines from 482; one reported admission assertion change. Commit `85e2e3d`; specimens verified by the parent. Migrate `customers.store.ts` (paged customers and customer details keyed).
+- [x] T18 — two families, inactive-only bound of twenty, byte-identical spec. Commit `dfe2cb6`. Migrate `customer-relations.store.ts` (contacts and preferences keyed).
+- [x] T19 — one per-owner family, byte-identical spec. Commit `2dbdb99`. Migrate `customer-properties.store.ts` (per-customer properties keyed).
+- [x] T20 — invalidate-only per owner, byte-identical spec. Commit `1b0a098`. Migrate `customer-history.store.ts` (per-owner history keyed).
+- [x] T21 — Prettier clean on the touched files, tsc exit 0, state 71, pages 106, components 134, all green by bounded group. Verify T17–T20 with Prettier, `tsc`, the focused specs and the CRM consumer specs; commit one work unit per store.
+
+### L25 — Stage 3: the last four stores
+
+“ok termina con los pendientes”
+
+A read-only explorer mapped the four remaining hand-rolled stores before any edit, and its verdict held: none of them needed a new registry option. All four already used the registry's `join` force policy, so the `forcePolicy` experiment from L23 stayed reverted and out of the codebase.
+
+Four work units, one per store: `85e2e3d` (customer pages and details), `dfe2cb6` (contacts and preferences), `2dbdb99` (properties), `1b0a098` (history). The three single-family stores keep their specs byte-identical; only `customers.store.spec.ts` changed, for one reported assertion: admission at the cap now emits a failed `Result` instead of throwing, the frozen unified contract from S3.
+
+Two reported nuances, neither a behavior change anyone consumes. Entries in the three single-family stores expose `ReadResourceState` fields, so the adapter derives `pendingReads` as one shared flight per key and `loaded` as `result !== undefined`; a verified empty array and a verified null both survive. And history/relations/properties retention is now first-admitted rather than last-accessed, with the same bound of twenty inactive entries, and no consumer or spec pins the order.
+
+Evidence, every run bounded to `NG_BUILD_MAX_WORKERS=1 NODE_OPTIONS=--max-old-space-size=3072`: the four store specs 71/71, the two customer pages plus the writes and history consumers 106/106, the four component consumers 134/134, `tsc -p tsconfig.app.json --noEmit` exit 0, and Prettier clean on every touched file. The four Prettier warnings that remain under `customers/presentation/state` are pre-existing style debt in files this stage did not touch and were deliberately left alone.
+
+Not executed and not claimed: the full unit suite (this host OOMs on large invocations), and any live backend, CORS, authorization, redaction, browser or native review evidence for this stage.
