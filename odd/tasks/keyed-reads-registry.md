@@ -43,6 +43,14 @@ The user said: “mergeas al main”. Merge the feature branch into `main` local
 
 The user said: “y luego vamos por b y a”. After the merge, continue with the four IAM stores: `user.store.ts`, `user-sessions.store.ts`, `rbac.store.ts` and `audit-logs.store.ts`. `roles.store.ts` and `agenda.store.ts` remain out of scope.
 
+### S10 — Extend the registry instead of tightening the stores
+
+The user said: “1. Extender el registro con 3 hooks y migrar los tres”. Session, RBAC and audit reads carry policies the frozen registry did not expose, and the survey named three: `isPinned` (retained roles, in-flight writes, the audit current query), `obsoleteResult` (RBAC delivers `BUSY` for a superseded read) and `inactiveHistoryLimit` (sessions bounds inactive history only). Reading the consumers added three more of the same nature: `dropUnverifiedOnIdle` (a placeholder that never became verified data is disposed when its last observer leaves), `cancelOnInvalidate` (without it a superseded flight is cancelled before its result can be mapped to `BUSY`) and `invalidate(key)` (expire one key without refreshing it). All are additive, default to the previous behavior and carry their own specs; no existing registry spec changes.
+
+### S11 — Preserve every store's read contract
+
+Each migrated store keeps its public API and signals, TTLs, entry caps, eviction and pinning, admission outcomes, session fencing and reset, refresh targeting, shared flights, error codes and public entry shapes. Specs change only for an assertion that pins the mechanism being replaced, and each such change is reported with its reason; no assertion is weakened for green.
+
 ## Tasks
 
 - [x] T1 — Add the shared keyed read registry and its state adapter helper with their own focused specs. Linked: S1, S3. Route: bounded writer. Surfaces: `src/app/shared/state/keyed-reads.ts`, `src/app/shared/state/keyed-reads.spec.ts`. Commit `d4c2075`; registry 309 lines, 14/14 specs reproduced by the parent (L10).
@@ -56,7 +64,13 @@ The user said: “y luego vamos por b y a”. After the merge, continue with the
 - [x] T9 — Migrate `field-staff.store.ts`. Linked: S7. Route: parent inline after the writer died. Commit `7fef925`; 213 → 139, spec 21/21 untouched.
 - [x] T10 — Format, focused and full verification for S6 and S7. Linked: S5, S6, S7. Route: parent with command re-run. Focused and consumer specs green; the full suite and the operations group run are unreachable (L12, L18).
 - [x] T11 — Merge the feature branch into `main` locally, without push. Linked: S8. Route: parent, after T10. Fast-forward `e117747 → 1203717`; nothing pushed; `main` still matches `origin/main` at 0/0 divergent commits.
-- [ ] T12 — Map and migrate the four IAM stores. Linked: S9. Route: explorer, then bounded writers.
+- [x] T12 — Map and migrate the four IAM stores. Linked: S9. Route: explorer, then bounded writers. `user.store.ts` was already half-migrated; finished inline. Commit `6dff733`; state specs 103/103, tsc exit 0.
+- [x] T13 — Migrate `user-sessions.store.ts` (owner queries and session details keyed; the global count stays hand-rolled). Linked: S9, S10, S11. Route: bounded writer, corrected by the parent. Commit `4fb1f32`; sessions group 72/72 and tsc exit 0.
+- [x] T14 — Migrate `rbac.store.ts` (role assignments keyed; the permission catalog stays hand-rolled). Linked: S9, S10, S11. Route: bounded writer. Commit `8b8fff5`; rbac group 32/32 with both specs byte-identical.
+- [x] T15 — Migrate `audit-logs.store.ts` (audit pages keyed; the global total stays hand-rolled). Linked: S9, S10, S11. Route: bounded writer; the first attempt was discarded after its consumer spec caught a clamp regression. Commit `4b3a76a`; audit group 47/47 and `users-page` 52/52.
+- [x] T16 — Verify T12–T15 with Prettier, `tsc`, the four stores' focused specs and the IAM consumer specs. Linked: S5, S9, S11. Route: parent. Prettier clean, tsc exit 0, every state spec file and every IAM consumer spec green by group; the full suite and the independent verifier are unexecuted (L23).
+
+T12 keeps the mapping deliverable and `user.store.ts`, which fit the frozen registry unchanged; T13–T15 carry the three stores that needed the S10 extension. The registry addition itself is `9bd7173`, committed before them.
 
 ## Log
 
@@ -179,11 +193,11 @@ Two more writer launches ended with “parent process terminated while task was 
 
 Result of (b), measured against `c4e6549`:
 
-| Store | Before | After | Consumer spec |
-| --- | ---: | ---: | --- |
-| `field-staff.store.ts` | 213 | 139 | 21/21, untouched |
-| `service-requests.store.ts` | 437 | 339 | 16/16, untouched |
-| `service-orders.store.ts` | 475 | 352 | 25/25, untouched |
+| Store                       | Before | After | Consumer spec    |
+| --------------------------- | -----: | ----: | ---------------- |
+| `field-staff.store.ts`      |    213 |   139 | 21/21, untouched |
+| `service-requests.store.ts` |    437 |   339 | 16/16, untouched |
+| `service-orders.store.ts`   |    475 |   352 | 25/25, untouched |
 
 Totals: 1125 → 830 lines (+219/−517), and `git diff --name-only c4e6549..HEAD -- "*store.spec.ts"` is empty, so all three consumer suites are byte-identical rather than rewritten. `service-orders-manual.store.spec.ts`, which pins the refresh batch that the registry replaced, also passes 44/44 untouched. `tsc --noEmit` exits 0 and Prettier `--check` is clean on all three stores.
 
@@ -204,3 +218,31 @@ Still unverified, and not claimed: `ng test --include='src/app/features/operatio
 “no hagas nada de iam porfa solo te pido que crees la rama para empezar”
 
 This supersedes the continuation implied at the end of L19. No IAM migration was performed: no store was read into a plan, no writer was launched, nothing was edited. The only IAM-adjacent action was a read-only contract-mapping survey launched moments before this instruction; it was cancelled and nothing from it was applied, committed or reused. S9 and T12 remain unstarted and T12 stays unchecked. Creating the branch is the whole deliverable of this step.
+
+### L21 — T12: user.store.ts migrated, and the survey that stopped the rest
+
+“terminamos una parte de la refactoizacion de stores, ahora estamos haciendo el de iam, por favor termina de refactorizar los stores de ima como hemos venido haciendo pls”
+
+A read-only explorer mapped the four stores. `user.store.ts` carried an unfinished migration: the page family was already on the registry, but its own resource map, activity counters, teardown writes, mutation batches and observer were still hand-rolled, and the page TTL had been written as `12000` instead of the documented `120000`. Observation, pinning, admission and mutation batches now come from `pages.observe`; session clearing is `pages.reset()`; a mutation is `pages.markMutated()`; the TTL is corrected. Public signals, cap, pinning and session fencing are unchanged.
+
+Two specs pinned the replaced mechanism and were changed with their reason: admission overflow was asserted as a thrown error (the frozen registry returns a failed `Result` per S3) and a TTL revisit was asserted to re-request the raw query (the registry revalidates the effective query recorded by `adopt`). Evidence: `ng test --include='src/app/features/users/presentation/state/user*.spec.ts'` → 9 files, **103/103 passed**, exit 0; `tsc -p tsconfig.app.json --noEmit` exit 0; Prettier clean. Commit `6dff733`.
+
+The same survey found that the other three stores are not mechanically migratable: sessions bounds **inactive** history at 20 and disposes placeholders, RBAC pins retained and written role keys and delivers `BUSY` for a superseded read, and audit pins the current query. The registry exposed none of those, which is what S10 authorizes.
+
+### L22 — S10: six additive hooks on the registry
+
+The registry gained `isPinned`, `obsoleteResult`, `inactiveHistoryLimit`, `dropUnverifiedOnIdle`, `cancelOnInvalidate` (default true) and an `invalidate(key)` method. Each optional addition defaults to the previous behavior; five carry a focused spec (pinned-key refusal, detached obsolete mapping, inactive-only history, placeholder disposal, single-key expiry) and the existing 23 registry specs are untouched. Evidence: `ng test --include=src/app/shared/state/keyed-reads.spec.ts` → 1 file, **28/28 passed**, exit 0; `tsc -p tsconfig.app.json --noEmit` exit 0; Prettier clean. Commit `9bd7173`, before any consumer uses them.
+
+### L23 — IAM closed: the four stores on the registry
+
+Each store is its own commit, in this order: `6dff733` (user queries), `4fb1f32` (session owners and details), `8b8fff5` (role assignments), `4b3a76a` (audit pages). Only the keyed families moved; the three unkeyed singletons (statistics, session count, permission catalog, global audit total) stay hand-rolled on purpose, and the audit global total keeps its `latest`/`sequence` ordering byte-identical.
+
+Public entry shapes never changed: each store adapts to `KeyedEntry` only inside its `keyedState` closures, so `ownerEntries` (`expiresAt`, `loaded`), `details[id].items`, `assignmentEntries`, `matrices`, `entries[currentKey]` and every computed projection still work for the components and templates.
+
+Spec changes, all reported: `user.store.query` admission overflow is a failed `Result` instead of a throw (S3); two revisit assertions re-request the adopted effective query; one `user-sessions.owners` retry assertion does the same; one `audit-logs.store` `loading` assertion moves to "settles when verified data arrives". Both RBAC suites are byte-identical.
+
+Evidence, every run bounded to `NG_BUILD_MAX_WORKERS=1 NODE_OPTIONS=--max-old-space-size=3072` because this host OOMs on large invocations: all 14 `state/*.spec.ts` files ran green (169 tests); `users-page` 52/52; audit-viewer + store + ttl 47/47; user-sessions + revoke dialog + three session specs 72/72; rbac-matrix + both rbac specs 32/32; user-editor + user-status + delete-user 39/39; `tsc -p tsconfig.app.json --noEmit` exit 0; Prettier clean.
+
+Two corrections during T16 are worth keeping. A folder-level run died with `FATAL ERROR: Zone Allocation failed` and left partially written build output; the next two groups then reported one impossible failure each (an audit clamp and a sessions post-write refresh) that did not reproduce in four later runs of the same groups with a clean build. And the audit migration was briefly lost to a `git checkout` taken while diagnosing that phantom failure; it was redone and its consumer spec, which had never been run by the first attempt, is now part of its verification.
+
+Not executed and not claimed: the full unit suite (the folder-level invocation already dies; `main`'s last recorded full-suite state is the 3260/3262 of the operations log), the independent verifier (its launch returned no result), and any live backend, CORS, authorization, redaction, browser or native review evidence.
