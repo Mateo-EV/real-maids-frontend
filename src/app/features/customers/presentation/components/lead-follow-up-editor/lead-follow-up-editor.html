@@ -43,6 +43,15 @@
         @if (stages().pendingReads) {
           <p role="status">{{ stages().loaded ? "Actualizando etapas…" : "Cargando etapas…" }}</p>
         }
+        @if (stageUnknown()) {
+          <div hlmAlert variant="destructive" role="alert">
+            <p hlmAlertTitle>La etapa actual del prospecto no está en el catálogo recibido.</p>
+            <p hlmAlertDescription>
+              Sin ella no se puede determinar el orden del embudo. Actualiza las etapas para
+              registrar el seguimiento.
+            </p>
+          </div>
+        }
         @if (stages().error) {
           <div hlmAlert variant="destructive" role="alert">
             <p hlmAlertTitle>No se pudieron cargar las etapas.</p>
@@ -111,7 +120,7 @@
     <button
       hlmBtn
       type="submit"
-      [disabled]="profile().submitting()"
+      [disabled]="profile().submitting() || stageUnknown()"
       [attr.aria-busy]="profile().submitting()"
     >
       @if (profile().submitting()) {

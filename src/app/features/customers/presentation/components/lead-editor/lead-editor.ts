@@ -173,6 +173,29 @@ export class LeadEditor implements OnInit {
       destino = this.selectedStage()
     return !!actual && !!destino && destino.order < actual.order
   })
+  private readonly stageCatalogVerified = computed(() => {
+    const entry = this.acquisition.stages()
+    return entry.loaded && !entry.error && !entry.loading && !entry.refreshing
+  })
+  /**
+   * Cambio de etapa cuyo orden no se puede resolver porque el catálogo recibido no trae la etapa
+   * actual o la elegida. Sin orden no hay relación que validar: ni salto ni retroceso ni avance.
+   */
+  readonly stageUnknown = computed(
+    () =>
+      !!this.target &&
+      this.stageCatalogVerified() &&
+      String(this.target.stageId) !== this.model().stageId &&
+      (!this.currentStage() || !this.selectedStage())
+  )
+  /**
+   * La etapa capturada sin cambios se conserva aunque el catálogo recibido ya no la traiga: sin
+   * transición no hay orden que validar y editar nombre, teléfono u observación no queda bloqueado.
+   */
+  private stageAccepted(value: string): boolean {
+    if (this.validChoice("stageId", value)) return true
+    return !!this.target && String(this.target.stageId) === value && this.stageCatalogVerified()
+  }
   /** Salto: supera el siguiente nivel del embudo (puede tener varias etapas) y el servidor lo rechaza. */
   readonly stageSalta = computed(() => {
     const actual = this.currentStage(),
@@ -203,7 +226,7 @@ export class LeadEditor implements OnInit {
         : { kind: "choice", message: "Selecciona una opción verificada del catálogo disponible." }
     )
     validate(path.stageId, ({ value }) => {
-      if (!this.validChoice("stageId", value()))
+      if (!this.stageAccepted(value()))
         return {
           kind: "choice",
           message: "Selecciona una opción verificada del catálogo disponible."
@@ -361,7 +384,9 @@ export class LeadEditor implements OnInit {
       if (
         !this.current() ||
         !this.validChoice("originId", v.originId) ||
-        !this.validChoice("stageId", v.stageId)
+        !this.stageAccepted(v.stageId) ||
+        // Un cambio de etapa sin orden resoluble se rechaza aquí en vez de esperar el 400 del servidor.
+        this.stageUnknown()
       )
         return
       try {

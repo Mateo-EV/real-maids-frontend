@@ -107,6 +107,16 @@ export class LeadFollowUpEditor implements OnInit {
   hasChoice(value: string): boolean {
     return !!this.stages().data?.some(stage => String(stage.id) === value)
   }
+  private readonly stagesVerified = computed(() => {
+    const entry = this.stages()
+    return entry.loaded && !entry.error && !entry.pendingReads
+  })
+  /**
+   * El catálogo verificado no trae la etapa actual del prospecto: el orden del embudo no se puede
+   * juzgar, así que ni la relación ni el motivo obligatorio se pueden determinar. Sin salto, sin
+   * retroceso y sin etapa de respaldo inventada: sólo refrescar el catálogo desbloquea el registro.
+   */
+  readonly stageUnknown = computed(() => this.stagesVerified() && !this.currentStage())
   private verifiedChoice(value: string): boolean {
     const entry = this.stages()
     return (
@@ -174,6 +184,8 @@ export class LeadFollowUpEditor implements OnInit {
     return submit(this.profile, async () => {
       const value = this.model()
       if (!this.current() || !this.verifiedChoice(value.stageId)) return
+      // Sin la etapa actual en el catálogo no hay orden que respetar ni motivo que exigir.
+      if (this.stageUnknown()) return
       // Misma regla que el servidor: sin salto y con motivo cuando el paso es hacia atrás.
       if (this.relationOf(value.stageId) === "salto") return
       if (this.relationOf(value.stageId) === "retroceso" && !value.comment.trim()) return

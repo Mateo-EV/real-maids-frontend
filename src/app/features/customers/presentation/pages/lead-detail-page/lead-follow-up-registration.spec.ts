@@ -23,6 +23,8 @@ import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
 const lead = (id = 7) =>
   Lead.create(id, 11, 12, `Prospecto ${id}`, null, null, null, null, true, new Date(0), null)
 const stage = FunnelStage.create(31, "Etapa suministrada", 2, true)
+// La etapa actual del prospecto forma parte del catálogo verificado: sin ella el orden no se juzga.
+const currentStage = FunnelStage.create(12, "Etapa actual", 1, false)
 const record = LeadFollowUp.create(9, 7, 21, 31, "Anterior", new Date(0))
 async function setup(server = false) {
   const profiles: Subject<Result<Lead, CustomerError>>[] = []
@@ -133,7 +135,7 @@ async function setup(server = false) {
     await settle()
   }
   const valid = async () => {
-    await respond(catalogs, Result.success([stage]))
+    await respond(catalogs, Result.success([currentStage, stage]))
     await fill("stageId", "31")
   }
   const overlay = () => getDebugNode(dialog())!.injector.get(CdkDialogRef).overlayRef
@@ -186,7 +188,7 @@ describe("T7 follow-up registration through verified open detail with real store
     expect(s.unexpected).not.toHaveBeenCalled()
     await s.valid()
     expect(s.dialog().querySelector('option[value="31"]')?.textContent?.trim()).toBe(
-      "Etapa suministrada · Final"
+      "Etapa suministrada · Final · Siguiente"
     )
     expect(s.dialog().querySelectorAll("input, select, textarea")).toHaveLength(2)
   })
@@ -245,7 +247,13 @@ describe("T7 follow-up registration through verified open detail with real store
     await s.submit()
     expect(s.dialog().querySelector<HTMLSelectElement>("select")!.value).toBe("31")
     await s.click("Reintentar etapas", s.dialog())
-    await s.respond(s.catalogs, Result.success([FunnelStage.create(32, "Otra", 1, false)]))
+    await s.respond(
+      s.catalogs,
+      Result.success([
+        FunnelStage.create(12, "Etapa actual", 1, false),
+        FunnelStage.create(32, "Otra", 2, false)
+      ])
+    )
     expect(s.dialog().querySelector<HTMLSelectElement>("select")!.value).toBe("31")
     expect(s.dialog().textContent).toContain("Etapa no disponible")
     await s.submit()
@@ -517,5 +525,29 @@ describe("S6 stage-order guidance in the follow-up editor", () => {
     )
     await s.submit()
     expect(s.add).toHaveBeenCalledExactlyOnceWith({ leadId: 7, stageId: 12, comment: null })
+  })
+  it("blocks dispatch and explains when the current stage is missing from the received catalog", async () => {
+    const s: Harness = await setup()
+    await s.open()
+    // El 12 es la etapa actual del prospecto y no viene en el catálogo entregado.
+    await s.respond(s.catalogs, Result.success([FunnelStage.create(31, "Etapa tres", 3, true)]))
+    const submitButton = () => s.dialog().querySelector<HTMLButtonElement>('button[type="submit"]')!
+    expect(s.dialog().textContent).toContain(
+      "La etapa actual del prospecto no está en el catálogo recibido."
+    )
+    expect(s.dialog().textContent).toContain("Actualiza las etapas para")
+    expect(submitButton().disabled).toBe(true)
+    await s.fill("stageId", "31")
+    await s.submit()
+    expect(s.add).not.toHaveBeenCalled()
+    // La acción existente de refresco es la única salida: no se inventa etapa ni permiso.
+    await s.click("Actualizar etapas", s.dialog())
+    await s.respond(s.catalogs, Result.success(ordered()))
+    expect(s.dialog().textContent).not.toContain(
+      "La etapa actual del prospecto no está en el catálogo recibido."
+    )
+    expect(submitButton().disabled).toBe(false)
+    await s.submit()
+    expect(s.add).toHaveBeenCalledExactlyOnceWith({ leadId: 7, stageId: 31, comment: null })
   })
 })

@@ -663,25 +663,24 @@ describe("WP6 editing a legitimately loaded lead", () => {
   it("keeps missing loaded association IDs visible and blocks dispatch until explicit verified choices", async () => {
     const s = await editSetup()
     await s.open()
-    await s.catalogs(21, 22)
+    // El origen cargado (11) no llega en el catálogo; la etapa actual (12) sí.
+    await s.catalogs(21, 12)
     for (const [field, id] of [
       ["originId", "11"],
       ["stageId", "12"]
     ])
       expect(s.dialog().querySelector<HTMLSelectElement>(`#lead-${field}`)!.value).toBe(id)
     expect(s.dialog().textContent).toContain("Origen no disponible")
-    expect(s.dialog().textContent).toContain("Etapa no disponible")
     await s.submit()
     expect(s.update).not.toHaveBeenCalled()
     await s.fill("originId", "21")
-    await s.fill("stageId", "22")
     await s.submit()
     expect(s.update).toHaveBeenCalledOnce()
     expect(s.update.mock.calls[0]).toEqual([
       {
         id: 7,
         originId: 21,
-        stageId: 22,
+        stageId: 12,
         name: "Prospecto 7",
         email: null,
         phone: null,
@@ -991,6 +990,57 @@ describe("D2 stage-change reason on the lead edit PUT", () => {
       name: "Prospecto 7",
       email: null,
       phone: null,
+      referenceAddress: null,
+      observation: "<b>Texto literal</b>\nhttps://example.test",
+      comentarioSeguimiento: null
+    })
+  })
+})
+
+describe("Stage catalog gaps on the lead edit PUT", () => {
+  type Harness = Awaited<ReturnType<typeof editSetup>>
+  // La etapa capturada del prospecto es la 12; el catálogo entregado no la trae.
+  const withoutCurrentStage = async (s: Harness) => {
+    s.origins.next(Result.success([LeadOrigin.create(11, "Origen real", null, false)]))
+    s.stages.next(
+      Result.success([
+        FunnelStage.create(31, "Etapa tres", 3, true),
+        FunnelStage.create(32, "Etapa cuatro", 4, false)
+      ])
+    )
+    await s.settle()
+  }
+  it("blocks a stage change whose order cannot be resolved and explains the missing catalog entry", async () => {
+    const s = await editSetup()
+    await s.open()
+    await withoutCurrentStage(s)
+    expect(s.dialog().textContent).toContain("Etapa no disponible")
+    await s.fill("stageId", "31")
+    expect(s.dialog().textContent).toContain(
+      "La etapa actual del prospecto no está en el catálogo recibido."
+    )
+    expect(s.dialog().textContent).toContain("Actualiza las")
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+  })
+  it("still saves the other fields when the unchanged stage is missing from the catalog", async () => {
+    const s = await editSetup()
+    await s.open()
+    await withoutCurrentStage(s)
+    // Sin cambio de etapa no hay orden que resolver: editar los demás datos sigue disponible.
+    expect(s.dialog().textContent).not.toContain(
+      "La etapa actual del prospecto no está en el catálogo recibido."
+    )
+    await s.fill("name", "Nombre actualizado")
+    await s.fill("phone", " ext. B ")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 12,
+      name: "Nombre actualizado",
+      email: null,
+      phone: "ext. B",
       referenceAddress: null,
       observation: "<b>Texto literal</b>\nhttps://example.test",
       comentarioSeguimiento: null

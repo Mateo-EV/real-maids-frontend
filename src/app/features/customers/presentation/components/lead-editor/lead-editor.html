@@ -63,6 +63,16 @@
             } @else if (catalog.entry.loaded && !catalog.options.length) {
               <p role="status">No hay {{ catalog.name }} en el catálogo recibido.</p>
             }
+            @if (catalog.key === "stageId" && stageUnknown()) {
+              <div hlmAlert variant="destructive" role="alert">
+                <p hlmAlertTitle>La etapa actual del prospecto no está en el catálogo recibido.</p>
+                <p hlmAlertDescription>
+                  No se puede determinar el orden del embudo para el cambio de etapa. Actualiza las
+                  etapas para guardar el cambio; los demás datos se guardan conservando la etapa
+                  actual.
+                </p>
+              </div>
+            }
             <button
               hlmBtn
               type="button"
