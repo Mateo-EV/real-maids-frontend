@@ -268,7 +268,7 @@ describe("WP6 lead creation through inbox", () => {
     expect(s.list).toHaveBeenLastCalledWith({ offset: 5, limit: 5 })
     expect(s.root.textContent).toContain("6–6 de 45 prospectos")
     expect(
-      s.root.querySelector("a[aria-label='Ver prospecto Prospecto']")?.getAttribute("href")
+      s.root.querySelector("a[aria-label='Ver detalle de Prospecto']")?.getAttribute("href")
     ).toContain("offset=5&limit=5")
   })
   it("maps blank nullable optionals to null", async () => {

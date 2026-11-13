@@ -19,6 +19,7 @@ import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { CUSTOMERS_ROUTES } from "../../../customers.routes"
 import * as Actions from "../../../application/use-cases/acquisition.use-cases"
 import { ListCustomersUseCase } from "../../../application/use-cases/list-customers.use-case"
+import { GetCustomerStatisticsUseCase } from "../../../application/use-cases/get-customer-statistics.use-case"
 import { Lead } from "../../../domain/entities/lead.entity"
 import { CustomerError, CustomerErrorCode } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
@@ -95,6 +96,15 @@ async function setup(
         useValue: { execute: emailCheck }
       },
       { provide: ListCustomersUseCase, useValue: { execute: customers } },
+      // The CRM shell owns both KPI aggregates; keep them stubbed so only the consumer is exercised.
+      {
+        provide: GetCustomerStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, activos: 0, inactivos: 0 })) }
+      },
+      {
+        provide: Actions.GetLeadStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, convertidos: 0, pendientes: 0 })) }
+      },
       { provide: Actions.ListLeadOriginsUseCase, useValue: { execute: readOrigins } },
       { provide: Actions.ListFunnelStagesUseCase, useValue: { execute: readStages } },
       ...[
@@ -114,9 +124,14 @@ async function setup(
     ]
   })
   const harness = await RouterTestingHarness.create(url)
+  // The routed parent is the CRM shell (navigation + KPIs), so scope every assertion helper to
+  // the routed consumer inside its outlet and read the route-local toast from that consumer.
+  const consumer = (selector: string) =>
+    harness.routeNativeElement!.querySelector<HTMLElement>(selector)
+  const element = () => (consumer("app-lead-detail-page") ?? consumer("app-leads-page"))!
   if (editing)
     vi.spyOn(
-      harness.routeDebugElement!.injector.get(HotToastService),
+      getDebugNode(consumer("app-lead-detail-page")!)!.injector.get(HotToastService),
       "success"
     ).mockImplementation(success)
   const settle = async () => {
@@ -125,7 +140,6 @@ async function setup(
     harness.detectChanges()
   }
   await settle()
-  const element = () => harness.routeNativeElement!
   const respond = async (value: DetailResult) => {
     requests.at(-1)!.next(value)
     requests.at(-1)!.complete()
@@ -431,7 +445,7 @@ describe("Lead read-only detail and independent return context", () => {
     for (const selector of ["[catalogDesktop]", "[catalogMobile]"]) {
       const link = s.element().querySelector<HTMLAnchorElement>(`${selector} a`)!
       expect(link?.getAttribute("href")).toBe("/admin/customers/leads/7?offset=10&limit=5")
-      expect(link?.getAttribute("aria-label")).toBe("Ver prospecto Prospecto 7")
+      expect(link?.getAttribute("aria-label")).toBe("Ver detalle de Prospecto 7")
     }
     s.element().querySelector<HTMLAnchorElement>("[catalogDesktop] a")!.click()
     await s.settle()

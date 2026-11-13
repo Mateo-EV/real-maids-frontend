@@ -19,6 +19,7 @@ import * as Actions from "../../../application/use-cases/acquisition.use-cases"
 import { ACQUISITION_REPOSITORY } from "../../../domain/repositories/acquisition.repository"
 import { AcquisitionRepositoryImpl } from "../../../infrastructure/repositories/acquisition.repository-impl"
 import { Lead } from "../../../domain/entities/lead.entity"
+import { GetCustomerStatisticsUseCase } from "../../../application/use-cases/get-customer-statistics.use-case"
 import { CustomerType } from "../../../domain/entities/customer.entity"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
@@ -74,6 +75,15 @@ async function setup(server = false, converted = false) {
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       { provide: Actions.GetLeadUseCase, useValue: { execute: read } },
       { provide: Actions.ListLeadsUseCase, useValue: { execute: list } },
+      // The CRM shell owns both KPI aggregates: stub them so no unrelated GET is ever dispatched.
+      {
+        provide: GetCustomerStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, activos: 0, inactivos: 0 })) }
+      },
+      {
+        provide: Actions.GetLeadStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, convertidos: 0, pendientes: 0 })) }
+      },
       ...[
         Actions.CreateLeadUseCase,
         Actions.UpdateLeadUseCase,
@@ -85,8 +95,12 @@ async function setup(server = false, converted = false) {
     ]
   })
   const harness = await RouterTestingHarness.create("/admin/customers/leads/7?offset=10&limit=5")
+  // The routed parent is the CRM shell (navigation + KPIs): keep assertions on the detail consumer
+  // and read the route-local toast service from it instead of the shell's root instance.
+  const element = () =>
+    harness.routeNativeElement!.querySelector<HTMLElement>("app-lead-detail-page")!
   const success = vi
-    .spyOn(harness.routeDebugElement!.injector.get(HotToastService), "success")
+    .spyOn(getDebugNode(element())!.injector.get(HotToastService), "success")
     .mockImplementation(vi.fn())
   const http = TestBed.inject(HttpTestingController)
   const settle = async () => {
@@ -96,7 +110,6 @@ async function setup(server = false, converted = false) {
     await harness.fixture.whenStable()
     harness.detectChanges()
   }
-  const element = () => harness.routeNativeElement!
   const dialog = () => document.querySelector<HTMLElement>("app-lead-conversion-dialog")!
   const click = async (text: string, root: HTMLElement = element()) => {
     const button = [...root.querySelectorAll<HTMLButtonElement>("button")].find(

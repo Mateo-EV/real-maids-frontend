@@ -2,7 +2,7 @@ import { PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject, Subject } from "rxjs"
+import { BehaviorSubject, of, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
@@ -12,6 +12,7 @@ import { CUSTOMERS_ROUTES } from "../../../customers.routes"
 import * as Actions from "../../../application/use-cases/acquisition.use-cases"
 import { Lead } from "../../../domain/entities/lead.entity"
 import { LeadFollowUp } from "../../../domain/entities/lead-follow-up.entity"
+import { GetCustomerStatisticsUseCase } from "../../../application/use-cases/get-customer-statistics.use-case"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
 
@@ -61,6 +62,15 @@ async function setup(server = false, url = "/admin/customers/leads/7?offset=10&l
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       { provide: Actions.GetLeadUseCase, useValue: { execute: profile } },
       { provide: Actions.ListLeadFollowUpsUseCase, useValue: { execute: read } },
+      // The CRM shell owns both KPI aggregates; keep them stubbed so only the consumer is read.
+      {
+        provide: GetCustomerStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, activos: 0, inactivos: 0 })) }
+      },
+      {
+        provide: Actions.GetLeadStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, convertidos: 0, pendientes: 0 })) }
+      },
       ...[
         Actions.ListLeadOriginsUseCase,
         Actions.ListFunnelStagesUseCase,
@@ -74,7 +84,8 @@ async function setup(server = false, url = "/admin/customers/leads/7?offset=10&l
     ]
   })
   const harness = await RouterTestingHarness.create(url)
-  const root = () => harness.routeNativeElement!
+  // The routed parent is the CRM shell (navigation + KPIs): keep every assertion on the detail consumer.
+  const root = () => harness.routeNativeElement!.querySelector<HTMLElement>("app-lead-detail-page")!
   const settle = async () => {
     harness.detectChanges()
     await harness.fixture.whenStable()

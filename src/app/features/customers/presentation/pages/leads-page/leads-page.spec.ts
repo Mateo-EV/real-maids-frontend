@@ -169,7 +169,7 @@ describe("LeadsPage read-only inbox", () => {
     expect(
       s.element.querySelector("app-catalog-frame header [catalogControls]")?.textContent
     ).toContain("Crear prospecto")
-    expect(s.element.textContent).not.toMatch(/Editar|Convertir|Seguimiento|Ver detalle/)
+    expect(s.element.textContent).not.toMatch(/Editar|Convertir|Seguimiento/)
   })
 
   it("restores only validated paging from the route and never reads filters from the URL", () => {
@@ -293,7 +293,7 @@ describe("LeadsPage read-only inbox", () => {
     await s.settle()
     await s.respond(page())
     const detail = s.element.querySelector<HTMLAnchorElement>(
-      'a[aria-label="Ver prospecto Prospecto de prueba"]'
+      'a[aria-label="Ver detalle de Prospecto de prueba"]'
     )!
     const params = new URL(detail.href).searchParams
     expect([...params.keys()]).toEqual(["offset", "limit"])

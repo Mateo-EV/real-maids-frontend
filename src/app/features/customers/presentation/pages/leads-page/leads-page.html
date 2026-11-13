@@ -136,17 +136,7 @@
               <tbody hlmTBody>
                 @for (lead of rows(); track lead.id) {
                   <tr hlmTr>
-                    <td hlmTd class="font-semibold">
-                      <a
-                        hlmBtn
-                        variant="link"
-                        class="h-auto max-w-full text-left whitespace-normal break-words"
-                        [routerLink]="['/admin/customers/leads', lead.id]"
-                        [queryParams]="query()"
-                        [attr.aria-label]="'Ver prospecto ' + lead.name"
-                        >{{ lead.name }}</a
-                      >
-                    </td>
+                    <td hlmTd class="font-semibold">{{ lead.name }}</td>
                     <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
                     <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
                     <td hlmTd>
@@ -161,19 +151,30 @@
                       }}</span>
                     </td>
                     <td hlmTd>
-                      @if (!lead.isConverted) {
-                        <button
+                      <div class="flex flex-wrap items-center gap-1">
+                        <a
                           hlmBtn
-                          type="button"
+                          variant="outline"
                           size="sm"
-                          variant="destructive"
-                          [disabled]="writing()"
-                          [attr.aria-label]="'Eliminar prospecto ' + lead.name"
-                          (click)="deleteLead(lead)"
+                          [routerLink]="['/admin/customers/leads', lead.id]"
+                          [queryParams]="query()"
+                          [attr.aria-label]="'Ver detalle de ' + lead.name"
+                          >Ver detalle</a
                         >
-                          <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
-                        </button>
-                      }
+                        @if (!lead.isConverted) {
+                          <button
+                            hlmBtn
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            [disabled]="writing()"
+                            [attr.aria-label]="'Eliminar prospecto ' + lead.name"
+                            (click)="deleteLead(lead)"
+                          >
+                            <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
+                          </button>
+                        }
+                      </div>
                     </td>
                   </tr>
                 }
@@ -184,17 +185,7 @@
             @for (lead of rows(); track lead.id) {
               <li class="min-w-0 rounded-xl border p-4">
                 <div class="flex flex-wrap items-center gap-3">
-                  <h2 class="min-w-0 flex-1 font-semibold break-words">
-                    <a
-                      hlmBtn
-                      variant="link"
-                      class="h-auto max-w-full text-left whitespace-normal break-words"
-                      [routerLink]="['/admin/customers/leads', lead.id]"
-                      [queryParams]="query()"
-                      [attr.aria-label]="'Ver prospecto ' + lead.name"
-                      >{{ lead.name }}</a
-                    >
-                  </h2>
+                  <h2 class="min-w-0 flex-1 font-semibold break-words">{{ lead.name }}</h2>
                   <span hlmBadge variant="outline">{{
                     lead.isConverted ? "Convertido" : "No convertido"
                   }}</span>
@@ -213,20 +204,30 @@
                     <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
                   </dd>
                 </dl>
-                @if (!lead.isConverted) {
-                  <button
+                <div class="mt-4 flex flex-wrap items-center gap-1">
+                  <a
                     hlmBtn
-                    type="button"
+                    variant="outline"
                     size="sm"
-                    variant="destructive"
-                    class="mt-4"
-                    [disabled]="writing()"
-                    [attr.aria-label]="'Eliminar prospecto ' + lead.name"
-                    (click)="deleteLead(lead)"
+                    [routerLink]="['/admin/customers/leads', lead.id]"
+                    [queryParams]="query()"
+                    [attr.aria-label]="'Ver detalle de ' + lead.name"
+                    >Ver detalle</a
                   >
-                    <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
-                  </button>
-                }
+                  @if (!lead.isConverted) {
+                    <button
+                      hlmBtn
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      [disabled]="writing()"
+                      [attr.aria-label]="'Eliminar prospecto ' + lead.name"
+                      (click)="deleteLead(lead)"
+                    >
+                      <ng-icon name="lucideTrash2" aria-hidden="true" />Eliminar
+                    </button>
+                  }
+                </div>
               </li>
             }
           </ul>

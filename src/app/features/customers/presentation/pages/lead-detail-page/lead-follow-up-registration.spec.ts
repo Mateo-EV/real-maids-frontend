@@ -3,7 +3,7 @@ import { getDebugNode, PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject, Subject } from "rxjs"
+import { BehaviorSubject, of, Subject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
@@ -16,6 +16,7 @@ import * as Actions from "../../../application/use-cases/acquisition.use-cases"
 import { Lead } from "../../../domain/entities/lead.entity"
 import { LeadFollowUp } from "../../../domain/entities/lead-follow-up.entity"
 import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
+import { GetCustomerStatisticsUseCase } from "../../../application/use-cases/get-customer-statistics.use-case"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
 
@@ -59,6 +60,15 @@ async function setup(server = false) {
       { provide: Actions.ListLeadFollowUpsUseCase, useValue: { execute: read } },
       { provide: Actions.ListFunnelStagesUseCase, useValue: { execute: stages } },
       { provide: Actions.AddLeadFollowUpUseCase, useValue: { execute: add } },
+      // The CRM shell owns both KPI aggregates; keep them stubbed so only the consumer is read.
+      {
+        provide: GetCustomerStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, activos: 0, inactivos: 0 })) }
+      },
+      {
+        provide: Actions.GetLeadStatisticsUseCase,
+        useValue: { execute: () => of(Result.success({ total: 0, convertidos: 0, pendientes: 0 })) }
+      },
       ...[
         Actions.ListLeadOriginsUseCase,
         Actions.ListLeadsUseCase,
@@ -70,10 +80,12 @@ async function setup(server = false) {
     ]
   })
   const harness = await RouterTestingHarness.create("/admin/customers/leads/7")
-  vi.spyOn(harness.routeDebugElement!.injector.get(HotToastService), "success").mockImplementation(
+  // The routed parent is the CRM shell (navigation + KPIs): keep every assertion and the
+  // route-local toast scope on the detail consumer rather than the shell's root instance.
+  const root = () => harness.routeNativeElement!.querySelector<HTMLElement>("app-lead-detail-page")!
+  vi.spyOn(getDebugNode(root())!.injector.get(HotToastService), "success").mockImplementation(
     success
   )
-  const root = () => harness.routeNativeElement!
   const settle = async () => {
     harness.detectChanges()
     await harness.fixture.whenStable()
