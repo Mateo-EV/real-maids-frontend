@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   inject,
   OnInit,
@@ -18,6 +19,7 @@ import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { Lead } from "../../../domain/entities/lead.entity"
+import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
 import {
   customerDialogLifecycle,
@@ -31,6 +33,8 @@ interface FollowUpContext {
   current: () => boolean
   onSaved: () => void
 }
+/** Relación de una etapa del catálogo con la etapa actual del prospecto. */
+type StageRelation = "actual" | "paralela" | "siguiente" | "retroceso" | "salto" | "desconocida"
 @Component({
   selector: "app-lead-follow-up-editor",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,6 +59,51 @@ export class LeadFollowUpEditor implements OnInit {
   readonly stages = this.store.stages
   readonly error = signal("")
   readonly model = signal({ stageId: "", comment: "" })
+  private readonly currentStage = computed(() =>
+    (this.stages().data ?? []).find(stage => stage.id === this.context.lead.stageId)
+  )
+  /**
+   * El orden del catálogo es un nivel, no un identificador: varias etapas pueden compartirlo.
+   * El siguiente nivel es el menor orden estrictamente mayor que el de la etapa actual.
+   */
+  private readonly nextOrder = computed(() => {
+    const actual = this.currentStage()
+    if (!actual) return undefined
+    const orders = (this.stages().data ?? [])
+      .filter(stage => stage.order > actual.order)
+      .map(stage => stage.order)
+    return orders.length ? Math.min(...orders) : undefined
+  })
+  /**
+   * La actual sólo registra; avanzar exige estar en el siguiente nivel (cualquiera de sus etapas),
+   * retroceder exige motivo, un salto de nivel queda fuera del embudo y una hermana del mismo nivel
+   * es el mismo paso del embudo y avanza sin motivo.
+   * Si la etapa actual no está en el catálogo no se puede juzgar el orden y decide el servidor.
+   */
+  relation(stage: FunnelStage): StageRelation {
+    const actual = this.currentStage()
+    if (stage.id === this.context.lead.stageId) return "actual"
+    if (!actual) return "desconocida"
+    if (stage.order < actual.order) return "retroceso"
+    if (stage.order === actual.order) return "paralela"
+    return stage.order === this.nextOrder() ? "siguiente" : "salto"
+  }
+  relationOf(value: string): StageRelation {
+    const stage = (this.stages().data ?? []).find(s => String(s.id) === value)
+    return stage ? this.relation(stage) : "desconocida"
+  }
+  readonly retrocede = computed(() => this.relationOf(this.model().stageId) === "retroceso")
+  stageLabel(stage: FunnelStage): string {
+    const sufijo: Record<StageRelation, string> = {
+      actual: " · Etapa actual (sólo registra)",
+      paralela: " · Misma etapa del embudo",
+      siguiente: " · Siguiente",
+      retroceso: " · Retroceso (motivo obligatorio)",
+      salto: " · Requiere avanzar una etapa por vez",
+      desconocida: ""
+    }
+    return `${stage.name}${stage.isFinal ? " · Final" : ""}${sufijo[this.relation(stage)]}`
+  }
   hasChoice(value: string): boolean {
     return !!this.stages().data?.some(stage => String(stage.id) === value)
   }
@@ -69,10 +118,26 @@ export class LeadFollowUpEditor implements OnInit {
     )
   }
   readonly profile = form(this.model, path => {
-    validate(path.stageId, ({ value }) =>
-      this.verifiedChoice(value())
-        ? undefined
-        : { kind: "choice", message: "Selecciona una etapa verificada del catálogo disponible." }
+    validate(path.stageId, ({ value }) => {
+      if (!this.verifiedChoice(value()))
+        return {
+          kind: "choice",
+          message: "Selecciona una etapa verificada del catálogo disponible."
+        }
+      return this.relationOf(value()) === "salto"
+        ? {
+            kind: "orden",
+            message: "Avanza una etapa por vez: elige la etapa inmediatamente siguiente."
+          }
+        : undefined
+    })
+    validate(path.comment, ({ value }) =>
+      this.relationOf(this.model().stageId) === "retroceso" && !value().trim()
+        ? {
+            kind: "motivo",
+            message: "Indica el motivo del retroceso: qué error o excepción lo motiva."
+          }
+        : undefined
     )
   })
   private readonly lifecycle = customerDialogLifecycle(
@@ -109,6 +174,9 @@ export class LeadFollowUpEditor implements OnInit {
     return submit(this.profile, async () => {
       const value = this.model()
       if (!this.current() || !this.verifiedChoice(value.stageId)) return
+      // Misma regla que el servidor: sin salto y con motivo cuando el paso es hacia atrás.
+      if (this.relationOf(value.stageId) === "salto") return
+      if (this.relationOf(value.stageId) === "retroceso" && !value.comment.trim()) return
       try {
         const result = await firstValueFrom(
           this.store

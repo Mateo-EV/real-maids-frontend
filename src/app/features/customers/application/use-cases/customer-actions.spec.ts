@@ -146,8 +146,13 @@ const actions: Action[] = [
   {
     token: ACQUISITION_REPOSITORY,
     method: "updateLead",
-    args: [{ id: 3, ...lead }],
-    invoke: () => TestBed.inject(acquisition.UpdateLeadUseCase).execute({ id: 3, ...lead })
+    args: [{ id: 3, ...lead, comentarioSeguimiento: null }],
+    invoke: () =>
+      TestBed.inject(acquisition.UpdateLeadUseCase).execute({
+        id: 3,
+        ...lead,
+        comentarioSeguimiento: null
+      })
   },
   {
     token: ACQUISITION_REPOSITORY,

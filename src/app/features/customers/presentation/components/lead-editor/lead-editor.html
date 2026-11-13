@@ -2,7 +2,8 @@
   <h2 hlmDialogTitle>{{ target ? "Editar prospecto" : "Crear prospecto" }}</h2>
   <p hlmDialogDescription>
     @if (target) {
-      {{ target.name }} · ID {{ target.id }}. Actualiza los datos del prospecto.
+      {{ target.name }} · ID {{ target.id }}. Actualiza los datos del prospecto. La etapa siguiente
+      lo avanza; volver a una anterior lo retrocede y exige el motivo.
     } @else {
       Registra los datos del prospecto.
     }
@@ -75,6 +76,34 @@
           <div [id]="catalog.key + '-errors'">
             @if (profile[catalog.key]().touched()) {
               @for (error of profile[catalog.key]().errors(); track error.kind) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
+            }
+          </div>
+        </div>
+      }
+      @if (target) {
+        <div hlmField class="min-w-0 gap-1.5 sm:col-span-2">
+          <label hlmFieldLabel for="lead-motivo"
+            >Motivo del cambio de etapa ({{ stageRetrocede() ? "obligatorio" : "opcional" }})</label
+          >
+          <textarea
+            hlmTextarea
+            id="lead-motivo"
+            [formField]="profile.motivo"
+            aria-describedby="lead-motivo-help lead-motivo-errors"
+          ></textarea>
+          <p hlmFieldDescription id="lead-motivo-help">
+            @if (stageRetrocede()) {
+              Retroceder de etapa exige el motivo: qué error o excepción lo justifica. Queda
+              registrado como seguimiento del prospecto.
+            } @else {
+              Si la etapa cambia, este comentario queda registrado como seguimiento del prospecto.
+            }
+          </p>
+          <div id="lead-motivo-errors">
+            @if (profile.motivo().touched()) {
+              @for (error of profile.motivo().errors(); track error.kind) {
                 <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
               }
             }

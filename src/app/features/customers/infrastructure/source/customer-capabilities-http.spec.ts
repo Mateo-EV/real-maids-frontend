@@ -313,10 +313,18 @@ describe("Customer supported HTTP operations", () => {
     await check(acquisition.findLead(3), "GET", "prospectos/3", null, lead, mappedLead)
     await check(acquisition.createLead(leadInput), "POST", "prospectos", leadBody, lead, mappedLead)
     await check(
-      acquisition.updateLead({ id: 3, ...leadInput }),
+      acquisition.updateLead({ id: 3, ...leadInput, comentarioSeguimiento: null }),
       "PUT",
       "prospectos/3",
-      leadBody,
+      { ...leadBody, comentarioSeguimiento: null },
+      lead,
+      mappedLead
+    )
+    await check(
+      acquisition.updateLead({ id: 3, ...leadInput, comentarioSeguimiento: "Etapa anterior" }),
+      "PUT",
+      "prospectos/3",
+      { ...leadBody, comentarioSeguimiento: "Etapa anterior" },
       lead,
       mappedLead
     )

@@ -158,9 +158,9 @@ describe("Customer domain contracts", () => {
     }
     expect(await firstValueFrom(injected.createLead(params))).toEqual(Result.failure(failure))
     expect(repository.createLead).toHaveBeenCalledExactlyOnceWith(params)
-    expect(await firstValueFrom(injected.updateLead({ id: 3, ...params }))).toEqual(
-      Result.failure(failure)
-    )
+    expect(
+      await firstValueFrom(injected.updateLead({ id: 3, ...params, comentarioSeguimiento: null }))
+    ).toEqual(Result.failure(failure))
     expect(await firstValueFrom(injected.listLeads({ offset: 20, limit: 10 }))).toEqual(
       Result.failure(failure)
     )

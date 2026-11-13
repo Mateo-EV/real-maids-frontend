@@ -41,6 +41,8 @@ export interface UpdateLeadParams {
   readonly phone: string | null
   readonly referenceAddress: string | null
   readonly observation: string | null
+  /** Motivo del retroceso de etapa; obligatorio para el servidor cuando la etapa nueva es anterior. */
+  readonly comentarioSeguimiento: string | null
 }
 /** Server copies the lead's current profile; repeat returns the linked customer. */
 export interface ConvertLeadParams {

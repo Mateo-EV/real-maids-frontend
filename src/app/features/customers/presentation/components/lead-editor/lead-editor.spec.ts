@@ -235,6 +235,8 @@ describe("WP6 lead creation through inbox", () => {
     )
     expect(s.dialog().querySelector('option[value="11"]')?.getAttribute("value")).toBe("11")
     expect(s.dialog().querySelector('option[value="12"]')?.getAttribute("value")).toBe("12")
+    // Creation never asks for a stage-change reason: it has no funnel transition.
+    expect(s.dialog().querySelector("#lead-motivo")).toBeNull()
     expect(s.dialog().textContent).not.toMatch(/Editar|Convertido|Registro|Cliente vinculado/)
     await s.submit()
     expect(s.create).not.toHaveBeenCalled()
@@ -259,6 +261,9 @@ describe("WP6 lead creation through inbox", () => {
       referenceAddress: "Dirección",
       observation: "<b>" + "x".repeat(600) + "</b>"
     })
+    expect(Object.keys((s.create.mock.calls[0] as unknown as [object])[0]!)).not.toContain(
+      "comentarioSeguimiento"
+    )
     expect(s.success).not.toHaveBeenCalled()
     expect(s.list).toHaveBeenCalledTimes(1)
     s.response.next(Result.success(lead))

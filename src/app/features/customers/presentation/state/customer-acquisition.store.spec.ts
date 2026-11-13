@@ -331,8 +331,12 @@ describe("CustomerAcquisitionStore", () => {
     store.createLead(params).subscribe()
     expect(repository.createLead).toHaveBeenCalledWith(params)
     repository.updateLead.mockReturnValue(of(Result.success(lead)))
-    store.updateLead({ ...params, id: 7 }).subscribe()
-    expect(repository.updateLead).toHaveBeenCalledWith({ ...params, id: 7 })
+    store.updateLead({ ...params, id: 7, comentarioSeguimiento: null }).subscribe()
+    expect(repository.updateLead).toHaveBeenCalledWith({
+      ...params,
+      id: 7,
+      comentarioSeguimiento: null
+    })
     expect(store.selectLeads({})().expires).toBe(0)
     expect(store.selectLeads({})().data?.total).toBe(53)
     expect(store.selectLead(7)().expires).toBe(0)
@@ -392,13 +396,13 @@ describe("CustomerAcquisitionStore", () => {
     repository.findLead.mockReturnValue(older)
     store.loadLead(7, true).subscribe()
     repository.updateLead.mockReturnValue(of(Result.success(lead)))
-    store.updateLead({ ...params, id: 7 }).subscribe()
+    store.updateLead({ ...params, id: 7, comentarioSeguimiento: null }).subscribe()
     expect(older.observed).toBe(false)
     older.next(Result.success({ ...lead, name: "Obsolete" }))
     expect(store.selectLead(7)().data?.name).toBe("Lead")
     const error = new CustomerError("FORBIDDEN")
     repository.updateLead.mockReturnValue(of(Result.failure(error)))
-    store.updateLead({ ...params, id: 7 }).subscribe()
+    store.updateLead({ ...params, id: 7, comentarioSeguimiento: null }).subscribe()
     expect(store.writeError()).toBe(error)
     expect(store.selectLead(7)().error).toBeUndefined()
     expect(store.selectLead(7)().data).toBe(lead)

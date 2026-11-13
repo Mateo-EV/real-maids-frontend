@@ -577,7 +577,8 @@ describe("WP6 editing a legitimately loaded lead", () => {
       email: "ana@example.test",
       phone: null,
       referenceAddress: null,
-      observation: null
+      observation: null,
+      comentarioSeguimiento: null
     })
   })
 
@@ -638,7 +639,8 @@ describe("WP6 editing a legitimately loaded lead", () => {
       email: null,
       phone: "ext. A",
       referenceAddress: null,
-      observation: "<b>literal</b>"
+      observation: "<b>literal</b>",
+      comentarioSeguimiento: null
     })
     expect(s.success).not.toHaveBeenCalled()
     expect(s.execute).toHaveBeenCalledTimes(2)
@@ -684,7 +686,8 @@ describe("WP6 editing a legitimately loaded lead", () => {
         email: null,
         phone: null,
         referenceAddress: null,
-        observation: "<b>Texto literal</b>\nhttps://example.test"
+        observation: "<b>Texto literal</b>\nhttps://example.test",
+        comentarioSeguimiento: null
       }
     ])
   })
@@ -882,5 +885,115 @@ describe("WP6 editing a legitimately loaded lead", () => {
     expect(s.update).not.toHaveBeenCalled()
     expect(s.readOrigins).not.toHaveBeenCalled()
     expect(s.readStages).not.toHaveBeenCalled()
+  })
+})
+
+describe("D2 stage-change reason on the lead edit PUT", () => {
+  type Harness = Awaited<ReturnType<typeof editSetup>>
+  // El orden es un nivel: la actual (12, orden 2) tiene una hermana y el nivel 3 es el siguiente.
+  const catalog = async (s: Harness) => {
+    s.origins.next(Result.success([LeadOrigin.create(11, "Origen real", null, false)]))
+    s.stages.next(
+      Result.success([
+        FunnelStage.create(40, "Etapa uno", 1, false),
+        FunnelStage.create(12, "Etapa dos", 2, false),
+        FunnelStage.create(13, "Etapa dos bis", 2, false),
+        FunnelStage.create(31, "Etapa tres", 3, true),
+        FunnelStage.create(32, "Etapa cuatro", 4, false)
+      ])
+    )
+    await s.settle()
+  }
+  it("blocks a stage rollback without a reason and sends the trimmed reason when provided", async () => {
+    const s = await editSetup()
+    await s.open()
+    await catalog(s)
+    await s.fill("stageId", "40")
+    expect(s.dialog().querySelector('label[for="lead-motivo"]')!.textContent).toContain(
+      "Motivo del cambio de etapa (obligatorio)"
+    )
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+    expect(s.dialog().querySelector("#lead-motivo-errors")!.textContent).toContain(
+      "Indica el motivo del retroceso: qué error o excepción lo motiva."
+    )
+    await s.fill("motivo", "  Error de etapa  ")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 40,
+      name: "Prospecto 7",
+      email: null,
+      phone: null,
+      referenceAddress: null,
+      observation: "<b>Texto literal</b>\nhttps://example.test",
+      comentarioSeguimiento: "Error de etapa"
+    })
+    expect(s.success).not.toHaveBeenCalled()
+  })
+  it("never demands a reason for a same-level sibling and rejects a level jump", async () => {
+    const s = await editSetup()
+    await s.open()
+    await catalog(s)
+    await s.fill("stageId", "13")
+    expect(s.dialog().querySelector('label[for="lead-motivo"]')!.textContent).toContain(
+      "Motivo del cambio de etapa (opcional)"
+    )
+    await s.fill("stageId", "32")
+    await s.submit()
+    expect(s.update).not.toHaveBeenCalled()
+    expect(s.dialog().querySelector("#stageId-errors")!.textContent).toContain(
+      "Avanza una etapa por vez: elige la etapa inmediatamente siguiente."
+    )
+    await s.fill("stageId", "31")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 31,
+      name: "Prospecto 7",
+      email: null,
+      phone: null,
+      referenceAddress: null,
+      observation: "<b>Texto literal</b>\nhttps://example.test",
+      comentarioSeguimiento: null
+    })
+  })
+  it("moves to a same-level sibling without a reason and without inventing one", async () => {
+    const s = await editSetup()
+    await s.open()
+    await catalog(s)
+    await s.fill("stageId", "13")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 13,
+      name: "Prospecto 7",
+      email: null,
+      phone: null,
+      referenceAddress: null,
+      observation: "<b>Texto literal</b>\nhttps://example.test",
+      comentarioSeguimiento: null
+    })
+  })
+  it("sends no reason when the stage does not change, even with typed text", async () => {
+    const s = await editSetup()
+    await s.open()
+    await catalog(s)
+    await s.fill("motivo", "  Sin cambio de etapa  ")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith({
+      id: 7,
+      originId: 11,
+      stageId: 12,
+      name: "Prospecto 7",
+      email: null,
+      phone: null,
+      referenceAddress: null,
+      observation: "<b>Texto literal</b>\nhttps://example.test",
+      comentarioSeguimiento: null
+    })
   })
 })

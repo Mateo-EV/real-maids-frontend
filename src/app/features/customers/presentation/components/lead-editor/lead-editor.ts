@@ -100,7 +100,9 @@ export class LeadEditor implements OnInit {
     email: this.target?.email ?? "",
     phone: this.target?.phone ?? "",
     referenceAddress: this.target?.referenceAddress ?? "",
-    observation: this.target?.observation ?? ""
+    observation: this.target?.observation ?? "",
+    // Sólo lo envía la edición cuando la etapa cambia; la creación no lo manda.
+    motivo: ""
   })
   readonly textFields = [
     { key: "name", label: "Nombre (obligatorio)", help: "Hasta 120 caracteres.", type: "text" },
@@ -148,6 +150,36 @@ export class LeadEditor implements OnInit {
         })) ?? []
     }
   ])
+  private readonly stageCatalog = computed(() => this.acquisition.stages().data ?? [])
+  private readonly currentStage = computed(() => {
+    const target = this.target
+    return target ? this.stageCatalog().find(stage => stage.id === target.stageId) : undefined
+  })
+  private readonly selectedStage = computed(() =>
+    this.stageCatalog().find(stage => String(stage.id) === this.model().stageId)
+  )
+  /** Nivel siguiente: el menor orden estrictamente mayor que el de la etapa actual. */
+  private readonly nextStageOrder = computed(() => {
+    const actual = this.currentStage()
+    if (!actual) return undefined
+    const orders = this.stageCatalog()
+      .filter(stage => stage.order > actual.order)
+      .map(stage => stage.order)
+    return orders.length ? Math.min(...orders) : undefined
+  })
+  /** Retroceso: la etapa elegida es de un nivel anterior y exige motivo. */
+  readonly stageRetrocede = computed(() => {
+    const actual = this.currentStage(),
+      destino = this.selectedStage()
+    return !!actual && !!destino && destino.order < actual.order
+  })
+  /** Salto: supera el siguiente nivel del embudo (puede tener varias etapas) y el servidor lo rechaza. */
+  readonly stageSalta = computed(() => {
+    const actual = this.currentStage(),
+      destino = this.selectedStage(),
+      next = this.nextStageOrder()
+    return !!actual && !!destino && next !== undefined && destino.order > next
+  })
   hasChoice(key: "originId" | "stageId", value: string): boolean {
     return this.catalogs()
       .find(c => c.key === key)!
@@ -165,12 +197,32 @@ export class LeadEditor implements OnInit {
     )
   }
   readonly profile = form(this.model, path => {
-    for (const key of ["originId", "stageId"] as const)
-      validate(path[key], ({ value }) =>
-        this.validChoice(key, value())
-          ? undefined
-          : { kind: "choice", message: "Selecciona una opción verificada del catálogo disponible." }
-      )
+    validate(path.originId, ({ value }) =>
+      this.validChoice("originId", value())
+        ? undefined
+        : { kind: "choice", message: "Selecciona una opción verificada del catálogo disponible." }
+    )
+    validate(path.stageId, ({ value }) => {
+      if (!this.validChoice("stageId", value()))
+        return {
+          kind: "choice",
+          message: "Selecciona una opción verificada del catálogo disponible."
+        }
+      return this.stageSalta()
+        ? {
+            kind: "orden",
+            message: "Avanza una etapa por vez: elige la etapa inmediatamente siguiente."
+          }
+        : undefined
+    })
+    validate(path.motivo, ({ value }) =>
+      this.stageRetrocede() && !value().trim()
+        ? {
+            kind: "motivo",
+            message: "Indica el motivo del retroceso: qué error o excepción lo motiva."
+          }
+        : undefined
+    )
     for (const [key, max] of [
       ["name", 120],
       ["email", 120],
@@ -322,8 +374,15 @@ export class LeadEditor implements OnInit {
           referenceAddress: v.referenceAddress.trim() || null,
           observation: v.observation.trim() || null
         }
+        // El motivo sólo acompaña un cambio real de etapa: sin transición el servidor no registra
+        // seguimiento y el campo no debe inventar uno.
+        const cambioEtapa = !!this.target && String(this.target.stageId) !== v.stageId
         const write = this.target
-          ? this.acquisition.updateLead({ id: this.target.id, ...payload })
+          ? this.acquisition.updateLead({
+              id: this.target.id,
+              ...payload,
+              comentarioSeguimiento: cambioEtapa ? v.motivo.trim() || null : null
+            })
           : this.acquisition.createLead(payload)
         const result = await firstValueFrom(
           write.pipe(

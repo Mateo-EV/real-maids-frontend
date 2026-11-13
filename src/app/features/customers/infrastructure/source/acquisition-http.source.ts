@@ -268,10 +268,12 @@ export class AcquisitionHttpSource {
     const p = { ...params }
     return this.t.request(
       () => {
-        input(id(p.id))
-        return this.http.put<unknown>(`${this.leads}/${p.id}`, leadBody(p), {
-          transferCache: false
-        })
+        input(id(p.id) && (p.comentarioSeguimiento === null || required(p.comentarioSeguimiento)))
+        return this.http.put<unknown>(
+          `${this.leads}/${p.id}`,
+          { ...leadBody(p), comentarioSeguimiento: p.comentarioSeguimiento },
+          { transferCache: false }
+        )
       },
       v => sameId(leadDto(v), p.id),
       "LEAD_NOT_FOUND"

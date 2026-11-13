@@ -1,8 +1,9 @@
 <hlm-dialog-header>
   <h2 hlmDialogTitle>Registrar seguimiento</h2>
   <p hlmDialogDescription>
-    {{ context.lead.name }} · ID {{ context.lead.id }}. Registra una etapa y un comentario opcional,
-    sin cambiar la etapa del prospecto.
+    {{ context.lead.name }} · ID {{ context.lead.id }}. La etapa siguiente avanza el prospecto;
+    volver a una anterior lo retrocede y exige el motivo. Elegir la etapa actual sólo registra la
+    entrada.
   </p>
 </hlm-dialog-header>
 <form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
@@ -29,8 +30,12 @@
           </option>
         }
         @for (stage of stages().data ?? []; track stage.id) {
-          <option [value]="'' + stage.id" [selected]="model().stageId === '' + stage.id">
-            {{ stage.name }}{{ stage.isFinal ? " · Final" : "" }}
+          <option
+            [value]="'' + stage.id"
+            [selected]="model().stageId === '' + stage.id"
+            [disabled]="relation(stage) === 'salto'"
+          >
+            {{ stageLabel(stage) }}
           </option>
         }
       </hlm-native-select>
@@ -67,16 +72,30 @@
       </div>
     </div>
     <div hlmField class="min-w-0 gap-1.5">
-      <label hlmFieldLabel for="follow-up-comment">Comentario (opcional)</label>
+      <label hlmFieldLabel for="follow-up-comment"
+        >Comentario ({{ retrocede() ? "obligatorio" : "opcional" }})</label
+      >
       <textarea
         hlmTextarea
         id="follow-up-comment"
         [formField]="profile.comment"
-        aria-describedby="follow-up-comment-help"
+        aria-describedby="follow-up-comment-help follow-up-comment-errors"
       ></textarea>
       <p hlmFieldDescription id="follow-up-comment-help">
-        Texto libre. Se omiten espacios al inicio y al final; vacío se guarda sin registrar.
+        @if (retrocede()) {
+          Motivo obligatorio del retroceso: qué error o excepción motiva devolver el prospecto de
+          etapa.
+        } @else {
+          Texto libre. Se omiten espacios al inicio y al final; vacío se guarda sin registrar.
+        }
       </p>
+      <div id="follow-up-comment-errors">
+        @if (profile.comment().touched()) {
+          @for (error of profile.comment().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
     </div>
   </fieldset>
   <hlm-dialog-footer class="border-t pt-3">

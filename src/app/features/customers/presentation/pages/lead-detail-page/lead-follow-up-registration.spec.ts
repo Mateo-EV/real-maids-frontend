@@ -422,3 +422,100 @@ describe("T7 follow-up registration through verified open detail with real store
     expect(s.dialog()).toBeNull()
   })
 })
+describe("S6 stage-order guidance in the follow-up editor", () => {
+  type Harness = Awaited<ReturnType<typeof setup>>
+  // El orden es un nivel: el 3 (siguiente) lo comparten tres etapas, el 4 lo comparten dos como
+  // nivel de salto y el 2 tiene una hermana de la etapa actual (12).
+  const ordered = () => [
+    FunnelStage.create(40, "Etapa uno", 1, false),
+    FunnelStage.create(12, "Etapa dos", 2, false),
+    FunnelStage.create(13, "Etapa dos bis", 2, false),
+    FunnelStage.create(31, "Etapa tres", 3, true),
+    FunnelStage.create(33, "Etapa tres bis", 3, false),
+    FunnelStage.create(34, "Etapa tres ter", 3, false),
+    FunnelStage.create(32, "Etapa cuatro", 4, false),
+    FunnelStage.create(35, "Etapa cuatro bis", 4, false)
+  ]
+  const option = (s: Harness, id: string) =>
+    [...s.dialog().querySelectorAll<HTMLOptionElement>("option")].find(o => o.value === id)!
+  const label = (s: Harness, id: string) => option(s, id).textContent!.trim()
+  const open = async () => {
+    const s: Harness = await setup()
+    await s.open()
+    await s.respond(s.catalogs, Result.success(ordered()))
+    return s
+  }
+  it("labels every level by funnel relation and disables only the levels above the next one", async () => {
+    const s = await open()
+    expect(label(s, "12")).toBe("Etapa dos · Etapa actual (sólo registra)")
+    expect(label(s, "13")).toBe("Etapa dos bis · Misma etapa del embudo")
+    expect(label(s, "40")).toBe("Etapa uno · Retroceso (motivo obligatorio)")
+    expect(label(s, "31")).toBe("Etapa tres · Final · Siguiente")
+    for (const id of ["33", "34"]) expect(label(s, id)).toContain(" · Siguiente")
+    expect(label(s, "32")).toBe("Etapa cuatro · Requiere avanzar una etapa por vez")
+    expect(label(s, "35")).toBe("Etapa cuatro bis · Requiere avanzar una etapa por vez")
+    for (const id of ["32", "35"]) expect(option(s, id).disabled).toBe(true)
+    for (const id of ["12", "13", "31", "33", "34", "40"])
+      expect(option(s, id).disabled).toBe(false)
+    expect(s.dialog().textContent).toContain(
+      "La etapa siguiente avanza el prospecto; volver a una anterior lo retrocede y exige el motivo."
+    )
+  })
+  it("offers every stage of the next level, accepts it without a reason and never dispatches a jump", async () => {
+    const s = await open()
+    await s.fill("stageId", "32")
+    expect(s.dialog().querySelector<HTMLSelectElement>("#follow-up-stageId")!.value).toBe("32")
+    await s.submit()
+    expect(s.add).not.toHaveBeenCalled()
+    expect(s.dialog().querySelector("#follow-up-stage-errors")!.textContent).toContain(
+      "Avanza una etapa por vez: elige la etapa inmediatamente siguiente."
+    )
+    // Cualquiera de las tres etapas del siguiente nivel es una transición válida.
+    await s.fill("stageId", "34")
+    expect(s.dialog().querySelector('label[for="follow-up-comment"]')!.textContent).toContain(
+      "Comentario (opcional)"
+    )
+    await s.submit()
+    expect(s.add).toHaveBeenCalledExactlyOnceWith({ leadId: 7, stageId: 34, comment: null })
+  })
+  it("accepts a same-level sibling without a reason", async () => {
+    const s = await open()
+    await s.fill("stageId", "13")
+    expect(s.dialog().querySelector('label[for="follow-up-comment"]')!.textContent).toContain(
+      "Comentario (opcional)"
+    )
+    await s.submit()
+    expect(s.dialog().querySelector("#follow-up-comment-errors")!.textContent).not.toContain(
+      "Indica el motivo del retroceso"
+    )
+    expect(s.add).toHaveBeenCalledExactlyOnceWith({ leadId: 7, stageId: 13, comment: null })
+  })
+  it("requires the rollback reason before dispatch and sends it trimmed", async () => {
+    const s = await open()
+    await s.fill("stageId", "40")
+    expect(s.dialog().querySelector('label[for="follow-up-comment"]')!.textContent).toContain(
+      "Comentario (obligatorio)"
+    )
+    await s.submit()
+    expect(s.add).not.toHaveBeenCalled()
+    expect(s.dialog().querySelector("#follow-up-comment-errors")!.textContent).toContain(
+      "Indica el motivo del retroceso: qué error o excepción lo motiva."
+    )
+    await s.fill("comment", "  Error de etapa  ")
+    await s.submit()
+    expect(s.add).toHaveBeenCalledExactlyOnceWith({
+      leadId: 7,
+      stageId: 40,
+      comment: "Error de etapa"
+    })
+  })
+  it("records the current stage without requesting any stage change", async () => {
+    const s = await open()
+    await s.fill("stageId", "12")
+    expect(s.dialog().querySelector('label[for="follow-up-comment"]')!.textContent).toContain(
+      "Comentario (opcional)"
+    )
+    await s.submit()
+    expect(s.add).toHaveBeenCalledExactlyOnceWith({ leadId: 7, stageId: 12, comment: null })
+  })
+})
