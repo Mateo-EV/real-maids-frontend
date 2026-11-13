@@ -358,7 +358,7 @@ describe("Admin users navigation", () => {
     await harness.fixture.whenStable()
     harness.detectChanges()
     const element = harness.routeNativeElement!
-    expect(element.querySelector("app-leads-page app-crm-catalog-navigation")).not.toBeNull()
+    expect(element.querySelector("app-crm-shell app-crm-catalog-navigation")).not.toBeNull()
     expect(element.querySelector("app-customer-detail-page")).toBeNull()
     expect(detail).not.toHaveBeenCalled()
     expect(leads).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
@@ -374,7 +374,7 @@ describe("Admin users navigation", () => {
     await harness.fixture.whenStable()
     harness.detectChanges()
     expect(TestBed.inject(Router).url).toBe("/admin/customers")
-    expect(element.querySelector("app-customers-page app-crm-catalog-navigation")).not.toBeNull()
+    expect(element.querySelector("app-crm-shell app-crm-catalog-navigation")).not.toBeNull()
     expect(customers).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
     expect(
       element.querySelector('app-crm-catalog-navigation [aria-current="page"]')?.textContent?.trim()

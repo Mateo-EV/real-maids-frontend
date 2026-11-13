@@ -52,6 +52,7 @@ describe("Customer domain contracts", () => {
         of(Result.success({ items: [customer], total: 1, offset: 0, limit: 20 }))
       ),
       findById: vi.fn(() => response),
+      findStatistics: vi.fn(() => of(Result.success({ total: 0, activos: 0, inactivos: 0 }))),
       create: vi.fn(() => response),
       update: vi.fn(() => response)
     }

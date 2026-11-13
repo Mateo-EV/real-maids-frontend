@@ -15,8 +15,10 @@ import { UpdateCustomerUseCase } from "../../application/use-cases/update-custom
 import { Customer, CustomerType } from "../../domain/entities/customer.entity"
 import { customerFixture, customerInput } from "../../domain/customer.fixture"
 import { CustomerError } from "../../domain/errors/customer.error"
+import { ClienteEstadisticas } from "../../domain/params/cliente-estadisticas.params"
 import { customerQueryKey, CustomersStore } from "./customers.store"
 import { CustomerHistoryStore } from "./customer-history.store"
+import { GetCustomerStatisticsUseCase } from "../../application/use-cases/get-customer-statistics.use-case"
 import { LinkCustomerAccountUseCase } from "../../application/use-cases/link-customer-account.use-case"
 
 const page = (
@@ -27,6 +29,8 @@ const page = (
 ): PaginationResponse<Customer> => ({ items, total, offset, limit })
 type PageResult = Result<PaginationResponse<Customer>, CustomerError>
 type ProfileResult = Result<Customer, CustomerError>
+type CustomerStatisticsResult = Result<ClienteEstadisticas, CustomerError>
+const customerTotals: ClienteEstadisticas = { total: 32, activos: 30, inactivos: 2 }
 
 describe("CustomersStore", () => {
   let store: InstanceType<typeof CustomersStore>
@@ -36,6 +40,7 @@ describe("CustomersStore", () => {
     update: ReturnType<typeof vi.fn>,
     status: ReturnType<typeof vi.fn>,
     link: ReturnType<typeof vi.fn>,
+    statistics: ReturnType<typeof vi.fn>,
     invalidateHistory: ReturnType<typeof vi.fn>
   let session: BehaviorSubject<AuthSession | null>
   beforeEach(() => {
@@ -45,6 +50,7 @@ describe("CustomersStore", () => {
     update = vi.fn()
     status = vi.fn()
     link = vi.fn()
+    statistics = vi.fn()
     invalidateHistory = vi.fn()
     session = new BehaviorSubject<AuthSession | null>(
       AuthSession.create("Test", "fake@example.test", null, Date.now() + 60000, 7)
@@ -52,6 +58,7 @@ describe("CustomersStore", () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: CustomerHistoryStore, useValue: { invalidateCustomer: invalidateHistory } },
+        { provide: GetCustomerStatisticsUseCase, useValue: { execute: statistics } },
         { provide: LinkCustomerAccountUseCase, useValue: { execute: link } },
         { provide: ListCustomersUseCase, useValue: { execute: list } },
         { provide: GetCustomerByIdUseCase, useValue: { execute: detail } },
@@ -636,6 +643,95 @@ describe("CustomersStore", () => {
     })
     expect(list).not.toHaveBeenCalled()
   })
+
+  it("reuses the customer statistics aggregate for two minutes and only success renews freshness", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    store.loadStatistics().subscribe()
+    now.mockReturnValue(120999)
+    store.loadStatistics().subscribe()
+    expect(statistics).toHaveBeenCalledTimes(1)
+    expect(store.selectStatistics()).toMatchObject({ result: customerTotals, expires: 121000 })
+    now.mockReturnValue(121000)
+    statistics.mockReturnValue(of(Result.failure(new CustomerError("NETWORK"))))
+    store.loadStatistics().subscribe()
+    expect(statistics).toHaveBeenCalledTimes(2)
+    // Verified counts survive a failed revalidation with retryable feedback and no renewal.
+    expect(store.selectStatistics()).toMatchObject({
+      result: customerTotals,
+      error: { code: "NETWORK" },
+      expires: 0,
+      refreshing: false
+    })
+    now.mockReturnValue(121500)
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    store.loadStatistics().subscribe()
+    expect(statistics).toHaveBeenCalledTimes(3)
+    expect(store.selectStatistics()).toMatchObject({ result: customerTotals, expires: 241500 })
+  })
+
+  it("shares one statistics flight, exposes unverified/refreshing state and forces explicit retries", () => {
+    const response = new Subject<CustomerStatisticsResult>()
+    statistics.mockReturnValue(response)
+    expect(store.selectStatistics().result).toBeUndefined()
+    const first = store.loadStatistics().subscribe()
+    const second = store.observeStatistics().subscribe()
+    expect(statistics).toHaveBeenCalledTimes(1)
+    expect(store.selectStatistics()).toMatchObject({ loading: true, result: undefined })
+    response.next(Result.failure(new CustomerError("NETWORK")))
+    response.complete()
+    expect(store.selectStatistics()).toMatchObject({
+      loading: false,
+      error: { code: "NETWORK" },
+      result: undefined
+    })
+    const retry = new Subject<CustomerStatisticsResult>()
+    statistics.mockReturnValue(retry)
+    store.loadStatistics(true).subscribe()
+    expect(statistics).toHaveBeenCalledTimes(2)
+    retry.next(Result.success(customerTotals))
+    retry.complete()
+    expect(store.selectStatistics().result).toEqual(customerTotals)
+    statistics.mockReturnValue(new Subject<CustomerStatisticsResult>())
+    store.loadStatistics(true).subscribe()
+    expect(store.selectStatistics()).toMatchObject({ refreshing: true, loading: false })
+    expect(store.selectStatistics().result).toEqual(customerTotals)
+    first.unsubscribe()
+    second.unsubscribe()
+  })
+
+  it("invalidates the statistics entry only after a confirmed customer write", () => {
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    store.loadStatistics().subscribe()
+    const observer = store.observeStatistics().subscribe()
+    expect(statistics).toHaveBeenCalledTimes(1)
+    const customer = customerFixture(7, "Confirmed")
+    create.mockReturnValue(of(Result.failure(new CustomerError("CONFLICT"))))
+    store.createCustomer(customerInput("Rejected")).subscribe()
+    expect(statistics).toHaveBeenCalledTimes(1)
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    create.mockReturnValue(of(Result.success(customer)))
+    store.createCustomer(customerInput("Confirmed")).subscribe()
+    expect(statistics).toHaveBeenCalledTimes(2)
+    expect(store.selectStatistics().result).toEqual(customerTotals)
+    observer.unsubscribe()
+  })
+
+  it("clears verified counts and fences the statistics read on session replacement", () => {
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    store.loadStatistics().subscribe()
+    const pending = new Subject<CustomerStatisticsResult>()
+    statistics.mockReturnValue(pending)
+    store.loadStatistics(true).subscribe()
+    expect(pending.observed).toBe(true)
+    const old = session.value!
+    session.next(AuthSession.create(old.name, old.email, null, old.expiresAt, 9))
+    expect(pending.observed).toBe(false)
+    expect(store.selectStatistics()).toMatchObject({ result: undefined, loading: false })
+    pending.next(Result.success(customerTotals))
+    pending.complete()
+    expect(store.selectStatistics().result).toBeUndefined()
+  })
 })
 
 describe("CustomersStore SSR boundary", () => {
@@ -649,7 +745,8 @@ describe("CustomersStore SSR boundary", () => {
           GetCustomerByIdUseCase,
           CreateCustomerUseCase,
           UpdateCustomerUseCase,
-          SetCustomerStatusUseCase
+          SetCustomerStatusUseCase,
+          GetCustomerStatisticsUseCase
         ].map(provide => ({ provide, useValue: { execute } })),
         {
           provide: AuthStore,
@@ -664,9 +761,11 @@ describe("CustomersStore SSR boundary", () => {
     expect(
       await firstValueFrom(store.setCustomerStatus({ customerId: 7, isActive: false }))
     ).toMatchObject({ success: false })
+    expect(await firstValueFrom(store.loadStatistics())).toMatchObject({ success: false })
     expect(execute).not.toHaveBeenCalled()
     expect(store.customers()).toEqual([])
     expect(store.total()).toBeNull()
     expect(store.loading()).toBe(false)
+    expect(store.selectStatistics().result).toBeUndefined()
   })
 })

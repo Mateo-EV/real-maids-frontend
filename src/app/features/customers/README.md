@@ -295,26 +295,30 @@ escaping helper and `ReglaNegocioException` for invalid ids. Its tests are mocke
 MockMvc routing tests, so real SQL/MySQL behavior, live OpenAPI rendering, CORS and browser acceptance
 remain **pending**; the API currently served on localhost:8080 predates that commit.
 
-## Lead admin: catalog tabs, KPIs and deletion
+## CRM admin: shell tabs, KPIs and deletion
 
-M03/RF03/HU03 (RNF09/RNF10/RNF12): the inbox at `/admin/customers/leads` is now a tabbed page.
-`Prospectos` keeps the existing frame, filters, table/cards, states and pagination; `Orígenes` and
-`Etapas` are read-only catalog tables driven by the existing root catalog reads (120000ms, ref-counted,
-caller-cancelled) with their own loading/refreshing/error/verified-empty states and explicit retry.
-No create/edit/activate action, no new endpoint and no pagination is invented for those catalogs.
-Each tab carries an `hlmBadge` count: the server total for prospectos and the loaded catalog counts.
+M03/RF03/HU03 (RNF09/RNF10/RNF12): the CRM is tabbed at CRM level with **real routes** under one
+persistent shell — `/admin/customers` (Clientes), `/admin/customers/leads` (Prospectos),
+`/admin/customers/origins` (Orígenes) and `/admin/customers/stages` (Etapas), with `leads/:id` and
+`:id` last so static paths win and every existing deep link keeps working. `CrmShell` renders the
+shared `CrmCatalogNavigation` (four links), the KPI block and `<router-outlet />`; pages do not render
+the navigation themselves. `Orígenes` and `Etapas` are READ-ONLY pages over the existing root catalog
+reads (120000ms, ref-counted, caller-cancelled) with their own loading/refreshing/error/verified-empty
+states and explicit retry; no create/edit/activate action, no new catalog endpoint and no pagination
+is invented. The inbox keeps its frame, filters, table/cards, pagination and delete action.
 
-The four KPI cards (`Prospectos`, `Convertidos`, `Pendientes`, `Orígenes activos`) live in ONE
-`catalog-metrics` section that is a sibling outside the switchable tab content, so changing tabs
-neither destroys nor re-reads them. `kpi-label`, `kpi-value`, `kpi-tile` with its `data-kpi-tone`
-tones and the `catalog-metrics` rhythm are now defined once in `src/styles.css`; the IAM page consumes
-the same tokens through `--users-*` aliases. The first three numbers come from
-`GET /api/prospectos/estadisticas` → `{total, convertidos, pendientes}` (`CLIENTE_LEER`), stored in a
-root single-key entry with success-only 30000ms freshness, ref-counted flights, forced retry, session
-fencing and confirmed-write invalidation; they are never computed from the loaded page. The fourth is
-the count of loaded active origins, mirroring IAM's “Roles definidos”. Unverified values render `—`,
-refreshing and stale/error states stay visible and retryable, and no polling or invented arithmetic
-appears beyond joining the server counts in a description.
+The four KPI cards (`Clientes`, `Prospectos`, `Convertidos`, `Pendientes`) live in ONE
+`catalog-metrics` section that is a sibling of the outlet INSIDE the shell, so switching tabs neither
+destroys nor re-reads them. `kpi-label`, `kpi-value`, `kpi-tile` with its `data-kpi-tone` tones and the
+`catalog-metrics` rhythm are defined once in `src/styles.css`; the IAM page consumes the same tokens
+through `--users-*` aliases. Clientes comes from `GET /api/clientes/estadisticas` →
+`{total, activos, inactivos}` (`CLIENTE_LEER`) in a root single-key entry with success-only 120000ms
+freshness, ref-counted flights, forced retry, session fencing and confirmed-write invalidation, and
+shows `N activos · M inactivos`. The prospect cards reuse the acquisition statistics entry
+(`GET /api/prospectos/estadisticas`, `{total, convertidos, pendientes}`, 30000ms). Counts are never
+computed from the loaded page; unverified values render `—`, refreshing and stale/error states stay
+visible and retryable per group, and no polling or invented arithmetic appears beyond joining the
+server counts in a description.
 
 Deletion is physical and server-authoritative: `DELETE /api/prospectos/{id}` (`CLIENTE_ACTUALIZAR`)
 returns 204, 404 when missing and 409 when the prospecto is already converted or another aggregate

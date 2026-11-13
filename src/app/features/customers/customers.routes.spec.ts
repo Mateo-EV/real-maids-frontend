@@ -41,15 +41,16 @@ describe("Customer feature routes", () => {
     const session = new BehaviorSubject(
       AuthSession.create("Test", "identity@example.test", null, Date.now() + 600000, 7)
     )
+    const listRoute = CUSTOMERS_ROUTES[0].children!.find(route => route.path === "")!
     TestBed.configureTestingModule({
       providers: [
         provideRouter([
           {
-            ...CUSTOMERS_ROUTES[0],
+            ...listRoute,
             path: "customers",
             canActivate: [],
             providers: [
-              ...(CUSTOMERS_ROUTES[0].providers ?? []),
+              ...(listRoute.providers ?? []),
               provideHotToastConfig({ position: "bottom-right" })
             ]
           }
@@ -83,33 +84,44 @@ describe("Customer feature routes", () => {
     expect(harness.routeNativeElement!.textContent).not.toContain("Cliente creado correctamente")
     open.mock.results[0].value.close()
   })
-  it("owns protected lazy list and read-only detail routes without local store providers", async () => {
-    expect(CUSTOMERS_ROUTES).toHaveLength(4)
-    const leads = CUSTOMERS_ROUTES[1]
-    expect(leads.path).toBe("leads")
-    expect(leads.canActivate).toEqual([authGuard])
-    expect(leads.providers).toBeDefined()
+  it("composes one protected CRM shell whose children keep every page, guard and toast scope", async () => {
+    expect(CUSTOMERS_ROUTES).toHaveLength(1)
+    const shell = CUSTOMERS_ROUTES[0]
+    expect(shell.path).toBe("")
+    expect(shell.canActivate).toEqual([authGuard])
+    const { CrmShell } = await import("./presentation/pages/crm-shell/crm-shell")
+    expect(await shell.loadComponent!()).toBe(CrmShell)
+    const children = shell.children!
+    // Static paths stay before the dynamic customer detail; order is part of the contract.
+    expect(children.map(route => route.path)).toEqual([
+      "",
+      "leads",
+      "leads/:id",
+      "origins",
+      "stages",
+      ":id"
+    ])
+    const [list, leads, leadDetail, origins, stages, detail] = children
+    for (const child of children) expect(child.providers).toBeDefined()
+    expect(list.title).toBe("Clientes | The Real Maids")
+    expect(await list.loadComponent!()).toBe(CustomersPage)
     const { LeadsPage } = await import("./presentation/pages/leads-page/leads-page")
+    expect(leads.title).toBe("Prospectos | The Real Maids")
     expect(await leads.loadComponent!()).toBe(LeadsPage)
-    const leadDetail = CUSTOMERS_ROUTES[2]
-    expect(leadDetail.path).toBe("leads/:id")
-    expect(leadDetail.canActivate).toEqual([authGuard])
-    expect(leadDetail.providers).toBeDefined()
     const { LeadDetailPage } =
       await import("./presentation/pages/lead-detail-page/lead-detail-page")
+    expect(leadDetail.title).toBe("Detalle del prospecto | The Real Maids")
     expect(await leadDetail.loadComponent!()).toBe(LeadDetailPage)
-    const detail = CUSTOMERS_ROUTES[3]
-    expect(detail.path).toBe(":id")
-    expect(detail.canActivate).toEqual([authGuard])
-    expect(detail.providers).toBeDefined()
+    const { CrmOriginsPage } =
+      await import("./presentation/pages/crm-origins-page/crm-origins-page")
+    expect(origins.title).toBe("Orígenes de prospecto | The Real Maids")
+    expect(await origins.loadComponent!()).toBe(CrmOriginsPage)
+    const { CrmStagesPage } = await import("./presentation/pages/crm-stages-page/crm-stages-page")
+    expect(stages.title).toBe("Etapas del embudo | The Real Maids")
+    expect(await stages.loadComponent!()).toBe(CrmStagesPage)
     const { CustomerDetailPage } =
       await import("./presentation/pages/customer-detail-page/customer-detail-page")
+    expect(detail.title).toBe("Detalle del cliente | The Real Maids")
     expect(await detail.loadComponent!()).toBe(CustomerDetailPage)
-    const route = CUSTOMERS_ROUTES[0]
-    expect(route.path).toBe("")
-    expect(route.canActivate).toEqual([authGuard])
-    expect(route.title).toBe("Clientes | The Real Maids")
-    expect(route.providers).toBeDefined()
-    expect(await route.loadComponent!()).toBe(CustomersPage)
   })
 })

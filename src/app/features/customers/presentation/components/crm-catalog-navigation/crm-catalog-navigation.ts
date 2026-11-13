@@ -26,6 +26,30 @@ import { RouterLink, RouterLinkActive } from "@angular/router"
           ariaCurrentWhenActive="page"
           >Prospectos</a
         >
+        <a
+          routerLink="/admin/customers/origins"
+          routerLinkActive="active-catalog"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Orígenes</a
+        >
+        <a
+          routerLink="/admin/customers/stages"
+          routerLinkActive="active-catalog"
+          [routerLinkActiveOptions]="{
+            paths: 'exact',
+            queryParams: 'ignored',
+            matrixParams: 'ignored',
+            fragment: 'ignored'
+          }"
+          ariaCurrentWhenActive="page"
+          >Etapas</a
+        >
       </div>
     </nav>
   `,

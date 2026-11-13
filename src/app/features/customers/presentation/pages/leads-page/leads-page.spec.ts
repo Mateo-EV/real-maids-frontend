@@ -14,7 +14,6 @@ import { Result } from "@/app/shared/utils/result"
 import {
   CreateLeadUseCase,
   DeleteLeadUseCase,
-  GetLeadStatisticsUseCase,
   ListFunnelStagesUseCase,
   ListLeadOriginsUseCase,
   ListLeadsUseCase
@@ -22,7 +21,6 @@ import {
 import { FunnelStage } from "../../../domain/entities/funnel-stage.entity"
 import { LeadOrigin } from "../../../domain/entities/lead-origin.entity"
 import { Lead } from "../../../domain/entities/lead.entity"
-import { ProspectoEstadisticas } from "../../../domain/params/prospecto-estadisticas.params"
 import { CustomerError } from "../../../domain/errors/customer.error"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
 import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delete-dialog"
@@ -48,14 +46,11 @@ const page = (items: Lead[] = [row], total = 45, offset = 0, limit = 20): PageRe
   Result.success({ items, total, offset, limit })
 
 type CatalogResult<T> = Result<readonly T[], CustomerError>
-type StatisticsResult = Result<ProspectoEstadisticas, CustomerError>
-const totals: ProspectoEstadisticas = { total: 45, convertidos: 5, pendientes: 40 }
 
 function setup(server = false, query: Record<string, string> = {}) {
   const requests: Subject<PageResult>[] = []
   const originRequests: Subject<CatalogResult<LeadOrigin>>[] = []
   const stageRequests: Subject<CatalogResult<FunnelStage>>[] = []
-  const statisticsRequests: Subject<StatisticsResult>[] = []
   const execute = vi.fn(() => {
     const response = new Subject<PageResult>()
     requests.push(response)
@@ -69,11 +64,6 @@ function setup(server = false, query: Record<string, string> = {}) {
   const loadStages = vi.fn(() => {
     const response = new Subject<CatalogResult<FunnelStage>>()
     stageRequests.push(response)
-    return response
-  })
-  const loadStatistics = vi.fn(() => {
-    const response = new Subject<StatisticsResult>()
-    statisticsRequests.push(response)
     return response
   })
   const session = new BehaviorSubject<AuthSession | null>(
@@ -102,7 +92,6 @@ function setup(server = false, query: Record<string, string> = {}) {
       { provide: CreateLeadUseCase, useValue: { execute: createLead } },
       { provide: ListLeadOriginsUseCase, useValue: { execute: loadOrigins } },
       { provide: ListFunnelStagesUseCase, useValue: { execute: loadStages } },
-      { provide: GetLeadStatisticsUseCase, useValue: { execute: loadStatistics } },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } },
       ...(server ? [{ provide: PLATFORM_ID, useValue: "server" }] : [])
@@ -131,19 +120,6 @@ function setup(server = false, query: Record<string, string> = {}) {
     stageRequests.at(-1)!.complete()
     await settle()
   }
-  const respondStatistics = async (value: StatisticsResult) => {
-    statisticsRequests.at(-1)!.next(value)
-    statisticsRequests.at(-1)!.complete()
-    await settle()
-  }
-  const clickTab = async (tab: "prospects" | "origins" | "stages") => {
-    const button = element.querySelector<HTMLButtonElement>(`[data-${tab}-tab]`)
-    expect(button, tab).not.toBeNull()
-    button!.click()
-    await settle()
-  }
-  const badge = (tab: "prospects" | "origins" | "stages") =>
-    element.querySelector(`[data-${tab}-tab] span`)?.textContent?.trim()
   const click = async (label: string) => {
     const button = Array.from(element.querySelectorAll<HTMLButtonElement>("button")).find(
       item => item.getAttribute("aria-label") === label || item.textContent?.trim() === label
@@ -159,10 +135,8 @@ function setup(server = false, query: Record<string, string> = {}) {
     requests,
     originRequests,
     stageRequests,
-    statisticsRequests,
     loadOrigins,
     loadStages,
-    loadStatistics,
     openDialog,
     toast,
     createLead,
@@ -171,10 +145,7 @@ function setup(server = false, query: Record<string, string> = {}) {
     respond,
     respondOrigins,
     respondStages,
-    respondStatistics,
     click,
-    clickTab,
-    badge,
     settle
   }
 }
@@ -182,14 +153,14 @@ function setup(server = false, query: Record<string, string> = {}) {
 afterEach(() => vi.restoreAllMocks())
 
 describe("LeadsPage read-only inbox", () => {
-  it("starts at 0/20 with unverified loading, then verified empty and shared CRM navigation", async () => {
+  it("starts at 0/20 with unverified loading, then verified empty and the shared filter row", async () => {
     const s = setup()
     expect(s.execute).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
     expect(s.element.textContent).toContain("Cargando prospectos")
     expect(s.element.textContent).not.toContain("No hay prospectos")
     await s.respond(page([], 0))
     expect(s.element.textContent).toContain("No hay prospectos")
-    expect(s.element.querySelector("app-crm-catalog-navigation")).not.toBeNull()
+    expect(s.element.querySelector("app-crm-catalog-navigation")).toBeNull()
     expect(s.element.querySelector("input#lead-filter-search")).not.toBeNull()
     expect(
       s.element.querySelector("select#lead-filter-origin, select#lead-filter-stage")
@@ -725,191 +696,29 @@ describe("LeadsPage read-only inbox", () => {
     expect(s.execute).not.toHaveBeenCalled()
     expect(s.loadOrigins).not.toHaveBeenCalled()
     expect(s.loadStages).not.toHaveBeenCalled()
-    expect(s.loadStatistics).not.toHaveBeenCalled()
   })
 
-  it("renders one KPI block with four cards and switches tabs without re-rendering or re-reading it", async () => {
+  it("renders no CRM tabs, KPI block, catalog tables or duplicated CRM navigation", async () => {
     const s = setup()
     await s.respond(page([row], 45))
-    await s.respondStatistics(Result.success(totals))
     await s.respondOrigins(
-      Result.success([
-        LeadOrigin.create(11, "Formulario web", "Sitio web", true),
-        LeadOrigin.create(13, "Feria", null, false)
-      ])
+      Result.success([LeadOrigin.create(11, "Formulario web", "Sitio web", true)])
     )
-    await s.respondStages(
-      Result.success([
-        FunnelStage.create(12, "Contactado", 1, false),
-        FunnelStage.create(14, "Cerrado", 2, true)
-      ])
-    )
-    const nav = s.element.querySelector('nav[aria-label="Secciones de prospectos"]')!
-    expect(nav).not.toBeNull()
-    const metrics = s.element.querySelector('.catalog-metrics[aria-label="Resumen del catálogo"]')!
-    expect(metrics).not.toBeNull()
-    expect(metrics.querySelectorAll("article")).toHaveLength(4)
+    await s.respondStages(Result.success([FunnelStage.create(12, "Contactado", 1, false)]))
+    expect(s.element.querySelector("app-crm-catalog-navigation")).toBeNull()
+    expect(s.element.querySelector(".catalog-metrics")).toBeNull()
+    expect(s.element.querySelector('nav[aria-label="Secciones de prospectos"]')).toBeNull()
     expect(
-      [...metrics.querySelectorAll(".kpi-value")].map(value => value.textContent?.trim())
-    ).toEqual(["45", "5", "40", "1"])
+      s.element.querySelectorAll("[data-prospects-tab], [data-origins-tab], [data-stages-tab]")
+    ).toHaveLength(0)
+    expect(s.element.textContent).not.toContain("Resumen del catálogo")
+    expect(s.element.querySelectorAll("app-catalog-frame")).toHaveLength(1)
     expect(
-      [...metrics.querySelectorAll(".kpi-tile")].map(tile => tile.getAttribute("data-kpi-tone"))
-    ).toEqual(["navy", "amber", "blue", "green"])
-    expect(
-      metrics.querySelectorAll("[hlmCardDescription]")[0].textContent?.replace(/\s+/g, " ").trim()
-    ).toBe("5 convertidos · 40 pendientes")
-    expect(
-      metrics.querySelectorAll("[hlmCardDescription]")[3].textContent?.replace(/\s+/g, " ").trim()
-    ).toBe("Formulario web")
-    expect(s.badge("prospects")).toBe("45")
-    expect(s.badge("origins")).toBe("2")
-    expect(s.badge("stages")).toBe("2")
-    expect(nav.querySelector("[data-prospects-tab]")?.getAttribute("aria-current")).toBe("page")
-    expect(nav.querySelector("[data-origins-tab]")?.getAttribute("aria-current")).toBeNull()
-    const firstCard = metrics.firstElementChild
-    await s.clickTab("origins")
-    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
-    expect(metrics.firstElementChild).toBe(firstCard)
-    expect(s.loadStatistics).toHaveBeenCalledOnce()
-    expect(s.execute).toHaveBeenCalledOnce()
-    expect(nav.querySelector("[data-origins-tab]")?.getAttribute("aria-current")).toBe("page")
-    expect(s.element.textContent).toContain("Orígenes de prospecto")
-    expect(s.element.querySelector("#lead-filter-search")).toBeNull()
-    await s.clickTab("stages")
-    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
-    expect(metrics.firstElementChild).toBe(firstCard)
-    expect(s.element.textContent).toContain("Etapas del embudo")
-    expect(s.loadStatistics).toHaveBeenCalledOnce()
-    await s.clickTab("prospects")
-    expect(s.element.querySelector(".catalog-metrics")).toBe(metrics)
-    expect(metrics.firstElementChild).toBe(firstCard)
-    expect(s.element.querySelector("#lead-filter-search")).not.toBeNull()
-    expect(s.loadStatistics).toHaveBeenCalledOnce()
-    expect(s.execute).toHaveBeenCalledOnce()
-  })
-
-  it("shows unverified tab badges as — until the server counts are verified", async () => {
-    const s = setup()
-    expect(s.badge("prospects")).toBe("—")
-    expect(s.badge("origins")).toBe("—")
-    expect(s.badge("stages")).toBe("—")
-    await s.respondOrigins(Result.success([]))
-    expect(s.badge("origins")).toBe("0")
-    expect(s.badge("prospects")).toBe("—")
-  })
-
-  it("surfaces statistics loading, refreshing, stale errors and one forced retry outside the tab body", async () => {
-    const s = setup()
-    const metric = () => s.element.querySelector("[data-prospect-metric]")?.textContent?.trim()
-    expect(metric()).toBe("—")
-    expect(s.element.textContent).toContain("Cargando estadísticas")
-    await s.respondStatistics(Result.failure(new CustomerError("NETWORK")))
-    expect(metric()).toBe("—")
-    expect(s.element.textContent).toContain("No se pudieron cargar las estadísticas")
-    expect(s.loadStatistics).toHaveBeenCalledOnce()
-    await s.click("Reintentar estadísticas")
-    expect(s.loadStatistics).toHaveBeenCalledTimes(2)
-    await s.respondStatistics(Result.success(totals))
-    expect(metric()).toBe("45")
-    expect(s.element.textContent).toContain("5 convertidos · 40 pendientes")
-    expect(s.element.textContent).not.toContain("No se pudieron cargar las estadísticas")
-    s.fixture.componentInstance.retryStatistics()
-    await s.settle()
-    expect(s.element.textContent).toContain("Actualizando estadísticas")
-    expect(metric()).toBe("45")
-    expect(s.loadStatistics).toHaveBeenCalledTimes(3)
-    await s.respondStatistics(Result.failure(new CustomerError("NETWORK")))
-    expect(metric()).toBe("45")
-    expect(s.element.textContent).toContain("Las estadísticas pueden estar desactualizadas")
-    expect(s.element.textContent).not.toContain("Actualizando estadísticas")
-  })
-
-  it("renders the read-only origins catalog with loading, safe error retry and verified rows", async () => {
-    const s = setup()
-    await s.clickTab("origins")
-    expect(s.element.textContent).toContain("Cargando orígenes")
-    await s.respondOrigins(Result.failure(new CustomerError("NETWORK")))
-    expect(s.element.textContent).toContain("No se pudieron cargar los orígenes")
-    await s.click("Reintentar orígenes")
-    expect(s.loadOrigins).toHaveBeenCalledTimes(2)
-    await s.respondOrigins(
-      Result.success([
-        LeadOrigin.create(11, "Formulario web", "Sitio web", true),
-        LeadOrigin.create(13, "Feria", null, false)
-      ])
-    )
-    const frame = s.element.querySelector(
-      'app-catalog-frame section[aria-labelledby="lead-origins-title"]'
-    )!
-    expect(frame).not.toBeNull()
-    expect([...frame.querySelectorAll("th")].map(th => th.textContent?.trim())).toEqual([
-      "Origen",
-      "Descripción",
-      "Estado"
-    ])
-    const table = frame.querySelector("[catalogDesktop] table")!
-    expect(
-      [...table.querySelectorAll("tbody tr")].map(row =>
-        [...row.querySelectorAll("td")].map(cell => cell.textContent?.trim())
-      )
-    ).toEqual([
-      ["Formulario web", "Sitio web", "Activo"],
-      ["Feria", "Sin descripción", "Inactivo"]
-    ])
-    expect(frame.querySelector("ul[catalogMobile]")?.textContent).toContain("Feria")
-    expect(frame.querySelectorAll("button")).toHaveLength(0)
-    expect(frame.textContent).not.toMatch(/Crear|Editar|Activar|Desactivar/)
-  })
-
-  it("renders the read-only stage catalog with order, final labels and a verified empty state", async () => {
-    const s = setup()
-    await s.respondStages(
-      Result.success([
-        FunnelStage.create(12, "Contactado", 1, false),
-        FunnelStage.create(14, "Cerrado", 2, true)
-      ])
-    )
-    await s.clickTab("stages")
-    const frame = s.element.querySelector(
-      'app-catalog-frame section[aria-labelledby="lead-stages-title"]'
-    )!
-    expect([...frame.querySelectorAll("th")].map(th => th.textContent?.trim())).toEqual([
-      "Etapa",
-      "Orden",
-      "Final"
-    ])
-    const table = frame.querySelector("[catalogDesktop] table")!
-    expect(
-      [...table.querySelectorAll("tbody tr")].map(row =>
-        [...row.querySelectorAll("td")].map(cell => cell.textContent?.trim())
-      )
-    ).toEqual([
-      ["Contactado", "1", "No"],
-      ["Cerrado", "2", "Sí"]
-    ])
-    expect(frame.querySelectorAll("button")).toHaveLength(0)
-    await s.clickTab("origins")
-    await s.respondOrigins(Result.success([]))
-    expect(s.element.textContent).toContain("No hay orígenes registrados")
-    expect(s.element.textContent).not.toContain("No se pudieron cargar los orígenes")
-  })
-
-  it("keeps the prospect inbox controls and server page when returning from a catalog tab", async () => {
-    const s = setup()
-    await s.respond(page([row], 45))
-    const search = s.element.querySelector<HTMLInputElement>("#lead-filter-search")!
-    search.value = "Ana"
-    search.dispatchEvent(new Event("input", { bubbles: true }))
-    await new Promise(resolve => setTimeout(resolve, 275))
-    await s.settle()
-    await s.respond(page([row], 7))
-    expect(s.execute).toHaveBeenCalledTimes(2)
-    await s.clickTab("origins")
-    expect(s.element.querySelector("#lead-filter-search")).toBeNull()
-    await s.clickTab("prospects")
-    expect(s.element.querySelector<HTMLInputElement>("#lead-filter-search")!.value).toBe("Ana")
-    expect(s.element.textContent).toContain("1–1 de 7 prospectos")
-    expect(s.execute).toHaveBeenCalledTimes(2)
+      s.element.querySelector('app-catalog-frame section[aria-labelledby="leads-title"]')
+    ).not.toBeNull()
+    expect(s.element.querySelector("#lead-origins-title, #lead-stages-title")).toBeNull()
+    expect(s.element.textContent).toContain(row.name)
+    expect(s.element.querySelector("input#lead-filter-search")).not.toBeNull()
   })
 })
 
@@ -943,10 +752,6 @@ function deletionSetup() {
       { provide: DeleteLeadUseCase, useValue: { execute: remove } },
       { provide: ListLeadOriginsUseCase, useValue: { execute: () => of(Result.success([])) } },
       { provide: ListFunnelStagesUseCase, useValue: { execute: () => of(Result.success([])) } },
-      {
-        provide: GetLeadStatisticsUseCase,
-        useValue: { execute: () => of(Result.success(totals)) }
-      },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session } }
     ]

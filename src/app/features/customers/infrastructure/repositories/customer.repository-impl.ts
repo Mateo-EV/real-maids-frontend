@@ -16,6 +16,10 @@ export class CustomerRepositoryImpl implements CustomerRepository {
     return this.source.findById(id)
   }
 
+  findStatistics() {
+    return this.source.findStatistics()
+  }
+
   create(customer: CreateCustomerParams) {
     return this.source.create(customer)
   }

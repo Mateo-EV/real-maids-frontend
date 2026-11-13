@@ -1,0 +1,102 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6"
+>
+  <app-catalog-frame
+    titleId="crm-stages-title"
+    title="Etapas del embudo"
+    description="Catálogo de etapas en sólo lectura"
+    [busy]="stages().loading || stages().refreshing"
+  >
+    @if (stages().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando etapas…
+      </div>
+    }
+    @if (stages().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando etapas…</p>
+    }
+    @if (stages().error) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>
+            {{
+              stages().data
+                ? "No se pudieron actualizar las etapas."
+                : "No se pudieron cargar las etapas."
+            }}
+          </h2>
+          <div hlmAlertDescription>
+            @if (stages().data) {
+              <p>Se conservan las etapas verificadas disponibles.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="stages().loading || stages().refreshing"
+        >
+          Reintentar etapas
+        </button>
+      </div>
+    }
+    @if (stages().data; as items) {
+      @if (items.length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Etapas del embudo de prospectos
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Etapa</th>
+                <th hlmTh scope="col">Orden</th>
+                <th hlmTh scope="col">Final</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (stage of items; track stage.id) {
+                <tr hlmTr>
+                  <td hlmTd class="font-semibold">{{ stage.name }}</td>
+                  <td hlmTd>{{ stage.order }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{ stage.isFinal ? "Sí" : "No" }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Etapas del embudo">
+          @for (stage of items; track stage.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ stage.name }}</h2>
+                <span hlmBadge variant="outline">{{ stage.isFinal ? "Final" : "No final" }}</span>
+              </div>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Orden</dt>
+                <dd>{{ stage.order }}</dd>
+                <dt class="text-muted-foreground">Final</dt>
+                <dd>{{ stage.isFinal ? "Sí" : "No" }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>No hay etapas registradas</h2>
+            <p hlmEmptyDescription>El servidor no devolvió etapas del embudo.</p>
+          </div>
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground">Catálogo de sólo lectura</p>
+    </ng-container>
+  </app-catalog-frame>
+</main>

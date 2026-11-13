@@ -1,0 +1,106 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6 lg:px-6"
+>
+  <app-catalog-frame
+    titleId="crm-origins-title"
+    title="Orígenes de prospecto"
+    description="Catálogo de orígenes en sólo lectura"
+    [busy]="origins().loading || origins().refreshing"
+  >
+    @if (origins().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando orígenes…
+      </div>
+    }
+    @if (origins().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando orígenes…</p>
+    }
+    @if (origins().error) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>
+            {{
+              origins().data
+                ? "No se pudieron actualizar los orígenes."
+                : "No se pudieron cargar los orígenes."
+            }}
+          </h2>
+          <div hlmAlertDescription>
+            @if (origins().data) {
+              <p>Se conservan los orígenes verificados disponibles.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="origins().loading || origins().refreshing"
+        >
+          Reintentar orígenes
+        </button>
+      </div>
+    }
+    @if (origins().data; as items) {
+      @if (items.length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Orígenes de prospecto
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Origen</th>
+                <th hlmTh scope="col">Descripción</th>
+                <th hlmTh scope="col">Estado</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (origin of items; track origin.id) {
+                <tr hlmTr>
+                  <td hlmTd class="font-semibold">{{ origin.name }}</td>
+                  <td hlmTd>{{ origin.description ?? "Sin descripción" }}</td>
+                  <td hlmTd>
+                    <span hlmBadge variant="outline">{{
+                      origin.isActive ? "Activo" : "Inactivo"
+                    }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Orígenes de prospecto">
+          @for (origin of items; track origin.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ origin.name }}</h2>
+                <span hlmBadge variant="outline">{{
+                  origin.isActive ? "Activo" : "Inactivo"
+                }}</span>
+              </div>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Descripción</dt>
+                <dd class="break-words">{{ origin.description ?? "Sin descripción" }}</dd>
+                <dt class="text-muted-foreground">Estado</dt>
+                <dd>{{ origin.isActive ? "Activo" : "Inactivo" }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>No hay orígenes registrados</h2>
+            <p hlmEmptyDescription>El servidor no devolvió orígenes de prospecto.</p>
+          </div>
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground">Catálogo de sólo lectura</p>
+    </ng-container>
+  </app-catalog-frame>
+</main>

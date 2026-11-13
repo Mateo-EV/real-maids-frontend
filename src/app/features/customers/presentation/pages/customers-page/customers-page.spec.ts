@@ -120,20 +120,20 @@ describe("CustomersPage read-only server list", () => {
     expect(s.element.textContent).not.toContain("No hay clientes activos")
     await s.respond(page([], 0))
     expect(s.element.textContent).toContain("No hay clientes activos")
-    const navigation = s.element.querySelector(
-      'app-crm-catalog-navigation nav[aria-label="Catálogos CRM"]'
-    )!
-    expect(navigation).not.toBeNull()
-    expect(navigation.querySelector('a[href="/admin/customers"]')?.textContent).toContain(
-      "Clientes"
-    )
-    expect(navigation.querySelector('a[href="/admin/customers/leads"]')?.textContent).toContain(
-      "Prospectos"
-    )
     expect(s.element.querySelector("app-catalog-frame a")).toBeNull()
     expect(s.element.textContent).toContain("Crear cliente")
     expect(s.element.textContent).not.toMatch(/Editar|Propiedades|Desactivar/)
     expect(s.element.textContent).not.toContain("Cargando clientes")
+  })
+
+  it("leaves the CRM navigation and the KPI block to the shared shell", async () => {
+    const s = setup()
+    await s.respond(page())
+    expect(s.element.querySelector("app-crm-catalog-navigation")).toBeNull()
+    expect(s.element.querySelector(".catalog-metrics")).toBeNull()
+    expect(s.element.querySelectorAll("app-catalog-frame")).toHaveLength(1)
+    expect(s.element.querySelector("input#customer-search")).not.toBeNull()
+    expect(s.element.textContent).toContain(row.name)
   })
 
   it("debounces search, applies type immediately, resets offset and retains effective page size", async () => {

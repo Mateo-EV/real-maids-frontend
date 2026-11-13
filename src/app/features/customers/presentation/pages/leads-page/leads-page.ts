@@ -16,21 +16,13 @@ import { LeadEditor } from "../../components/lead-editor/lead-editor"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { leadPageContext } from "./lead-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmCardImports } from "@spartan-ng/helm/card"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import {
-  lucideCircleCheck,
-  lucideClock,
-  lucidePlus,
-  lucideTag,
-  lucideTrash2,
-  lucideUsers
-} from "@ng-icons/lucide"
+import { lucidePlus, lucideTrash2 } from "@ng-icons/lucide"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import {
   CatalogFilterSelect,
@@ -42,7 +34,6 @@ import { createSessionReadScope } from "@/app/features/auth/presentation/state/s
 import { LeadListQuery } from "../../../domain/models/lead-list-query"
 import { Lead } from "../../../domain/entities/lead.entity"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
-import { CrmCatalogNavigation } from "../../components/crm-catalog-navigation/crm-catalog-navigation"
 import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delete-dialog"
 
 @Component({
@@ -50,12 +41,10 @@ import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delet
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    CrmCatalogNavigation,
     CatalogFrame,
     CatalogFilters,
     TablePagination,
     HlmButtonImports,
-    HlmCardImports,
     HlmTableImports,
     HlmBadgeImports,
     HlmEmptyImports,
@@ -63,16 +52,7 @@ import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delet
     HlmSpinnerImports,
     NgIcon
   ],
-  providers: [
-    provideIcons({
-      lucidePlus,
-      lucideUsers,
-      lucideCircleCheck,
-      lucideClock,
-      lucideTag,
-      lucideTrash2
-    })
-  ],
+  providers: [provideIcons({ lucidePlus, lucideTrash2 })],
   templateUrl: "./leads-page.html",
   styleUrl: "./leads-page.css"
 })
@@ -83,28 +63,8 @@ export class LeadsPage implements OnInit {
   private readonly toast = inject(HotToastService)
   private dialog: BrnDialogRef | undefined
   readonly writing = this.acquisition.writing
-  /** The tab body swaps; the KPI block above it is mounted once and keeps its own read. */
-  readonly section = signal<"prospects" | "origins" | "stages">("prospects")
   readonly origins = computed(() => this.acquisition.origins())
   readonly stages = computed(() => this.acquisition.stages())
-  readonly statistics = computed(() => this.acquisition.statistics())
-  readonly statisticsTotal = computed(() => this.statistics().data?.total)
-  readonly convertedCount = computed(() => this.statistics().data?.convertidos)
-  readonly pendingCount = computed(() => this.statistics().data?.pendientes)
-  readonly originCount = computed(() => this.origins().data?.length)
-  readonly stageCount = computed(() => this.stages().data?.length)
-  readonly activeOrigins = computed(() =>
-    (this.origins().data ?? []).filter(origin => origin.isActive)
-  )
-  /** Unverified catalogs stay unknown: a zero is only shown once the server returned rows. */
-  readonly activeOriginCount = computed(() =>
-    this.origins().data ? this.activeOrigins().length : undefined
-  )
-  readonly activeOriginNames = computed(() =>
-    this.activeOrigins()
-      .map(origin => origin.name)
-      .join(", ")
-  )
   private readonly requestedQuery = signal<LeadListQuery>(
     leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
@@ -194,11 +154,6 @@ export class LeadsPage implements OnInit {
   retryStages(): void {
     this.readCatalog(force => this.acquisition.loadStages(force), true)
   }
-  /** One explicit retry; the mounted observer keeps the same single entry and pinned key. */
-  retryStatistics(): void {
-    this.readCatalog(force => this.acquisition.loadStatistics(force), true)
-  }
-  readonly statisticsErrorMessage = "No se pudieron cargar las estadísticas. Inténtalo de nuevo."
   readonly errorMessage = computed(() => {
     switch (this.list().error?.code) {
       case "FORBIDDEN":
@@ -282,8 +237,7 @@ export class LeadsPage implements OnInit {
 
   ngOnInit(): void {
     this.scope.check()
-    // Observed once: confirmed lead writes revalidate it and tab switches never re-mount it.
-    this.readCatalog(force => this.acquisition.observeStatistics(force))
+    // Catalog reads stay here: the filter options and row labels depend on them.
     this.readCatalog(force => this.acquisition.loadOrigins(force))
     this.readCatalog(force => this.acquisition.loadStages(force))
     this.destroyRef.onDestroy(() => this.dialog?.close())

@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from "@angular/common
 import { firstValueFrom } from "rxjs"
 import { beforeEach, afterEach, describe, it, expect } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { Result } from "@/app/shared/utils/result"
 import { CustomerType } from "../../domain/entities/customer.entity"
 import { CustomerRepositoryImpl } from "../repositories/customer.repository-impl"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
@@ -214,6 +215,34 @@ describe("Customer real HTTP boundary", () => {
   )("rejects old arrays and malformed pages without exposing data: %j", async ({ dto }) => {
     const pending = firstValueFrom(repository.findPage())
     http.expectOne("http://localhost:8080/api/clientes?pagina=0&tamanio=20").flush(dto)
+    const result = await pending
+    expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+    expect(result).not.toHaveProperty("data")
+  })
+
+  it("reads the server customer statistics aggregate from its own documented endpoint", async () => {
+    const pending = firstValueFrom(repository.findStatistics())
+    const request = http.expectOne("http://localhost:8080/api/clientes/estadisticas")
+    expect(request.request.method).toBe("GET")
+    expect(request.request.params.keys()).toEqual([])
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ total: 32, activos: 30, inactivos: 2 })
+    expect(await pending).toEqual(Result.success({ total: 32, activos: 30, inactivos: 2 }))
+  })
+
+  it.each(
+    [
+      { total: 32, activos: 30 },
+      { total: 32, activos: 30, inactivos: -1 },
+      { total: 32, activos: 30, inactivos: 2.5 },
+      { total: "32", activos: 30, inactivos: 2 },
+      { total: 32, activos: Number.MAX_SAFE_INTEGER + 1, inactivos: 0 },
+      [32, 30, 2],
+      null
+    ].map(dto => ({ dto }))
+  )("rejects a malformed statistics aggregate without inventing counts: %j", async ({ dto }) => {
+    const pending = firstValueFrom(repository.findStatistics())
+    http.expectOne("http://localhost:8080/api/clientes/estadisticas").flush(dto)
     const result = await pending
     expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
     expect(result).not.toHaveProperty("data")

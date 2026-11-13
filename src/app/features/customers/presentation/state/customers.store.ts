@@ -32,11 +32,16 @@ import {
   LinkCustomerAccountParams
 } from "../../domain/params/customer.params"
 import { CustomerHistoryStore } from "./customer-history.store"
+import { GetCustomerStatisticsUseCase } from "../../application/use-cases/get-customer-statistics.use-case"
+import { ClienteEstadisticas } from "../../domain/params/cliente-estadisticas.params"
 
 type Page = PaginationResponse<Customer>
 type PageResult = Result<Page, CustomerError>
 type DetailResult = Result<Customer, CustomerError>
+type StatisticsResult = Result<ClienteEstadisticas, CustomerError>
 type KeyedDetail = KeyedEntry<number, Customer, CustomerError>
+type KeyedStatistics = KeyedEntry<null, ClienteEstadisticas, CustomerError>
+const statisticsKey = "statistics"
 export interface CustomerReadEntry<T> {
   readonly result: T | undefined
   readonly loading: boolean
@@ -113,9 +118,33 @@ const fromKeyedDetails = (entries: Readonly<Record<string, KeyedDetail>>) => {
     }
   return details
 }
+/** The aggregate is a single key; only the registry's `query: null` slot differs. */
+const toStatisticsEntry = (entry: CustomerReadEntry<ClienteEstadisticas>): KeyedStatistics => ({
+  query: null,
+  result: entry.result,
+  loading: entry.loading,
+  refreshing: entry.refreshing,
+  error: entry.error,
+  expires: entry.expires
+})
+const fromStatisticsEntry = (
+  entries: Readonly<Record<string, KeyedStatistics>>
+): CustomerReadEntry<ClienteEstadisticas> => {
+  const entry = entries[statisticsKey]
+  return entry
+    ? {
+        result: entry.result,
+        loading: entry.loading,
+        refreshing: entry.refreshing,
+        error: entry.error,
+        expires: entry.expires
+      }
+    : emptyEntry<ClienteEstadisticas>()
+}
 interface CustomersState {
   readonly entries: Readonly<Record<string, CustomerPageEntry>>
   readonly details: Readonly<Record<number, CustomerReadEntry<Customer>>>
+  readonly statistics: CustomerReadEntry<ClienteEstadisticas>
   readonly currentPageKey: string | null
   readonly selectedId: number | null
   readonly writePending: number
@@ -125,6 +154,7 @@ interface CustomersState {
 const initialState: CustomersState = {
   entries: {},
   details: {},
+  statistics: emptyEntry<ClienteEstadisticas>(),
   currentPageKey: null,
   selectedId: null,
   writePending: 0,
@@ -170,6 +200,7 @@ export const CustomersStore = signalStore(
       // Keyed state is cleared before the coordinators reset, so no teardown write reappears.
       pages.reset()
       details.reset()
+      statisticsReads.reset()
       patchState(store, initialState)
     })
     const pages = createKeyedReads<CustomerListQuery, Page, CustomerError>({
@@ -219,6 +250,27 @@ export const CustomersStore = signalStore(
       normalizeError: toCustomerError,
       overflow: () => new CustomerError("UNEXPECTED")
     })
+    const statisticsReads = createKeyedReads<null, ClienteEstadisticas, CustomerError>({
+      key: () => statisticsKey,
+      request: () =>
+        injector
+          .get(GetCustomerStatisticsUseCase)
+          .execute()
+          .pipe(take(1), defaultIfEmpty(Result.failure(new CustomerError("INVALID_RESPONSE")))),
+      state: keyedState<null, ClienteEstadisticas, CustomerError>(
+        () => ({ [statisticsKey]: toStatisticsEntry(store.statistics()) }),
+        next => patchState(store, { statistics: fromStatisticsEntry(next) })
+      ),
+      scope,
+      // Same freshness group as the customer reads: the KPI block checks on reads, no polling.
+      ttl: 120000,
+      expireOnError: true,
+      noSession: "failure",
+      noSessionObserve: "empty",
+      noSessionError: () => new CustomerError("UNAUTHENTICATED"),
+      normalizeError: toCustomerError,
+      overflow: () => new CustomerError("UNEXPECTED")
+    })
     const readPage = (query: CustomerListQuery = {}, force = false): Observable<PageResult> =>
       pages.read(query, force)
     const readCustomer = (id: number, force = false): Observable<DetailResult> =>
@@ -226,6 +278,8 @@ export const CustomersStore = signalStore(
     const invalidateCustomers = (customerId?: number): void => {
       if (!scope.check()) return
       pages.markMutated()
+      // The CRM KPI aggregate follows the same confirmed writes as the affected pages.
+      statisticsReads.markMutated()
       // A customer-specific invalidation touches only that profile; a broad one touches all.
       details.markMutated(entry => customerId === undefined || entry.query === customerId)
     }
@@ -303,6 +357,16 @@ export const CustomersStore = signalStore(
           patchState(store, { selectedId: id })
           return details.read(id, force)
         })
+      },
+      loadStatistics(force = false): Observable<StatisticsResult> {
+        return statisticsReads.read(null, force)
+      },
+      /** Keeps the mounted CRM KPI block revalidated once after confirmed customer writes. */
+      observeStatistics(force = false): Observable<StatisticsResult> {
+        return statisticsReads.observe(null, { force })
+      },
+      selectStatistics(): CustomerReadEntry<ClienteEstadisticas> {
+        return store.statistics()
       },
       observeQuery(query: CustomerListQuery = {}, force = false): Observable<PageResult> {
         return defer(() => {

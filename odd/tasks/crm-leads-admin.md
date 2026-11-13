@@ -60,6 +60,7 @@ User correction (verbatim): “ok me entendiste mal, me psiste todo en la pagina
 Then, when asked how to shape the tabs, the user rejected unifying URLs and chose own routes: “no, mejor rutas propias ya luego haremos lo mismo en users”.
 
 Corrected design (supersedes the leads-page tabs of T2/T3, which are removed):
+
 - S8 — The CRM itself is tabbed with REAL ROUTES and a persistent shell: `/admin/customers` (Clientes), `/admin/customers/leads` (Prospectos), `/admin/customers/origins` (Orígenes) and `/admin/customers/stages` (Etapas). The shared CRM navigation gains the two catalog links. Detail routes stay where they are.
 - S9 — Four KPI cards live in the CRM shell — Clientes, Prospectos, Convertidos, Pendientes — outside the router outlet, mounted once, so switching tabs neither re-creates nor re-reads them. Clientes needs a new server aggregate (`GET /api/clientes/estadisticas`); the prospect counts reuse the existing `/api/prospectos/estadisticas`.
 - The read-only Orígenes/Etapas tables move out of the leads page into their own CRM pages.
@@ -67,3 +68,11 @@ Corrected design (supersedes the leads-page tabs of T2/T3, which are removed):
 
 - T6 (S9): Backend `GET /api/clientes/estadisticas` (total/activos/inactivos) mirroring `/api/usuarios/estadisticas`, with focused tests. Route: backend writer. Commit: pending.
 - T7 (S8, S9): Frontend CRM shell with persistent KPIs, real Orígenes/Etapas routes, extended CRM navigation, read-only catalog pages relocated, and the leads page losing its internal tabs/KPI block. Route: bounded frontend writer. Commit: pending.
+
+### L9 — T6/T7 implementation and parent verification
+
+Backend `GET /api/clientes/estadisticas` committed as `1b42fd3` on `feature/crm-client-statistics` and fast-forwarded into `mateo`: one JPQL aggregate over every stored customer (active included in `total`), `CLIENTE_LEER`, Spanish `@Operation`. RED exposed that the literal path was being swallowed by `/{id}` (403 expected, 400 observed); GREEN focused 25/25 and the full Maven suite 86/86 with no environment failure.
+
+Frontend delivered the CRM shell: `CrmShell` renders `CrmCatalogNavigation` (Clientes · Prospectos · Orígenes · Etapas), one `catalog-metrics` KPI block (Clientes with `N activos · M inactivos`, Prospectos/Convertidos/Pendientes from the prospectos statistics) and `<router-outlet />` as siblings, so tab changes never re-create or re-read the block. `customers.routes.ts` is one guarded shell parent with children `''`, `leads`, `leads/:id`, `origins`, `stages`, `:id` (static before dynamic, titles and per-consumer `provideCatalogToast()` kept). New `CrmOriginsPage`/`CrmStagesPage` are read-only tables over the existing root catalog reads; the leads page lost its tabs, KPI block, catalog tables and duplicated nav; the customers page no longer renders the nav (the leftover import was removed by the parent, clearing NG8113). New customer statistics plumbing: `cliente-estadisticas.params.ts` → repository/`GetCustomerStatisticsUseCase` → HTTP source with DTO validation → 120000ms success-only single-key entry in `CustomersStore` with ref-counted flights, forced retry, session fencing and confirmed-write invalidation.
+
+Evidence: writer RED (unresolved shell/pages/use case) → GREEN partitioned (leads 33, customers 53, shell 6, origins 4, stages 4, state 100, source 87, routes/nav/contracts 16, admin routes 23); parent runs 67/67 (customers + shell + origins + stages) and 49/49 + 100/100 + 87/87 (leads/routes/nav/contracts, state, source). The combined focused command and `ng build` still cannot complete on this machine (native/zone heap exhaustion), so full-suite and production/SSR builds stay unverified, as do live CORS, `/api/clientes/estadisticas` against a running backend and browser acceptance.

@@ -7,13 +7,15 @@ import { CreateCustomerParams, UpdateCustomerParams } from "../params/customer.p
 
 import { CustomerListQuery } from "../models/customer-list-query"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
+import { ClienteEstadisticas } from "../params/cliente-estadisticas.params"
 
-/** Active-only server pages and profile actions. Status is a separate capability. */
+/** Active-only server pages, the server aggregate and profile actions. Status is a capability. */
 export interface CustomerRepository {
   findById(id: number): Observable<Result<Customer, CustomerError>>
   findPage(
     query: CustomerListQuery
   ): Observable<Result<PaginationResponse<Customer>, CustomerError>>
+  findStatistics(): Observable<Result<ClienteEstadisticas, CustomerError>>
   create(customer: CreateCustomerParams): Observable<Result<Customer, CustomerError>>
   update(customer: UpdateCustomerParams): Observable<Result<Customer, CustomerError>>
 }

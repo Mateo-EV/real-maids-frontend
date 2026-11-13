@@ -1,0 +1,124 @@
+<app-crm-catalog-navigation />
+<div class="bg-background text-foreground">
+  <!-- Mounted once by the shell: the routed consumer changes below, this block never re-mounts. -->
+  <div class="mx-auto w-full px-4 pt-6 sm:px-6 lg:px-6">
+    <section
+      class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      aria-label="Resumen del CRM"
+    >
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Clientes</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="navy"
+            ><ng-icon name="lucideUsers" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-customer-metric>
+            {{ customerStatistics().result?.total ?? "—" }}
+          </p>
+          <p hlmCardDescription>
+            @if (customerStatistics().result; as totals) {
+              {{ totals.activos }} activos · {{ totals.inactivos }} inactivos
+            } @else {
+              {{
+                customerStatistics().loading
+                  ? "Cargando estadísticas…"
+                  : "Estadísticas sin verificar"
+              }}
+            }
+          </p>
+          @if (customerStatistics().refreshing) {
+            <p role="status" class="text-sm">Actualizando estadísticas…</p>
+          }
+          @if (customerStatistics().error) {
+            @if (customerStatistics().result) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">{{ customerStatisticsError }}</p>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              size="sm"
+              (click)="retryCustomers()"
+              [disabled]="customerStatistics().loading || customerStatistics().refreshing"
+            >
+              Reintentar estadísticas de clientes
+            </button>
+          }
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Prospectos</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="green"
+            ><ng-icon name="lucideTag" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-prospect-metric>
+            {{ leadStatistics().data?.total ?? "—" }}
+          </p>
+          <p hlmCardDescription>
+            @if (leadStatistics().data; as totals) {
+              {{ totals.convertidos }} convertidos · {{ totals.pendientes }} pendientes
+            } @else {
+              {{
+                leadStatistics().loading ? "Cargando estadísticas…" : "Estadísticas sin verificar"
+              }}
+            }
+          </p>
+          @if (leadStatistics().refreshing) {
+            <p role="status" class="text-sm">Actualizando estadísticas…</p>
+          }
+          @if (leadStatistics().error) {
+            @if (leadStatistics().data) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">{{ leadStatisticsError }}</p>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              size="sm"
+              (click)="retryLeads()"
+              [disabled]="leadStatistics().loading || leadStatistics().refreshing"
+            >
+              Reintentar estadísticas de prospectos
+            </button>
+          }
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Convertidos</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="amber"
+            ><ng-icon name="lucideCircleCheck" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-converted-metric>
+            {{ leadStatistics().data?.convertidos ?? "—" }}
+          </p>
+          <p hlmCardDescription>
+            {{ leadStatistics().data ? "Del total del servidor" : "Estadísticas sin verificar" }}
+          </p>
+        </div>
+      </article>
+      <article hlmCard>
+        <div hlmCardHeader>
+          <p class="kpi-label">Pendientes</p>
+          <span hlmCardAction class="kpi-tile" data-kpi-tone="blue"
+            ><ng-icon name="lucideClock" aria-hidden="true" size="24"
+          /></span>
+          <p class="kpi-value" data-pending-metric>
+            {{ leadStatistics().data?.pendientes ?? "—" }}
+          </p>
+          <p hlmCardDescription>
+            {{ leadStatistics().data ? "Del total del servidor" : "Estadísticas sin verificar" }}
+          </p>
+        </div>
+      </article>
+    </section>
+  </div>
+</div>
+<router-outlet />

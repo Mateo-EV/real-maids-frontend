@@ -10,6 +10,7 @@ import {
   LinkCustomerAccountParams
 } from "../../domain/params/customer.params"
 import { customerTransport } from "./customer-http.transport"
+import { ClienteEstadisticas } from "../../domain/params/cliente-estadisticas.params"
 import {
   record,
   readId,
@@ -27,8 +28,23 @@ import {
   required,
   email,
   optional,
-  invalid
+  invalid,
+  integer
 } from "./customer-http.validation"
+
+/** Server counts are nonnegative safe integers; no cross-count arithmetic is asserted here. */
+function count(v: unknown): number {
+  return integer(v) ? v : invalid()
+}
+/** Frozen aggregate contract; an absent field is an invalid response, never an invented zero. */
+export function clientStatisticsDto(v: unknown): ClienteEstadisticas {
+  const p = record(v)
+  return {
+    total: count(p["total"]),
+    activos: count(p["activos"]),
+    inactivos: count(p["inactivos"])
+  }
+}
 
 export function customerDto(v: unknown): Customer {
   const p = record(v)
@@ -97,6 +113,12 @@ export class CustomerHttpSource {
       },
       v => sameId(customerDto(v), customerId),
       "CUSTOMER_NOT_FOUND"
+    )
+  }
+  findStatistics() {
+    return this.transport.request(
+      () => this.http.get<unknown>(`${this.url}/estadisticas`, { transferCache: false }),
+      clientStatisticsDto
     )
   }
   create(params: CreateCustomerParams) {
