@@ -24,31 +24,24 @@
         <label hlmFieldLabel [for]="'request-' + catalog.key"
           >{{ catalog.label }} (obligatorio)</label
         >
-        <hlm-native-select
-          [selectId]="'request-' + catalog.key"
-          [formField]="profile[catalog.key]"
-          [attr.aria-describedby]="
-            'request-' + catalog.key + '-status request-' + catalog.key + '-errors'
-          "
-          (change)="catalog.key === 'customerId' && customerChanged($event)"
-          class="w-full"
-        >
-          <option value="">Selecciona {{ catalog.label.toLowerCase() }}</option>
-          @if (model()[catalog.key] && !hasChoice(catalog.key, model()[catalog.key])) {
-            <option [value]="model()[catalog.key]" [selected]="true">
-              @if (catalog.key === "customerId" && selectedCustomer(); as selected) {
-                {{ selected.name }}
-              } @else {
-                {{ catalog.label }} no disponible en el catálogo actual
-              }
-            </option>
-          }
-          @for (option of catalog.options; track option.id) {
-            <option [value]="'' + option.id" [selected]="model()[catalog.key] === '' + option.id">
-              {{ option.label }}
-            </option>
-          }
-        </hlm-native-select>
+        <app-catalog-combobox
+          [id]="'request-' + catalog.key"
+          [label]="catalog.label"
+          [placeholder]="catalog.placeholder"
+          [emptyLabel]="catalog.emptyLabel"
+          [searchPlaceholder]="catalog.searchPlaceholder"
+          [selectedLabel]="catalog.selected"
+          [searchable]="catalog.searchable"
+          [options]="catalog.options"
+          [loading]="catalog.busy"
+          [errorLabel]="catalog.failed ? catalog.errorLabel : ''"
+          [page]="catalog.page ?? 1"
+          [pageCount]="catalog.pageCount"
+          (searchChange)="catalog.key === 'customerId' && searchCustomers($event)"
+          (selectChange)="choiceChanged(catalog.key, $event)"
+          (reload)="loadCatalog(catalog.key)"
+          (pageChange)="goToPage($event)"
+        />
         <div [id]="'request-' + catalog.key + '-status'" class="flex flex-col gap-2">
           @if (catalog.busy) {
             <p role="status">Cargando {{ catalog.name }}…</p>
@@ -60,15 +53,11 @@
                 {{ catalog.name }}.
               </p>
               <p hlmAlertDescription>
-                Reintenta para verificar las opciones. Tu borrador se conserva.
+                Abre el selector y usa el botón de recarga para verificar las opciones. Tu borrador
+                se conserva.
               </p>
             </div>
-          } @else if (
-            catalog.loaded &&
-            (editing
-              ? !(catalog.key === "propertyId" ? propertyOptions().length : typeOptions().length)
-              : !catalog.options.length)
-          ) {
+          } @else if (catalog.loaded && catalog.empty) {
             <p role="status">
               No hay {{ catalog.name }}{{ catalog.key === "propertyId" ? " activas" : "" }} en el
               catálogo recibido.
@@ -76,25 +65,14 @@
           } @else if (catalog.key === "propertyId" && !selectedCustomer() && !editing) {
             <p hlmFieldDescription>Selecciona primero un cliente activo verificado.</p>
           }
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            size="sm"
-            [disabled]="
-              pending() ||
-              catalog.busy ||
-              (catalog.key === 'propertyId' && !selectedCustomer() && !editing)
-            "
-            (click)="loadCatalog(catalog.key)"
-          >
-            {{ catalog.failed ? "Reintentar" : "Actualizar" }} {{ catalog.name }}
-          </button>
         </div>
         <div [id]="'request-' + catalog.key + '-errors'">
           @if (profile[catalog.key]().touched()) {
             @for (error of profile[catalog.key]().errors(); track error.kind) {
-              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              <!-- A picker is not a native control, so the field has no control invalid state. -->
+              <hlm-field-error [validator]="error.kind" forceShow>{{
+                error.message
+              }}</hlm-field-error>
             }
           }
         </div>
@@ -104,23 +82,6 @@
               Cliente seleccionado: {{ selected.name }} · ID {{ selected.id }}
             </p>
           }
-          <p hlmFieldDescription role="status">
-            @if (customerPage(); as page) {
-              {{ page.items.length ? page.offset + 1 : 0 }}–{{
-                page.items.length ? page.offset + page.items.length : 0
-              }}
-              de {{ page.total }} clientes
-            } @else {
-              Clientes sin verificar
-            }
-          </p>
-          <app-table-pagination
-            label="Paginación de clientes para la solicitud"
-            [currentPage]="currentPage()"
-            [pageCount]="pageCount()"
-            [disabled]="pending() || customerBusy() || !customerPage()"
-            (pageSelected)="goToPage($event)"
-          />
         }
       </div>
     }

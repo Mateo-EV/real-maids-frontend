@@ -178,8 +178,8 @@ describe("WP7 request detail additive edit ownership", () => {
         // Request identity changed, but its customer (8) did not. Fresh owner
         // properties/types survive a cancelled PUT and are reused on reopening.
         await s.open()
-        expect(s.field("propertyId").value).toBe("31")
-        expect(s.field("serviceTypeId").value).toBe("4")
+        expect(s.label("propertyId")).toBe("Propiedad capturada")
+        expect(s.label("serviceTypeId")).toBe("Tipo capturado")
       }
       s.http.expectNone(() => true)
     }

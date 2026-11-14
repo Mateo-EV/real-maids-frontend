@@ -160,6 +160,36 @@ describe("CatalogCombobox presentation", () => {
     expect(panel.textContent).toContain("Sin clientes en esta página")
   })
 
+  it("hides the search box but keeps the reload action when the catalog has no server search", async () => {
+    const { fixture, open, settle } = await setup({ searchable: false })
+    const reloads = vi.fn()
+    fixture.componentInstance.reload.subscribe(reloads)
+    const panel = await open()
+    expect(panel.querySelector('input[type="search"]')).toBeNull()
+    expect(panel.querySelector("input")).toBeNull()
+    const reload = [...panel.querySelectorAll("button")].find(
+      button => button.getAttribute("aria-label") === "Recargar opciones"
+    )!
+    expect(reload).toBeDefined()
+    expect(reload.querySelector('ng-icon[name="lucideRefreshCw"]')).not.toBeNull()
+    // The verified page stays rendered and selectable: only the box is gone.
+    expect(panel.querySelectorAll('[role="option"]').length).toBe(2)
+    reload.click()
+    await settle()
+    expect(reloads).toHaveBeenCalledOnce()
+    // The consumer can re-enable the box for a catalog whose contract does support search.
+    fixture.componentRef.setInput("searchable", true)
+    await settle()
+    expect(panel.querySelector<HTMLInputElement>('input[type="search"]')?.id).toBe(
+      "customer-choice-search"
+    )
+    expect(
+      [...panel.querySelectorAll("button")].some(
+        button => button.getAttribute("aria-label") === "Recargar opciones"
+      )
+    ).toBe(true)
+  })
+
   it("omits paging unless supplied and keeps bounded paging inside the panel", async () => {
     const { fixture, open, settle } = await setup()
     const changes = vi.fn()

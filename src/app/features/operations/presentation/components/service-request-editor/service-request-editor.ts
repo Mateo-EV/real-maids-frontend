@@ -1,21 +1,33 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { disabled, form, FormField, FormRoot, submit, validate } from "@angular/forms/signals"
-import { catchError, EMPTY, firstValueFrom, Observable, Subject, switchMap, takeUntil } from "rxjs"
+import {
+  catchError,
+  EMPTY,
+  firstValueFrom,
+  Observable,
+  of,
+  Subject,
+  switchMap,
+  takeUntil,
+  timer
+} from "rxjs"
 import { BrnDialogRef, injectBrnDialogContext } from "@spartan-ng/brain/dialog"
 import { HlmDialogImports } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmFieldImports } from "@spartan-ng/helm/field"
 import { HlmInputImports } from "@spartan-ng/helm/input"
 import { HlmTextareaImports } from "@spartan-ng/helm/textarea"
-import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { CustomerPropertiesStore } from "@/app/features/customers/presentation/state/customer-properties.store"
 import { customerDialogLifecycle } from "@/app/features/customers/presentation/components/customer-editor/customer-dialog-lifecycle"
 import { ServiceCatalogStore } from "@/app/features/service-catalog/presentation/state/service-catalog.store"
-import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
+import {
+  CatalogCombobox,
+  CatalogComboboxOption
+} from "@/app/shared/components/catalog-combobox/catalog-combobox"
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
 import { OperationsErrorCode } from "../../../domain/errors/operations.error"
@@ -28,7 +40,36 @@ export interface ServiceRequestEditorContext {
   request?: ServiceRequestSummary
   ownerChanged$?: Observable<void>
 }
+/**
+ * Customer page the editor observes. The owner-properties list and the active service-type
+ * catalog are finite server lists without a search parameter, so only this one carries one.
+ */
+type CustomerPageQuery = NormalizedPagination & { readonly search?: string }
+/** Only the one catalog contract that really supports a server-side search is debounced. */
+const searchDebounceMs = 250
+/** One searchable picker contract: the panel never filters, pages or totals on its own. */
+interface CatalogField {
+  readonly key: "customerId" | "propertyId" | "serviceTypeId"
+  readonly label: string
+  readonly name: string
+  readonly placeholder: string
+  readonly searchPlaceholder: string
+  readonly emptyLabel: string
+  readonly errorLabel: string
+  readonly options: readonly CatalogComboboxOption[]
+  readonly selected: string
+  /** Only the customer page has a server search parameter; the other two are finite lists. */
+  readonly searchable: boolean
+  readonly busy: boolean
+  readonly failed: boolean
+  readonly loaded: boolean
+  readonly empty: boolean
+  readonly page?: number
+  readonly pageCount?: number
+}
 const positiveId = (value: string) => /^[1-9]\d*$/.test(value) && Number(value) <= 2147483647
+/** A selection whose option left the verified page stays visible without inventing a record. */
+const missingChoice = (label: string) => `${label} no disponible en el catálogo actual`
 const calendar = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const [year, month, day] = value.split("-").map(Number)
@@ -47,10 +88,9 @@ const calendar = (value: string) => {
     HlmFieldImports,
     HlmInputImports,
     HlmTextareaImports,
-    HlmNativeSelectImports,
     HlmAlertImports,
     HlmSpinnerImports,
-    TablePagination
+    CatalogCombobox
   ],
   templateUrl: "./service-request-editor.html"
 })
@@ -65,15 +105,20 @@ export class ServiceRequestEditor implements OnInit {
   private readonly properties = inject(CustomerPropertiesStore)
   private readonly catalog = inject(ServiceCatalogStore)
   private readonly store = inject(ServiceRequestsStore)
-  private readonly requested = signal<NormalizedPagination>({ offset: 0, limit: 20 })
+  private readonly requested = signal<CustomerPageQuery>({ offset: 0, limit: 20 })
   // Only the explicitly selected safe identity/context is retained locally, never
   // a catalog result. Its originating root entry remains the authority at dispatch.
   readonly selectedCustomer = signal<{
     id: number
     name: string
-    query: NormalizedPagination
+    query: CustomerPageQuery
   } | null>(null)
-  private readonly customerQueries = new Subject<{ query: NormalizedPagination; force: boolean }>()
+  /** One active customer key: a search supersedes the previous read instead of adding keys. */
+  private readonly customerQueries = new Subject<{
+    query: CustomerPageQuery
+    force: boolean
+    delay: number
+  }>()
   private readonly ownerChanged = new Subject<void>()
   private readonly customerAdmissionError = signal(false)
   private readonly propertyAdmissionError = signal(false)
@@ -88,9 +133,13 @@ export class ServiceRequestEditor implements OnInit {
   })
   readonly customerEntry = computed(() => this.customers.selectQuery(this.requested()))
   readonly customerPage = computed(() => this.customerEntry().result)
-  readonly customerQuery = computed(() => {
+  /** Effective returned metadata, carrying the search term of the observed key. */
+  readonly customerQuery = computed<CustomerPageQuery>(() => {
     const page = this.customerPage()
-    return page ? { offset: page.offset, limit: page.limit } : this.requested()
+    const search = this.requested().search
+    return page
+      ? { offset: page.offset, limit: page.limit, ...(search ? { search } : {}) }
+      : this.requested()
   })
   readonly currentPage = computed(
     () => this.customerQuery().offset / this.customerQuery().limit + 1
@@ -98,15 +147,27 @@ export class ServiceRequestEditor implements OnInit {
   readonly pageCount = computed(() =>
     Math.max(1, Math.ceil((this.customerPage()?.total ?? 0) / this.customerQuery().limit))
   )
-  readonly customerOptions = computed(
+  private readonly loadedCustomers = computed<readonly CatalogComboboxOption[]>(
     () =>
       this.customerEntry()
         .result?.items.filter(c => c.isActive)
-        .map(c => ({
-          id: c.id,
-          label: c.name
-        })) ?? []
+        .map(c => ({ value: String(c.id), label: c.name })) ?? []
   )
+  /** Verified page options plus the retained identity, never a fabricated customer. */
+  readonly customerOptions = computed<readonly CatalogComboboxOption[]>(() => {
+    const loaded = this.loadedCustomers()
+    const selected = this.selectedCustomer()
+    const value = this.model().customerId
+    if (!value || loaded.some(option => option.value === value)) return loaded
+    const name = selected && String(selected.id) === value ? selected.name : undefined
+    return [
+      {
+        value,
+        label: name ? `${name} · no disponible en esta página` : missingChoice("Cliente")
+      },
+      ...loaded
+    ]
+  })
   readonly customerBusy = computed(
     () => this.customerEntry().loading || this.customerEntry().refreshing
   )
@@ -162,8 +223,14 @@ export class ServiceRequestEditor implements OnInit {
         ]
       : this.typeOptions()
   )
+  private readonly propertyChoices = computed<readonly CatalogComboboxOption[]>(() =>
+    this.withMissing(this.editPropertyOptions(), this.model().propertyId, "Propiedad")
+  )
+  private readonly typeChoices = computed<readonly CatalogComboboxOption[]>(() =>
+    this.withMissing(this.editTypeOptions(), this.model().serviceTypeId, "Tipo de servicio")
+  )
 
-  readonly catalogs = computed(() => [
+  readonly catalogs = computed<readonly CatalogField[]>(() => [
     ...(this.editing
       ? []
       : [
@@ -171,18 +238,34 @@ export class ServiceRequestEditor implements OnInit {
             key: "customerId" as const,
             label: "Cliente",
             name: "clientes",
+            placeholder: "Selecciona cliente",
+            searchPlaceholder: "Buscar cliente…",
+            emptyLabel: "Sin clientes para esta búsqueda.",
+            errorLabel: "No se pudieron cargar los clientes.",
             options: this.customerOptions(),
+            selected: this.choiceLabel(this.customerOptions(), this.model().customerId),
+            searchable: true,
             loaded: !!this.customerPage(),
+            empty: !this.loadedCustomers().length,
             busy: this.customerBusy(),
-            failed: this.customerFailed()
+            failed: this.customerFailed(),
+            page: this.currentPage(),
+            pageCount: this.pageCount()
           }
         ]),
     {
       key: "propertyId" as const,
       label: "Propiedad",
       name: "propiedades",
-      options: this.editPropertyOptions(),
+      placeholder: "Selecciona propiedad",
+      searchPlaceholder: "Buscar propiedad…",
+      emptyLabel: "Sin propiedades activas del cliente.",
+      errorLabel: "No se pudieron cargar las propiedades.",
+      options: this.propertyChoices(),
+      selected: this.choiceLabel(this.propertyChoices(), this.model().propertyId),
+      searchable: false,
       loaded: this.propertyEntry().loaded,
+      empty: !this.propertyOptions().length,
       busy: this.propertyBusy(),
       failed: this.propertyFailed()
     },
@@ -190,8 +273,15 @@ export class ServiceRequestEditor implements OnInit {
       key: "serviceTypeId" as const,
       label: "Tipo de servicio",
       name: "tipos de servicio",
-      options: this.editTypeOptions(),
+      placeholder: "Selecciona tipo de servicio",
+      searchPlaceholder: "Buscar tipo de servicio…",
+      emptyLabel: "Sin tipos de servicio en el catálogo recibido.",
+      errorLabel: "No se pudieron cargar los tipos de servicio.",
+      options: this.typeChoices(),
+      selected: this.choiceLabel(this.typeChoices(), this.model().serviceTypeId),
+      searchable: false,
       loaded: this.typeEntry().loaded,
+      empty: !this.typeOptions().length,
       busy: this.typeBusy(),
       failed: this.typeFailed()
     }
@@ -213,15 +303,27 @@ export class ServiceRequestEditor implements OnInit {
     else if (key === "propertyId") this.loadProperties(true)
     else this.loadTypes(true)
   }
+  /** Only a value the picker actually offers becomes the model; nothing is inferred. */
+  choiceChanged(key: "customerId" | "propertyId" | "serviceTypeId", value: string): void {
+    if (!this.current() || this.pending()) return
+    if (key === "customerId") {
+      this.customerChanged(value)
+      return
+    }
+    if (value === this.model()[key]) return
+    this.model.update(m => ({ ...m, [key]: value }))
+  }
 
   private validCustomer(value: string): boolean {
     if (this.editing) return positiveId(value) && Number(value) === this.editing.customerId
     const selected = this.selectedCustomer()
     if (!positiveId(value) || !selected || selected.id !== Number(value)) return false
     const source = this.customers.selectQuery(selected.query)
+    const requested = this.requested()
     const sameQuery =
-      selected.query.offset === this.requested().offset &&
-      selected.query.limit === this.requested().limit
+      selected.query.offset === requested.offset &&
+      selected.query.limit === requested.limit &&
+      (selected.query.search ?? "") === (requested.search ?? "")
     if (sameQuery && this.customerAdmissionError()) return false
     return (
       !!source.result &&
@@ -319,17 +421,23 @@ export class ServiceRequestEditor implements OnInit {
     }
     this.customerQueries
       .pipe(
-        switchMap(({ query, force }) => {
-          this.requested.set(query)
-          this.customerAdmissionError.set(false)
-          return this.customers.observeQuery(query, force).pipe(
-            takeUntil(this.lifecycle.cancelled$),
-            catchError(() => {
-              this.customerAdmissionError.set(true)
-              return EMPTY
+        switchMap(request =>
+          (request.delay ? timer(request.delay) : of(0)).pipe(
+            switchMap(() => {
+              if (!this.current() || this.editing) return EMPTY
+              const query = request.query
+              this.requested.set(query)
+              this.customerAdmissionError.set(false)
+              return this.customers.observeQuery(query, request.force).pipe(
+                takeUntil(this.lifecycle.cancelled$),
+                catchError(() => {
+                  this.customerAdmissionError.set(true)
+                  return EMPTY
+                })
+              )
             })
           )
-        }),
+        ),
         takeUntilDestroyed(this.destroyRef),
         takeUntilDestroyed(this.context.owner)
       )
@@ -356,7 +464,26 @@ export class ServiceRequestEditor implements OnInit {
   loadCustomers(force = false): void {
     if (this.editing) return
     if (!this.current() || this.pending()) return
-    this.customerQueries.next({ query: this.requested(), force })
+    this.customerQueries.next({ query: this.requested(), force, delay: 0 })
+  }
+  /**
+   * Server-side search inside the picker. The current effective size is kept, the page
+   * restarts at zero, and the selection/property context is never reset by a search.
+   */
+  searchCustomers(value: string): void {
+    if (this.editing) return
+    if (!this.current() || this.pending()) return
+    const search = value.trim()
+    if ((this.requested().search ?? "") === search) return
+    this.customerQueries.next({
+      query: {
+        offset: 0,
+        limit: this.customerQuery().limit,
+        ...(search ? { search } : {})
+      },
+      force: false,
+      delay: searchDebounceMs
+    })
   }
   goToPage(page: number): void {
     if (this.editing) return
@@ -371,15 +498,16 @@ export class ServiceRequestEditor implements OnInit {
       page === this.currentPage()
     )
       return
+    const { limit, search } = this.customerQuery()
     this.customerQueries.next({
-      query: { offset: (page - 1) * this.customerQuery().limit, limit: this.customerQuery().limit },
-      force: false
+      query: { offset: (page - 1) * limit, limit, ...(search ? { search } : {}) },
+      force: false,
+      delay: 0
     })
   }
-  customerChanged(event: Event): void {
+  customerChanged(value: string): void {
     if (this.editing) return
     if (!this.current() || this.pending()) return
-    const value = (event.target as HTMLSelectElement).value
     if (value === String(this.selectedCustomer()?.id ?? "")) return
     // Cancel the prior owner before resetting/reading any replacement context.
     this.ownerChanged.next()
@@ -471,19 +599,33 @@ export class ServiceRequestEditor implements OnInit {
           this.typeAdmissionError.set(true)
       })
   }
-  hasChoice(key: "customerId" | "propertyId" | "serviceTypeId", value: string): boolean {
-    const options =
-      key === "customerId"
-        ? this.customerOptions()
-        : key === "propertyId"
-          ? this.editPropertyOptions()
-          : this.editTypeOptions()
-    return options.some(o => String(o.id) === value)
+  private choiceLabel(options: readonly CatalogComboboxOption[], value: string): string {
+    return options.find(option => option.value === value)?.label ?? ""
+  }
+  /** Verified choices plus the retained value, labelled without inventing a catalog name. */
+  private withMissing(
+    options: readonly { readonly id: number; readonly label: string }[],
+    value: string,
+    label: string
+  ): readonly CatalogComboboxOption[] {
+    const loaded = options.map(option => ({ value: String(option.id), label: option.label }))
+    if (!value || loaded.some(option => option.value === value)) return loaded
+    return [{ value, label: missingChoice(label) }, ...loaded]
+  }
+  /**
+   * Native selects were replaced by pickers, so nothing blurs a choice field. A submission
+   * attempt must still surface its validation messages for all three catalog choices.
+   */
+  private touchChoices(): void {
+    this.profile.customerId().markAsTouched()
+    this.profile.propertyId().markAsTouched()
+    this.profile.serviceTypeId().markAsTouched()
   }
   save(): Promise<boolean> {
     if (this.editing) return this.saveEdit()
     if (!this.current() || this.pending()) return Promise.resolve(false)
     this.error.set("")
+    this.touchChoices()
     return submit(this.profile, async () => {
       const v = this.model()
       if (!this.current() || this.store.writing()) return
@@ -536,6 +678,7 @@ export class ServiceRequestEditor implements OnInit {
     const request = this.editing
     if (!request || !this.current() || this.pending()) return Promise.resolve(false)
     this.error.set("")
+    this.touchChoices()
     return submit(this.profile, async () => {
       const v = this.model()
       if (!this.current() || this.store.writing()) return

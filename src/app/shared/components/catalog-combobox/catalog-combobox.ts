@@ -53,6 +53,11 @@ export class CatalogCombobox {
   readonly placeholder = input("Selecciona una opción")
   readonly emptyLabel = input("Sin opciones en esta página.")
   readonly searchPlaceholder = input("Buscar…")
+  /**
+   * A catalog whose contract has no search parameter hides the box entirely instead of
+   * offering a control that cannot narrow the verified page. The reload action stays.
+   */
+  readonly searchable = input(true)
   readonly selectedLabel = input("")
   readonly options = input<readonly CatalogComboboxOption[]>([])
   readonly loading = input(false)

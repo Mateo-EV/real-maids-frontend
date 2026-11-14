@@ -29,17 +29,19 @@
     class="max-w-[calc(100vw-2rem)]"
     (keydown.escape)="closeOnEscape($event, trigger)"
   >
-    <div class="flex shrink-0 items-center gap-2 p-2">
-      <input
-        hlmInput
-        brnComboboxInput
-        type="search"
-        [id]="id() + '-search'"
-        [attr.aria-label]="label()"
-        [placeholder]="searchPlaceholder()"
-        [attr.aria-activedescendant]="activeOption()"
-        class="min-w-0 flex-1"
-      />
+    <div class="flex shrink-0 items-center gap-2 p-2" [class.justify-end]="!searchable()">
+      @if (searchable()) {
+        <input
+          hlmInput
+          brnComboboxInput
+          type="search"
+          [id]="id() + '-search'"
+          [attr.aria-label]="label()"
+          [placeholder]="searchPlaceholder()"
+          [attr.aria-activedescendant]="activeOption()"
+          class="min-w-0 flex-1"
+        />
+      }
       <button
         hlmBtn
         type="button"

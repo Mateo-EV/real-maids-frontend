@@ -24,6 +24,7 @@ import { ServiceRequestDetailPage } from "../../pages/service-request-detail-pag
 import { ServiceRequestsStore } from "../../state/service-requests.store"
 
 export const origin = "https://api.example.test"
+type ChoiceKey = "customerId" | "propertyId" | "serviceTypeId"
 export const requests = `${origin}/api/solicitudes`
 export const properties = `${origin}/api/clientes/8/propiedades`
 export const types = `${origin}/api/catalogos/tipos-servicio`
@@ -114,6 +115,9 @@ export async function setupUpdate(
   const http = TestBed.inject(HttpTestingController)
   const store = TestBed.inject(ServiceRequestsStore)
   const settle = async () => {
+    // A post-await write continuation is not tracked by whenStable, so let the
+    // macrotask/microtask queues drain before the dialog overlay is re-rendered.
+    await new Promise(resolve => setTimeout(resolve, 0))
     harness.detectChanges()
     await harness.fixture.whenStable()
     harness.detectChanges()
@@ -135,29 +139,82 @@ export async function setupUpdate(
     control!.click()
     await settle()
   }
-  const field = (key: string) => {
-    const control = dialog().querySelector<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >(`#request-${key}`)
+  const field = (key: "description" | "desiredDate") => {
+    const control = dialog().querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `#request-${key}`
+    )
     expect(control, `Public labeled ${key} field`).not.toBeNull()
     return control!
   }
-  const fill = async (key: string, value: string) => {
+  const fill = async (key: "description" | "desiredDate", value: string) => {
     const control = field(key)
     control.value = value
-    control.dispatchEvent(
-      new Event(control.tagName === "SELECT" ? "change" : "input", { bubbles: true })
-    )
+    control.dispatchEvent(new Event("input", { bubbles: true }))
     control.dispatchEvent(new Event("blur"))
     await settle()
   }
-  const injectChoice = async (key: string, value: string) => {
-    const select = field(key) as HTMLSelectElement
-    const option = document.createElement("option")
-    option.value = value
-    option.textContent = "Unverified choice"
-    select.append(option)
-    await fill(key, value)
+  const trigger = (key: ChoiceKey) => {
+    const control = dialog().querySelector<HTMLButtonElement>(`button#request-${key}`)
+    expect(control, `Catalog picker ${key}`).not.toBeNull()
+    return control!
+  }
+  /** What the closed picker reports as the current choice; never a copied result array. */
+  const label = (key: ChoiceKey) => trigger(key).textContent?.trim() ?? ""
+  /** Panel of one picker: its loaded options plus the search/reload/page actions. */
+  const picker = async (key: ChoiceKey) => {
+    const id = `request-${key}`
+    const find = () =>
+      document
+        .getElementById(`${id}-options`)
+        ?.closest("hlm-combobox-content") as HTMLElement | null
+    let panel = find()
+    if (!panel) {
+      // A panel left open by a previous step would swallow the next trigger click.
+      for (const open of document.querySelectorAll<HTMLElement>("hlm-combobox-content")) {
+        open.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+        await settle()
+      }
+      trigger(key).click()
+      await settle()
+      panel = find()
+    }
+    expect(panel, `${id} panel`).toBeTruthy()
+    const search = panel!.querySelector<HTMLInputElement>('input[type="search"]')
+    const options = () => Array.from(panel!.querySelectorAll<HTMLElement>('[role="option"]'))
+    const action = (text: string) =>
+      Array.from(panel!.querySelectorAll<HTMLButtonElement>("button")).find(
+        b => b.textContent?.trim() === text || b.getAttribute("aria-label") === text
+      )
+    return {
+      panel: panel!,
+      search,
+      options,
+      action,
+      values: () => options().map(o => [o.getAttribute("data-value"), o.textContent?.trim()])
+    }
+  }
+  const closePicker = async (choice: Awaited<ReturnType<typeof picker>>) => {
+    ;(choice.search ?? choice.panel).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+    await settle()
+  }
+  const choose = async (key: ChoiceKey, value: string) => {
+    const choice = await picker(key)
+    const option = choice.options().find(o => o.getAttribute("data-value") === value)
+    expect(option, `${key} option ${value}`).toBeDefined()
+    option!.scrollIntoView = vi.fn()
+    option!.click()
+    await settle()
+    return choice
+  }
+  const reload = async (key: ChoiceKey) => {
+    const choice = await picker(key)
+    const action = choice.action("Recargar opciones")
+    expect(action, `${key} reload action`).toBeDefined()
+    action!.click()
+    await settle()
+    return choice
   }
   const submit = async () => {
     const form = dialog().querySelector("form")
@@ -200,7 +257,12 @@ export async function setupUpdate(
     click,
     field,
     fill,
-    injectChoice,
+    trigger,
+    label,
+    picker,
+    closePicker,
+    choose,
+    reload,
     submit,
     navigate,
     read,

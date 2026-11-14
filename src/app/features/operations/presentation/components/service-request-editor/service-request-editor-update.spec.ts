@@ -37,18 +37,19 @@ describe("WP7 request editor captured update mode", () => {
       !customer || customer.disabled || (customer instanceof HTMLInputElement && customer.readOnly)
     ).toBe(true)
     expect(s.dialog().querySelector("app-table-pagination")).toBeNull()
-    for (const [key, value] of Object.entries({
-      propertyId: "31",
-      serviceTypeId: "4",
-      description: "Descripción registrada",
-      desiredDate: "2024-02-29"
-    })) {
-      expect(s.field(key).value).toBe(value)
+    // S1: the two editable catalog references are pickers; no native select and no pager.
+    expect(s.dialog().querySelectorAll("select")).toHaveLength(0)
+    expect(s.dialog().querySelectorAll("app-catalog-combobox")).toHaveLength(2)
+    expect(s.dialog().textContent).not.toMatch(/Página \d+ de \d+/)
+    expect(s.label("propertyId")).toBe("Propiedad capturada")
+    expect(s.label("serviceTypeId")).toBe("Tipo capturado")
+    expect(s.field("description").value).toBe("Descripción registrada")
+    expect(s.field("desiredDate").value).toBe("2024-02-29")
+    for (const key of ["propertyId", "serviceTypeId", "description", "desiredDate"])
       expect(s.dialog().querySelector(`label[for="request-${key}"]`)).not.toBeNull()
-    }
     await s.choices()
-    expect(s.field("propertyId").value).toBe("31")
-    expect(s.field("serviceTypeId").value).toBe("4")
+    expect(s.label("propertyId")).toBe("Propiedad capturada")
+    expect(s.label("serviceTypeId")).toBe("Tipo capturado")
     expect(s.dialog().textContent).not.toMatch(/SYNTHETIC-ACCESS|SYNTHETIC-CODE|Caller/)
     s.http.expectNone(() => true)
   })
@@ -74,8 +75,8 @@ describe("WP7 request editor captured update mode", () => {
         typeRead.flush(mode === "inactive-property" ? [typeDto()] : [typeDto(5)])
       }
       await s.settle()
-      expect(s.field("propertyId").value).toBe("31")
-      expect(s.field("serviceTypeId").value).toBe("4")
+      expect(s.label("propertyId")).toBe("Propiedad capturada")
+      expect(s.label("serviceTypeId")).toBe("Tipo capturado")
       expect(s.dialog().textContent).toContain("Propiedad capturada")
       if (mode === "missing" || mode === "pending")
         expect(s.dialog().textContent).toContain("Tipo capturado")
@@ -107,8 +108,8 @@ describe("WP7 request editor captured update mode", () => {
     await s.settle()
     await s.open()
     await s.choices([propertyDto(31, false), propertyDto(32)], [typeDto(5)])
-    await s.fill("propertyId", "32")
-    await s.fill("serviceTypeId", "5")
+    await s.choose("propertyId", "32")
+    await s.choose("serviceTypeId", "5")
     await s.fill("description", "  <b>Trabajo literal</b>  ")
     await s.fill("desiredDate", "2024-02-29")
     expect(s.field("desiredDate").getAttribute("min")).toBeNull()
@@ -126,8 +127,8 @@ describe("WP7 request editor captured update mode", () => {
     expect(s.success).not.toHaveBeenCalled()
     expect(s.dialog().querySelector('[role="alert"]')).not.toBeNull()
     // Returning to captured references is explicit, never an automatic fallback.
-    await s.fill("propertyId", "31")
-    await s.fill("serviceTypeId", "4")
+    await s.choose("propertyId", "31")
+    await s.choose("serviceTypeId", "4")
     await s.fill("description", "   ")
     await s.fill("desiredDate", "")
     await s.submit()
@@ -180,17 +181,14 @@ describe("WP7 request editor captured update mode", () => {
         [propertyDto(), propertyDto(32), propertyDto(33, false)],
         [typeDto(), typeDto(5)]
       )
-      await s.fill(key, key === "propertyId" ? "32" : "5")
+      await s.choose(key, key === "propertyId" ? "32" : "5")
       await s.fill("description", "Borrador conservado")
       clock.mockReturnValue(start + 120000)
       await s.submit()
       s.http.expectNone(() => true)
-      expect(s.field(key).value).toBe(key === "propertyId" ? "32" : "5")
+      expect(s.label(key)).toBe(key === "propertyId" ? "Propiedad 32 · Dirección 32" : "Tipo 5")
       expect(s.field("description").value).toBe("Borrador conservado")
-      await s.click(
-        key === "propertyId" ? "Actualizar propiedades" : "Actualizar tipos de servicio",
-        s.dialog()
-      )
+      await s.reload(key)
       const revalidate = s.http.expectOne(key === "propertyId" ? properties : types)
       await s.submit()
       s.http.expectNone(r => r.method === "PUT")
@@ -198,10 +196,7 @@ describe("WP7 request editor captured update mode", () => {
       await s.settle()
       await s.submit()
       s.http.expectNone(r => r.method === "PUT")
-      await s.click(
-        key === "propertyId" ? "Reintentar propiedades" : "Reintentar tipos de servicio",
-        s.dialog()
-      )
+      await s.reload(key)
       s.http
         .expectOne(key === "propertyId" ? properties : types)
         .flush(key === "propertyId" ? [propertyDto(32)] : [typeDto(5)])
@@ -220,7 +215,7 @@ describe("WP7 request editor captured update mode", () => {
   )
 
   it.each(["inactive", "foreign", "missing"] as const)(
-    "blocks changed %s property without erasing draft or selecting a default",
+    "never offers a changed %s property and never substitutes it in the replacement",
     async mode => {
       const s = await setupUpdate()
       s.read().flush(requestDto())
@@ -234,11 +229,22 @@ describe("WP7 request editor captured update mode", () => {
             : [],
         [typeDto()]
       )
-      await s.injectChoice("propertyId", "32")
+      const panel = await s.picker("propertyId")
+      // Only the legitimately loaded captured reference is offered.
+      expect(panel.values()).toEqual([["31", "Propiedad capturada"]])
+      await s.closePicker(panel)
       await s.fill("description", "Conservar")
       await s.submit()
-      s.http.expectNone(r => r.method === "PUT")
-      expect(s.field("propertyId").value).toBe("32")
+      const update = s.put()
+      expect(update.request.body).toEqual({
+        idPropiedad: 31,
+        idTipoServicio: 4,
+        descripcion: "Conservar",
+        fechaDeseada: "2024-02-29"
+      })
+      update.flush({}, { status: 403, statusText: "Forbidden" })
+      await s.settle()
+      expect(s.label("propertyId")).toBe("Propiedad capturada")
       expect(s.field("description").value).toBe("Conservar")
       expect(s.success).not.toHaveBeenCalled()
     }
@@ -250,15 +256,15 @@ describe("WP7 request editor captured update mode", () => {
     await s.settle()
     await s.open()
     await s.choices([propertyDto()], [typeDto(), typeDto(5)])
-    await s.fill("serviceTypeId", "5")
-    await s.click("Actualizar tipos de servicio", s.dialog())
+    await s.choose("serviceTypeId", "5")
+    await s.reload("serviceTypeId")
     s.http.expectOne(types).flush([])
     await s.settle()
-    expect(s.field("serviceTypeId").value).toBe("5")
+    expect(s.label("serviceTypeId")).toBe("Tipo de servicio no disponible en el catálogo actual")
     expect(s.dialog().textContent).toMatch(/no disponible/i)
     await s.submit()
     s.http.expectNone(r => r.method === "PUT")
-    await s.fill("serviceTypeId", "4")
+    await s.choose("serviceTypeId", "4")
     await s.submit()
     s.put().flush({}, { status: 403, statusText: "Forbidden" })
     await s.settle()
@@ -275,8 +281,15 @@ describe("WP7 request editor captured update mode", () => {
     const update = s.put()
     expect(s.store.writing()).toBe(true)
     expect(s.success).not.toHaveBeenCalled()
-    for (const key of ["propertyId", "serviceTypeId", "description", "desiredDate"])
+    for (const key of ["description", "desiredDate"] as const)
       expect(s.field(key).disabled).toBe(true)
+    // The disabled fieldset also owns the pickers: a disabled trigger cannot open.
+    for (const key of ["propertyId", "serviceTypeId"] as const) {
+      expect(s.trigger(key).matches(":disabled"), key).toBe(true)
+      s.trigger(key).click()
+      await s.settle()
+      expect(document.querySelector(`input#request-${key}-search`), key).toBeNull()
+    }
     const cancel = s.button("Cancelar", s.dialog())!
     expect(cancel.disabled).toBe(true)
     cancel.click()
