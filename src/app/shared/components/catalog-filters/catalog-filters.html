@@ -1,20 +1,22 @@
-<div class="catalog-filter-search flex flex-col gap-1">
-  <label [for]="searchInputId()" class="text-xs font-medium">{{ searchLabel() }}</label>
-  <hlm-input-group>
-    <input
-      #searchInput
-      hlmInputGroupInput
-      [id]="searchInputId()"
-      type="search"
-      [placeholder]="searchPlaceholder()"
-      [value]="searchValue()"
-      (input)="searchChange.emit(searchInput.value)"
-    />
-    <hlm-input-group-addon>
-      <ng-icon name="lucideSearch" aria-hidden="true" />
-    </hlm-input-group-addon>
-  </hlm-input-group>
-</div>
+@if (searchInputId(); as searchId) {
+  <div class="catalog-filter-search flex flex-col gap-1">
+    <label [for]="searchId" class="text-xs font-medium">{{ searchLabel() }}</label>
+    <hlm-input-group>
+      <input
+        #searchInput
+        hlmInputGroupInput
+        [id]="searchId"
+        type="search"
+        [placeholder]="searchPlaceholder()"
+        [value]="searchValue()"
+        (input)="searchChange.emit(searchInput.value)"
+      />
+      <hlm-input-group-addon>
+        <ng-icon name="lucideSearch" aria-hidden="true" />
+      </hlm-input-group-addon>
+    </hlm-input-group>
+  </div>
+}
 @for (select of selects(); track select.id) {
   <div class="flex flex-col gap-1">
     <label [for]="select.id" class="text-xs font-medium">{{ select.label }}</label>
@@ -28,6 +30,20 @@
         <option [value]="option.value">{{ option.label }}</option>
       }
     </hlm-native-select>
+  </div>
+}
+@for (date of dates(); track date.id) {
+  <div class="catalog-filter-date flex flex-col gap-1">
+    <label [for]="date.id" class="text-xs font-medium">{{ date.label }}</label>
+    <hlm-input-group>
+      <input
+        hlmInputGroupInput
+        [id]="date.id"
+        type="date"
+        [value]="date.value"
+        (input)="dateChanged(date.id, $event)"
+      />
+    </hlm-input-group>
   </div>
 }
 <ng-content />

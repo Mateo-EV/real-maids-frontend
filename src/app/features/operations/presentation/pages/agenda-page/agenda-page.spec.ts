@@ -99,15 +99,11 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     expect(TestBed.inject(AgendaStore, null)).toBeNull()
     expect(s.authFactory).not.toHaveBeenCalled()
     s.http.expectNone(r => r.url.includes("/api/"))
-    expect(
-      s.element.querySelector('a[href="/admin/operations/agenda"]')?.getAttribute("aria-current")
-    ).toBe("page")
-    expect(
-      s.element.querySelector('a[href="/admin/operations/requests"]')?.textContent?.trim()
-    ).toBe("Solicitudes")
-    expect(s.element.querySelector('a[href="/admin/operations/orders"]')?.textContent?.trim()).toBe(
-      "Órdenes"
-    )
+    // S9: the shell owns the section tabs; this consumer renders none of them.
+    expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
+    expect(s.element.querySelector('a[href="/admin/operations/requests"]')).toBeNull()
+    expect(s.element.querySelector('a[href="/admin/operations/orders"]')).toBeNull()
+    expect(s.element.querySelector("app-catalog-frame header nav")).toBeNull()
   })
   it.each([
     ["day", "2024-02-29", "2024-02-29", "Día"],

@@ -1,13 +1,14 @@
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
-import { Component, PLATFORM_ID } from "@angular/core"
+import { Component, PLATFORM_ID, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject, Subscription } from "rxjs"
+import { BehaviorSubject, EMPTY, Subscription } from "rxjs"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
@@ -53,8 +54,34 @@ const page = (pagina = 0, tamanio = 20, totalElementos = 45, first = dto()) => {
 @Component({ template: "<p>Navigation target</p>" })
 class NavigationTarget {}
 
+/** Interactive list pages own the customer picker; its paged read is stubbed here. */
+const customerItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
 const subscriptions: Subscription[] = []
+const customerEntries: unknown[] = []
+const customersStub = {
+  selectQuery: () => ({
+    result: {
+      items: customerItems(),
+      offset: 0,
+      limit: 20,
+      total: customerItems().length
+    },
+    loading: false,
+    refreshing: false,
+    error: undefined
+  }),
+  observeQuery: (query: unknown) => {
+    customerEntries.push(query)
+    return EMPTY
+  }
+}
 async function setup(options: { url?: string; server?: boolean; guest?: boolean } = {}) {
+  customerItems.set([
+    { id: 88, name: "Cliente cargado", isActive: true },
+    { id: 91, name: "Cliente inactivo", isActive: false },
+    { id: 92, name: "Otro cliente", isActive: true }
+  ])
+  customerEntries.splice(0)
   const session = new BehaviorSubject<AuthSession | null>(options.guest ? null : caller())
   TestBed.configureTestingModule({
     providers: [
@@ -69,6 +96,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
         { path: "admin/operations/agenda", component: AgendaPage },
         { path: "elsewhere", component: NavigationTarget }
       ]),
+      { provide: CustomersStore, useValue: customersStub },
       { provide: API_URL, useValue: "https://api.example.test" },
       { provide: AuthStore, useValue: { session: () => session.value } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => session.asObservable() } },
@@ -120,47 +148,36 @@ afterEach(() => {
 // WP7 T5 / S1-S4: leaf consumer contracts, not root route/sidebar integration.
 // The importable RED stub intentionally performs no observation or HTTP.
 describe("ServiceRequestsPage inbox", () => {
-  // T6F / S1,S3,S4,S5,S6,S8: navigation is feature-local, not a sidebar change.
+  // S4/S9: the shell owns the section tabs; the page owns filters plus the create action.
   it.each(["loading", "empty", "error"] as const)(
-    "exposes working Solicitudes/Órdenes links in CatalogFrame controls during %s",
+    "keeps the create action in the shared filter row and no duplicate section navigation during %s",
     async state => {
       const s = await setup({ url: `${inbox}?page=2&size=5` })
       const pending = s.request(2, 5)
       if (state === "empty") pending.flush(page(2, 5, 0))
       else if (state === "error") pending.error(new ProgressEvent("error"))
       await s.settle()
-      const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")!
-      expect(controls, "CatalogFrame header controls").not.toBeNull()
-      const requests = controls.querySelector<HTMLAnchorElement>(`a[href="${inbox}"]`)
-      const orders = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/orders"]')
-      expect(requests?.textContent?.trim()).toBe("Solicitudes")
-      expect(requests?.getAttribute("aria-current")).toBe("page")
-      expect(orders?.textContent?.trim()).toBe("Órdenes")
-      expect(orders?.getAttribute("aria-current")).toBeNull()
-      const agenda = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/agenda"]')
-      expect(agenda?.textContent?.trim()).toBe("Agenda")
-      expect(agenda?.getAttribute("aria-current")).toBeNull()
-      const create = Array.from(controls.querySelectorAll("button")).find(
-        button => button.textContent?.trim() === "Crear solicitud"
-      )
-      expect(create, "Existing create action remains available").toBeDefined()
-      expect(create!.disabled).toBe(false)
-      orders!.click()
-      await s.settle()
-      expect(TestBed.inject(Router).url).toBe("/admin/operations/orders")
-      if (state === "loading") expect(pending.cancelled).toBe(true)
-      s.http.expectNone(() => true)
+      const row = s.element.querySelector("app-catalog-filters")! as HTMLElement
+      expect(row, "shared filter row").not.toBeNull()
+      // S4: like CRM/IAM, the action area is the frame's header slot beside the title.
+      expect(s.element.querySelector("app-catalog-frame header [catalogControls]")).toBe(row)
+      const create = row.querySelector<HTMLButtonElement>("button.catalog-action-with-plus")!
+      expect(create.textContent?.trim()).toBe("Crear solicitud")
+      expect(create.disabled).toBe(false)
+      expect(row.querySelector("nav")).toBeNull()
+      expect(s.element.querySelector('a[href="/admin/operations/orders"]')).toBeNull()
+      expect(
+        s.element.querySelector('a[href="/admin/operations/agenda"]'),
+        "agenda navigation moved to the shell"
+      ).toBeNull()
     }
   )
 
-  it("opens the working blank agenda consumer from the inbox header without an agenda GET", async () => {
+  it("opens the working blank agenda consumer from the routes, not from a page-local link", async () => {
     const s = await setup()
     const pending = s.request()
-    const link = s.element.querySelector<HTMLAnchorElement>(
-      '[catalogControls] a[href="/admin/operations/agenda"]'
-    )!
-    expect(link).not.toBeNull()
-    link.click()
+    expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
+    await TestBed.inject(Router).navigateByUrl("/admin/operations/agenda")
     await s.settle()
     expect(pending.cancelled).toBe(true)
     expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
@@ -173,7 +190,7 @@ describe("ServiceRequestsPage inbox", () => {
   it("starts with one 0/20 GET, observable loading and actual ordered table/card records", async () => {
     const s = await setup()
     const pending = s.request()
-    expect(s.element.textContent).toContain("Operaciones")
+    expect(s.element.querySelector("app-catalog-frame header nav")).toBeNull()
     expect(s.element.querySelector("h1")?.textContent).toContain("Solicitudes internas")
     expect(s.element.querySelector('[role="status"]')?.textContent).toMatch(/Cargando solicitudes/)
     expect(s.element.textContent).not.toMatch(/No hay solicitudes|0–0 de 0/)
@@ -204,7 +221,18 @@ describe("ServiceRequestsPage inbox", () => {
     expect(s.element.querySelector("[catalogDesktop] table")).not.toBeNull()
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(2)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(2)
-    expect(s.element.querySelector("input, select")).toBeNull()
+    const filters = Array.from(
+      s.element.querySelectorAll<HTMLElement>(
+        "app-catalog-filters input, app-catalog-filters select"
+      )
+    )
+    expect(filters.length).toBe(4)
+    expect(
+      Array.from(s.element.querySelectorAll("input, select")).every(control =>
+        control.closest("app-catalog-filters")
+      ),
+      "filter controls live only in the shared row"
+    ).toBe(true)
     expect(s.element.textContent).not.toMatch(/Editar|Cancelar solicitud|Cotizar|KPI/)
     s.http.expectNone(() => true)
   })
@@ -438,5 +466,133 @@ describe("ServiceRequestsPage inbox", () => {
       expect(records.querySelector("b")).toBeNull()
     }
     s.http.expectNone(() => true)
+  })
+
+  // S3,S5-S8: filters are one server query, never a local slice or invented values.
+  it("sends the chosen status, customer and inclusive date range as one 0-based query keeping the effective size", async () => {
+    const s = await setup({ url: `${inbox}?page=2&size=5` })
+    s.request(2, 5).flush(page(2, 5, 45))
+    await s.settle()
+    const filters = () => s.element.querySelector("app-catalog-filters")! as HTMLElement
+    const next = async () => {
+      const pending = s.http.expectOne(r => r.url === api)
+      expect(pending.request.method).toBe("GET")
+      pending.flush(page(0, 5, 45))
+      await s.settle()
+      return pending.request.params
+    }
+    const status = filters().querySelector<HTMLSelectElement>("select#requests-filter-status")!
+    expect(
+      Array.from(status.options).map(option => [option.value, option.textContent?.trim()])
+    ).toEqual([
+      ["", "Todos los estados"],
+      ["registrada", "Registrada"],
+      ["atendida", "Atendida"],
+      ["cancelada", "Cancelada"]
+    ])
+    status.value = "atendida"
+    status.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const afterStatus = await next()
+    expect(afterStatus.get("pagina")).toBe("0")
+    expect(afterStatus.get("tamanio")).toBe("5")
+    expect(afterStatus.get("estado")).toBe("atendida")
+    const customer = filters().querySelector<HTMLSelectElement>("select#requests-filter-customer")!
+    expect(
+      Array.from(customer.options).map(option => [option.value, option.textContent?.trim()])
+    ).toEqual([
+      ["", "Todos los clientes"],
+      ["88", "Cliente cargado"],
+      ["92", "Otro cliente"]
+    ])
+    customer.value = "88"
+    customer.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const afterCustomer = await next()
+    expect([
+      afterCustomer.get("pagina"),
+      afterCustomer.get("tamanio"),
+      afterCustomer.get("estado"),
+      afterCustomer.get("idCliente")
+    ]).toEqual(["0", "5", "atendida", "88"])
+    const from = filters().querySelector<HTMLInputElement>("input#requests-filter-from")!
+    const until = filters().querySelector<HTMLInputElement>("input#requests-filter-until")!
+    expect([from.type, until.type]).toEqual(["date", "date"])
+    from.value = "2024-01-01"
+    from.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    const afterFrom = await next()
+    expect([afterFrom.get("desde"), afterFrom.get("hasta")]).toEqual(["2024-01-01", null])
+    until.value = "2024-01-31"
+    until.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    const afterUntil = await next()
+    expect([
+      afterUntil.get("pagina"),
+      afterUntil.get("tamanio"),
+      afterUntil.get("desde"),
+      afterUntil.get("hasta")
+    ]).toEqual(["0", "5", "2024-01-01", "2024-01-31"])
+    const final = filters()
+    expect(final.querySelector<HTMLSelectElement>("select#requests-filter-status")!.value).toBe(
+      "atendida"
+    )
+    expect(final.querySelector<HTMLSelectElement>("select#requests-filter-customer")!.value).toBe(
+      "88"
+    )
+    expect(final.querySelector<HTMLInputElement>("input#requests-filter-from")!.value).toBe(
+      "2024-01-01"
+    )
+    expect(final.querySelector<HTMLInputElement>("input#requests-filter-until")!.value).toBe(
+      "2024-01-31"
+    )
+    // Clearing a filter omits the key instead of sending an empty value.
+    const cleared = final.querySelector<HTMLSelectElement>("select#requests-filter-status")!
+    cleared.value = ""
+    cleared.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const afterClear = await next()
+    expect(afterClear.has("estado")).toBe(false)
+    expect([afterClear.get("idCliente"), afterClear.get("desde"), afterClear.get("hasta")]).toEqual(
+      ["88", "2024-01-01", "2024-01-31"]
+    )
+  })
+
+  it("keeps an explicitly chosen customer visible when the loaded page no longer offers it", async () => {
+    const s = await setup()
+    s.request().flush(page(0, 20, 45))
+    await s.settle()
+    const customer = () =>
+      s.element.querySelector<HTMLSelectElement>("select#requests-filter-customer")!
+    customer().value = "88"
+    customer().dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const read = async () => {
+      const pending = s.http.expectOne(r => r.url === api)
+      expect(pending.request.params.get("idCliente")).toBe("88")
+      pending.flush(page(0, 20, 45))
+      await s.settle()
+    }
+    await read()
+    expect(customer().value).toBe("88")
+    customerItems.set([{ id: 92, name: "Otro cliente", isActive: true }])
+    s.harness.detectChanges()
+    await s.settle()
+    const retained = Array.from(customer().options).find(option => option.value === "88")
+    expect(retained?.textContent?.trim()).toBe("Cliente cargado · no disponible en esta página")
+    expect(customer().value).toBe("88")
+    // S7: the retained selection is never silently cleared or re-queried by a catalog refresh.
+    s.http.expectNone(r => r.url === api)
+    expect(customer().selectedOptions[0].textContent?.trim()).toBe(
+      "Cliente cargado · no disponible en esta página"
+    )
+    // Clearing the filter is the only way to drop the retained identity; the already-cached
+    // unfiltered 0/20 entry is reused, so no duplicate HTTP is dispatched.
+    customer().value = ""
+    customer().dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect(customer().value).toBe("")
+    expect(customer().options.length).toBe(2)
+    s.http.expectNone(r => r.url === api)
   })
 })

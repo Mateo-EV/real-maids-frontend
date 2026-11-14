@@ -17,10 +17,20 @@ export interface CatalogFilterSelect {
   readonly options: readonly CatalogFilterSelectOption[]
 }
 
+/** Native calendar filter: the value is the `YYYY-MM-DD` string the input produced. */
+export interface CatalogFilterDate {
+  readonly id: string
+  readonly label: string
+  readonly value: string
+}
+
 /**
  * Presentation only: the row is the host so `src/styles.css` `.catalog-filter-row > *`
- * keeps targeting the search block, each select wrapper and the projected action button.
- * Queries, debounce and store writes stay consumer-owned.
+ * keeps targeting the search block, each select wrapper, each date wrapper and the
+ * projected action button. Queries, debounce and store writes stay consumer-owned.
+ *
+ * The search block only renders when `searchInputId` is supplied, so lists whose server
+ * contract has no text search (operations requests/orders) do not show a dead input.
  */
 @Component({
   selector: "app-catalog-filters",
@@ -31,11 +41,17 @@ export interface CatalogFilterSelect {
   templateUrl: "./catalog-filters.html"
 })
 export class CatalogFilters {
-  readonly searchInputId = input.required<string>()
-  readonly searchLabel = input.required<string>()
-  readonly searchPlaceholder = input.required<string>()
+  readonly searchInputId = input("")
+  readonly searchLabel = input("")
+  readonly searchPlaceholder = input("")
   readonly searchValue = input("")
   readonly selects = input<readonly CatalogFilterSelect[]>([])
+  readonly dates = input<readonly CatalogFilterDate[]>([])
   readonly searchChange = output<string>()
   readonly selectChange = output<{ id: string; value: string }>()
+  readonly dateChange = output<{ id: string; value: string }>()
+
+  protected dateChanged(id: string, event: Event): void {
+    this.dateChange.emit({ id, value: (event.target as HTMLInputElement).value })
+  }
 }

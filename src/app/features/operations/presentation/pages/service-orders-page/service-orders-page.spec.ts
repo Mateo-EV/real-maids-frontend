@@ -1,15 +1,17 @@
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
-import { Component, PLATFORM_ID } from "@angular/core"
+import { Component, PLATFORM_ID, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject, Subscription } from "rxjs"
+import { BehaviorSubject, EMPTY, Subscription } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
+import { FieldStaffStore } from "@/app/features/field-operations/presentation/state/field-staff.store"
 import { provideOperationsRequestReads } from "../../../operations.providers"
 import { ServiceOrdersStore } from "../../state/service-orders.store"
 import { ServiceOrdersPage } from "./service-orders-page"
@@ -26,8 +28,54 @@ const caller = (id = 19, expires = deadline, name = "Caller") =>
 class NavigationTarget {}
 
 const subscriptions: Subscription[] = []
+/** The staff picker reads the real catalog store in production; this leaf stubs its page. */
+/** The customer picker reads the real catalog store in production; this leaf stubs its page. */
+const customerItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
+const customerQueries: unknown[] = []
+const customersStub = {
+  selectQuery: () => ({
+    result: {
+      items: customerItems(),
+      offset: 0,
+      limit: 20,
+      total: customerItems().length
+    },
+    loading: false,
+    refreshing: false,
+    error: undefined
+  }),
+  observeQuery: (query: unknown) => {
+    customerQueries.push(query)
+    return EMPTY
+  }
+}
+const staffItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
+const staffQueries: unknown[] = []
+const staffStub = {
+  selectStaff: () => ({
+    result: { items: staffItems(), offset: 0, limit: 20, total: staffItems().length },
+    loading: false,
+    refreshing: false,
+    error: undefined
+  }),
+  observeStaff: (query: unknown) => {
+    staffQueries.push(query)
+    return EMPTY
+  }
+}
 async function setup(options: { url?: string; server?: boolean; guest?: boolean } = {}) {
   const session = new BehaviorSubject<AuthSession | null>(options.guest ? null : caller())
+  customerItems.set([
+    { id: 5, name: "Cliente cargado", isActive: true },
+    { id: 7, name: "Cliente inactivo", isActive: false },
+    { id: 8, name: "Otro cliente", isActive: true }
+  ])
+  customerQueries.splice(0)
+  staffItems.set([
+    { id: 4, name: "Operaria cargada", isActive: true },
+    { id: 6, name: "Operaria inactiva", isActive: false },
+    { id: 9, name: "Otra operaria", isActive: true }
+  ])
   const authCreated = vi.fn(() => ({ session: () => session.value }))
   const observeSession = vi.fn(() => session.asObservable())
   TestBed.configureTestingModule({
@@ -43,6 +91,8 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
         { path: "admin/operations/agenda", component: AgendaPage },
         { path: "elsewhere", component: NavigationTarget }
       ]),
+      { provide: CustomersStore, useValue: customersStub },
+      { provide: FieldStaffStore, useValue: staffStub },
       { provide: API_URL, useValue: "https://api.example.test" },
       { provide: AuthStore, useFactory: authCreated },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: observeSession } },
@@ -95,14 +145,11 @@ afterEach(() => {
 // T6D / S1,S3,S4,S5,S6: public unrouted leaf contracts, not root integration.
 // The typed RED scaffold intentionally has no observation, retry or page action.
 describe("ServiceOrdersPage read-only inbox", () => {
-  it("opens the working blank agenda consumer from the inbox header without an agenda GET", async () => {
+  it("opens the working blank agenda consumer from the routes, not from a page-local link", async () => {
     const s = await setup()
     const pending = s.request()
-    const link = s.element.querySelector<HTMLAnchorElement>(
-      '[catalogControls] a[href="/admin/operations/agenda"]'
-    )!
-    expect(link).not.toBeNull()
-    link.click()
+    expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
+    await TestBed.inject(Router).navigateByUrl("/admin/operations/agenda")
     await s.settle()
     expect(pending.cancelled).toBe(true)
     expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
@@ -111,34 +158,24 @@ describe("ServiceOrdersPage read-only inbox", () => {
     ).toBe("")
     s.http.expectNone(r => r.url.includes("/api/"))
   })
-  // T6F / S1,S3,S4,S5,S6,S8: preserve paging and read-only controls.
+  // S3,S9: the shell owns the section tabs; the page owns the filter row.
   it.each(["loading", "empty", "error"] as const)(
-    "exposes working Solicitudes/Órdenes links in CatalogFrame controls during %s",
+    "renders its own filter row and no duplicate section navigation during %s",
     async state => {
       const s = await setup({ url: `${inbox}?page=2&size=5` })
       const pending = s.request(2, 5)
       if (state === "empty") pending.flush(ordersDtoPage(2, 5, 0))
       else if (state === "error") pending.error(new ProgressEvent("error"))
       await s.settle()
-      const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")!
-      expect(controls, "CatalogFrame header controls").not.toBeNull()
-      const requests = controls.querySelector<HTMLAnchorElement>(
-        'a[href="/admin/operations/requests"]'
-      )
-      const orders = controls.querySelector<HTMLAnchorElement>(`a[href="${inbox}"]`)
-      expect(requests?.textContent?.trim()).toBe("Solicitudes")
-      expect(requests?.getAttribute("aria-current")).toBeNull()
-      expect(orders?.textContent?.trim()).toBe("Órdenes")
-      expect(orders?.getAttribute("aria-current")).toBe("page")
-      const agenda = controls.querySelector<HTMLAnchorElement>('a[href="/admin/operations/agenda"]')
-      expect(agenda?.textContent?.trim()).toBe("Agenda")
-      expect(agenda?.getAttribute("aria-current")).toBeNull()
-      expect(controls.querySelector("button")).toBeNull()
-      requests!.click()
-      await s.settle()
-      expect(TestBed.inject(Router).url).toBe("/admin/operations/requests")
-      if (state === "loading") expect(pending.cancelled).toBe(true)
-      s.http.expectNone(() => true)
+      const row = s.element.querySelector("app-catalog-filters")! as HTMLElement
+      expect(row, "shared filter row").not.toBeNull()
+      expect(row.querySelectorAll("select").length).toBe(3)
+      expect(row.querySelectorAll('input[type="date"]').length).toBe(2)
+      expect(row.querySelector("button")).toBeNull()
+      expect(s.element.querySelector('a[href="/admin/operations/requests"]')).toBeNull()
+      expect(s.element.querySelector('a[href="' + inbox + '"]')).toBeNull()
+      expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
+      expect(s.element.querySelector("app-catalog-frame header nav")).toBeNull()
     }
   )
 
@@ -146,7 +183,7 @@ describe("ServiceOrdersPage read-only inbox", () => {
     const s = await setup()
     const pending = s.request()
     expect(s.element.querySelector("h1")?.textContent).toContain("Órdenes de servicio")
-    expect(s.element.textContent).toContain("Operaciones")
+    expect(s.element.querySelector("app-catalog-filters")).not.toBeNull()
     expect(s.element.textContent).toMatch(/Cargando órdenes/)
     expect(s.element.querySelector("app-catalog-frame section")?.getAttribute("aria-busy")).toBe(
       "true"
@@ -185,7 +222,15 @@ describe("ServiceOrdersPage read-only inbox", () => {
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(2)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(2)
     expect(s.element.querySelector("[catalogDesktop] table caption")).not.toBeNull()
-    expect(s.element.querySelector("input, select, textarea, [catalogControls] button")).toBeNull()
+    // S3,S9: the shared filter row is the frame's own header action area (like CRM/IAM);
+    // it is the only form control, with no extra frame action, create button or search input.
+    const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")
+    expect(controls, "filter row projected into the frame header").toBe(
+      s.element.querySelector("app-catalog-filters")
+    )
+    expect(controls!.querySelector("button")).toBeNull()
+    expect(s.element.querySelector("app-catalog-filters button")).toBeNull()
+    expect(s.element.querySelector('app-catalog-filters input[type="search"]')).toBeNull()
     expect(s.element.textContent).not.toMatch(/Crear orden|Editar|Asignar|Cancelar orden|KPI/)
     s.http.expectNone(() => true)
   })
@@ -502,5 +547,101 @@ describe("ServiceOrdersPage read-only inbox", () => {
       expect(records.textContent).not.toMatch(/Solicitud #0|USD|\$/)
     }
     s.http.expectNone(() => true)
+  })
+
+  // S3,S5-S8: one documented server query per change, never a local slice or invented enum.
+  it("sends the chosen order status code, customer, staff and date range as one 0-based query", async () => {
+    const s = await setup({ url: `${inbox}?page=2&size=5` })
+    s.request(2, 5).flush(ordersDtoPage(2, 5, 45))
+    await s.settle()
+    const filters = () => s.element.querySelector("app-catalog-filters")! as HTMLElement
+    const next = async () => {
+      const pending = s.http.expectOne(r => r.url === api)
+      pending.flush(ordersDtoPage(0, 5, 45))
+      await s.settle()
+      return pending.request.params
+    }
+    const status = filters().querySelector<HTMLSelectElement>("select#orders-filter-status")!
+    // Backend CodigoEstadoOrden: the wire carries the code, the label is the visible name.
+    expect(
+      Array.from(status.options).map(option => [option.value, option.textContent?.trim()])
+    ).toEqual([
+      ["", "Todos los estados"],
+      ["PENDIENTE", "Pendiente"],
+      ["PROGRAMADA", "Programada"],
+      ["EN_PROCESO", "En proceso"],
+      ["COMPLETADA", "Completada"],
+      ["PAGADO", "Pagado"],
+      ["CANCELADA", "Cancelada"]
+    ])
+    status.value = "PROGRAMADA"
+    status.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const afterStatus = await next()
+    expect([
+      afterStatus.get("pagina"),
+      afterStatus.get("tamanio"),
+      afterStatus.get("estado")
+    ]).toEqual(["0", "5", "PROGRAMADA"])
+    const customer = filters().querySelector<HTMLSelectElement>("select#orders-filter-customer")!
+    customer.value = "5"
+    customer.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect((await next()).get("idCliente")).toBe("5")
+    const staff = filters().querySelector<HTMLSelectElement>("select#orders-filter-staff")!
+    expect(
+      Array.from(staff.options).map(option => [option.value, option.textContent?.trim()])
+    ).toEqual([
+      ["", "Todo el personal"],
+      ["4", "Operaria cargada"],
+      ["9", "Otra operaria"]
+    ])
+    staff.value = "4"
+    staff.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect((await next()).get("idPersonal")).toBe("4")
+    const from = filters().querySelector<HTMLInputElement>("input#orders-filter-from")!
+    from.value = "2024-03-01"
+    from.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    expect((await next()).get("desde")).toBe("2024-03-01")
+    const until = filters().querySelector<HTMLInputElement>("input#orders-filter-until")!
+    until.value = "2024-03-31"
+    until.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    const final = await next()
+    expect([
+      final.get("pagina"),
+      final.get("tamanio"),
+      final.get("estado"),
+      final.get("idCliente"),
+      final.get("idPersonal"),
+      final.get("desde"),
+      final.get("hasta")
+    ]).toEqual(["0", "5", "PROGRAMADA", "5", "4", "2024-03-01", "2024-03-31"])
+  })
+
+  it("keeps the chosen staff visible after the loaded page stops offering it", async () => {
+    const s = await setup()
+    s.request().flush(ordersDtoPage(0, 20, 45))
+    await s.settle()
+    const staff = () => s.element.querySelector<HTMLSelectElement>("select#orders-filter-staff")!
+    staff().value = "4"
+    staff().dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    const pending = s.http.expectOne(r => r.url === api)
+    expect(pending.request.params.get("idPersonal")).toBe("4")
+    pending.flush(ordersDtoPage(0, 20, 45))
+    await s.settle()
+    staffItems.set([{ id: 9, name: "Otra operaria", isActive: true }])
+    s.harness.detectChanges()
+    await s.settle()
+    expect(
+      Array.from(staff().options)
+        .find(option => option.value === "4")
+        ?.textContent?.trim()
+    ).toBe("Operaria cargada · no disponible en esta página")
+    expect(staff().value).toBe("4")
+    s.http.expectNone(r => r.url === api)
   })
 })

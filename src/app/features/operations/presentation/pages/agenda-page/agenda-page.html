@@ -1,38 +1,12 @@
 <main
   class="bg-background text-foreground mx-auto flex w-full min-w-0 flex-col gap-5 px-4 py-6 sm:px-6"
 >
-  <p class="text-sm text-muted-foreground">Operaciones</p>
   <app-catalog-frame
     titleId="agenda-title"
     title="Agenda"
     description="Consulta de programación por fechas explícitas. Sin cambios de programación desde el calendario."
     [busy]="busy()"
   >
-    <nav catalogControls class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
-      @for (
-        link of [
-          { path: "requests", label: "Solicitudes" },
-          { path: "orders", label: "Órdenes" },
-          { path: "agenda", label: "Agenda" }
-        ];
-        track link.path
-      ) {
-        <a
-          hlmBtn
-          variant="outline"
-          [routerLink]="'/admin/operations/' + link.path"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >{{ link.label }}</a
-        >
-      }
-    </nav>
     <form
       class="grid gap-4 border-b p-4 sm:grid-cols-2 xl:grid-cols-4"
       [formRoot]="fields"
