@@ -1,0 +1,101 @@
+<hlm-combobox
+  [value]="selectedValue()"
+  [search]="search()"
+  (searchChange)="searchOptions($event)"
+  (valueChange)="selectOption($event)"
+  [filter]="showOption"
+  [state]="open()"
+  (stateChanged)="open.set($event)"
+>
+  <button
+    #trigger
+    brnComboboxTrigger
+    brnComboboxAnchor
+    brnComboboxPopoverTrigger
+    hlmBtn
+    type="button"
+    variant="outline"
+    [id]="id()"
+    [attr.aria-label]="label()"
+    class="w-full min-w-0 justify-between"
+  >
+    <span class="min-w-0 truncate" [class.text-muted-foreground]="!selectedLabel()">{{
+      selectedLabel() || placeholder()
+    }}</span>
+    <ng-icon name="lucideChevronDown" aria-hidden="true" class="shrink-0 text-muted-foreground" />
+  </button>
+  <hlm-combobox-content
+    *hlmComboboxPortal
+    class="max-w-[calc(100vw-2rem)]"
+    (keydown.escape)="closeOnEscape($event, trigger)"
+  >
+    <div class="flex shrink-0 items-center gap-2 p-2">
+      <input
+        hlmInput
+        brnComboboxInput
+        type="search"
+        [id]="id() + '-search'"
+        [attr.aria-label]="label()"
+        [placeholder]="searchPlaceholder()"
+        [attr.aria-activedescendant]="activeOption()"
+        class="min-w-0 flex-1"
+      />
+      <button
+        hlmBtn
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        aria-label="Recargar opciones"
+        (mousedown)="$event.preventDefault()"
+        (click)="reload.emit()"
+      >
+        <ng-icon name="lucideRefreshCw" aria-hidden="true" />
+      </button>
+    </div>
+    @if (loading()) {
+      <p role="status" class="px-2 py-1 text-sm text-muted-foreground">Cargando opciones…</p>
+    }
+    @if (errorLabel()) {
+      <p role="alert" class="px-2 py-1 text-sm text-destructive">{{ errorLabel() }}</p>
+    }
+    <div hlmComboboxList [id]="id() + '-options'" [aria-label]="label()" class="min-h-0">
+      @for (option of options(); track option.value) {
+        <hlm-combobox-item [value]="option.value" (click)="selectClickedOption(option.value)">
+          <span class="min-w-0 break-words">{{ option.label }}</span>
+        </hlm-combobox-item>
+      }
+    </div>
+    @if (!options().length && !loading() && !errorLabel()) {
+      <p class="p-2 text-sm text-muted-foreground">{{ emptyLabel() }}</p>
+    }
+    @if (hasPagination()) {
+      <div
+        role="group"
+        aria-label="Páginas de opciones"
+        class="flex shrink-0 items-center justify-between gap-2 border-t p-2"
+      >
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          size="sm"
+          [disabled]="!canGoBack()"
+          (click)="pageChange.emit(page() - 1)"
+        >
+          Anterior
+        </button>
+        <span class="text-xs text-muted-foreground">Página {{ page() }} de {{ pageCount() }}</span>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          size="sm"
+          [disabled]="!canGoForward()"
+          (click)="pageChange.emit(page() + 1)"
+        >
+          Siguiente
+        </button>
+      </div>
+    }
+  </hlm-combobox-content>
+</hlm-combobox>
