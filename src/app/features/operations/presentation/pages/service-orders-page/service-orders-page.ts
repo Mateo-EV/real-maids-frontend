@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
-import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
+import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -11,6 +11,10 @@ import { HlmTableImports } from "@spartan-ng/helm/table"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { FieldStaffStore } from "@/app/features/field-operations/presentation/state/field-staff.store"
+import {
+  CatalogCombobox,
+  CatalogComboboxOption
+} from "@/app/shared/components/catalog-combobox/catalog-combobox"
 import {
   CatalogFilterDate,
   CatalogFilterSelect,
@@ -39,9 +43,22 @@ interface FilterValues {
 }
 
 const noFilters: FilterValues = { status: "", customerId: "", staffId: "", from: "", until: "" }
-/** Loaded pages only: neither picker has a text search in the order list contract. */
-const customerPageQuery = { offset: 0, limit: 20 } as const
-const staffPageQuery = { offset: 0, limit: 20, isActive: true } as const
+/**
+ * One searched page per picker: neither catalog is downloaded nor sliced locally, and only a
+ * set filter offers an empty value (an absence of identity, never an invented record).
+ */
+const customerPage = { offset: 0, limit: 20 } as const
+const staffPage = { offset: 0, limit: 20, isActive: true } as const
+const anyCustomer: CatalogComboboxOption = { value: "", label: "Todos los clientes" }
+const anyStaff: CatalogComboboxOption = { value: "", label: "Todo el personal" }
+const searchDebounceMs = 250
+
+interface PickerRequest {
+  readonly search: string
+  readonly force: boolean
+  readonly delay: number
+}
+
 /**
  * Backend order states: the wire carries the enum code and the operator sees the
  * catalog name (`CodigoEstadoOrden`), never a client-side translation table.
@@ -59,6 +76,7 @@ const orderStatusOptions = [
   selector: "app-service-orders-page",
   imports: [
     RouterLink,
+    CatalogCombobox,
     CatalogFilters,
     CatalogFrame,
     TablePagination,
@@ -86,6 +104,18 @@ export class ServiceOrdersPage implements OnInit {
   /** Captured labels so an already-chosen record never disappears from its own filter. */
   private readonly selectedCustomer = signal<{ id: number; label: string } | null>(null)
   private readonly selectedStaff = signal<{ id: number; label: string } | null>(null)
+  /** Observed picker queries; one active key each, so typing cannot fill a pinned registry. */
+  private readonly customerQuery = signal<{ offset: number; limit: number; search?: string }>(
+    customerPage
+  )
+  private readonly staffQuery = signal<{
+    offset: number
+    limit: number
+    isActive?: boolean
+    search?: string
+  }>(staffPage)
+  private readonly customerReads = new Subject<PickerRequest | null>()
+  private readonly staffReads = new Subject<PickerRequest | null>()
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()
   private revision = 0
   private recoveryUsed = false
@@ -97,14 +127,18 @@ export class ServiceOrdersPage implements OnInit {
     this.filters.set(noFilters)
     this.selectedCustomer.set(null)
     this.selectedStaff.set(null)
+    this.customerQuery.set(customerPage)
+    this.staffQuery.set(staffPage)
+    this.customerReads.next(null)
+    this.staffReads.next(null)
     this.requested.set({ offset: 0, limit: 20 })
     const generation = this.scope.generation()
     // Admit the replacement session only after all scopes have finished resetting.
     queueMicrotask(() => {
       if (!this.current(generation)) return
       this.recoveryUsed = false
-      this.readCustomers(false)
-      this.readStaff(false)
+      this.customerReads.next({ search: "", force: false, delay: 0 })
+      this.staffReads.next({ search: "", force: false, delay: 0 })
       this.load({ offset: 0, limit: 20 })
     })
   })
@@ -127,29 +161,53 @@ export class ServiceOrdersPage implements OnInit {
     this.rows().length ? this.result()!.offset + this.rows().length : 0
   )
   readonly error = computed(() => this.list().error ?? this.admissionError())
-  readonly customerEntry = computed(() => this.customers.selectQuery(customerPageQuery))
-  readonly staffEntry = computed(() => this.staff.selectStaff(staffPageQuery))
-  readonly catalogBusy = computed(
-    () =>
-      this.customerEntry().loading ||
-      this.customerEntry().refreshing ||
-      this.staffEntry().loading ||
-      this.staffEntry().refreshing
+  readonly customerEntry = computed(() => this.customers.selectQuery(this.customerQuery()))
+  readonly staffEntry = computed(() => this.staff.selectStaff(this.staffQuery()))
+  readonly customerError = computed(() =>
+    this.customerEntry().error ? "No se pudieron cargar los clientes." : ""
   )
-  readonly catalogFailed = computed(() => !!this.customerEntry().error || !!this.staffEntry().error)
-  private options(
-    items: readonly { id: number; name: string; isActive: boolean }[] | undefined,
-    selected: { id: number; label: string } | null
-  ): readonly { value: string; label: string }[] {
-    const loaded = (items ?? [])
+  readonly staffError = computed(() =>
+    this.staffEntry().error ? "No se pudo cargar el personal." : ""
+  )
+  private readonly loadedCustomers = computed<readonly CatalogComboboxOption[]>(() =>
+    (this.customerEntry().result?.items ?? [])
       .filter(item => item.isActive)
       .map(item => ({ value: String(item.id), label: item.name }))
-    if (!selected || loaded.some(option => option.value === String(selected.id))) return loaded
-    return [
-      { value: String(selected.id), label: `${selected.label} · no disponible en esta página` },
-      ...loaded
-    ]
+  )
+  private readonly loadedStaff = computed<readonly CatalogComboboxOption[]>(() =>
+    (this.staffEntry().result?.items ?? [])
+      .filter(item => item.isActive)
+      .map(item => ({ value: String(item.id), label: item.name }))
+  )
+  /** Verified page options plus the retained identity; the clear entry only exists when set. */
+  private options(
+    loaded: readonly CatalogComboboxOption[],
+    selected: { id: number; label: string } | null,
+    clear: CatalogComboboxOption
+  ): readonly CatalogComboboxOption[] {
+    const retained =
+      selected && !loaded.some(option => option.value === String(selected.id))
+        ? [
+            {
+              value: String(selected.id),
+              label: `${selected.label} · no disponible en esta página`
+            }
+          ]
+        : []
+    return [...(selected ? [clear] : []), ...retained, ...loaded]
   }
+  readonly customerOptions = computed(() =>
+    this.options(this.loadedCustomers(), this.selectedCustomer(), anyCustomer)
+  )
+  readonly staffOptions = computed(() =>
+    this.options(this.loadedStaff(), this.selectedStaff(), anyStaff)
+  )
+  readonly customerLabel = computed(() =>
+    this.selectedLabel(this.selectedCustomer(), this.customerOptions())
+  )
+  readonly staffLabel = computed(() =>
+    this.selectedLabel(this.selectedStaff(), this.staffOptions())
+  )
   readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => [
     {
       id: "orders-filter-status",
@@ -157,20 +215,6 @@ export class ServiceOrdersPage implements OnInit {
       allLabel: "Todos los estados",
       value: this.filters().status,
       options: orderStatusOptions
-    },
-    {
-      id: "orders-filter-customer",
-      label: "Cliente",
-      allLabel: "Todos los clientes",
-      value: this.filters().customerId,
-      options: this.options(this.customerEntry().result?.items, this.selectedCustomer())
-    },
-    {
-      id: "orders-filter-staff",
-      label: "Personal",
-      allLabel: "Todo el personal",
-      value: this.filters().staffId,
-      options: this.options(this.staffEntry().result?.items, this.selectedStaff())
     }
   ])
   readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
@@ -194,25 +238,67 @@ export class ServiceOrdersPage implements OnInit {
 
   setSelect(id: string, value: string): void {
     if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
-    if (id === "orders-filter-status") {
-      const known = orderStatusOptions.some(option => option.value === value)
-      return this.changeFilters({ status: known ? value : "" })
+    if (id !== "orders-filter-status") return
+    const known = orderStatusOptions.some(option => option.value === value)
+    this.changeFilters({ status: known ? value : "" })
+  }
+
+  /**
+   * S9: only a verified option value reaches the query, the captured label is a real server
+   * name, and the cleared entry is the only way to drop an already-chosen identity.
+   */
+  setCustomer(value: string): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    if (value === this.filters().customerId) return
+    if (!value) {
+      this.selectedCustomer.set(null)
+      return this.changeFilters({ customerId: "" })
     }
-    if (id === "orders-filter-customer") {
-      if (!this.capture(this.customers.selectQuery(customerPageQuery).result?.items, value)) return
-      this.selectedCustomer.set(this.captured(this.selectedCustomer(), customerPageQuery, value))
-      return this.changeFilters({ customerId: value })
+    const customerId = Number(value)
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) return
+    const loaded = this.loadedCustomers().find(option => option.value === value)
+    const retained = this.selectedCustomer()
+    const label =
+      loaded?.label ?? (retained && String(retained.id) === value ? retained.label : undefined)
+    if (!label) return
+    this.selectedCustomer.set({ id: customerId, label })
+    this.changeFilters({ customerId: value })
+  }
+
+  setStaff(value: string): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    if (value === this.filters().staffId) return
+    if (!value) {
+      this.selectedStaff.set(null)
+      return this.changeFilters({ staffId: "" })
     }
-    if (id !== "orders-filter-staff") return
-    const staffId = value ? Number(value) : 0
-    if (value && (!Number.isSafeInteger(staffId) || staffId <= 0)) return
-    if (!value) this.selectedStaff.set(null)
-    else {
-      const loaded = this.staffEntry().result?.items.find(item => item.id === staffId)
-      if (loaded) this.selectedStaff.set({ id: loaded.id, label: loaded.name })
-      else if (this.selectedStaff()?.id !== staffId) return
-    }
+    const staffId = Number(value)
+    if (!Number.isSafeInteger(staffId) || staffId <= 0) return
+    const loaded = this.loadedStaff().find(option => option.value === value)
+    const retained = this.selectedStaff()
+    const label =
+      loaded?.label ?? (retained && String(retained.id) === value ? retained.label : undefined)
+    if (!label) return
+    this.selectedStaff.set({ id: staffId, label })
     this.changeFilters({ staffId: value })
+  }
+
+  /** Debounced server search: it never applies, clears or re-reads the list filters. */
+  searchCustomers(value: string): void {
+    this.queueCustomerRead({ search: value.trim(), force: false, delay: searchDebounceMs })
+  }
+
+  searchStaff(value: string): void {
+    this.queueStaffRead({ search: value.trim(), force: false, delay: searchDebounceMs })
+  }
+
+  /** One forced read of the query currently observed by the picker, nothing else. */
+  reloadCustomers(): void {
+    this.queueCustomerRead({ search: this.customerQuery().search ?? "", force: true, delay: 0 })
+  }
+
+  reloadStaff(): void {
+    this.queueStaffRead({ search: this.staffQuery().search ?? "", force: true, delay: 0 })
   }
 
   setDate(id: string, value: string): void {
@@ -221,30 +307,23 @@ export class ServiceOrdersPage implements OnInit {
     if (id === "orders-filter-until") this.changeFilters({ until: value })
   }
 
-  retryCatalogs(): void {
-    if (this.destroyRef.destroyed || !this.scope.check()) return
-    this.readCustomers(true)
-    this.readStaff(true)
+  private queueCustomerRead(request: PickerRequest): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    this.customerReads.next(request)
   }
 
-  private capture(
-    items: readonly { id: number; name: string; isActive: boolean }[] | undefined,
-    value: string
-  ): boolean {
-    return !value || (items ?? []).some(item => String(item.id) === value)
+  private queueStaffRead(request: PickerRequest): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    this.staffReads.next(request)
   }
 
-  private captured(
+  private selectedLabel(
     selected: { id: number; label: string } | null,
-    _query: unknown,
-    value: string
-  ): { id: number; label: string } | null {
-    if (!value) return null
-    const customerId = Number(value)
-    if (!Number.isSafeInteger(customerId) || customerId <= 0) return selected
-    const loaded = this.customerEntry().result?.items.find(item => item.id === customerId)
-    if (loaded) return { id: loaded.id, label: loaded.name }
-    return selected?.id === customerId ? selected : null
+    options: readonly CatalogComboboxOption[]
+  ): string {
+    if (!selected) return ""
+    const value = String(selected.id)
+    return options.find(option => option.value === value)?.label ?? selected.label
   }
 
   private changeFilters(patch: Partial<FilterValues>): void {
@@ -267,29 +346,66 @@ export class ServiceOrdersPage implements OnInit {
     return query
   }
 
-  private readCustomers(force: boolean): void {
-    this.customers
-      .observeQuery(customerPageQuery, force)
-      .pipe(takeUntil(this.scope.cancelled$), takeUntilDestroyed(this.destroyRef))
-      .subscribe()
-  }
-
-  private readStaff(force: boolean): void {
-    this.staff
-      .observeStaff(staffPageQuery, force)
-      .pipe(takeUntil(this.scope.cancelled$), takeUntilDestroyed(this.destroyRef))
-      .subscribe()
-  }
-
   ngOnInit(): void {
     const ready = this.scope.check()
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event instanceof NavigationStart) {
         this.departing = true
         this.revision++
+        this.customerReads.next(null)
+        this.staffReads.next(null)
         this.queries.next(null)
       }
     })
+    // One picker query is observed per catalog: a new search supersedes the previous read, so
+    // typing cannot exhaust the pinned registry that keeps the current view alive.
+    this.customerReads
+      .pipe(
+        switchMap(request => {
+          if (!request) return EMPTY
+          const generation = this.scope.generation()
+          return (request.delay ? timer(request.delay) : of(0)).pipe(
+            switchMap(() => {
+              if (!this.current(generation)) return EMPTY
+              const query = {
+                offset: customerPage.offset,
+                limit: customerPage.limit,
+                ...(request.search ? { search: request.search } : {})
+              }
+              this.customerQuery.set(query)
+              return this.customers
+                .observeQuery(query, request.force)
+                .pipe(takeUntil(this.scope.cancelled$))
+            })
+          )
+        }),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe()
+    this.staffReads
+      .pipe(
+        switchMap(request => {
+          if (!request) return EMPTY
+          const generation = this.scope.generation()
+          return (request.delay ? timer(request.delay) : of(0)).pipe(
+            switchMap(() => {
+              if (!this.current(generation)) return EMPTY
+              const query = {
+                offset: staffPage.offset,
+                limit: staffPage.limit,
+                isActive: staffPage.isActive,
+                ...(request.search ? { search: request.search } : {})
+              }
+              this.staffQuery.set(query)
+              return this.staff
+                .observeStaff(query, request.force)
+                .pipe(takeUntil(this.scope.cancelled$))
+            })
+          )
+        }),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe()
     this.queries
       .pipe(
         switchMap(request => {
@@ -337,8 +453,8 @@ export class ServiceOrdersPage implements OnInit {
       .subscribe()
     if (ready) this.load(this.requested())
     if (ready) {
-      this.readCustomers(false)
-      this.readStaff(false)
+      this.customerReads.next({ search: "", force: false, delay: 0 })
+      this.staffReads.next({ search: "", force: false, delay: 0 })
     }
   }
 

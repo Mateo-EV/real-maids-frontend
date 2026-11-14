@@ -54,10 +54,11 @@ const page = (pagina = 0, tamanio = 20, totalElementos = 45, first = dto()) => {
 @Component({ template: "<p>Navigation target</p>" })
 class NavigationTarget {}
 
-/** Interactive list pages own the customer picker; its paged read is stubbed here. */
+/** Interactive list pages own the customer picker; its paged/search read is stubbed here. */
 const customerItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
 const subscriptions: Subscription[] = []
-const customerEntries: unknown[] = []
+/** Captured picker reads: the query key plus whether the consumer forced a revalidation. */
+const customerEntries: { query: unknown; force: boolean }[] = []
 const customersStub = {
   selectQuery: () => ({
     result: {
@@ -70,8 +71,8 @@ const customersStub = {
     refreshing: false,
     error: undefined
   }),
-  observeQuery: (query: unknown) => {
-    customerEntries.push(query)
+  observeQuery: (query: unknown, force = false) => {
+    customerEntries.push({ query, force })
     return EMPTY
   }
 }
@@ -133,7 +134,46 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
     button!.click()
     await settle()
   }
-  return { harness, element, http, request, settle, click, session }
+  /** Opens the picker and exposes its panel; options come from the server page only. */
+  const openPicker = async (id: string) => {
+    element.querySelector<HTMLButtonElement>(`button#${id}`)!.click()
+    await settle()
+    const search = document.querySelector<HTMLInputElement>(`input#${id}-search`)
+    expect(search, `${id} search`).not.toBeNull()
+    const panel = search!.closest("hlm-combobox-content") as HTMLElement
+    expect(panel, `${id} panel`).not.toBeNull()
+    const options = () => Array.from(panel.querySelectorAll<HTMLElement>('[role="option"]'))
+    const values = () =>
+      options().map(option => [option.getAttribute("data-value"), option.textContent?.trim()])
+    return { search: search!, panel, options, values }
+  }
+  const closePicker = async (search: HTMLInputElement) => {
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await settle()
+  }
+  const chooseOption = async (id: string, value: string) => {
+    const picker = await openPicker(id)
+    const options = picker.options()
+    options.forEach(option => (option.scrollIntoView = vi.fn()))
+    const option = options.find(item => item.getAttribute("data-value") === value)
+    expect(option, `${id} option ${value}`).toBeDefined()
+    option!.click()
+    await settle()
+  }
+  const trigger = (id: string) => element.querySelector<HTMLButtonElement>(`button#${id}`)!
+  return {
+    harness,
+    element,
+    http,
+    request,
+    settle,
+    click,
+    session,
+    openPicker,
+    closePicker,
+    chooseOption,
+    trigger
+  }
 }
 
 afterEach(() => {
@@ -226,7 +266,11 @@ describe("ServiceRequestsPage inbox", () => {
         "app-catalog-filters input, app-catalog-filters select"
       )
     )
-    expect(filters.length).toBe(4)
+    expect(filters.length).toBe(3)
+    // S6: the customer filter is the searched combobox inside the same shared row.
+    expect(
+      s.element.querySelector("app-catalog-filters button#requests-filter-customer")
+    ).not.toBeNull()
     expect(
       Array.from(s.element.querySelectorAll("input, select")).every(control =>
         control.closest("app-catalog-filters")
@@ -497,17 +541,18 @@ describe("ServiceRequestsPage inbox", () => {
     expect(afterStatus.get("pagina")).toBe("0")
     expect(afterStatus.get("tamanio")).toBe("5")
     expect(afterStatus.get("estado")).toBe("atendida")
-    const customer = filters().querySelector<HTMLSelectElement>("select#requests-filter-customer")!
-    expect(
-      Array.from(customer.options).map(option => [option.value, option.textContent?.trim()])
-    ).toEqual([
-      ["", "Todos los clientes"],
+    const customer = filters().querySelector<HTMLButtonElement>("button#requests-filter-customer")!
+    expect(customer.getAttribute("aria-label")).toBe("Cliente")
+    expect(customer.textContent?.trim()).toBe("Todos los clientes")
+    const picker = await s.openPicker("requests-filter-customer")
+    // S6/S9: only the verified server page, so the inactive record is absent and no option is
+    // invented locally. The empty value only exists once a filter can actually be cleared.
+    expect(picker.values()).toEqual([
       ["88", "Cliente cargado"],
       ["92", "Otro cliente"]
     ])
-    customer.value = "88"
-    customer.dispatchEvent(new Event("change", { bubbles: true }))
-    await s.settle()
+    await s.closePicker(picker.search)
+    await s.chooseOption("requests-filter-customer", "88")
     const afterCustomer = await next()
     expect([
       afterCustomer.get("pagina"),
@@ -537,9 +582,7 @@ describe("ServiceRequestsPage inbox", () => {
     expect(final.querySelector<HTMLSelectElement>("select#requests-filter-status")!.value).toBe(
       "atendida"
     )
-    expect(final.querySelector<HTMLSelectElement>("select#requests-filter-customer")!.value).toBe(
-      "88"
-    )
+    expect(s.trigger("requests-filter-customer").textContent?.trim()).toBe("Cliente cargado")
     expect(final.querySelector<HTMLInputElement>("input#requests-filter-from")!.value).toBe(
       "2024-01-01"
     )
@@ -562,11 +605,7 @@ describe("ServiceRequestsPage inbox", () => {
     const s = await setup()
     s.request().flush(page(0, 20, 45))
     await s.settle()
-    const customer = () =>
-      s.element.querySelector<HTMLSelectElement>("select#requests-filter-customer")!
-    customer().value = "88"
-    customer().dispatchEvent(new Event("change", { bubbles: true }))
-    await s.settle()
+    await s.chooseOption("requests-filter-customer", "88")
     const read = async () => {
       const pending = s.http.expectOne(r => r.url === api)
       expect(pending.request.params.get("idCliente")).toBe("88")
@@ -574,25 +613,76 @@ describe("ServiceRequestsPage inbox", () => {
       await s.settle()
     }
     await read()
-    expect(customer().value).toBe("88")
+    // The captured identity is the trigger label, not a local guess at the current page.
+    expect(s.trigger("requests-filter-customer").textContent?.trim()).toBe("Cliente cargado")
     customerItems.set([{ id: 92, name: "Otro cliente", isActive: true }])
     s.harness.detectChanges()
     await s.settle()
-    const retained = Array.from(customer().options).find(option => option.value === "88")
-    expect(retained?.textContent?.trim()).toBe("Cliente cargado · no disponible en esta página")
-    expect(customer().value).toBe("88")
-    // S7: the retained selection is never silently cleared or re-queried by a catalog refresh.
-    s.http.expectNone(r => r.url === api)
-    expect(customer().selectedOptions[0].textContent?.trim()).toBe(
+    const retained = await s.openPicker("requests-filter-customer")
+    expect(retained.values()).toEqual([
+      ["", "Todos los clientes"],
+      ["88", "Cliente cargado · no disponible en esta página"],
+      ["92", "Otro cliente"]
+    ])
+    await s.closePicker(retained.search)
+    expect(s.trigger("requests-filter-customer").textContent?.trim()).toBe(
       "Cliente cargado · no disponible en esta página"
     )
+    // S9: the retained selection is never silently cleared or re-queried by a catalog refresh.
+    s.http.expectNone(r => r.url === api)
+    expect(customerEntries).toHaveLength(1)
     // Clearing the filter is the only way to drop the retained identity; the already-cached
     // unfiltered 0/20 entry is reused, so no duplicate HTTP is dispatched.
-    customer().value = ""
-    customer().dispatchEvent(new Event("change", { bubbles: true }))
+    await s.chooseOption("requests-filter-customer", "")
     await s.settle()
-    expect(customer().value).toBe("")
-    expect(customer().options.length).toBe(2)
+    expect(s.trigger("requests-filter-customer").textContent?.trim()).toBe("Todos los clientes")
+    const cleared = await s.openPicker("requests-filter-customer")
+    expect(cleared.values()).toEqual([["92", "Otro cliente"]])
     s.http.expectNone(r => r.url === api)
+  })
+
+  // S6/S9: the picker searches on the server without ever applying itself as a filter.
+  it("debounces one customer search read with the busqueda query and keeps the filter unchanged", async () => {
+    const s = await setup()
+    s.request().flush(page(0, 20, 45))
+    await s.settle()
+    expect(customerEntries).toEqual([{ query: { offset: 0, limit: 20 }, force: false }])
+    const picker = await s.openPicker("requests-filter-customer")
+    picker.search.value = "  Cliente  "
+    picker.search.dispatchEvent(new Event("input", { bubbles: true }))
+    picker.search.value = "Cliente cargado"
+    picker.search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    // Still debounced: nothing is dispatched before the 250ms window closes.
+    expect(customerEntries).toHaveLength(1)
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    expect(customerEntries).toEqual([
+      { query: { offset: 0, limit: 20 }, force: false },
+      { query: { offset: 0, limit: 20, search: "Cliente cargado" }, force: false }
+    ])
+    // S9: searching never selects, clears or re-reads the request list filter.
+    expect(s.trigger("requests-filter-customer").textContent?.trim()).toBe("Todos los clientes")
+    expect(picker.options().every(option => option.getAttribute("aria-selected") !== "true")).toBe(
+      true
+    )
+    s.http.expectNone(() => true)
+  })
+
+  it("forces exactly one reload of the customer query from the picker button", async () => {
+    const s = await setup()
+    s.request().flush(page(0, 20, 45))
+    await s.settle()
+    const picker = await s.openPicker("requests-filter-customer")
+    const reload = picker.search.nextElementSibling as HTMLButtonElement
+    expect(reload.getAttribute("aria-label")).toBe("Recargar opciones")
+    reload.click()
+    await s.settle()
+    expect(customerEntries).toEqual([
+      { query: { offset: 0, limit: 20 }, force: false },
+      { query: { offset: 0, limit: 20 }, force: true }
+    ])
+    // S2: the reload replaces the old view-level retry and never touches the list query.
+    s.http.expectNone(() => true)
   })
 })

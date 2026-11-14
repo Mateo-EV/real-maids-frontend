@@ -12,6 +12,23 @@
       (selectChange)="setSelect($event.id, $event.value)"
       (dateChange)="setDate($event.id, $event.value)"
     >
+      <div class="flex flex-col gap-1">
+        <label for="requests-filter-customer" class="text-xs font-medium">Cliente</label>
+        <app-catalog-combobox
+          [id]="'requests-filter-customer'"
+          label="Cliente"
+          placeholder="Todos los clientes"
+          emptyLabel="Sin clientes para esta búsqueda."
+          searchPlaceholder="Buscar cliente…"
+          [selectedLabel]="customerLabel()"
+          [options]="customerOptions()"
+          [loading]="customerBusy()"
+          [errorLabel]="customerError()"
+          (searchChange)="searchCustomers($event)"
+          (selectChange)="setCustomer($event)"
+          (reload)="reloadCustomers()"
+        />
+      </div>
       <button
         hlmBtn
         class="catalog-action-with-plus"
@@ -23,19 +40,6 @@
         <ng-icon name="lucidePlus" aria-hidden="true" />Crear solicitud
       </button>
     </app-catalog-filters>
-    @if (customerBusy()) {
-      <p role="status" class="px-4 py-1 text-xs text-muted-foreground">Cargando clientes…</p>
-    }
-    @if (customerFailed()) {
-      <div class="flex flex-wrap items-center gap-2 px-4 py-1">
-        <p role="alert" class="text-xs text-destructive">
-          No se pudieron cargar los clientes para filtrar.
-        </p>
-        <button hlmBtn variant="outline" size="sm" type="button" (click)="retryCustomers()">
-          Reintentar clientes
-        </button>
-      </div>
-    }
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando solicitudes…

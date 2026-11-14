@@ -31,7 +31,8 @@ const subscriptions: Subscription[] = []
 /** The staff picker reads the real catalog store in production; this leaf stubs its page. */
 /** The customer picker reads the real catalog store in production; this leaf stubs its page. */
 const customerItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
-const customerQueries: unknown[] = []
+/** Captured picker reads: the query key plus whether the consumer forced a revalidation. */
+const customerQueries: { query: unknown; force: boolean }[] = []
 const customersStub = {
   selectQuery: () => ({
     result: {
@@ -44,13 +45,13 @@ const customersStub = {
     refreshing: false,
     error: undefined
   }),
-  observeQuery: (query: unknown) => {
-    customerQueries.push(query)
+  observeQuery: (query: unknown, force = false) => {
+    customerQueries.push({ query, force })
     return EMPTY
   }
 }
 const staffItems = signal<{ id: number; name: string; isActive: boolean }[]>([])
-const staffQueries: unknown[] = []
+const staffQueries: { query: unknown; force: boolean }[] = []
 const staffStub = {
   selectStaff: () => ({
     result: { items: staffItems(), offset: 0, limit: 20, total: staffItems().length },
@@ -58,8 +59,8 @@ const staffStub = {
     refreshing: false,
     error: undefined
   }),
-  observeStaff: (query: unknown) => {
-    staffQueries.push(query)
+  observeStaff: (query: unknown, force = false) => {
+    staffQueries.push({ query, force })
     return EMPTY
   }
 }
@@ -71,6 +72,7 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
     { id: 8, name: "Otro cliente", isActive: true }
   ])
   customerQueries.splice(0)
+  staffQueries.splice(0)
   staffItems.set([
     { id: 4, name: "Operaria cargada", isActive: true },
     { id: 6, name: "Operaria inactiva", isActive: false },
@@ -130,7 +132,50 @@ async function setup(options: { url?: string; server?: boolean; guest?: boolean 
     button!.click()
     await settle()
   }
-  return { harness, element, http, request, settle, click, session, authCreated, observeSession }
+  /** Opens the picker and exposes its panel; options come from the server page only. */
+  const openPicker = async (id: string) => {
+    const trigger = element.querySelector<HTMLButtonElement>(`button#${id}`)
+    expect(trigger, id).not.toBeNull()
+    trigger!.click()
+    await settle()
+    const search = document.querySelector<HTMLInputElement>(`input#${id}-search`)
+    expect(search, `${id} search`).not.toBeNull()
+    const panel = search!.closest("hlm-combobox-content") as HTMLElement
+    expect(panel, `${id} panel`).not.toBeNull()
+    const options = () => Array.from(panel.querySelectorAll<HTMLElement>('[role="option"]'))
+    const values = () =>
+      options().map(option => [option.getAttribute("data-value"), option.textContent?.trim()])
+    return { search: search!, panel, options, values }
+  }
+  const closePicker = async (search: HTMLInputElement) => {
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await settle()
+  }
+  const chooseOption = async (id: string, value: string) => {
+    const picker = await openPicker(id)
+    const options = picker.options()
+    options.forEach(option => (option.scrollIntoView = vi.fn()))
+    const option = options.find(item => item.getAttribute("data-value") === value)
+    expect(option, `${id} option ${value}`).toBeDefined()
+    option!.click()
+    await settle()
+  }
+  const trigger = (id: string) => element.querySelector<HTMLButtonElement>(`button#${id}`)!
+  return {
+    harness,
+    element,
+    http,
+    request,
+    settle,
+    click,
+    session,
+    authCreated,
+    observeSession,
+    openPicker,
+    closePicker,
+    chooseOption,
+    trigger
+  }
 }
 
 afterEach(() => {
@@ -169,9 +214,11 @@ describe("ServiceOrdersPage read-only inbox", () => {
       await s.settle()
       const row = s.element.querySelector("app-catalog-filters")! as HTMLElement
       expect(row, "shared filter row").not.toBeNull()
-      expect(row.querySelectorAll("select").length).toBe(3)
+      // S6: the status filter stays a native select; both catalog filters are searched pickers.
+      expect(row.querySelectorAll("select").length).toBe(1)
+      expect(row.querySelectorAll("app-catalog-combobox").length).toBe(2)
       expect(row.querySelectorAll('input[type="date"]').length).toBe(2)
-      expect(row.querySelector("button")).toBeNull()
+      expect(row.textContent).not.toMatch(/Crear orden|Asignar|Reintentar filtros/)
       expect(s.element.querySelector('a[href="/admin/operations/requests"]')).toBeNull()
       expect(s.element.querySelector('a[href="' + inbox + '"]')).toBeNull()
       expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
@@ -230,8 +277,11 @@ describe("ServiceOrdersPage read-only inbox", () => {
     expect(controls, "filter row projected into the frame header").toBe(
       s.element.querySelector("app-catalog-filters")
     )
-    expect(controls!.querySelector("button")).toBeNull()
-    expect(s.element.querySelector("app-catalog-filters button")).toBeNull()
+    expect(controls!.querySelectorAll("app-catalog-combobox")).toHaveLength(2)
+    expect(
+      s.element.querySelector("app-catalog-filters button#orders-filter-customer")
+    ).not.toBeNull()
+    expect(s.element.querySelector("app-catalog-filters button#orders-filter-staff")).not.toBeNull()
     expect(s.element.querySelector('app-catalog-filters input[type="search"]')).toBeNull()
     expect(s.element.textContent).not.toMatch(/Crear orden|Editar|Asignar|Cancelar orden|KPI/)
     s.http.expectNone(() => true)
@@ -585,22 +635,28 @@ describe("ServiceOrdersPage read-only inbox", () => {
       afterStatus.get("tamanio"),
       afterStatus.get("estado")
     ]).toEqual(["0", "5", "PROGRAMADA"])
-    const customer = filters().querySelector<HTMLSelectElement>("select#orders-filter-customer")!
-    customer.value = "5"
-    customer.dispatchEvent(new Event("change", { bubbles: true }))
-    await s.settle()
+    const customer = filters().querySelector<HTMLButtonElement>("button#orders-filter-customer")!
+    expect(customer.getAttribute("aria-label")).toBe("Cliente")
+    expect(customer.textContent?.trim()).toBe("Todos los clientes")
+    const customers = await s.openPicker("orders-filter-customer")
+    // S6/S9: only the verified server page; the inactive record is absent and no option is
+    // invented locally. The empty value only appears once a filter can actually be cleared.
+    expect(customers.values()).toEqual([
+      ["5", "Cliente cargado"],
+      ["8", "Otro cliente"]
+    ])
+    await s.closePicker(customers.search)
+    await s.chooseOption("orders-filter-customer", "5")
     expect((await next()).get("idCliente")).toBe("5")
-    const staff = filters().querySelector<HTMLSelectElement>("select#orders-filter-staff")!
-    expect(
-      Array.from(staff.options).map(option => [option.value, option.textContent?.trim()])
-    ).toEqual([
-      ["", "Todo el personal"],
+    const staff = filters().querySelector<HTMLButtonElement>("button#orders-filter-staff")!
+    expect(staff.getAttribute("aria-label")).toBe("Personal")
+    const staffPicker = await s.openPicker("orders-filter-staff")
+    expect(staffPicker.values()).toEqual([
       ["4", "Operaria cargada"],
       ["9", "Otra operaria"]
     ])
-    staff.value = "4"
-    staff.dispatchEvent(new Event("change", { bubbles: true }))
-    await s.settle()
+    await s.closePicker(staffPicker.search)
+    await s.chooseOption("orders-filter-staff", "4")
     expect((await next()).get("idPersonal")).toBe("4")
     const from = filters().querySelector<HTMLInputElement>("input#orders-filter-from")!
     from.value = "2024-03-01"
@@ -627,23 +683,70 @@ describe("ServiceOrdersPage read-only inbox", () => {
     const s = await setup()
     s.request().flush(ordersDtoPage(0, 20, 45))
     await s.settle()
-    const staff = () => s.element.querySelector<HTMLSelectElement>("select#orders-filter-staff")!
-    staff().value = "4"
-    staff().dispatchEvent(new Event("change", { bubbles: true }))
-    await s.settle()
+    await s.chooseOption("orders-filter-staff", "4")
     const pending = s.http.expectOne(r => r.url === api)
     expect(pending.request.params.get("idPersonal")).toBe("4")
     pending.flush(ordersDtoPage(0, 20, 45))
     await s.settle()
+    expect(s.trigger("orders-filter-staff").textContent?.trim()).toBe("Operaria cargada")
     staffItems.set([{ id: 9, name: "Otra operaria", isActive: true }])
     s.harness.detectChanges()
     await s.settle()
-    expect(
-      Array.from(staff().options)
-        .find(option => option.value === "4")
-        ?.textContent?.trim()
-    ).toBe("Operaria cargada · no disponible en esta página")
-    expect(staff().value).toBe("4")
+    const retained = await s.openPicker("orders-filter-staff")
+    expect(retained.values()).toEqual([
+      ["", "Todo el personal"],
+      ["4", "Operaria cargada · no disponible en esta página"],
+      ["9", "Otra operaria"]
+    ])
+    await s.closePicker(retained.search)
+    expect(s.trigger("orders-filter-staff").textContent?.trim()).toBe(
+      "Operaria cargada · no disponible en esta página"
+    )
+    // S9: the retained selection is never silently cleared or re-queried by a catalog refresh.
     s.http.expectNone(r => r.url === api)
+    expect(staffQueries).toHaveLength(1)
+  })
+
+  // S4/S6/S9: the staff picker searches on the server without applying itself as a filter.
+  it("debounces one staff search read and forces exactly one reload of that same query", async () => {
+    const s = await setup()
+    s.request().flush(ordersDtoPage(0, 20, 45))
+    await s.settle()
+    expect(staffQueries).toEqual([
+      { query: { offset: 0, limit: 20, isActive: true }, force: false }
+    ])
+    const picker = await s.openPicker("orders-filter-staff")
+    picker.search.value = "  Operaria  "
+    picker.search.dispatchEvent(new Event("input", { bubbles: true }))
+    picker.search.value = "Operaria cargada"
+    picker.search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    // Still debounced: nothing is dispatched before the 250ms window closes.
+    expect(staffQueries).toHaveLength(1)
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    expect(staffQueries).toEqual([
+      { query: { offset: 0, limit: 20, isActive: true }, force: false },
+      {
+        query: { offset: 0, limit: 20, isActive: true, search: "Operaria cargada" },
+        force: false
+      }
+    ])
+    // S9: searching never selects, clears or re-reads the order list filter.
+    expect(s.trigger("orders-filter-staff").textContent?.trim()).toBe("Todo el personal")
+    expect(picker.options().every(option => option.getAttribute("aria-selected") !== "true")).toBe(
+      true
+    )
+    s.http.expectNone(() => true)
+    const reload = picker.search.nextElementSibling as HTMLButtonElement
+    expect(reload.getAttribute("aria-label")).toBe("Recargar opciones")
+    reload.click()
+    await s.settle()
+    expect(staffQueries.at(-1)).toEqual({
+      query: { offset: 0, limit: 20, isActive: true, search: "Operaria cargada" },
+      force: true
+    })
+    expect(staffQueries).toHaveLength(3)
+    s.http.expectNone(() => true)
   })
 })
