@@ -18,24 +18,23 @@
     <legend hlmFieldLegend class="sr-only">Datos de la preferencia</legend>
     <div hlmField class="min-w-0 gap-1.5">
       <label hlmFieldLabel for="preference-propertyId">Alcance</label>
-      <select
-        hlmNativeSelect
-        id="preference-propertyId"
+      <hlm-native-select
+        selectId="preference-propertyId"
         [formField]="profile.propertyId"
         aria-describedby="preference-scope-help preference-propertyId-errors"
       >
         @if (unknownScope()) {
-          <option hlmNativeSelectOption [value]="model().propertyId" disabled>
+          <option [value]="model().propertyId" disabled>
             Propiedad sin verificar
           </option>
         }
-        <option hlmNativeSelectOption value="general">Todo el cliente</option>
+        <option value="general">Todo el cliente</option>
         @for (property of context.choices().items; track property.id) {
-          <option hlmNativeSelectOption [value]="'' + property.id">
+          <option [value]="'' + property.id">
             {{ property.optionLabel }}
           </option>
         }
-      </select>
+      </hlm-native-select>
       <p hlmFieldDescription id="preference-scope-help">{{ context.choices().message }}</p>
       @if (unknownScope()) {
         <p hlmFieldDescription>
