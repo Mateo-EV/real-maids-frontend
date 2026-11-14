@@ -4,70 +4,48 @@
   <app-catalog-frame
     titleId="agenda-title"
     title="Agenda"
-    description="Consulta de programación por fechas explícitas. Sin cambios de programación desde el calendario."
+    description="Consulta de programación por fechas explícitas; los filtros se aplican solos. Sin cambios de programación desde el calendario."
     [busy]="busy()"
   >
-    <form
-      class="grid gap-4 border-b p-4 sm:grid-cols-2 xl:grid-cols-4"
-      [formRoot]="fields"
-      (submit)="search()"
+    <app-catalog-filters
+      catalogControls
+      [dates]="filterDates()"
+      (dateChange)="setDate($event.value)"
     >
-      <div class="flex min-w-0 flex-col gap-2">
-        <label hlmLabel for="agenda-date">Fecha seleccionada (obligatoria)</label>
-        <input
-          hlmInput
-          id="agenda-date"
-          type="date"
-          [formField]="fields.date"
-          aria-describedby="agenda-date-help agenda-date-error"
-        />
-        <p id="agenda-date-help" class="text-xs text-muted-foreground">
-          Selecciona una fecha; no se asume el día de hoy.
-        </p>
-        <p id="agenda-date-error" class="text-xs text-destructive">
-          @if (fields.date().touched()) {
-            @for (error of fields.date().errors(); track error.kind) {
-              {{ error.message }}
-            }
+      <div class="flex flex-col gap-1">
+        <label for="agenda-view" class="text-xs font-medium">Vista</label>
+        <hlm-native-select
+          selectId="agenda-view"
+          [value]="model().view"
+          (valueChange)="setView($event)"
+        >
+          @for (view of views; track view.value) {
+            <option [value]="view.value">{{ view.label }}</option>
           }
-        </p>
-      </div>
-      <div class="flex min-w-0 flex-col gap-2">
-        <label hlmLabel for="agenda-view">Vista</label>
-        <hlm-native-select selectId="agenda-view" [formField]="fields.view">
-          <option value="day">Día</option>
-          <option value="week">7 días desde la fecha seleccionada</option>
-          <option value="month">Mes completo de la fecha seleccionada</option>
         </hlm-native-select>
       </div>
-      <div class="flex min-w-0 flex-col gap-2">
-        <label hlmLabel for="agenda-staff">ID de personal (opcional)</label>
-        <input
-          hlmInput
-          id="agenda-staff"
-          type="text"
-          inputmode="numeric"
-          [formField]="fields.staff"
-          aria-describedby="agenda-staff-help agenda-staff-error"
+      <div class="flex flex-col gap-1">
+        <label for="agenda-staff" class="text-xs font-medium">Personal</label>
+        <app-catalog-combobox
+          [id]="'agenda-staff'"
+          label="Personal"
+          placeholder="Todo el personal"
+          emptyLabel="Sin personal para esta búsqueda."
+          searchPlaceholder="Buscar personal…"
+          [selectedLabel]="staffLabel()"
+          [options]="staffOptions()"
+          [loading]="staffEntry().loading || staffEntry().refreshing"
+          [errorLabel]="staffError()"
+          (searchChange)="searchStaff($event)"
+          (selectChange)="setStaff($event)"
+          (reload)="reloadStaff()"
         />
-        <p id="agenda-staff-help" class="text-xs text-muted-foreground">
-          El alcance real lo determina el servidor.
-        </p>
-        <p id="agenda-staff-error" class="text-xs text-destructive">
-          @if (fields.staff().touched()) {
-            @for (error of fields.staff().errors(); track error.kind) {
-              {{ error.message }}
-            }
-          }
-        </p>
       </div>
-      <div class="flex items-start">
-        <button hlmBtn type="submit" [disabled]="fields().invalid()">Consultar agenda</button>
-      </div>
-    </form>
+    </app-catalog-filters>
     @if (!store.query()) {
       <p class="p-5 text-sm text-muted-foreground">
-        Selecciona una fecha para consultar la agenda.
+        Selecciona una fecha para consultar la agenda. No se asume el día de hoy y el alcance real
+        del personal lo determina el servidor.
       </p>
     }
     @if (store.loading()) {
@@ -103,9 +81,9 @@
       <section class="min-w-0 p-4" aria-label="Programación consultada">
         <h2 class="mb-4 text-sm font-semibold">
           {{
-            applied()?.view === "day"
+            model().view === "day"
               ? "Día"
-              : applied()?.view === "week"
+              : model().view === "week"
                 ? "7 días desde la fecha seleccionada"
                 : "Mes completo"
           }}
@@ -118,11 +96,11 @@
         }
         <div
           class="grid min-w-0 gap-3"
-          [class.md:grid-cols-2]="applied()?.view === 'week'"
-          [class.xl:grid-cols-4]="applied()?.view === 'week'"
-          [class.sm:grid-cols-2]="applied()?.view === 'month'"
-          [class.lg:grid-cols-4]="applied()?.view === 'month'"
-          [class.2xl:grid-cols-7]="applied()?.view === 'month'"
+          [class.md:grid-cols-2]="model().view === 'week'"
+          [class.xl:grid-cols-4]="model().view === 'week'"
+          [class.sm:grid-cols-2]="model().view === 'month'"
+          [class.lg:grid-cols-4]="model().view === 'month'"
+          [class.2xl:grid-cols-7]="model().view === 'month'"
         >
           @for (day of days(); track day.date) {
             <section

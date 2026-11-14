@@ -414,18 +414,34 @@ describe("Operations protected request integration", () => {
     )
     expect(consumer.injector.get(AuthStore)).toBe(app.auth)
     expect(consumer.injector.get(HotToastService)).toBeDefined()
-    app.http.expectNone(r => r.url.includes("/api/"))
+    // S5: a blank required date never queries the agenda; only its staff picker reads a catalog.
+    app.http.expectNone(r => r.url === "http://localhost:8080/api/agenda")
     const shell = harness.routeNativeElement!
     expect(shell.querySelector('app-admin-sidebar a[href="/admin/operations/agenda"]')).toBeNull()
     expect(shell.querySelector('a[href="/admin/operations"]')?.getAttribute("aria-current")).toBe(
       "page"
     )
+    // S3/S4: the controls, including the staff picker, live in the frame header row.
+    const filters = shell.querySelector(
+      "app-agenda-page app-catalog-frame header app-catalog-filters"
+    )!
+    expect(filters, "Agenda filter row inside the frame header").not.toBeNull()
+    expect(filters.querySelectorAll("app-catalog-combobox")).toHaveLength(1)
+    expect(shell.querySelector('app-agenda-page button[type="submit"]')).toBeNull()
+    const staff = app.http.expectOne(r => r.url === "http://localhost:8080/api/personal")
+    expect(staff.request.method).toBe("GET")
+    expect(staff.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(staff.request.transferCache).toBe(false)
+    expect(staff.request.params.get("pagina")).toBe("0")
+    expect(staff.request.params.get("tamanio")).toBe("20")
+    expect(staff.request.params.get("activo")).toBe("true")
+    staff.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    await settle()
     const date = shell.querySelector<HTMLInputElement>("#agenda-date")!
     expect(date.value).toBe("")
+    // S5: the explicit date applies at once, without any submit action.
     date.value = "2024-02-29"
     date.dispatchEvent(new Event("input", { bubbles: true }))
-    await settle()
-    shell.querySelector<HTMLButtonElement>('app-agenda-page button[type="submit"]')!.click()
     await settle()
     const pending = app.http.expectOne(r => r.url === "http://localhost:8080/api/agenda")
     expect(pending.request.method).toBe("GET")
