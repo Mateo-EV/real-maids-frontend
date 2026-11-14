@@ -40,6 +40,14 @@
       "sessions": 9,
       "memories": 0,
       "prompts": 0
+    },
+    {
+      "id": "2b69ed95",
+      "created_by": "Mateo Rioja",
+      "created_at": "2026-11-14T21:29:13.5894016Z",
+      "sessions": 2,
+      "memories": 1,
+      "prompts": 0
     }
   ]
 }
