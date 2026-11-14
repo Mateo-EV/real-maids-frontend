@@ -6,6 +6,7 @@
     [busy]="list().loading || list().refreshing"
   >
     <app-catalog-filters
+      catalogControls
       [selects]="filterSelects()"
       [dates]="filterDates()"
       (selectChange)="setSelect($event.id, $event.value)"

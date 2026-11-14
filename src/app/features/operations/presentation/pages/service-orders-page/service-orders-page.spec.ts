@@ -222,9 +222,13 @@ describe("ServiceOrdersPage read-only inbox", () => {
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(2)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(2)
     expect(s.element.querySelector("[catalogDesktop] table caption")).not.toBeNull()
-    // S3,S9: the shared filter row (3 selects + 2 date inputs) is the only form control;
-    // still no frame action, no create button and no text-search input on this page.
-    expect(s.element.querySelector("[catalogControls]")).toBeNull()
+    // S3,S9: the shared filter row is the frame's own header action area (like CRM/IAM);
+    // it is the only form control, with no extra frame action, create button or search input.
+    const controls = s.element.querySelector("app-catalog-frame header [catalogControls]")
+    expect(controls, "filter row projected into the frame header").toBe(
+      s.element.querySelector("app-catalog-filters")
+    )
+    expect(controls!.querySelector("button")).toBeNull()
     expect(s.element.querySelector("app-catalog-filters button")).toBeNull()
     expect(s.element.querySelector('app-catalog-filters input[type="search"]')).toBeNull()
     expect(s.element.textContent).not.toMatch(/Crear orden|Editar|Asignar|Cancelar orden|KPI/)

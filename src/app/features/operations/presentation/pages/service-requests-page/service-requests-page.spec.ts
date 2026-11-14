@@ -159,6 +159,8 @@ describe("ServiceRequestsPage inbox", () => {
       await s.settle()
       const row = s.element.querySelector("app-catalog-filters")! as HTMLElement
       expect(row, "shared filter row").not.toBeNull()
+      // S4: like CRM/IAM, the action area is the frame's header slot beside the title.
+      expect(s.element.querySelector("app-catalog-frame header [catalogControls]")).toBe(row)
       const create = row.querySelector<HTMLButtonElement>("button.catalog-action-with-plus")!
       expect(create.textContent?.trim()).toBe("Crear solicitud")
       expect(create.disabled).toBe(false)
