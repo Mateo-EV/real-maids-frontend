@@ -246,8 +246,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 .catalog-filter-row > div > [data-slot="input-group"],
 .catalog-filter-row > div > [data-slot="native-select-wrapper"] > [data-slot="native-select"],
+.catalog-filter-row > div > app-catalog-combobox [data-slot="button"],
 .catalog-filter-row > [data-slot="button"] {
   height: 2.25rem;
+}
+
+/* The picker trigger truncates and its panel copies the trigger width, so the cell
+   owns one readable width instead of shrinking to the loaded client/staff name. */
+.catalog-filter-row > div:has(app-catalog-combobox) {
+  width: 16rem;
 }
 
 .catalog-filter-row > div > [data-slot="input-group"] {
@@ -259,7 +266,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 }
 
 @media (width < 40rem) {
-  .catalog-filter-row > .catalog-filter-search {
+  .catalog-filter-row > .catalog-filter-search,
+  .catalog-filter-row > div:has(app-catalog-combobox) {
     width: 100%;
   }
 }
