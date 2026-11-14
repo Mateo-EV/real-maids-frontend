@@ -1,57 +1,31 @@
 <main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
-  <p class="text-sm text-muted-foreground">Operaciones</p>
   <app-catalog-frame
     titleId="service-orders-title"
     title="Órdenes de servicio"
     description="Consulta de órdenes de servicio registradas"
     [busy]="list().loading || list().refreshing"
   >
-    <div catalogControls>
-      <nav class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/requests"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Solicitudes</a
-        >
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/orders"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Órdenes</a
-        >
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/agenda"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Agenda</a
-        >
-      </nav>
-    </div>
+    <app-catalog-filters
+      [selects]="filterSelects()"
+      [dates]="filterDates()"
+      (selectChange)="setSelect($event.id, $event.value)"
+      (dateChange)="setDate($event.id, $event.value)"
+    />
+    @if (catalogBusy()) {
+      <p role="status" class="px-4 py-1 text-xs text-muted-foreground">
+        Cargando clientes y personal…
+      </p>
+    }
+    @if (catalogFailed()) {
+      <div class="flex flex-wrap items-center gap-2 px-4 py-1">
+        <p role="alert" class="text-xs text-destructive">
+          No se pudieron cargar los clientes o el personal para filtrar.
+        </p>
+        <button hlmBtn variant="outline" size="sm" type="button" (click)="retryCatalogs()">
+          Reintentar filtros
+        </button>
+      </div>
+    }
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner aria-label="Cargando órdenes" />Cargando órdenes…

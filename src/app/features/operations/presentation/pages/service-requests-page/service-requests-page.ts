@@ -1,13 +1,9 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import {
-  ActivatedRoute,
-  NavigationStart,
-  Router,
-  RouterLink,
-  RouterLinkActive
-} from "@angular/router"
+import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
 import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
+import { NgIcon, provideIcons } from "@ng-icons/core"
+import { lucidePlus } from "@ng-icons/lucide"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -15,10 +11,17 @@ import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
+import {
+  CatalogFilterDate,
+  CatalogFilterSelect,
+  CatalogFilters
+} from "@/app/shared/components/catalog-filters/catalog-filters"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { OperationsError } from "../../../domain/errors/operations.error"
+import { ServiceRequestQuery } from "../../../domain/params/operations.params"
 import {
   serviceRequestPageContext,
   serviceRequestPagingParams
@@ -29,14 +32,27 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { ServiceRequestEditor } from "../../components/service-request-editor/service-request-editor"
 
-type Query = Required<PaginationParams>
+type Query = Required<PaginationParams> & ServiceRequestQuery
+
+/** Blank means "no filter": the adapter only ever receives documented query keys. */
+interface FilterValues {
+  status: string
+  customerId: string
+  from: string
+  until: string
+}
+
+const noFilters: FilterValues = { status: "", customerId: "", from: "", until: "" }
+/** Loaded page only: the list contract has no text search for the customer picker. */
+const customerPageQuery = { offset: 0, limit: 20 } as const
 
 @Component({
   selector: "app-service-requests-page",
   imports: [
     RouterLink,
-    RouterLinkActive,
+    CatalogFilters,
     CatalogFrame,
+    NgIcon,
     TablePagination,
     HlmAlertImports,
     HlmBadgeImports,
@@ -45,10 +61,12 @@ type Query = Required<PaginationParams>
     HlmSpinnerImports,
     HlmTableImports
   ],
+  providers: [provideIcons({ lucidePlus })],
   templateUrl: "./service-requests-page.html"
 })
 export class ServiceRequestsPage implements OnInit {
   private readonly store = inject(ServiceRequestsStore)
+  private readonly customers = inject(CustomersStore)
   private readonly route = inject(ActivatedRoute)
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
@@ -61,6 +79,9 @@ export class ServiceRequestsPage implements OnInit {
     serviceRequestPageContext(this.route.snapshot.queryParamMap)
   )
   private readonly admissionError = signal<OperationsError | undefined>(undefined)
+  private readonly filters = signal<FilterValues>(noFilters)
+  /** Captured label so an already-chosen customer never disappears from its own filter. */
+  private readonly selectedCustomer = signal<{ id: number; label: string } | null>(null)
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()
   private revision = 0
   private recoveryUsed = false
@@ -70,12 +91,15 @@ export class ServiceRequestsPage implements OnInit {
     this.revision++
     this.queries.next(null)
     this.admissionError.set(undefined)
+    this.filters.set(noFilters)
+    this.selectedCustomer.set(null)
     this.requested.set({ offset: 0, limit: 20 })
     const generation = this.scope.generation()
     // Session reset runs inside a transition; wait before admitting new reads.
     queueMicrotask(() => {
       if (!this.current(generation)) return
       this.recoveryUsed = false
+      this.readCustomers(false)
       this.load({ offset: 0, limit: 20 })
     })
   })
@@ -98,6 +122,56 @@ export class ServiceRequestsPage implements OnInit {
     this.rows().length ? this.result()!.offset + this.rows().length : 0
   )
   readonly error = computed(() => this.list().error ?? this.admissionError())
+  readonly customerEntry = computed(() => this.customers.selectQuery(customerPageQuery))
+  readonly customerBusy = computed(
+    () => this.customerEntry().loading || this.customerEntry().refreshing
+  )
+  readonly customerFailed = computed(() => !!this.customerEntry().error)
+  /** Loaded, active customers; the retained choice stays visible when the page changes. */
+  private readonly loadedCustomers = computed(() =>
+    (this.customerEntry().result?.items ?? [])
+      .filter(customer => customer.isActive)
+      .map(customer => ({ value: String(customer.id), label: customer.name }))
+  )
+  readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => {
+    const selected = this.selectedCustomer()
+    const loaded = this.loadedCustomers()
+    const customerOptions =
+      selected && !loaded.some(option => option.value === String(selected.id))
+        ? [
+            {
+              value: String(selected.id),
+              label: `${selected.label} · no disponible en esta página`
+            },
+            ...loaded
+          ]
+        : loaded
+    return [
+      {
+        id: "requests-filter-status",
+        label: "Estado",
+        allLabel: "Todos los estados",
+        value: this.filters().status,
+        // Documented allow-list of the request contract, not an invented label table.
+        options: [
+          { value: "registrada", label: "Registrada" },
+          { value: "atendida", label: "Atendida" },
+          { value: "cancelada", label: "Cancelada" }
+        ]
+      },
+      {
+        id: "requests-filter-customer",
+        label: "Cliente",
+        allLabel: "Todos los clientes",
+        value: this.filters().customerId,
+        options: customerOptions
+      }
+    ]
+  })
+  readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
+    { id: "requests-filter-from", label: "Desde", value: this.filters().from },
+    { id: "requests-filter-until", label: "Hasta", value: this.filters().until }
+  ])
   readonly errorMessage = computed(() => {
     switch (this.error()?.code) {
       case "FORBIDDEN":
@@ -112,6 +186,62 @@ export class ServiceRequestsPage implements OnInit {
         return "No se pudieron cargar las solicitudes. Inténtalo de nuevo."
     }
   })
+
+  setSelect(id: string, value: string): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    if (id === "requests-filter-status")
+      return this.changeFilters({ status: this.statusValue(value) })
+    if (id !== "requests-filter-customer") return
+    const customerId = value ? Number(value) : 0
+    if (value && (!Number.isSafeInteger(customerId) || customerId <= 0)) return
+    if (!value) this.selectedCustomer.set(null)
+    else {
+      const loaded = this.customerEntry().result?.items.find(item => item.id === customerId)
+      if (loaded) this.selectedCustomer.set({ id: loaded.id, label: loaded.name })
+      else if (this.selectedCustomer()?.id !== customerId) return
+    }
+    this.changeFilters({ customerId: value })
+  }
+
+  setDate(id: string, value: string): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    if (id === "requests-filter-from") return this.changeFilters({ from: value })
+    if (id === "requests-filter-until") this.changeFilters({ until: value })
+  }
+
+  retryCustomers(): void {
+    if (this.destroyRef.destroyed || !this.scope.check()) return
+    this.readCustomers(true)
+  }
+
+  private statusValue(value: string): string {
+    return ["registrada", "atendida", "cancelada"].includes(value) ? value : ""
+  }
+
+  private changeFilters(patch: Partial<FilterValues>): void {
+    const filters = { ...this.filters(), ...patch }
+    this.filters.set(filters)
+    this.recoveryUsed = false
+    // S6: every filter change restarts at page zero and keeps the effective size.
+    this.load(this.buildQuery(0, this.query().limit, filters))
+  }
+
+  private buildQuery(offset: number, limit: number, filters = this.filters()): Query {
+    const query: Query = { offset, limit }
+    if (filters.status) query.status = filters.status
+    const customerId = filters.customerId ? Number(filters.customerId) : 0
+    if (Number.isSafeInteger(customerId) && customerId > 0) query.customerId = customerId
+    if (filters.from) query.from = filters.from
+    if (filters.until) query.until = filters.until
+    return query
+  }
+
+  private readCustomers(force: boolean): void {
+    this.customers
+      .observeQuery(customerPageQuery, force)
+      .pipe(takeUntil(this.scope.cancelled$), takeUntilDestroyed(this.destroyRef))
+      .subscribe()
+  }
 
   create(): void {
     if (
@@ -179,10 +309,10 @@ export class ServiceRequestsPage implements OnInit {
               queueMicrotask(() => {
                 if (!this.current(generation, revision)) return
                 this.load(
-                  {
-                    offset: Math.floor((page.total - 1) / page.limit) * page.limit,
-                    limit: page.limit
-                  },
+                  this.buildQuery(
+                    Math.floor((page.total - 1) / page.limit) * page.limit,
+                    page.limit
+                  ),
                   true
                 )
               })
@@ -198,6 +328,7 @@ export class ServiceRequestsPage implements OnInit {
       )
       .subscribe()
     if (ready) this.load(this.requested())
+    if (ready) this.readCustomers(false)
   }
 
   private current(generation: number, revision?: number): boolean {
@@ -234,6 +365,6 @@ export class ServiceRequestsPage implements OnInit {
     )
       return
     this.recoveryUsed = false
-    this.load({ offset: (page - 1) * this.query().limit, limit: this.query().limit })
+    this.load(this.buildQuery((page - 1) * this.query().limit, this.query().limit))
   }
 }

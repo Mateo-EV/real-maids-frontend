@@ -1,7 +1,7 @@
 import { Component, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { describe, expect, it } from "vitest"
-import { CatalogFilterSelect, CatalogFilters } from "./catalog-filters"
+import { CatalogFilterDate, CatalogFilterSelect, CatalogFilters } from "./catalog-filters"
 
 @Component({
   imports: [CatalogFilters],
@@ -124,5 +124,80 @@ describe("CatalogFilters presentation contract", () => {
     await fixture.whenStable()
     fixture.detectChanges()
     expect(row.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe("reflejado")
+  })
+})
+
+@Component({
+  imports: [CatalogFilters],
+  template: `<app-catalog-filters
+    catalogControls
+    [selects]="selects()"
+    [dates]="dates()"
+    (selectChange)="changes.push($event)"
+    (dateChange)="dateChanges.push($event)"
+  />`
+})
+class DateConsumer {
+  readonly selects = signal<readonly CatalogFilterSelect[]>([
+    {
+      id: "record-filter-state",
+      label: "Estado",
+      allLabel: "Todos los estados",
+      value: "",
+      options: [{ value: "pendiente", label: "Pendiente" }]
+    }
+  ])
+  readonly dates = signal<readonly CatalogFilterDate[]>([
+    { id: "record-filter-from", label: "Desde", value: "2024-01-31" },
+    { id: "record-filter-until", label: "Hasta", value: "" }
+  ])
+  readonly changes: { id: string; value: string }[] = []
+  readonly dateChanges: { id: string; value: string }[] = []
+}
+
+describe("CatalogFilters optional date range", () => {
+  function setupDates() {
+    const fixture = TestBed.createComponent(DateConsumer)
+    fixture.detectChanges()
+    const row = (fixture.nativeElement as HTMLElement).querySelector(
+      "app-catalog-filters"
+    ) as HTMLElement
+    return { fixture, row, consumer: fixture.componentInstance }
+  }
+
+  it("omits the search block entirely when no search input id is supplied", () => {
+    const { row } = setupDates()
+    expect(row.querySelector('input[type="search"]')).toBeNull()
+    expect(row.querySelector(".catalog-filter-search")).toBeNull()
+    expect(row.querySelectorAll("select").length).toBe(1)
+  })
+
+  it("renders one native date input per supplied date as a direct child of the row", () => {
+    const { row } = setupDates()
+    const dates = Array.from(row.querySelectorAll<HTMLInputElement>('input[type="date"]'))
+    expect(dates.map(input => input.id)).toEqual(["record-filter-from", "record-filter-until"])
+    expect(dates[0].value).toBe("2024-01-31")
+    expect(dates[1].value).toBe("")
+    const labels = dates.map(input =>
+      row.querySelector(`label[for="${input.id}"]`)?.textContent?.trim()
+    )
+    expect(labels).toEqual(["Desde", "Hasta"])
+    for (const input of dates)
+      expect(input.closest("app-catalog-filters")?.children).toContain(
+        input.closest(".catalog-filter-date")
+      )
+  })
+
+  it("emits the exact date payload and clears it back to an empty string", () => {
+    const { row, consumer } = setupDates()
+    const from = row.querySelector<HTMLInputElement>("input#record-filter-from")!
+    from.value = "2024-02-15"
+    from.dispatchEvent(new Event("input", { bubbles: true }))
+    from.value = ""
+    from.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(consumer.dateChanges).toEqual([
+      { id: "record-filter-from", value: "2024-02-15" },
+      { id: "record-filter-from", value: "" }
+    ])
   })
 })

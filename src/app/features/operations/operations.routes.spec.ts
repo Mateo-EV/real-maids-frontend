@@ -25,6 +25,7 @@ import { ServiceOrdersStore } from "./presentation/state/service-orders.store"
 import { OPERATIONS_REPOSITORY } from "./domain/repositories/operations.repository"
 import { OperationsRepositoryImpl } from "./infrastructure/repositories/operations.repository-impl"
 import { AgendaPage } from "./presentation/pages/agenda-page/agenda-page"
+import { OperationsShell } from "./presentation/pages/operations-shell/operations-shell"
 import { AgendaStore } from "./presentation/state/agenda.store"
 import { agendaDto } from "./presentation/state/agenda.testing"
 
@@ -107,16 +108,27 @@ afterEach(() => vi.unstubAllGlobals())
 // Spec: odd/tasks/wp7-operations.md T5/S1-S4; no role ACL or new write consumers.
 describe("Operations protected request integration", () => {
   // T6F / S1,S3,S4,S5,S6,S8: additive integration, not independent leaf acceptance.
-  it("adds order consumers while preserving the requests default and existing destinations", () => {
-    expect(OPERATIONS_ROUTES.map(route => route.path)).toEqual([
-      "",
+  // S1,S2: one persistent frame owns the tab navigation; the leaves stay lazy consumers.
+  const shell = () => OPERATIONS_ROUTES.find(route => route.loadComponent)
+
+  it("keeps the requests default and groups every consumer under one guarded shell", () => {
+    expect(OPERATIONS_ROUTES.map(route => route.path)).toEqual(["", ""])
+    expect(OPERATIONS_ROUTES[0]).toMatchObject({ pathMatch: "full", redirectTo: "requests" })
+    const frame = shell()!
+    expect(frame.canActivate).toEqual([authGuard])
+    expect(frame.component).toBeUndefined()
+    expect(frame.children!.map(route => route.path)).toEqual([
       "requests",
       "requests/:id",
       "orders",
       "orders/:id",
       "agenda"
     ])
-    expect(OPERATIONS_ROUTES[0]).toMatchObject({ pathMatch: "full", redirectTo: "requests" })
+    expect(frame.children!.every(route => route.canActivate === undefined)).toBe(true)
+  })
+
+  it("lazy loads the persistent operations frame", async () => {
+    expect(await shell()!.loadComponent!()).toBe(OperationsShell)
   })
 
   it.each([
@@ -125,11 +137,11 @@ describe("Operations protected request integration", () => {
     ["orders", ServiceOrdersPage],
     ["orders/:id", ServiceOrderDetailPage],
     ["agenda", AgendaPage]
-  ] as const)("lazy loads %s behind the unchanged auth guard", async (path, component) => {
-    const route = OPERATIONS_ROUTES.find(route => route.path === path)
+  ] as const)("lazy loads %s inside the guarded shell", async (path, component) => {
+    const route = shell()!.children!.find(route => route.path === path)
     expect(route, `Missing protected request route: ${path}`).toBeDefined()
-    expect(route!.canActivate).toEqual([authGuard])
     expect(route!.component).toBeUndefined()
+    expect(route!.providers).toEqual(expect.any(Array))
     expect(await route!.loadComponent!()).toBe(component)
   })
 
@@ -148,7 +160,7 @@ describe("Operations protected request integration", () => {
   })
 
   it("owns complete distinct route toast scopes and inherits root request/order/auth/repository lifetimes", () => {
-    const routes = OPERATIONS_ROUTES.filter(route => route.loadComponent)
+    const routes = OPERATIONS_ROUTES[1].children!.filter(route => route.loadComponent)
     expect(routes).toHaveLength(5)
     TestBed.configureTestingModule({ providers: appConfig.providers })
     const root = TestBed.inject(EnvironmentInjector)
@@ -237,6 +249,19 @@ describe("Operations protected request integration", () => {
       } else request.flush(dto)
       await harness.fixture.whenStable()
       harness.detectChanges()
+      // Only the list consumer mounts the filter row; the detail page reads no catalog.
+      if (selector === "app-service-requests-page") {
+        const customersRead = app.http.expectOne(
+          request =>
+            request.url === "http://localhost:8080/api/clientes" &&
+            request.params.get("pagina") === "0" &&
+            request.params.get("tamanio") === "20"
+        )
+        expect(customersRead.request.transferCache).toBe(false)
+        customersRead.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0 })
+        await harness.fixture.whenStable()
+        harness.detectChanges()
+      }
       const shell = harness.routeNativeElement!
       expect(shell.tagName.toLowerCase()).toBe("app-admin-shell")
       expect(shell.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
@@ -256,6 +281,22 @@ describe("Operations protected request integration", () => {
       expect(TestBed.inject(Router).url).toBe(
         url === "/admin/operations" ? "/admin/operations/requests" : url
       )
+      // S1,S2: one persistent frame renders the tab navigation exactly once.
+      expect(shell.querySelectorAll("app-operations-section-navigation")).toHaveLength(1)
+      const tabs = shell.querySelectorAll("app-operations-section-navigation a")
+      expect(Array.from(tabs).map(tab => tab.textContent?.trim())).toEqual([
+        "Solicitudes",
+        "Órdenes",
+        "Agenda"
+      ])
+      expect(
+        shell.querySelectorAll("app-operations-section-navigation [aria-current=page]")
+      ).toHaveLength(1)
+      expect(
+        shell
+          .querySelector("app-operations-section-navigation [aria-current=page]")
+          ?.textContent?.trim()
+      ).toBe("Solicitudes")
       app.http.verify()
     }
   )
@@ -284,6 +325,23 @@ describe("Operations protected request integration", () => {
       }
       await harness.fixture.whenStable()
       harness.detectChanges()
+      // The order list filters read one page of customers and one page of active staff.
+      if (!detail) {
+        const customers = app.http.expectOne(
+          request =>
+            request.url === "http://localhost:8080/api/clientes" &&
+            request.params.get("tamanio") === "20"
+        )
+        customers.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0 })
+        const staff = app.http.expectOne(
+          request => request.url === "http://localhost:8080/api/personal"
+        )
+        expect(staff.request.params.get("activo")).toBe("true")
+        expect(staff.request.params.get("tamanio")).toBe("20")
+        staff.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0 })
+        await harness.fixture.whenStable()
+        harness.detectChanges()
+      }
       const shell = harness.routeNativeElement!
       expect(shell.tagName.toLowerCase()).toBe("app-admin-shell")
       expect(shell.querySelectorAll("app-admin-sidebar")).toHaveLength(1)
@@ -379,9 +437,9 @@ describe("Operations protected request integration", () => {
     }
     await settle()
     const ordersLink = harness.routeNativeElement!.querySelector<HTMLAnchorElement>(
-      'app-service-requests-page [catalogControls] a[href="/admin/operations/orders"]'
+      'app-operations-section-navigation a[href="/admin/operations/orders"]'
     )
-    expect(ordersLink, "Missing working Órdenes inbox link").not.toBeNull()
+    expect(ordersLink, "Missing working Órdenes tab link").not.toBeNull()
     ordersLink!.click()
     await settle()
     const ordersApi = "http://localhost:8080/api/ordenes"
@@ -411,15 +469,28 @@ describe("Operations protected request integration", () => {
       .flush(ordersDtoPage(0, 5, 1))
     await settle()
     const requestsLink = harness.routeNativeElement!.querySelector<HTMLAnchorElement>(
-      'app-service-orders-page [catalogControls] a[href="/admin/operations/requests"]'
+      'app-operations-section-navigation a[href="/admin/operations/requests"]'
     )!
-    expect(requestsLink).not.toBeNull()
+    expect(requestsLink, "Missing Solicitudes tab link").not.toBeNull()
     requestsLink.click()
     await settle()
     expect(TestBed.inject(Router).url).toBe("/admin/operations/requests")
     expect(harness.routeNativeElement!.querySelector("app-service-requests-page")).not.toBeNull()
     // The original successful 0/20 requests entry is still fresh in the root store.
-    app.http.expectNone(request => request.url.includes("/api/"))
+    app.http.expectNone(request => request.url === api)
+    // The filter pickers read one page each per mounted list; they are separate from the
+    // list reads this test is pinning, so they are flushed here instead of left open.
+    for (const catalog of [
+      "http://localhost:8080/api/clientes",
+      "http://localhost:8080/api/personal"
+    ])
+      app.http
+        .match(request => request.url === catalog)
+        .filter(pending => !pending.cancelled)
+        .forEach(pending =>
+          pending.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0 })
+        )
+    await settle()
     app.http.verify()
   })
 })

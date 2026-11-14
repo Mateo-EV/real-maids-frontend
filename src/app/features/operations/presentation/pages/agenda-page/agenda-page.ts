@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { form, FormField, FormRoot, required, submit, validate } from "@angular/forms/signals"
-import { RouterLink, RouterLinkActive } from "@angular/router"
+import { RouterLink } from "@angular/router"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmInputImports } from "@spartan-ng/helm/input"
 import { HlmLabelImports } from "@spartan-ng/helm/label"
@@ -25,7 +25,6 @@ import { AgendaStore } from "../../state/agenda.store"
     FormRoot,
     FormField,
     RouterLink,
-    RouterLinkActive,
     HlmButtonImports,
     HlmInputImports,
     HlmLabelImports,

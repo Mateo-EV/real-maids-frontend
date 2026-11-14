@@ -1,60 +1,40 @@
 <main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
-  <p class="text-sm text-muted-foreground">Operaciones</p>
   <app-catalog-frame
     titleId="service-requests-title"
     title="Solicitudes internas"
     description="Consulta de solicitudes de servicio registradas"
     [busy]="list().loading || list().refreshing"
   >
-    <div catalogControls class="flex flex-wrap items-center gap-3">
-      <nav class="flex flex-wrap gap-2" aria-label="Catálogos de operaciones">
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/requests"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Solicitudes</a
-        >
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/orders"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Órdenes</a
-        >
-        <a
-          hlmBtn
-          variant="outline"
-          routerLink="/admin/operations/agenda"
-          routerLinkActive="bg-accent text-accent-foreground"
-          [routerLinkActiveOptions]="{
-            paths: 'exact',
-            queryParams: 'ignored',
-            matrixParams: 'ignored',
-            fragment: 'ignored'
-          }"
-          ariaCurrentWhenActive="page"
-          >Agenda</a
-        >
-      </nav>
-      <button hlmBtn type="button" [disabled]="writing()" (click)="create()">
-        Crear solicitud
+    <app-catalog-filters
+      [selects]="filterSelects()"
+      [dates]="filterDates()"
+      (selectChange)="setSelect($event.id, $event.value)"
+      (dateChange)="setDate($event.id, $event.value)"
+    >
+      <button
+        hlmBtn
+        class="catalog-action-with-plus"
+        size="sm"
+        type="button"
+        [disabled]="writing()"
+        (click)="create()"
+      >
+        <ng-icon name="lucidePlus" aria-hidden="true" />Crear solicitud
       </button>
-    </div>
+    </app-catalog-filters>
+    @if (customerBusy()) {
+      <p role="status" class="px-4 py-1 text-xs text-muted-foreground">Cargando clientes…</p>
+    }
+    @if (customerFailed()) {
+      <div class="flex flex-wrap items-center gap-2 px-4 py-1">
+        <p role="alert" class="text-xs text-destructive">
+          No se pudieron cargar los clientes para filtrar.
+        </p>
+        <button hlmBtn variant="outline" size="sm" type="button" (click)="retryCustomers()">
+          Reintentar clientes
+        </button>
+      </div>
+    }
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando solicitudes…
