@@ -80,23 +80,14 @@
                 <th hlmTh scope="col">Servicio</th>
                 <th hlmTh scope="col">Estado</th>
                 <th hlmTh scope="col">Fecha deseada</th>
+                <th hlmTh scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody hlmTBody>
               @for (request of rows(); track request.id) {
                 <tr hlmTr>
-                  <td hlmTd>
-                    <a
-                      hlmBtn
-                      variant="link"
-                      class="h-auto max-w-full text-left whitespace-normal break-words"
-                      [routerLink]="['/admin/operations/requests', request.id]"
-                      [queryParams]="paging()"
-                      [attr.aria-label]="
-                        'Ver solicitud ' + request.id + ' de ' + request.customerName
-                      "
-                      >{{ request.customerName }}</a
-                    >
+                  <td hlmTd class="whitespace-normal break-words">
+                    <p class="font-medium break-words">{{ request.customerName }}</p>
                     <p class="text-xs text-muted-foreground">Solicitud #{{ request.id }}</p>
                   </td>
                   <td hlmTd class="whitespace-normal break-words">{{ request.propertyName }}</td>
@@ -105,6 +96,19 @@
                     <span hlmBadge variant="outline">{{ request.status }}</span>
                   </td>
                   <td hlmTd>{{ request.desiredDate ?? "No registrado" }}</td>
+                  <td hlmTd>
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="['/admin/operations/requests', request.id]"
+                      [queryParams]="paging()"
+                      [attr.aria-label]="
+                        'Ver detalle de la solicitud ' + request.id + ' de ' + request.customerName
+                      "
+                      >Ver detalle</a
+                    >
+                  </td>
                 </tr>
               }
             </tbody>
@@ -119,17 +123,7 @@
             <li class="min-w-0 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-3">
                 <h2 class="min-w-0 flex-1 font-semibold break-words">
-                  <a
-                    hlmBtn
-                    variant="link"
-                    class="h-auto max-w-full text-left whitespace-normal break-words"
-                    [routerLink]="['/admin/operations/requests', request.id]"
-                    [queryParams]="paging()"
-                    [attr.aria-label]="
-                      'Ver solicitud ' + request.id + ' de ' + request.customerName
-                    "
-                    >{{ request.customerName }}</a
-                  >
+                  {{ request.customerName }}
                 </h2>
                 <span hlmBadge variant="outline">{{ request.status }}</span>
               </div>
@@ -142,6 +136,19 @@
                 <dt class="text-muted-foreground">Fecha deseada</dt>
                 <dd>{{ request.desiredDate ?? "No registrado" }}</dd>
               </dl>
+              <div class="mt-4 flex flex-wrap items-center gap-1">
+                <a
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  [routerLink]="['/admin/operations/requests', request.id]"
+                  [queryParams]="paging()"
+                  [attr.aria-label]="
+                    'Ver detalle de la solicitud ' + request.id + ' de ' + request.customerName
+                  "
+                  >Ver detalle</a
+                >
+              </div>
             </li>
           }
         </ul>

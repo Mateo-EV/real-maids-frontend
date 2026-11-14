@@ -215,8 +215,10 @@ describe("ServiceOrdersPage read-only inbox", () => {
         `${inbox}/27?page=0&size=20`,
         `${inbox}/3?page=0&size=20`
       ])
-      expect(links[0].textContent).toContain("OS-27")
-      expect(links[0].getAttribute("aria-label") || links[0].textContent).toContain("OS-27")
+      expect(links.map(link => link.textContent?.trim())).toEqual(["Ver detalle", "Ver detalle"])
+      // The record identity stays in the row text and in the accessible action name.
+      expect(records.textContent).toContain("OS-27")
+      expect(links[0].getAttribute("aria-label")).toContain("OS-27")
       expect(records.querySelector("button")).toBeNull()
     }
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(2)

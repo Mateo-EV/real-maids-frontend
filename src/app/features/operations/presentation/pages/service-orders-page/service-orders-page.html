@@ -72,21 +72,14 @@
                 <th hlmTh scope="col">Estado</th>
                 <th hlmTh scope="col">Programación</th>
                 <th hlmTh scope="col" class="text-right">Monto estimado</th>
+                <th hlmTh scope="col">Acciones</th>
               </tr>
             </thead>
             <tbody hlmTBody>
               @for (order of rows(); track order.id) {
                 <tr hlmTr>
                   <td hlmTd class="whitespace-normal break-words">
-                    <a
-                      hlmBtn
-                      variant="link"
-                      class="h-auto max-w-full text-left whitespace-normal break-words"
-                      [routerLink]="['/admin/operations/orders', order.id]"
-                      [queryParams]="paging()"
-                      [attr.aria-label]="'Ver orden ' + order.code + ' de ' + order.customerName"
-                      >{{ order.code }}</a
-                    >
+                    <p class="font-medium break-words">{{ order.code }}</p>
                     <p class="mt-1 text-xs text-muted-foreground">{{ order.customerName }}</p>
                   </td>
                   <td hlmTd class="whitespace-normal break-words">{{ order.propertyName }}</td>
@@ -112,6 +105,19 @@
                   <td hlmTd class="text-right tabular-nums">
                     {{ order.estimatedAmount ?? "No registrado" }}
                   </td>
+                  <td hlmTd>
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="['/admin/operations/orders', order.id]"
+                      [queryParams]="paging()"
+                      [attr.aria-label]="
+                        'Ver detalle de la orden ' + order.code + ' de ' + order.customerName
+                      "
+                      >Ver detalle</a
+                    >
+                  </td>
                 </tr>
               }
             </tbody>
@@ -125,17 +131,7 @@
           @for (order of rows(); track order.id) {
             <li class="min-w-0 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-3">
-                <h2 class="min-w-0 flex-1 font-semibold break-words">
-                  <a
-                    hlmBtn
-                    variant="link"
-                    class="h-auto max-w-full text-left whitespace-normal break-words"
-                    [routerLink]="['/admin/operations/orders', order.id]"
-                    [queryParams]="paging()"
-                    [attr.aria-label]="'Ver orden ' + order.code + ' de ' + order.customerName"
-                    >{{ order.code }}</a
-                  >
-                </h2>
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ order.code }}</h2>
                 <span hlmBadge variant="outline">{{ order.statusName }}</span>
               </div>
               <p class="mt-1 text-xs text-muted-foreground break-words">{{ order.customerName }}</p>
@@ -160,6 +156,19 @@
                 <dt class="text-muted-foreground">Monto estimado</dt>
                 <dd class="tabular-nums">{{ order.estimatedAmount ?? "No registrado" }}</dd>
               </dl>
+              <div class="mt-4 flex flex-wrap items-center gap-1">
+                <a
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  [routerLink]="['/admin/operations/orders', order.id]"
+                  [queryParams]="paging()"
+                  [attr.aria-label]="
+                    'Ver detalle de la orden ' + order.code + ' de ' + order.customerName
+                  "
+                  >Ver detalle</a
+                >
+              </div>
             </li>
           }
         </ul>
