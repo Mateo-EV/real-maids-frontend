@@ -1,2 +1,51 @@
 <app-operations-section-navigation />
+<!-- Persistent shell sibling: routed consumers change below, these server totals do not remount. -->
+<section
+  class="catalog-metrics mx-auto grid w-full grid-cols-1 gap-4 px-4 pt-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-6"
+  aria-label="Resumen de Operaciones"
+>
+  @for (card of cards; track card.label; let index = $index) {
+    <article hlmCard>
+      <div hlmCardHeader>
+        <p class="kpi-label">{{ card.label }}</p>
+        <span hlmCardAction class="kpi-tile" [attr.data-kpi-tone]="card.tone">
+          <ng-icon [name]="card.icon" aria-hidden="true" size="24" />
+        </span>
+        <p class="kpi-value">{{ card.state().result?.total ?? "—" }}</p>
+        <p hlmCardDescription>
+          @if (card.state().result) {
+            Del total del servidor
+          } @else {
+            {{ card.state().loading ? "Cargando estadísticas…" : "Estadísticas sin verificar" }}
+          }
+        </p>
+        @if (card.state().refreshing) {
+          <p role="status" class="text-sm">Actualizando…</p>
+        }
+        @if (card.state().error || card.retrying()) {
+          @if (card.state().error) {
+            @if (card.state().result) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">
+              No se pudo cargar el total de {{ card.label }}.
+            </p>
+          }
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            size="sm"
+            (click)="retry(index)"
+            [disabled]="card.state().loading || card.state().refreshing || card.retrying()"
+          >
+            Reintentar {{ card.label }}
+          </button>
+        }
+      </div>
+    </article>
+  }
+</section>
 <router-outlet />
