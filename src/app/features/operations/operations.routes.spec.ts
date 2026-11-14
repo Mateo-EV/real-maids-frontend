@@ -1,6 +1,7 @@
 import { Component, createEnvironmentInjector, EnvironmentInjector } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { By } from "@angular/platform-browser"
+import { HttpRequest } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
@@ -33,6 +34,7 @@ import { agendaDto } from "./presentation/state/agenda.testing"
 class LoginDestination {}
 
 const api = "http://localhost:8080/api/solicitudes"
+const ordersApi = "http://localhost:8080/api/ordenes"
 const dto = {
   idSolicitud: 17,
   idCliente: 5,
@@ -47,6 +49,24 @@ const dto = {
   registradoPor: "Actor del servidor",
   fechaRegistro: "2026-01-01T12:00:00Z",
   fechaActualizacion: null
+}
+
+/**
+ * T5/S7: the real shell renders four KPI cards that read exact server totals through queries of
+ * `tamanio=1` (`solicitudes?estado=registrada` plus three `ordenes` states). Those reads live
+ * outside every list/detail read this suite pins, so they are answered with a valid empty page
+ * before the assertions that count requests. The exact four queries are owned and pinned by
+ * `operations-shell.spec.ts`, not here.
+ */
+function isShellMetric(request: HttpRequest<unknown>): boolean {
+  return (request.url === api || request.url === ordersApi) && request.params.get("tamanio") === "1"
+}
+
+function flushShellMetrics(http: HttpTestingController): void {
+  const pending = http.match(isShellMetric)
+  expect(pending.length, "Shell KPI totals read once each").toBe(4)
+  for (const request of pending)
+    request.flush({ contenido: [], pagina: 0, tamanio: 1, totalElementos: 0, totalPaginas: 0 })
 }
 
 function requireAdminEntry() {
@@ -232,6 +252,7 @@ describe("Operations protected request integration", () => {
       const app = await setup(true)
       requireAdminEntry()
       const harness = await RouterTestingHarness.create(url)
+      flushShellMetrics(app.http)
       const request = app.http.expectOne(request => request.url === endpoint)
       expect(request.request.method).toBe("GET")
       expect(request.request.headers.get("Authorization")).toBe("Bearer fake-access")
@@ -309,6 +330,7 @@ describe("Operations protected request integration", () => {
     async (url, selector, detail) => {
       const app = await setup(true)
       const harness = await RouterTestingHarness.create(url)
+      flushShellMetrics(app.http)
       const endpoint = `http://localhost:8080/api/ordenes${detail ? "/17" : ""}`
       const pending = app.http.expectOne(request => request.url === endpoint)
       expect(pending.request.method).toBe("GET")
@@ -377,6 +399,7 @@ describe("Operations protected request integration", () => {
   it("opens protected Agenda blank, then dispatches one explicit root-composed GET and links the actual order", async () => {
     const app = await setup(true)
     const harness = await RouterTestingHarness.create("/admin/operations/agenda")
+    flushShellMetrics(app.http)
     const settle = async () => {
       await harness.fixture.whenStable()
       harness.detectChanges()
@@ -391,18 +414,34 @@ describe("Operations protected request integration", () => {
     )
     expect(consumer.injector.get(AuthStore)).toBe(app.auth)
     expect(consumer.injector.get(HotToastService)).toBeDefined()
-    app.http.expectNone(r => r.url.includes("/api/"))
+    // S5: a blank required date never queries the agenda; only its staff picker reads a catalog.
+    app.http.expectNone(r => r.url === "http://localhost:8080/api/agenda")
     const shell = harness.routeNativeElement!
     expect(shell.querySelector('app-admin-sidebar a[href="/admin/operations/agenda"]')).toBeNull()
     expect(shell.querySelector('a[href="/admin/operations"]')?.getAttribute("aria-current")).toBe(
       "page"
     )
+    // S3/S4: the controls, including the staff picker, live in the frame header row.
+    const filters = shell.querySelector(
+      "app-agenda-page app-catalog-frame header app-catalog-filters"
+    )!
+    expect(filters, "Agenda filter row inside the frame header").not.toBeNull()
+    expect(filters.querySelectorAll("app-catalog-combobox")).toHaveLength(1)
+    expect(shell.querySelector('app-agenda-page button[type="submit"]')).toBeNull()
+    const staff = app.http.expectOne(r => r.url === "http://localhost:8080/api/personal")
+    expect(staff.request.method).toBe("GET")
+    expect(staff.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(staff.request.transferCache).toBe(false)
+    expect(staff.request.params.get("pagina")).toBe("0")
+    expect(staff.request.params.get("tamanio")).toBe("20")
+    expect(staff.request.params.get("activo")).toBe("true")
+    staff.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    await settle()
     const date = shell.querySelector<HTMLInputElement>("#agenda-date")!
     expect(date.value).toBe("")
+    // S5: the explicit date applies at once, without any submit action.
     date.value = "2024-02-29"
     date.dispatchEvent(new Event("input", { bubbles: true }))
-    await settle()
-    shell.querySelector<HTMLButtonElement>('app-agenda-page button[type="submit"]')!.click()
     await settle()
     const pending = app.http.expectOne(r => r.url === "http://localhost:8080/api/agenda")
     expect(pending.request.method).toBe("GET")
@@ -422,6 +461,7 @@ describe("Operations protected request integration", () => {
   it("navigates requests → orders → loaded detail → effective inbox → requests without duplicate reads", async () => {
     const app = await setup(true)
     const harness = await RouterTestingHarness.create("/admin/operations")
+    flushShellMetrics(app.http)
     app.http
       .expectOne(request => request.url === api)
       .flush({
@@ -442,7 +482,6 @@ describe("Operations protected request integration", () => {
     expect(ordersLink, "Missing working Órdenes tab link").not.toBeNull()
     ordersLink!.click()
     await settle()
-    const ordersApi = "http://localhost:8080/api/ordenes"
     const list = app.http.expectOne(request => request.url === ordersApi)
     expect(list.request.headers.get("Authorization")).toBe("Bearer fake-access")
     list.flush(ordersDtoPage(0, 5, 1))
@@ -476,8 +515,10 @@ describe("Operations protected request integration", () => {
     await settle()
     expect(TestBed.inject(Router).url).toBe("/admin/operations/requests")
     expect(harness.routeNativeElement!.querySelector("app-service-requests-page")).not.toBeNull()
-    // The original successful 0/20 requests entry is still fresh in the root store.
-    app.http.expectNone(request => request.url === api)
+    // The original successful 0/20 requests list entry is still fresh in the root store. The
+    // assertion stays scoped to that list query: the shell's own `tamanio=1` KPI read is
+    // accounted for above and is not a list read.
+    app.http.expectNone(request => request.url === api && request.params.get("tamanio") === "20")
     // The filter pickers read one page each per mounted list; they are separate from the
     // list reads this test is pinning, so they are flushed here instead of left open.
     for (const catalog of [

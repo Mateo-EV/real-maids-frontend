@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
-import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
+import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from "rxjs"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucidePlus } from "@ng-icons/lucide"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
@@ -12,6 +12,10 @@ import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
+import {
+  CatalogCombobox,
+  CatalogComboboxOption
+} from "@/app/shared/components/catalog-combobox/catalog-combobox"
 import {
   CatalogFilterDate,
   CatalogFilterSelect,
@@ -43,13 +47,25 @@ interface FilterValues {
 }
 
 const noFilters: FilterValues = { status: "", customerId: "", from: "", until: "" }
-/** Loaded page only: the list contract has no text search for the customer picker. */
-const customerPageQuery = { offset: 0, limit: 20 } as const
+/**
+ * One searched page at a time: the picker never downloads a catalog nor slices it locally,
+ * and only the cleared filter offers an empty value (an absence of identity, not a name).
+ */
+const customerPage = { offset: 0, limit: 20 } as const
+const anyCustomer: CatalogComboboxOption = { value: "", label: "Todos los clientes" }
+const searchDebounceMs = 250
+
+interface CustomerPickerRequest {
+  readonly search: string
+  readonly force: boolean
+  readonly delay: number
+}
 
 @Component({
   selector: "app-service-requests-page",
   imports: [
     RouterLink,
+    CatalogCombobox,
     CatalogFilters,
     CatalogFrame,
     NgIcon,
@@ -82,6 +98,11 @@ export class ServiceRequestsPage implements OnInit {
   private readonly filters = signal<FilterValues>(noFilters)
   /** Captured label so an already-chosen customer never disappears from its own filter. */
   private readonly selectedCustomer = signal<{ id: number; label: string } | null>(null)
+  /** Observed picker query; only one key is active at a time so typing cannot fill the registry. */
+  private readonly customerQuery = signal<{ offset: number; limit: number; search?: string }>(
+    customerPage
+  )
+  private readonly customerReads = new Subject<CustomerPickerRequest | null>()
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()
   private revision = 0
   private recoveryUsed = false
@@ -93,13 +114,15 @@ export class ServiceRequestsPage implements OnInit {
     this.admissionError.set(undefined)
     this.filters.set(noFilters)
     this.selectedCustomer.set(null)
+    this.customerQuery.set(customerPage)
+    this.customerReads.next(null)
     this.requested.set({ offset: 0, limit: 20 })
     const generation = this.scope.generation()
     // Session reset runs inside a transition; wait before admitting new reads.
     queueMicrotask(() => {
       if (!this.current(generation)) return
       this.recoveryUsed = false
-      this.readCustomers(false)
+      this.customerReads.next({ search: "", force: false, delay: 0 })
       this.load({ offset: 0, limit: 20 })
     })
   })
@@ -122,52 +145,54 @@ export class ServiceRequestsPage implements OnInit {
     this.rows().length ? this.result()!.offset + this.rows().length : 0
   )
   readonly error = computed(() => this.list().error ?? this.admissionError())
-  readonly customerEntry = computed(() => this.customers.selectQuery(customerPageQuery))
+  readonly customerEntry = computed(() => this.customers.selectQuery(this.customerQuery()))
   readonly customerBusy = computed(
     () => this.customerEntry().loading || this.customerEntry().refreshing
   )
-  readonly customerFailed = computed(() => !!this.customerEntry().error)
+  readonly customerError = computed(() =>
+    this.customerEntry().error ? "No se pudieron cargar los clientes." : ""
+  )
   /** Loaded, active customers; the retained choice stays visible when the page changes. */
-  private readonly loadedCustomers = computed(() =>
+  private readonly loadedCustomers = computed<readonly CatalogComboboxOption[]>(() =>
     (this.customerEntry().result?.items ?? [])
       .filter(customer => customer.isActive)
       .map(customer => ({ value: String(customer.id), label: customer.name }))
   )
-  readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => {
+  /** Verified page options plus the retained identity; the clear entry only exists when set. */
+  readonly customerOptions = computed<readonly CatalogComboboxOption[]>(() => {
     const selected = this.selectedCustomer()
     const loaded = this.loadedCustomers()
-    const customerOptions =
+    const retained =
       selected && !loaded.some(option => option.value === String(selected.id))
         ? [
             {
               value: String(selected.id),
               label: `${selected.label} · no disponible en esta página`
-            },
-            ...loaded
+            }
           ]
-        : loaded
-    return [
-      {
-        id: "requests-filter-status",
-        label: "Estado",
-        allLabel: "Todos los estados",
-        value: this.filters().status,
-        // Documented allow-list of the request contract, not an invented label table.
-        options: [
-          { value: "registrada", label: "Registrada" },
-          { value: "atendida", label: "Atendida" },
-          { value: "cancelada", label: "Cancelada" }
-        ]
-      },
-      {
-        id: "requests-filter-customer",
-        label: "Cliente",
-        allLabel: "Todos los clientes",
-        value: this.filters().customerId,
-        options: customerOptions
-      }
-    ]
+        : []
+    return [...(selected ? [anyCustomer] : []), ...retained, ...loaded]
   })
+  readonly customerLabel = computed(() => {
+    const selected = this.selectedCustomer()
+    if (!selected) return ""
+    const value = String(selected.id)
+    return this.customerOptions().find(option => option.value === value)?.label ?? selected.label
+  })
+  readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => [
+    {
+      id: "requests-filter-status",
+      label: "Estado",
+      allLabel: "Todos los estados",
+      value: this.filters().status,
+      // Documented allow-list of the request contract, not an invented label table.
+      options: [
+        { value: "registrada", label: "Registrada" },
+        { value: "atendida", label: "Atendida" },
+        { value: "cancelada", label: "Cancelada" }
+      ]
+    }
+  ])
   readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
     { id: "requests-filter-from", label: "Desde", value: this.filters().from },
     { id: "requests-filter-until", label: "Hasta", value: this.filters().until }
@@ -189,18 +214,44 @@ export class ServiceRequestsPage implements OnInit {
 
   setSelect(id: string, value: string): void {
     if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
-    if (id === "requests-filter-status")
-      return this.changeFilters({ status: this.statusValue(value) })
-    if (id !== "requests-filter-customer") return
-    const customerId = value ? Number(value) : 0
-    if (value && (!Number.isSafeInteger(customerId) || customerId <= 0)) return
-    if (!value) this.selectedCustomer.set(null)
-    else {
-      const loaded = this.customerEntry().result?.items.find(item => item.id === customerId)
-      if (loaded) this.selectedCustomer.set({ id: loaded.id, label: loaded.name })
-      else if (this.selectedCustomer()?.id !== customerId) return
+    if (id !== "requests-filter-status") return
+    this.changeFilters({ status: this.statusValue(value) })
+  }
+
+  /**
+   * S9: only a verified option value reaches the query, the captured label is a real server
+   * name, and the cleared entry is the only way to drop an already-chosen identity.
+   */
+  setCustomer(value: string): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    if (value === this.filters().customerId) return
+    if (!value) {
+      this.selectedCustomer.set(null)
+      return this.changeFilters({ customerId: "" })
     }
+    const customerId = Number(value)
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) return
+    const loaded = this.loadedCustomers().find(option => option.value === value)
+    const retained = this.selectedCustomer()
+    const label =
+      loaded?.label ?? (retained && String(retained.id) === value ? retained.label : undefined)
+    if (!label) return
+    this.selectedCustomer.set({ id: customerId, label })
     this.changeFilters({ customerId: value })
+  }
+
+  /** Debounced server search: it never applies, clears or re-reads the list filter. */
+  searchCustomers(value: string): void {
+    this.queueCustomerRead({ search: value.trim(), force: false, delay: searchDebounceMs })
+  }
+
+  /** One forced read of the query currently observed by the picker, nothing else. */
+  reloadCustomers(): void {
+    this.queueCustomerRead({
+      search: this.customerQuery().search ?? "",
+      force: true,
+      delay: 0
+    })
   }
 
   setDate(id: string, value: string): void {
@@ -209,9 +260,9 @@ export class ServiceRequestsPage implements OnInit {
     if (id === "requests-filter-until") this.changeFilters({ until: value })
   }
 
-  retryCustomers(): void {
-    if (this.destroyRef.destroyed || !this.scope.check()) return
-    this.readCustomers(true)
+  private queueCustomerRead(request: CustomerPickerRequest): void {
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    this.customerReads.next(request)
   }
 
   private statusValue(value: string): string {
@@ -234,13 +285,6 @@ export class ServiceRequestsPage implements OnInit {
     if (filters.from) query.from = filters.from
     if (filters.until) query.until = filters.until
     return query
-  }
-
-  private readCustomers(force: boolean): void {
-    this.customers
-      .observeQuery(customerPageQuery, force)
-      .pipe(takeUntil(this.scope.cancelled$), takeUntilDestroyed(this.destroyRef))
-      .subscribe()
   }
 
   create(): void {
@@ -279,9 +323,35 @@ export class ServiceRequestsPage implements OnInit {
         this.departing = true
         this.dialog?.close()
         this.revision++
+        this.customerReads.next(null)
         this.queries.next(null)
       }
     })
+    // One picker query is observed at a time: a new search supersedes the previous read, so
+    // typing cannot exhaust the pinned registry that keeps the current view alive.
+    this.customerReads
+      .pipe(
+        switchMap(request => {
+          if (!request) return EMPTY
+          const generation = this.scope.generation()
+          return (request.delay ? timer(request.delay) : of(0)).pipe(
+            switchMap(() => {
+              if (!this.current(generation)) return EMPTY
+              const query = {
+                offset: customerPage.offset,
+                limit: customerPage.limit,
+                ...(request.search ? { search: request.search } : {})
+              }
+              this.customerQuery.set(query)
+              return this.customers
+                .observeQuery(query, request.force)
+                .pipe(takeUntil(this.scope.cancelled$))
+            })
+          )
+        }),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe()
     this.queries
       .pipe(
         switchMap(request => {
@@ -328,7 +398,7 @@ export class ServiceRequestsPage implements OnInit {
       )
       .subscribe()
     if (ready) this.load(this.requested())
-    if (ready) this.readCustomers(false)
+    if (ready) this.customerReads.next({ search: "", force: false, delay: 0 })
   }
 
   private current(generation: number, revision?: number): boolean {

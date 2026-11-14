@@ -11,22 +11,42 @@
       [dates]="filterDates()"
       (selectChange)="setSelect($event.id, $event.value)"
       (dateChange)="setDate($event.id, $event.value)"
-    />
-    @if (catalogBusy()) {
-      <p role="status" class="px-4 py-1 text-xs text-muted-foreground">
-        Cargando clientes y personal…
-      </p>
-    }
-    @if (catalogFailed()) {
-      <div class="flex flex-wrap items-center gap-2 px-4 py-1">
-        <p role="alert" class="text-xs text-destructive">
-          No se pudieron cargar los clientes o el personal para filtrar.
-        </p>
-        <button hlmBtn variant="outline" size="sm" type="button" (click)="retryCatalogs()">
-          Reintentar filtros
-        </button>
+    >
+      <div class="flex flex-col gap-1">
+        <label for="orders-filter-customer" class="text-xs font-medium">Cliente</label>
+        <app-catalog-combobox
+          [id]="'orders-filter-customer'"
+          label="Cliente"
+          placeholder="Todos los clientes"
+          emptyLabel="Sin clientes para esta búsqueda."
+          searchPlaceholder="Buscar cliente…"
+          [selectedLabel]="customerLabel()"
+          [options]="customerOptions()"
+          [loading]="customerEntry().loading || customerEntry().refreshing"
+          [errorLabel]="customerError()"
+          (searchChange)="searchCustomers($event)"
+          (selectChange)="setCustomer($event)"
+          (reload)="reloadCustomers()"
+        />
       </div>
-    }
+      <div class="flex flex-col gap-1">
+        <label for="orders-filter-staff" class="text-xs font-medium">Personal</label>
+        <app-catalog-combobox
+          [id]="'orders-filter-staff'"
+          label="Personal"
+          placeholder="Todo el personal"
+          emptyLabel="Sin personal para esta búsqueda."
+          searchPlaceholder="Buscar personal…"
+          [selectedLabel]="staffLabel()"
+          [options]="staffOptions()"
+          [loading]="staffEntry().loading || staffEntry().refreshing"
+          [errorLabel]="staffError()"
+          (searchChange)="searchStaff($event)"
+          (selectChange)="setStaff($event)"
+          (reload)="reloadStaff()"
+        />
+      </div>
+    </app-catalog-filters>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner aria-label="Cargando órdenes" />Cargando órdenes…
