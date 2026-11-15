@@ -94,71 +94,13 @@
             No se devolvieron servicios para esta consulta.
           </p>
         }
-        <div
-          class="grid min-w-0 gap-3"
-          [class.md:grid-cols-2]="model().view === 'week'"
-          [class.xl:grid-cols-4]="model().view === 'week'"
-          [class.sm:grid-cols-2]="model().view === 'month'"
-          [class.lg:grid-cols-4]="model().view === 'month'"
-          [class.2xl:grid-cols-7]="model().view === 'month'"
-        >
-          @for (day of days(); track day.date) {
-            <section
-              data-agenda-day
-              class="min-w-0 rounded-lg border p-3"
-              [attr.aria-label]="day.date"
-            >
-              <h3 class="mb-3 font-semibold">
-                <time [attr.datetime]="day.date">{{ day.date }}</time>
-              </h3>
-              @if (day.outsideRange) {
-                <p class="mb-2 text-xs text-muted-foreground">
-                  Fecha devuelta fuera del intervalo solicitado.
-                </p>
-              }
-              @for (entry of day.entries; track $index) {
-                <article
-                  class="min-w-0 rounded-md border bg-card p-3 text-sm break-words"
-                  data-agenda-entry
-                >
-                  <h3 class="mb-3 text-sm font-semibold">
-                    <time [attr.datetime]="entry.date">{{ entry.date }}</time>
-                  </h3>
-                  <a
-                    class="font-semibold text-primary underline underline-offset-4"
-                    [routerLink]="['/admin/operations/orders', entry.orderId]"
-                    >{{ entry.code }} · Orden ID {{ entry.orderId }}</a
-                  >
-                  <p>
-                    {{ entry.startTime }} →
-                    {{ entry.endTime === null ? "No registrado" : entry.endTime }}
-                  </p>
-                  <p>Estado: {{ entry.status }}</p>
-                  <p>Cliente: {{ entry.customerName }}</p>
-                  <p>Propiedad: {{ entry.propertyName }}</p>
-                  <p>
-                    Servicio:
-                    {{ entry.serviceTypeName === null ? "No registrado" : entry.serviceTypeName }}
-                  </p>
-                  <ul class="mt-2 flex flex-col gap-1" aria-label="Personal asignado">
-                    @for (staff of entry.assignedStaff; track $index) {
-                      <li>
-                        {{ staff.name }} · ID {{ staff.staffId }} · {{ staff.role }} ·
-                        {{ staff.phone === null ? "No registrado" : staff.phone }}
-                      </li>
-                    } @empty {
-                      <li>Sin personal asignado</li>
-                    }
-                  </ul>
-                </article>
-              } @empty {
-                <p class="text-sm text-muted-foreground">
-                  No se devolvieron servicios para esta fecha.
-                </p>
-              }
-            </section>
-          }
-        </div>
+        <app-agenda-calendar-view
+          [entries]="store.result() ?? []"
+          [selectedDate]="model().date"
+          [view]="model().view"
+          [busy]="busy()"
+          (orderSelected)="openOrder($event)"
+        />
       </section>
     }
   </app-catalog-frame>

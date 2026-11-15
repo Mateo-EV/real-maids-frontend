@@ -1,0 +1,5 @@
+@if (renderable()) {
+  <div class="agenda-calendar-view__frame" [attr.aria-busy]="busy()">
+    <full-calendar [options]="options()" />
+  </div>
+}

@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, inject, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { RouterLink } from "@angular/router"
+import { Router } from "@angular/router"
 import { EMPTY, of, Subject, switchMap, takeUntil, timer } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -18,6 +18,7 @@ import {
   CatalogFilters
 } from "@/app/shared/components/catalog-filters/catalog-filters"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
+import { AgendaCalendarView } from "../../components/agenda-calendar-view/agenda-calendar-view"
 import {
   agendaQuery,
   agendaRange,
@@ -53,10 +54,10 @@ const blank: AgendaModel = { date: "", view: "day", staff: "" }
   selector: "app-agenda-page",
   providers: [AgendaStore],
   imports: [
+    AgendaCalendarView,
     CatalogCombobox,
     CatalogFilters,
     CatalogFrame,
-    RouterLink,
     HlmAlertImports,
     HlmButtonImports,
     HlmNativeSelectImports,
@@ -67,6 +68,7 @@ const blank: AgendaModel = { date: "", view: "day", staff: "" }
 export class AgendaPage {
   readonly store = inject(AgendaStore)
   private readonly staff = inject(FieldStaffStore)
+  private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
   /** Draft and applied filter are the same thing: every change applies at once (S5). */
   readonly model = signal<AgendaModel>({ ...blank })
@@ -91,19 +93,6 @@ export class AgendaPage {
   readonly range = computed(() => {
     const { date, view } = this.model()
     return date ? agendaRange(date, view) : undefined
-  })
-  readonly days = computed(() => {
-    const entries = this.store.result() ?? []
-    const requested = this.range()?.dates ?? []
-    const dates = [
-      ...requested,
-      ...new Set(entries.map(entry => entry.date).filter(date => !requested.includes(date)))
-    ]
-    return dates.map(date => ({
-      date,
-      outsideRange: !requested.includes(date),
-      entries: entries.filter(entry => entry.date === date)
-    }))
   })
   readonly busy = computed(() => this.store.loading() || this.store.refreshing())
   readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
@@ -204,6 +193,12 @@ export class AgendaPage {
   /** One forced read of the query currently observed by the picker, nothing else. */
   reloadStaff(): void {
     this.queueStaffRead({ search: this.staffQuery().search ?? "", force: true, delay: 0 })
+  }
+
+  /** S8: the calendar reports the order the user clicked; the page owns the route. */
+  openOrder(orderId: number): void {
+    if (this.destroyRef.destroyed || !this.scope.check()) return
+    void this.router.navigate(["/admin/operations/orders", orderId])
   }
 
   retry(): void {

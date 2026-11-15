@@ -31,6 +31,8 @@
             ],
             "styles": [
               "@ngxpert/hot-toast/styles.css",
+              "@fullcalendar/angular/skeleton.css",
+              "@fullcalendar/angular/themes/classic/theme.css",
               "src/styles.css"
             ],
             "server": "src/main.server.ts",
@@ -87,9 +89,7 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
-            "setupFiles": [
-              "src/test-setup.ts"
-            ]
+            "setupFiles": ["src/test-setup.ts"]
           }
         }
       }
