@@ -452,9 +452,12 @@ describe("Operations protected request integration", () => {
     expect(pending.request.params.get("hasta")).toBe("2024-02-29")
     pending.flush([agendaDto()])
     await settle()
-    expect(
-      shell.querySelector('app-agenda-page a[href="/admin/operations/orders/17"]')
-    ).not.toBeNull()
+    // S8: the calendar renders the shift as an event that carries the actual order id.
+    const event = shell.querySelector(
+      'app-agenda-page app-agenda-calendar-view [data-agenda-order-id="17"]'
+    )
+    expect(event, "Agenda event for the actual order").not.toBeNull()
+    expect(event!.getAttribute("aria-label")).toContain("2024-02-29")
     app.http.verify()
   })
 

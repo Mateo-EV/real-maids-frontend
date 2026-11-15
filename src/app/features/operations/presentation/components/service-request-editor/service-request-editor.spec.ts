@@ -30,6 +30,7 @@ const requests = `${origin}/api/solicitudes`
 const customers = `${origin}/api/clientes`
 const types = `${origin}/api/catalogos/tipos-servicio`
 const inbox = "/admin/operations/requests"
+type ChoiceKey = "customerId" | "propertyId" | "serviceTypeId"
 const caller = (id = 19, name = "Caller") =>
   AuthSession.create(name, `caller${id}@example.test`, null, 4102444800000, id)
 const customer = (id = 8) => ({
@@ -130,6 +131,9 @@ async function setup(options: { server?: boolean; guest?: boolean } = {}) {
   const harness = await RouterTestingHarness.create(inbox)
   const http = TestBed.inject(HttpTestingController)
   const settle = async () => {
+    // A post-await write continuation is not tracked by whenStable, so let the
+    // macrotask/microtask queues drain before the dialog overlay is re-rendered.
+    await new Promise(resolve => setTimeout(resolve, 0))
     harness.detectChanges()
     await harness.fixture.whenStable()
     harness.detectChanges()
@@ -148,19 +152,18 @@ async function setup(options: { server?: boolean; guest?: boolean } = {}) {
     button!.click()
     await settle()
   }
-  const field = (key: string) => {
-    const control = dialog().querySelector<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >(`#request-${key}`)
+  // Text/calendar fields keep their native control; catalog choices are pickers.
+  const field = (key: "description" | "desiredDate") => {
+    const control = dialog().querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `#request-${key}`
+    )
     expect(control, `Labeled public field ${key}`).not.toBeNull()
     return control!
   }
-  const fill = async (key: string, value: string) => {
+  const fill = async (key: "description" | "desiredDate", value: string) => {
     const control = field(key)
     control.value = value
-    control.dispatchEvent(
-      new Event(control.tagName === "SELECT" ? "change" : "input", { bubbles: true })
-    )
+    control.dispatchEvent(new Event("input", { bubbles: true }))
     control.dispatchEvent(new Event("blur"))
     await settle()
   }
@@ -170,17 +173,78 @@ async function setup(options: { server?: boolean; guest?: boolean } = {}) {
     form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
     await settle()
   }
-  const getPage = (url: string, pagina = 0, tamanio = 20) => {
+  const getPage = (url: string, pagina = 0, tamanio = 20, busqueda?: string) => {
     const pending = http.expectOne(
       r =>
         r.url === url &&
         r.method === "GET" &&
         r.params.get("pagina") === String(pagina) &&
-        r.params.get("tamanio") === String(tamanio)
+        r.params.get("tamanio") === String(tamanio) &&
+        r.params.get("busqueda") === (busqueda ?? null)
     )
-    expect(pending.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    expect(pending.request.params.keys().sort()).toEqual(
+      busqueda === undefined ? ["pagina", "tamanio"] : ["busqueda", "pagina", "tamanio"]
+    )
     expect(pending.request.transferCache).toBe(false)
     return pending
+  }
+  const trigger = (key: ChoiceKey) => {
+    const control = dialog().querySelector<HTMLButtonElement>(`button#request-${key}`)
+    expect(control, `Catalog picker ${key}`).not.toBeNull()
+    return control!
+  }
+  /** What the closed picker reports as the current choice; never a copied result array. */
+  const label = (key: ChoiceKey) => trigger(key).textContent?.trim() ?? ""
+  /** Panel of one picker: options and its own search/reload/paging controls. */
+  const picker = async (key: ChoiceKey) => {
+    const id = `request-${key}`
+    const find = () =>
+      document
+        .getElementById(`${id}-options`)
+        ?.closest("hlm-combobox-content") as HTMLElement | null
+    let panel = find()
+    if (!panel) {
+      trigger(key).click()
+      await settle()
+      panel = find()
+    }
+    expect(panel, `${id} panel`).not.toBeNull()
+    const search = panel!.querySelector<HTMLInputElement>('input[type="search"]')
+    const options = () => Array.from(panel!.querySelectorAll<HTMLElement>('[role="option"]'))
+    const action = (text: string) =>
+      Array.from(panel!.querySelectorAll<HTMLButtonElement>("button")).find(
+        b => b.textContent?.trim() === text || b.getAttribute("aria-label") === text
+      )
+    return {
+      panel: panel!,
+      search,
+      options,
+      action,
+      values: () => options().map(o => [o.getAttribute("data-value"), o.textContent?.trim()])
+    }
+  }
+  const closePicker = async (choice: Awaited<ReturnType<typeof picker>>) => {
+    ;(choice.search ?? choice.panel).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+    await settle()
+  }
+  const choose = async (key: ChoiceKey, value: string) => {
+    const choice = await picker(key)
+    const option = choice.options().find(o => o.getAttribute("data-value") === value)
+    expect(option, `${key} option ${value}`).toBeDefined()
+    option!.scrollIntoView = vi.fn()
+    option!.click()
+    await settle()
+    return choice
+  }
+  const reload = async (key: ChoiceKey) => {
+    const choice = await picker(key)
+    const action = choice.action("Recargar opciones")
+    expect(action, `${key} reload action`).toBeDefined()
+    action!.click()
+    await settle()
+    return choice
   }
   const open = async () => {
     await click("Crear solicitud")
@@ -190,11 +254,11 @@ async function setup(options: { server?: boolean; guest?: boolean } = {}) {
     getPage(customers).flush(page([customer()]))
     http.expectOne(types).flush([service])
     await settle()
-    await fill("customerId", "8")
+    await choose("customerId", "8")
     http.expectOne(`${customers}/8/propiedades`).flush([property(), property(32, 8, false)])
     await settle()
-    await fill("propertyId", "31")
-    await fill("serviceTypeId", "4")
+    await choose("propertyId", "31")
+    await choose("serviceTypeId", "4")
   }
   const overlay = () => getDebugNode(dialog())!.injector.get(CdkDialogRef).overlayRef
   await settle()
@@ -216,6 +280,12 @@ async function setup(options: { server?: boolean; guest?: boolean } = {}) {
     fill,
     submit,
     getPage,
+    trigger,
+    label,
+    picker,
+    closePicker,
+    choose,
+    reload,
     open,
     choices,
     overlay
@@ -233,7 +303,9 @@ afterEach(() => {
 describe("WP7 T5 S1-S4 create-only request consumer", () => {
   it("projects one lazy launcher in catalogControls, blank required choices and actual root catalog data", async () => {
     const s = await setup()
-    s.http.expectNone(() => true)
+    // The page owns its own customer picker read (T4 filter row): it is the only request at
+    // rest, and the editor joins that same ref-counted flight instead of dispatching another.
+    const pageRead = s.getPage(customers)
     const launcher = s.harness.routeNativeElement!.querySelector("[catalogControls]")
     expect(launcher?.textContent).toContain("Crear solicitud")
     await s.open()
@@ -245,17 +317,23 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     expect(s.dialog().querySelector("[hlmDialogTitle]")?.textContent).toContain("Crear solicitud")
     expect(s.dialog().textContent).toMatch(/Cargando clientes/)
     expect(s.dialog().textContent).toMatch(/Cargando tipos/)
-    s.getPage(customers).flush(page([customer()]))
+    pageRead.flush(page([customer()]))
     s.http.expectOne(types).flush([service])
     await s.settle()
-    for (const key of ["customerId", "propertyId", "serviceTypeId"]) {
-      expect(s.field(key).value).toBe("")
+    // S1: the three catalog choices are pickers with blank choices; no native select remains.
+    expect(s.dialog().querySelectorAll("select")).toHaveLength(0)
+    expect(s.dialog().querySelectorAll("app-catalog-combobox")).toHaveLength(3)
+    for (const key of ["customerId", "propertyId", "serviceTypeId"] as const)
       expect(s.dialog().querySelector(`label[for="request-${key}"]`)).not.toBeNull()
-    }
-    expect(s.dialog().textContent).toContain("Cliente 8")
-    expect(s.dialog().textContent).toContain("Tipo real")
-    expect(s.dialog().querySelector('option[value="8"]')?.textContent?.trim()).toBe("Cliente 8")
-    expect(s.dialog().querySelector('option[value="4"]')?.textContent?.trim()).toBe("Tipo real")
+    expect(s.label("customerId")).toBe("Selecciona cliente")
+    expect(s.label("propertyId")).toBe("Selecciona propiedad")
+    expect(s.label("serviceTypeId")).toBe("Selecciona tipo de servicio")
+    const customersPanel = await s.picker("customerId")
+    expect(customersPanel.values()).toEqual([["8", "Cliente 8"]])
+    await s.closePicker(customersPanel)
+    const typesPanel = await s.picker("serviceTypeId")
+    expect(typesPanel.values()).toEqual([["4", "Tipo real"]])
+    await s.closePicker(typesPanel)
     expect(s.dialog().textContent).not.toMatch(/Editar|Precio|Registrado por|SYNTHETIC/)
     s.http.expectNone(r => r.url.includes("propiedades"))
     await s.submit()
@@ -267,6 +345,109 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     expect(TestBed.inject(CustomersStore)).toBe(TestBed.inject(CustomersStore))
     expect(TestBed.inject(CustomerPropertiesStore)).toBe(TestBed.inject(CustomerPropertiesStore))
     expect(TestBed.inject(ServiceCatalogStore)).toBe(TestBed.inject(ServiceCatalogStore))
+  })
+
+  // S1/S2: paging lives inside the picker panel, every catalog reload is the in-panel
+  // icon button, and the form keeps no standalone catalog controls or page navigation.
+  it("keeps every page control inside the picker panel and reloads exactly one read per catalog", async () => {
+    const s = await setup()
+    await s.open()
+    s.getPage(customers).flush(page([customer(8), customer(9)], 0, 2, 3))
+    s.http.expectOne(types).flush([service])
+    await s.settle()
+    expect(s.dialog().querySelector("app-table-pagination")).toBeNull()
+    expect(s.dialog().textContent).not.toMatch(/Página \d+ de \d+/)
+    for (const text of ["Anterior", "Siguiente", "Actualizar clientes", "Actualizar propiedades"]) {
+      const control = [...s.dialog().querySelectorAll("button")].find(
+        b => b.textContent?.trim() === text
+      )
+      expect(control, text).toBeUndefined()
+    }
+    const customersPanel = await s.picker("customerId")
+    expect(customersPanel.search, "customer server search box").not.toBeNull()
+    expect(customersPanel.panel.textContent).toContain("Página 1 de 2")
+    expect(customersPanel.action("Anterior")!.disabled).toBe(true)
+    await s.reload("customerId")
+    s.getPage(customers, 0, 2).flush(page([customer(8), customer(9)], 0, 2, 3))
+    await s.settle()
+    expect(customersPanel.values()).toEqual([
+      ["8", "Cliente 8"],
+      ["9", "Cliente 9"]
+    ])
+    s.http.expectNone(() => true)
+    await s.closePicker(customersPanel)
+    // A finite catalog without a search contract still reloads from its own panel.
+    const typesPanel = await s.reload("serviceTypeId")
+    // The finite service-type catalog has no server search: no box, reload stays.
+    expect(typesPanel.search).toBeNull()
+    expect(typesPanel.action("Recargar opciones")).toBeDefined()
+    s.http.expectOne(types).flush([service])
+    await s.settle()
+    s.http.expectNone(() => true)
+    await s.closePicker(typesPanel)
+    // The property list follows the verified owner; reloading it is one forced read.
+    const emptyProperties = await s.picker("propertyId")
+    expect(emptyProperties.values()).toEqual([])
+    await s.closePicker(emptyProperties)
+    await s.choose("customerId", "8")
+    s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
+    await s.settle()
+    const propertiesPanel = await s.picker("propertyId")
+    expect(propertiesPanel.values()).toEqual([["31", "Propiedad 31 · Dirección 31"]])
+    // The finite owner-property list has no server search: no box, reload stays.
+    expect(propertiesPanel.search).toBeNull()
+    expect(propertiesPanel.action("Recargar opciones")).toBeDefined()
+    await s.closePicker(propertiesPanel)
+    await s.reload("propertyId")
+    s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
+    await s.settle()
+    s.http.expectNone(() => true)
+    expect(s.label("customerId")).toBe("Cliente 8")
+  })
+
+  // S9: the only catalog with a server search parameter is searched on the server,
+  // debounced, without changing the selection or the property context.
+  it("debounces one server customer search without changing the selection or its properties", async () => {
+    const s = await setup()
+    await s.open()
+    s.getPage(customers).flush(page([customer(8), customer(9)]))
+    s.http.expectOne(types).flush([service])
+    await s.settle()
+    await s.choose("customerId", "8")
+    s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
+    await s.settle()
+    await s.choose("propertyId", "31")
+    await s.choose("serviceTypeId", "4")
+    const panel = await s.picker("customerId")
+    expect(panel.search, "customer server search").not.toBeNull()
+    const search = panel.search!
+    search.value = "  Cli  "
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    search.value = "Cliente 9"
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    // Still debounced: nothing is dispatched before the 250ms window closes.
+    s.http.expectNone(() => true)
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    s.getPage(customers, 0, 20, "Cliente 9").flush(page([customer(9)], 0, 20, 1))
+    await s.settle()
+    s.http.expectNone(() => true)
+    expect(s.label("customerId")).toBe("Cliente 8 · no disponible en esta página")
+    expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
+    expect(s.dialog().textContent).toContain("Cliente seleccionado: Cliente 8 · ID 8")
+    await s.closePicker(panel)
+    await s.submit()
+    const post = s.http.expectOne(r => r.method === "POST")
+    expect(post.request.body).toEqual({
+      idCliente: 8,
+      idPropiedad: 31,
+      idTipoServicio: 4,
+      descripcion: null,
+      fechaDeseada: null
+    })
+    post.flush({}, { status: 403, statusText: "Forbidden" })
+    await s.settle()
   })
 
   it("sends only five trimmed fields, guards pending dismissal and refreshes the observed inbox exactly once on success", async () => {
@@ -292,7 +473,14 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     expect(post.request.transferCache).toBe(false)
     expect(s.success).not.toHaveBeenCalled()
     expect(TestBed.inject(ServiceRequestsStore).writing()).toBe(true)
-    for (const key of ["customerId", "propertyId", "serviceTypeId", "description", "desiredDate"])
+    // The disabled fieldset still owns the pickers: a disabled trigger cannot open.
+    for (const key of ["customerId", "propertyId", "serviceTypeId"] as const) {
+      expect(s.trigger(key).matches(":disabled"), key).toBe(true)
+      s.trigger(key).click()
+      await s.settle()
+      expect(document.querySelector(`input#request-${key}-search`), key).toBeNull()
+    }
+    for (const key of ["description", "desiredDate"] as const)
       expect(s.field(key).disabled).toBe(true)
     const cancel = [...s.dialog().querySelectorAll<HTMLButtonElement>("button")].find(
       b => b.textContent?.trim() === "Cancelar"
@@ -338,7 +526,7 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     s.http.expectNone(() => true)
   })
 
-  it("rejects overlong description and unverified property/type IDs before HTTP", async () => {
+  it("rejects an overlong description and a choice that left the verified page before HTTP", async () => {
     const s = await setup()
     await s.open()
     await s.choices()
@@ -347,16 +535,33 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     expect(s.dialog().textContent).toContain("2000")
     s.http.expectNone(r => r.method === "POST")
     await s.fill("description", "Borrador")
-    for (const key of ["propertyId", "serviceTypeId"]) {
-      const select = s.field(key) as HTMLSelectElement
-      const injected = document.createElement("option")
-      injected.value = "999"
-      injected.textContent = "Unverified"
-      select.append(injected)
-      await s.fill(key, "999")
-      await s.submit()
-      s.http.expectNone(r => r.method === "POST")
-    }
+    // Inactive and foreign records are never offered: only the verified active owner
+    // property and the active service type reach the picker.
+    const propertiesPanel = await s.picker("propertyId")
+    expect(propertiesPanel.values()).toEqual([["31", "Propiedad 31 · Dirección 31"]])
+    // A value that is not a loaded option cannot become the selected identity.
+    const listbox = propertiesPanel.panel.querySelector('[role="listbox"]')!
+    const injected = document.createElement("div")
+    injected.setAttribute("role", "option")
+    injected.setAttribute("data-value", "999")
+    injected.textContent = "Unverified"
+    listbox.append(injected)
+    injected.click()
+    await s.settle()
+    expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
+    await s.closePicker(propertiesPanel)
+    const typesPanel = await s.picker("serviceTypeId")
+    expect(typesPanel.values()).toEqual([["4", "Tipo real"]])
+    await s.closePicker(typesPanel)
+    // A verified choice that later leaves the verified list is retained, not dispatched.
+    await s.reload("propertyId")
+    s.http.expectOne(`${customers}/8/propiedades`).flush([property(32)])
+    await s.settle()
+    expect(s.label("propertyId")).toBe("Propiedad no disponible en el catálogo actual")
+    await s.submit()
+    s.http.expectNone(r => r.method === "POST")
+    expect(s.dialog().textContent).toMatch(/propiedad activa verificada/)
+    expect(s.field("description").value).toBe("Borrador")
     expect(s.success).not.toHaveBeenCalled()
   })
 
@@ -392,17 +597,21 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     s.getPage(customers).flush(page([customer(8), customer(9)], 0, 2, 3))
     s.http.expectOne(types).flush([service])
     await s.settle()
-    await s.fill("customerId", "8")
+    await s.choose("customerId", "8")
     s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
     await s.settle()
-    await s.fill("propertyId", "31")
-    await s.fill("serviceTypeId", "4")
-    await s.click("Página siguiente", s.dialog())
+    await s.choose("propertyId", "31")
+    await s.choose("serviceTypeId", "4")
+    const panel = await s.picker("customerId")
+    expect(panel.panel.textContent).toContain("Página 1 de 2")
+    panel.action("Siguiente")!.click()
+    await s.settle()
     s.getPage(customers, 1, 2).flush(page([customer(10)], 1, 2, 3))
     await s.settle()
-    expect(s.field("customerId").value).toBe("8")
-    expect(s.dialog().textContent).toContain("Cliente 8")
-    expect(s.field("propertyId").value).toBe("31")
+    expect(panel.panel.textContent).toContain("Página 2 de 2")
+    expect(s.label("customerId")).toBe("Cliente 8 · no disponible en esta página")
+    expect(s.dialog().textContent).toContain("Cliente seleccionado: Cliente 8 · ID 8")
+    expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
     s.http.expectNone(() => true)
     await s.submit()
     s.http.expectOne(r => r.method === "POST").flush({}, { status: 403, statusText: "Forbidden" })
@@ -412,6 +621,11 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
   it.each(["clientes", "propiedades", "tipos de servicio"] as const)(
     "blocks expired %s at the exact TTL boundary until explicit revalidation, preserving the draft",
     async stale => {
+      const keyOf = {
+        clientes: "customerId",
+        propiedades: "propertyId",
+        "tipos de servicio": "serviceTypeId"
+      } as const
       const start = Date.now()
       const clock = vi.spyOn(Date, "now").mockReturnValue(start)
       const s = await setup()
@@ -419,14 +633,16 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
       s.getPage(customers).flush(page([customer(8), customer(9)], 0, 2, 3))
       s.http.expectOne(types).flush([service])
       await s.settle()
-      await s.fill("customerId", "8")
+      await s.choose("customerId", "8")
       s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
       await s.settle()
-      await s.fill("propertyId", "31")
-      await s.fill("serviceTypeId", "4")
+      await s.choose("propertyId", "31")
+      await s.choose("serviceTypeId", "4")
       await s.fill("description", "Borrador conservado")
       if (stale === "clientes") {
-        await s.click("Página siguiente", s.dialog())
+        const panel = await s.picker("customerId")
+        panel.action("Siguiente")!.click()
+        await s.settle()
         s.getPage(customers, 1, 2).flush(page([customer(10)], 1, 2, 3))
         await s.settle()
       }
@@ -434,7 +650,7 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
       clock.mockReturnValue(start + 60000)
       for (const fresh of ["clientes", "propiedades", "tipos de servicio"] as const) {
         if (fresh === stale) continue
-        await s.click(`Actualizar ${fresh}`, s.dialog())
+        await s.reload(keyOf[fresh])
         if (fresh === "clientes")
           s.getPage(customers, 0, 2).flush(page([customer(8), customer(9)], 0, 2, 3))
         else if (fresh === "propiedades")
@@ -446,18 +662,20 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
       await s.submit()
       s.http.expectNone(() => true)
       expect(s.success).not.toHaveBeenCalled()
-      expect(s.field("customerId").value).toBe("8")
-      expect(s.field("propertyId").value).toBe("31")
-      expect(s.field("serviceTypeId").value).toBe("4")
+      expect(s.label("customerId")).toContain("Cliente 8")
+      expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
+      expect(s.label("serviceTypeId")).toBe("Tipo real")
       expect(s.field("description").value).toBe("Borrador conservado")
       expect(s.dialog().textContent).toMatch(/Actualiza|verificad/)
       expect(s.harness.routeNativeElement!.textContent).toContain("1–1 de 1")
       if (stale === "clientes") {
         // Revisit using effective size 2, not the original request's size 20.
-        await s.click("Página anterior", s.dialog())
+        const panel = await s.picker("customerId")
+        panel.action("Anterior")!.click()
+        await s.settle()
         s.getPage(customers, 0, 2).flush(page([customer(8), customer(9)], 0, 2, 3))
       } else {
-        await s.click(`Actualizar ${stale}`, s.dialog())
+        await s.reload(keyOf[stale])
         if (stale === "propiedades")
           s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
         else s.http.expectOne(types).flush([service])
@@ -486,26 +704,35 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     s.getPage(customers).flush(page([customer(8), customer(9)], 0, 2, 3))
     s.http.expectOne(types).flush([service])
     await s.settle()
-    await s.fill("customerId", "8")
+    await s.choose("customerId", "8")
     s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
     await s.settle()
-    await s.fill("propertyId", "31")
-    await s.fill("serviceTypeId", "4")
+    await s.choose("propertyId", "31")
+    await s.choose("serviceTypeId", "4")
     await s.fill("description", "Sin perder el borrador")
-    await s.click("Página siguiente", s.dialog())
+    const panel = await s.picker("customerId")
+    panel.action("Siguiente")!.click()
+    await s.settle()
     s.getPage(customers, 1, 2).flush(page([customer(10)], 1, 2, 3))
     await s.settle()
     TestBed.inject(CustomersStore).invalidateCustomers(8)
     s.getPage(customers, 1, 2).flush(page([customer(10)], 1, 2, 3))
+    // The inbox page keeps its own active observer on the retained customer page (T4 filter
+    // picker), so the invalidation refreshes that key there too. The refreshed active-only page
+    // legitimately no longer carries the invalidated customer: it stays blocked here and only the
+    // later explicit revisit of a page that contains it re-verifies it.
+    s.getPage(customers, 0, 2).flush(page([customer(10)], 0, 2, 3))
     await s.settle()
     await s.submit()
     s.http.expectNone(() => true)
     expect(s.success).not.toHaveBeenCalled()
-    expect(s.field("customerId").value).toBe("8")
-    expect(s.field("propertyId").value).toBe("31")
+    expect(s.label("customerId")).toBe("Cliente 8 · no disponible en esta página")
+    expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
     expect(s.field("description").value).toBe("Sin perder el borrador")
     expect(s.harness.routeNativeElement!.textContent).toContain("1–1 de 1")
-    await s.click("Página anterior", s.dialog())
+    const revisit = await s.picker("customerId")
+    revisit.action("Anterior")!.click()
+    await s.settle()
     s.getPage(customers, 0, 2).flush(page([customer(8), customer(9)], 0, 2, 3))
     await s.settle()
     s.http.expectNone(() => true)
@@ -522,16 +749,18 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     s.getPage(customers).flush(page([customer(8), customer(9)]))
     s.http.expectOne(types).flush([service])
     await s.settle()
-    await s.fill("customerId", "8")
+    await s.choose("customerId", "8")
     const old = s.http.expectOne(`${customers}/8/propiedades`)
-    await s.fill("customerId", "9")
+    await s.choose("customerId", "9")
     expect(old.cancelled).toBe(true)
-    expect(s.field("propertyId").value).toBe("")
+    expect(s.label("propertyId")).toBe("Selecciona propiedad")
     s.http.expectOne(`${customers}/9/propiedades`).flush([property(31, 8)])
     await s.settle()
-    expect(s.dialog().textContent).not.toContain("Dirección 31")
+    const foreign = await s.picker("propertyId")
+    expect(foreign.values()).toEqual([])
+    await s.closePicker(foreign)
     expect(s.dialog().textContent).toMatch(/No se pudieron cargar las propiedades/)
-    await s.click("Reintentar propiedades", s.dialog())
+    await s.reload("propertyId")
     s.http.expectOne(`${customers}/9/propiedades`).flush([property(32, 9, false)])
     await s.settle()
     expect(s.dialog().textContent).toMatch(/No hay propiedades activas/)
@@ -552,7 +781,7 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     expect(s.dialog().textContent).toMatch(/No se pudieron cargar los clientes/)
     expect(s.dialog().textContent).not.toMatch(/No hay clientes|RAW INTERNAL/)
     expect(s.dialog().textContent).toMatch(/No hay tipos de servicio/)
-    await s.click("Reintentar clientes", s.dialog())
+    await s.reload("customerId")
     s.getPage(customers).flush(page([customer()]))
     await s.settle()
     expect(s.field("description").value).toBe("Borrador conservado")
@@ -564,19 +793,19 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     await s.open()
     await s.choices()
     await s.fill("description", "Conservar")
-    await s.click("Actualizar tipos de servicio", s.dialog())
+    await s.reload("serviceTypeId")
     const refresh = s.http.expectOne(types)
     await s.submit()
     s.http.expectNone(r => r.method === "POST")
     refresh.error(new ProgressEvent("error"))
     await s.settle()
-    expect(s.field("serviceTypeId").value).toBe("4")
+    expect(s.label("serviceTypeId")).toBe("Tipo real")
     await s.submit()
     s.http.expectNone(r => r.method === "POST")
-    await s.click("Reintentar tipos de servicio", s.dialog())
+    await s.reload("serviceTypeId")
     s.http.expectOne(types).flush([])
     await s.settle()
-    expect(s.field("serviceTypeId").value).toBe("4")
+    expect(s.label("serviceTypeId")).toBe("Tipo de servicio no disponible en el catálogo actual")
     expect(s.dialog().textContent).toMatch(/no disponible/i)
     expect(s.field("description").value).toBe("Conservar")
     await s.submit()
@@ -626,8 +855,13 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
         )
       else (s.overlay().outsidePointerEvents() as Subject<MouseEvent>).next(new MouseEvent("click"))
       await s.settle()
-      expect(customerRead.cancelled).toBe(true)
       expect(typeRead.cancelled).toBe(true)
+      // The customer page read is shared with the page's own customer picker, so it is
+      // not dialog-owned: it completes for the surviving consumer, never for the editor.
+      expect(customerRead.cancelled).toBe(false)
+      customerRead.flush(page([customer()]))
+      await s.settle()
+      expect(document.querySelector("app-service-request-editor")).toBeNull()
       expect(TestBed.inject(ServiceRequestsStore).selectRequests().result?.total).toBe(1)
       expect(s.success).not.toHaveBeenCalled()
       s.http.expectNone(() => true)
@@ -653,7 +887,9 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
       expect(pending.cancelled).toBe(true)
       expect(s.success).not.toHaveBeenCalled()
       if (action === "replacement") {
-        // The still-mounted page may admit a replacement-session list read.
+        // The still-mounted page may admit a replacement-session catalog and list read.
+        s.getPage(customers).flush(page([]))
+        await s.settle()
         s.getPage(requests).flush(page([]))
         await s.settle()
       }

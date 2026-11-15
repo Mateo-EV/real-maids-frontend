@@ -215,13 +215,17 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
       expect(
         s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
       ).toContain(label)
-      expect(s.element.querySelectorAll("[data-agenda-day]")).toHaveLength(
-        view === "day" ? 1 : view === "week" ? 7 : 29
+      // S8: the real calendar renders the explicit window (day/week/month) instead of the old grid.
+      expect(s.element.querySelectorAll("[data-date]")).toHaveLength(
+        view === "day" ? 3 : view === "week" ? 21 : 42
       )
-      expect(s.element.querySelector("[data-agenda-entry] time")?.textContent).toBe("2024-02-29")
+      expect(s.element.querySelector("[data-time]") !== null).toBe(view !== "month")
+      const event = s.element.querySelector("[data-agenda-entry]")
+      // The entry's own order id, date and clocks are displayed literally, not inferred.
+      expect(event?.getAttribute("data-agenda-order-id")).toBe("17")
+      expect(event?.getAttribute("aria-label")).toContain("2024-02-29")
       expect(s.element.textContent).toContain(from)
       expect(s.element.textContent).toContain(until)
-      expect(s.element.querySelector('a[href="/admin/operations/orders/17"]')).not.toBeNull()
       s.http.expectNone(r => r.method !== "GET")
     }
   )
@@ -237,14 +241,17 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
     ).toContain("7 días desde la fecha seleccionada")
-    expect(s.element.querySelectorAll("[data-agenda-day]")).toHaveLength(7)
+    // S8: a seven-day window is seven day cells in the calendar, one per explicit date.
+    expect(s.element.querySelectorAll("[data-date]")).toHaveLength(21)
     await s.field("agenda-view", "month")
     s.request("2024-02-01", "2024-02-29").flush([agendaDto()])
     await s.settle()
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
     ).toContain("Mes completo")
-    expect(s.element.querySelectorAll("[data-agenda-day]")).toHaveLength(29)
+    // The month grid renders the whole selected month and no hour slots at all.
+    expect(s.element.querySelectorAll("[data-date]")).toHaveLength(42)
+    expect(s.element.querySelector("[data-time]")).toBeNull()
     // The explicit date is never replaced by a default: no /hoy, no inferred staff.
     expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe("2024-02-29")
     s.http.expectNone(r => r.method !== "GET")
@@ -257,8 +264,11 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     await s.chooseStaff("77")
     s.request("2024-02-29", "2024-02-29", "77").flush([agendaDto()])
     await s.settle()
-    expect(s.element.textContent).toContain("Personal suministrado")
-    expect(s.element.textContent).toContain("ID 9")
+    // S4/S9: the calendar event carries the actual returned staff, not the requested identity.
+    const label = () =>
+      s.element.querySelector("[data-agenda-entry]")?.getAttribute("aria-label") ?? ""
+    expect(label()).toContain("Personal suministrado")
+    expect(label()).toContain("ID 9")
     expect(s.element.querySelector('[role="alert"]')).toBeNull()
     // S4: the picker shows the verified server name, and the clear entry restores all staff.
     expect(s.trigger().textContent?.trim()).toBe("Operaria filtrada")
@@ -343,13 +353,16 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     await s.settle()
     const entries = Array.from(s.element.querySelectorAll<HTMLElement>("[data-agenda-entry]"))
     expect(entries).toHaveLength(2)
-    expect(entries[0].querySelector("a")?.getAttribute("href")).toBe("/admin/operations/orders/22")
-    expect(entries[1].querySelector("a")?.getAttribute("href")).toBe("/admin/operations/orders/17")
-    expect(entries[0].textContent).toContain("08:15:49.123456789")
-    expect(entries[0].textContent).toContain("No registrado")
-    expect(entries[0].textContent).toContain(first.cliente)
-    expect(entries[0].querySelector("img")).toBeNull()
-    entries[0].querySelector<HTMLAnchorElement>("a")!.click()
+    const byOrder = (id: string) =>
+      entries.find(entry => entry.getAttribute("data-agenda-order-id") === id)!
+    // S8: every event keeps the real order id; the click opens that order.
+    expect(byOrder("22")).toBeDefined()
+    expect(byOrder("17")).toBeDefined()
+    expect(byOrder("22").getAttribute("aria-label")).toContain("08:15:49.123456789")
+    expect(byOrder("22").getAttribute("aria-label")).toContain("No registrado")
+    expect(byOrder("22").textContent).toContain(first.cliente)
+    expect(byOrder("22").querySelector("img")).toBeNull()
+    byOrder("22").click()
     await s.settle()
     expect(TestBed.inject(Router).url).toBe("/admin/operations/orders/22")
     s.http.expectNone(r => r.method !== "GET")
@@ -384,12 +397,12 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     s.request().flush([agendaDto(18)])
     await s.settle()
     expect(s.element.querySelector('[role="alert"]')).toBeNull()
-    expect(s.element.querySelector('a[href="/admin/operations/orders/18"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-agenda-order-id="18"]')).not.toBeNull()
     // S5: a new explicit date applies at once instead of waiting for a submit.
     await s.field("agenda-date", "2024-03-01")
-    s.request("2024-03-01").flush([agendaDto(22)])
+    s.request("2024-03-01").flush([agendaDto(22, "2024-03-01")])
     await s.settle()
-    expect(s.element.querySelector('a[href="/admin/operations/orders/22"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-agenda-order-id="22"]')).not.toBeNull()
     s.http.expectNone(r => r.method !== "GET")
   })
   it("cancels superseded query HTTP and hides unrelated rows immediately", async () => {
@@ -404,7 +417,7 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     expect(s.element.querySelector("[data-agenda-entry]")).toBeNull()
     s.request("2024-03-01").flush([], { status: 200, statusText: "OK" })
     await s.settle()
-    expect(s.element.querySelector('a[href="/admin/operations/orders/17"]')).toBeNull()
+    expect(s.element.querySelector('[data-agenda-order-id="17"]')).toBeNull()
   })
   it("cancels finite GET on page destruction and revisits with blank controls/no cross-visit data", async () => {
     const s = await setup()
