@@ -49,6 +49,18 @@ const viewType: Record<AgendaView, string> = {
 }
 
 /**
+ * The agenda queries seven days FROM the selected date, so the week view must show exactly
+ * that window. `timeGridWeek` alone is Monday-aligned: with a Thursday anchor the returned
+ * Mon-Wed of the next week would never be drawn while the unqueried Mon-Wed of this week
+ * would appear empty. `visibleRange` anchors the seven columns to the queried window.
+ */
+function plusDays(iso: string, days: number): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+/**
  * Module-level identities: the Angular wrapper diffs each option by reference, so stable values
  * avoid re-setting the plugin and locale lists on every render.
  */
@@ -136,25 +148,35 @@ export class AgendaCalendarView implements AfterViewInit {
       allDay: false
     }))
   })
-  readonly options = computed<CalendarOptions>(() => ({
-    plugins,
-    locales,
-    locale: "es",
-    initialView: viewType[this.view()] ?? viewType.day,
-    initialDate: this.anchor(),
-    // Explicit "now": the calendar never falls back to the browser's current date.
-    now: this.anchor(),
-    timeZone: "UTC",
-    firstDay: 1,
-    editable: false,
-    selectable: false,
-    height: "auto",
-    // No `today` action: the project never assumes the current date.
-    headerToolbar: { left: "prev,next", center: "title", right: "" },
-    events: this.events(),
-    eventClick: this.handleEventClick,
-    eventDidMount: this.handleEventDidMount
-  }))
+  readonly options = computed<CalendarOptions>(() => {
+    // A missing anchor renders nothing (renderable gates it), but the options object stays typed.
+    const anchor = this.anchor()
+    return {
+      plugins,
+      locales,
+      locale: "es",
+      initialView: viewType[this.view()] ?? viewType.day,
+      initialDate: this.anchor(),
+      // Explicit "now": the calendar never falls back to the browser's current date.
+      now: this.anchor(),
+      timeZone: "UTC",
+      firstDay: 1,
+      editable: false,
+      selectable: false,
+      height: "auto",
+      // No `today` action and no prev/next: navigation belongs to the page's explicit date
+      // control, which re-queries. A calendar-only paging button would show another period with
+      // the previous period's data.
+      headerToolbar: { left: "", center: "title", right: "" },
+      // The week window is the queried window, not the Monday-aligned calendar week.
+      ...(this.view() === "week" && anchor !== undefined
+        ? { visibleRange: { start: anchor, end: plusDays(anchor, 7) } }
+        : {}),
+      events: this.events(),
+      eventClick: this.handleEventClick,
+      eventDidMount: this.handleEventDidMount
+    }
+  })
 
   constructor() {
     // The wrapper ignores `initialView` after mount, so later view/date changes go through the API.

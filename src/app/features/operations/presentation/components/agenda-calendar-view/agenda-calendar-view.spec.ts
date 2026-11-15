@@ -124,13 +124,29 @@ describe("AgendaCalendarView FullCalendar consumer", () => {
     }
   )
 
-  it("offers only prev/next navigation: no today action ever assumes the current date", async () => {
+  it("exposes no navigation controls: the page's explicit date is the only way to move the window", async () => {
     const s = await setup()
     const labels = Array.from(s.element.querySelectorAll("button")).map(button =>
       button.getAttribute("aria-label")
     )
-    expect(labels).toEqual(["Día antes", "Día siguiente"])
-    expect(labels.some(label => /hoy/i.test(label ?? ""))).toBe(false)
+    // A calendar-only prev/next would show another period with the previous period's data,
+    // and a today action would assume the current date: the project forbids both.
+    expect(labels).toEqual([])
+    expect(labels.some(label => /hoy|today|antes|siguiente/i.test(label ?? ""))).toBe(false)
+  })
+
+  it("renders the seven-day window from the selected date, not the Monday-aligned week", async () => {
+    const s = await setup()
+    // Thursday 2024-02-29: the query covers 02-29..03-06, so the view must start there.
+    s.host.date.set("2024-02-29")
+    s.host.view.set("week")
+    await s.settle()
+    const columns = Array.from(s.element.querySelectorAll<HTMLElement>("[data-date]"))
+      .map(cell => cell.getAttribute("data-date"))
+      .filter((date): date is string => !!date)
+    expect(columns.length).toBeGreaterThan(0)
+    expect(columns.length % 7).toBe(0)
+    expect(s.element.querySelector('[data-date="2024-02-29"]')).not.toBeNull()
   })
 
   it("does not construct the calendar on the server", async () => {
