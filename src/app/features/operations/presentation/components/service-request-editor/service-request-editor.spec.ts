@@ -450,6 +450,47 @@ describe("WP7 T5 S1-S4 create-only request consumer", () => {
     await s.settle()
   })
 
+  // R2-002/R3-002: returning the box to the already dispatched term must still supersede the
+  // pending debounced search, so its delayed read never fires for the abandoned text.
+  it("drops a pending debounced search when the box returns to the dispatched term", async () => {
+    const s = await setup()
+    await s.open()
+    s.getPage(customers).flush(page([customer(8), customer(9)]))
+    s.http.expectOne(types).flush([service])
+    await s.settle()
+    await s.choose("customerId", "8")
+    s.http.expectOne(`${customers}/8/propiedades`).flush([property()])
+    await s.settle()
+    await s.choose("propertyId", "31")
+    await s.choose("serviceTypeId", "4")
+    const panel = await s.picker("customerId")
+    const search = panel.search!
+    const before = panel.values()
+    expect(before).toEqual([
+      ["8", "Cliente 8"],
+      ["9", "Cliente 9"]
+    ])
+    search.value = "Cliente 9"
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    // The abandoned term is still only a pending timer, not a dispatched read.
+    s.http.expectNone(() => true)
+    search.value = ""
+    search.dispatchEvent(new Event("input", { bubbles: true }))
+    await s.settle()
+    // Past the debounce window the abandoned text would have read the server by now.
+    await new Promise(resolve => setTimeout(resolve, 275))
+    await s.settle()
+    s.http.expectNone(r => r.params.get("busqueda") !== null)
+    // The verified page and both retained choices are untouched by the same-term re-emission.
+    expect(panel.values()).toEqual(before)
+    expect(s.label("customerId")).toBe("Cliente 8")
+    expect(s.label("propertyId")).toBe("Propiedad 31 · Dirección 31")
+    expect(s.dialog().textContent).toContain("Cliente seleccionado: Cliente 8 · ID 8")
+    await s.closePicker(panel)
+    s.http.expectNone(() => true)
+  })
+
   it("sends only five trimmed fields, guards pending dismissal and refreshes the observed inbox exactly once on success", async () => {
     const s = await setup()
     await s.open()

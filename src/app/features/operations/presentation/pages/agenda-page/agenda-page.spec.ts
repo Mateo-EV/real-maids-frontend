@@ -367,6 +367,50 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     expect(TestBed.inject(Router).url).toBe("/admin/operations/orders/22")
     s.http.expectNone(r => r.method !== "GET")
   })
+  // R3-003: FullCalendar draws only its own window, so a returned shift dated outside the
+  // requested range must be reported instead of disappearing without explanation.
+  it("reports returned shifts outside the requested window instead of dropping them silently", async () => {
+    const s = await setup()
+    await s.field("agenda-date", "2024-02-29")
+    s.request().flush([agendaDto(17), agendaDto(22, "2024-03-05")])
+    await s.settle()
+    const note = [...s.element.querySelectorAll<HTMLElement>('[role="status"]')].find(node =>
+      (node.textContent ?? "").includes("fuera del rango")
+    )
+    expect(note, "out-of-range note").toBeDefined()
+    expect(note!.textContent?.trim()).toBe(
+      "1 turno devuelto está fuera del rango solicitado y no se dibuja."
+    )
+    // The note is plain text placed above the calendar: no link and no access detail.
+    expect(note!.querySelector("a")).toBeNull()
+    expect(note!.textContent).not.toMatch(/SYNTHETIC|instrucciones|código/i)
+    const calendar = s.element.querySelector("app-agenda-calendar-view")!
+    const siblings = Array.from(note!.parentElement!.children)
+    expect(siblings.indexOf(note!)).toBeLessThan(siblings.indexOf(calendar))
+    // The window shift is drawn; the outside one is the reason for the note.
+    expect(s.element.querySelector('[data-agenda-order-id="17"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-agenda-order-id="22"]')).toBeNull()
+    s.http.expectNone(r => r.method !== "GET")
+  })
+  it("renders no out-of-range note when every returned shift is inside the window and counts several otherwise", async () => {
+    const s = await setup()
+    await s.field("agenda-date", "2024-02-29")
+    s.request().flush([agendaDto(17), agendaDto(18)])
+    await s.settle()
+    const notes = () =>
+      [...s.element.querySelectorAll<HTMLElement>('[role="status"]')]
+        .map(node => node.textContent?.trim() ?? "")
+        .filter(text => text.includes("fuera del rango"))
+    expect(notes()).toEqual([])
+    // Re-applying the same explicit filter re-reads the window: both outside shifts are counted.
+    await s.field("agenda-date", "2024-02-29")
+    s.request().flush([agendaDto(17), agendaDto(22, "2024-03-05"), agendaDto(23, "2024-02-01")])
+    await s.settle()
+    expect(notes()).toEqual([
+      "2 turnos devueltos están fuera del rango solicitado y no se dibujan."
+    ])
+    expect(s.element.querySelector('[data-agenda-order-id="17"]')).not.toBeNull()
+  })
   it("distinguishes verified empty from initial unverified state", async () => {
     const s = await setup()
     expect(s.element.textContent).not.toContain("No se devolvieron servicios")
