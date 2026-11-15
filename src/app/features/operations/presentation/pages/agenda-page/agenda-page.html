@@ -94,6 +94,9 @@
             No se devolvieron servicios para esta consulta.
           </p>
         }
+        @if (outOfRangeNote(); as note) {
+          <p role="status" class="mb-4 text-sm text-muted-foreground">{{ note }}</p>
+        }
         <app-agenda-calendar-view
           [entries]="store.result() ?? []"
           [selectedDate]="model().date"

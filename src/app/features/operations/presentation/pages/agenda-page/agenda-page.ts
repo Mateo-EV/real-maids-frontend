@@ -95,6 +95,24 @@ export class AgendaPage {
     return date ? agendaRange(date, view) : undefined
   })
   readonly busy = computed(() => this.store.loading() || this.store.refreshing())
+  /**
+   * FullCalendar only draws the window it was given, so a returned entry dated outside
+   * `[from, until]` would vanish silently. ISO `YYYY-MM-DD` compares correctly as text.
+   */
+  readonly outOfRange = computed(() => {
+    const range = this.range()
+    const result = this.store.result()
+    if (!range || !result) return 0
+    return result.filter(entry => entry.date < range.from || entry.date > range.until).length
+  })
+  /** Plain-text report of the returned shifts the calendar cannot draw; empty when none. */
+  readonly outOfRangeNote = computed(() => {
+    const count = this.outOfRange()
+    if (!count) return ""
+    return count === 1
+      ? "1 turno devuelto está fuera del rango solicitado y no se dibuja."
+      : `${count} turnos devueltos están fuera del rango solicitado y no se dibujan.`
+  })
   readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
     { id: "agenda-date", label: "Fecha seleccionada (obligatoria)", value: this.model().date }
   ])

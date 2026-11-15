@@ -469,12 +469,21 @@ export class ServiceRequestEditor implements OnInit {
   /**
    * Server-side search inside the picker. The current effective size is kept, the page
    * restarts at zero, and the selection/property context is never reset by a search.
+   *
+   * Every call emits, so `switchMap` supersedes a still-pending debounced term. Returning
+   * early when the box goes back to the dispatched term would leave that timer alive and its
+   * delayed read would fire for the abandoned text. The same-term emission instead re-reads
+   * the observed key with no delay and without forcing, so it resolves from the verified
+   * entry: no request, no page change and no selection/property change.
    */
   searchCustomers(value: string): void {
     if (this.editing) return
     if (!this.current() || this.pending()) return
     const search = value.trim()
-    if ((this.requested().search ?? "") === search) return
+    if ((this.requested().search ?? "") === search) {
+      this.customerQueries.next({ query: this.requested(), force: false, delay: 0 })
+      return
+    }
     this.customerQueries.next({
       query: {
         offset: 0,
