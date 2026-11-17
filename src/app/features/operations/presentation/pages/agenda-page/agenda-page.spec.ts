@@ -12,6 +12,7 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { FieldStaffStore } from "@/app/features/field-operations/presentation/state/field-staff.store"
 import { provideOperationsRequestReads } from "../../../operations.providers"
+import { agendaWeekWindow, civilToday } from "../../navigation/agenda-calendar"
 import { AgendaStore } from "../../state/agenda.store"
 import { agendaDto } from "../../state/agenda.testing"
 import { AgendaPage } from "./agenda-page"
@@ -41,7 +42,7 @@ const staffStub = {
   }
 }
 
-async function setup(server = false, guest = false) {
+async function setup(server = false, guest = false, keepWeek = false) {
   const session = new BehaviorSubject<AuthSession | null>(guest ? null : caller())
   const authFactory = vi.fn(() => ({ session: () => session.value }))
   staffItems.set([
@@ -140,6 +141,31 @@ async function setup(server = false, guest = false) {
     expect(pending.request.params.get("idPersonal")).toBe(staff ?? null)
     return pending
   }
+  /**
+   * The page opens on the browser's current week, so mounting dispatches one read. It is flushed
+   * here so each case keeps exact HTTP expectations; cases asserting a single day narrow the view
+   * to `Día` first, and the default-week case passes `keepWeek`.
+   */
+  const mountRequest = http.match(r => r.url === api)
+  if (server || guest) expect(mountRequest, "no mount read without a session").toHaveLength(0)
+  else {
+    expect(mountRequest, "mount agenda read").toHaveLength(1)
+    mountRequest[0].flush([agendaDto()])
+    await settle()
+  }
+  const mountWindow = mountRequest.length
+    ? {
+        from: mountRequest[0].request.params.get("desde"),
+        until: mountRequest[0].request.params.get("hasta")
+      }
+    : null
+  if (!server && !guest && !keepWeek) {
+    await field("agenda-view", "day")
+    const narrowing = http.match(r => r.url === api)
+    expect(narrowing, "one-day narrowing read").toHaveLength(1)
+    narrowing[0].flush([agendaDto()])
+    await settle()
+  }
   return {
     harness,
     element,
@@ -153,7 +179,14 @@ async function setup(server = false, guest = false) {
     trigger,
     openPicker,
     closePicker,
-    chooseStaff
+    chooseStaff,
+    mountWindow,
+    flushWindow: (rows: unknown[] = [agendaDto()]) => {
+      const pending = http.match(r => r.url === api)
+      expect(pending, "one pending agenda read").toHaveLength(1)
+      pending[0].flush(rows)
+      return pending[0].request.params
+    }
   }
 }
 afterEach(() => {
@@ -163,14 +196,20 @@ afterEach(() => {
 
 // T3 / S3,S4,S5: header filters, searched staff picker and automatic application.
 // T7C / S1,S2,S3,S4,S6,S8,S9,S10: real repository/source HTTP and public DOM.
-describe("AgendaPage explicit day/seven-day/month consumer", () => {
-  it("starts blank, dispatches no agenda read and owns its finite store locally", async () => {
-    const s = await setup()
-    expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe("")
-    expect(s.element.textContent).toContain("Selecciona una fecha")
+describe("AgendaPage current-week/day/month consumer", () => {
+  it("opens on the current Monday→Sunday week and owns its finite store locally", async () => {
+    const s = await setup(false, false, true)
+    const week = agendaWeekWindow(civilToday())!
+    // The reference date is the browser's own civil day and the view is the week containing it.
+    expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe(civilToday())
+    expect(s.element.querySelector<HTMLSelectElement>("#agenda-view")?.value).toBe("week")
+    expect(s.mountWindow).toEqual({ from: week.from, until: week.until })
+    expect(
+      s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
+    ).toContain("Semana")
     expect(s.element.querySelector("app-catalog-frame")).not.toBeNull()
     expect(TestBed.inject(AgendaStore, null)).toBeNull()
-    // S4: the only mount read is the staff picker's own catalog page; the agenda stays unread.
+    // S4: the other mount read is only the staff picker's own catalog page.
     expect(staffQueries).toEqual([
       { query: { offset: 0, limit: 20, isActive: true }, force: false }
     ])
@@ -198,20 +237,23 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
   })
   it.each([
     ["day", "2024-02-29", "2024-02-29", "Día"],
-    ["week", "2024-02-29", "2024-03-06", "7 días desde la fecha seleccionada"],
-    ["month", "2024-02-01", "2024-02-29", "Mes completo"]
+    ["week", "2024-02-26", "2024-03-03", "Semana"],
+    ["month", "2024-02-01", "2024-02-29", "Mes"]
   ] as const)(
-    "queries the explicit %s window without date defaults or inferred staff",
+    "queries the derived %s window of the reference date without inferred staff",
     async (view, from, until, label) => {
       const s = await setup()
-      // S5: the view alone applies nothing while the required date is still blank.
-      await s.field("agenda-view", view)
-      s.http.expectNone(r => r.url === api)
-      // S5: choosing the date dispatches immediately, without a submit action.
+      // S5: choosing the reference date dispatches immediately, without a submit action.
       await s.field("agenda-date", "2024-02-29")
       expect(s.element.textContent).toContain("Cargando agenda")
-      s.request(from, until).flush([agendaDto()])
+      s.request("2024-02-29", "2024-02-29").flush([agendaDto()])
       await s.settle()
+      if (view !== "day") {
+        // S5: the view change re-derives the window of the same reference date.
+        await s.field("agenda-view", view)
+        s.request(from, until).flush([agendaDto()])
+        await s.settle()
+      }
       expect(
         s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
       ).toContain(label)
@@ -236,19 +278,19 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     s.request("2024-02-29", "2024-02-29").flush([agendaDto()])
     await s.settle()
     await s.field("agenda-view", "week")
-    s.request("2024-02-29", "2024-03-06").flush([agendaDto()])
+    s.request("2024-02-26", "2024-03-03").flush([agendaDto()])
     await s.settle()
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
-    ).toContain("7 días desde la fecha seleccionada")
-    // S8: a seven-day window is seven day cells in the calendar, one per explicit date.
+    ).toContain("Semana")
+    // S8: a Monday→Sunday window is seven day cells in the calendar, one per queried date.
     expect(s.element.querySelectorAll("[data-date]")).toHaveLength(21)
     await s.field("agenda-view", "month")
     s.request("2024-02-01", "2024-02-29").flush([agendaDto()])
     await s.settle()
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
-    ).toContain("Mes completo")
+    ).toContain("Mes")
     // The month grid renders the whole selected month and no hour slots at all.
     expect(s.element.querySelectorAll("[data-date]")).toHaveLength(42)
     expect(s.element.querySelector("[data-time]")).toBeNull()
@@ -463,38 +505,62 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     await s.settle()
     expect(s.element.querySelector('[data-agenda-order-id="17"]')).toBeNull()
   })
-  it("cancels finite GET on page destruction and revisits with blank controls/no cross-visit data", async () => {
+  it("cancels finite GET on page destruction and revisits on the fresh current week", async () => {
     const s = await setup()
     await s.field("agenda-date", "2024-02-29")
     const pending = s.request()
     await s.harness.navigateByUrl("/elsewhere")
     expect(pending.cancelled).toBe(true)
     await s.harness.navigateByUrl("/admin/operations/agenda")
+    // A new visit owns fresh defaults: the current week, with no rows from the previous visit.
+    const revisit = s.harness.routeNativeElement!
+    expect(revisit.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe(civilToday())
+    expect(revisit.querySelector("[data-agenda-entry]")).toBeNull()
+    const week = agendaWeekWindow(civilToday())!
+    const mount = s.http.match(r => r.url === api)
+    expect(mount, "revisit mount read").toHaveLength(1)
+    expect(mount[0].request.params.get("desde")).toBe(week.from)
+    expect(mount[0].request.params.get("hasta")).toBe(week.until)
+    mount[0].flush([])
+    await s.settle()
     expect(
-      s.harness.routeNativeElement!.querySelector<HTMLInputElement>("#agenda-date")?.value
-    ).toBe("")
-    expect(s.harness.routeNativeElement!.querySelector("[data-agenda-entry]")).toBeNull()
+      revisit.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
+    ).toContain("Semana")
+  })
+  it("clears/cancels on logout without an automatic new query", async () => {
+    const s = await setup()
+    await s.field("agenda-date", "2024-02-29")
+    s.request().flush([agendaDto()])
+    await s.settle()
+    await s.field("agenda-date", "2024-02-29")
+    const pending = s.request()
+    s.session.next(null)
+    await s.settle()
+    expect(pending.cancelled).toBe(true)
+    expect(s.element.querySelector("[data-agenda-entry]")).toBeNull()
+    // A replaced session owns nothing: the controls return to the default without a new read.
+    expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe(civilToday())
+    expect(s.trigger().textContent?.trim()).toBe("Todo el personal")
     s.http.expectNone(r => r.url === api)
   })
-  it.each([null, caller(20)])(
-    "clears/cancels on logout/session replacement without an automatic new query",
-    async next => {
-      const s = await setup()
-      await s.field("agenda-date", "2024-02-29")
-      s.request().flush([agendaDto()])
-      await s.settle()
-      await s.field("agenda-date", "2024-02-29")
-      const pending = s.request()
-      s.session.next(next)
-      await s.settle()
-      expect(pending.cancelled).toBe(true)
-      expect(s.element.querySelector("[data-agenda-entry]")).toBeNull()
-      // A replaced session owns nothing: controls are blank again and nothing is re-read.
-      expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe("")
-      expect(s.trigger().textContent?.trim()).toBe("Todo el personal")
-      s.http.expectNone(r => r.url === api)
-    }
-  )
+  it("reopens the current week once for a replacement session", async () => {
+    const s = await setup()
+    await s.field("agenda-date", "2024-02-29")
+    const pending = s.request()
+    s.session.next(caller(20))
+    await s.settle()
+    expect(pending.cancelled).toBe(true)
+    expect(s.element.querySelector("[data-agenda-entry]")).toBeNull()
+    expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe(civilToday())
+    const week = agendaWeekWindow(civilToday())!
+    const replacement = s.http.match(r => r.url === api)
+    expect(replacement, "replacement read").toHaveLength(1)
+    expect(replacement[0].request.params.get("desde")).toBe(week.from)
+    expect(replacement[0].request.params.get("hasta")).toBe(week.until)
+    replacement[0].flush([agendaDto(17, civilToday())])
+    await s.settle()
+    expect(s.element.querySelector("[data-agenda-entry]")).not.toBeNull()
+  })
   it("preserves a pending read through same-session renewal", async () => {
     const s = await setup()
     await s.field("agenda-date", "2024-02-29")
@@ -506,14 +572,14 @@ describe("AgendaPage explicit day/seven-day/month consumer", () => {
     await s.settle()
     expect(s.element.querySelector("[data-agenda-entry]")).not.toBeNull()
   })
-  // S5: a blank required date dispatches nothing, on mount and on later control changes.
+  // S5: a blank reference date derives no window and dispatches nothing.
   it("rejects blank required date without HTTP", async () => {
     const s = await setup()
     await s.field("agenda-date", "")
     await s.field("agenda-view", "week")
     s.http.expectNone(r => r.url.includes("/api/"))
     expect(s.element.querySelector("[data-agenda-entry]")).toBeNull()
-    expect(s.element.textContent).toContain("Selecciona una fecha")
+    expect(s.element.textContent).toContain("Elige una fecha de referencia")
   })
   it("dispatches no SSR read or auth initialization even after an explicit date", async () => {
     const s = await setup(true)

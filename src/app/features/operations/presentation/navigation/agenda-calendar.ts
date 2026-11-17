@@ -22,13 +22,45 @@ const civilDate = (text: string): Date | undefined => {
     : undefined
 }
 const text = (date: Date) => date.toISOString().slice(0, 10)
+const pad = (value: number) => String(value).padStart(2, "0")
+
+/**
+ * The browser's own civil day, used only to seed the initial reference date of the agenda.
+ * It is a calendar day, never an operational timezone: the returned text is the day the user
+ * is living in, so the seeded window matches the shifts the backend stores as literal dates.
+ */
+export function civilToday(clock: Date = new Date()): string {
+  const year = clock.getFullYear()
+  if (!Number.isInteger(year) || year < 1 || year > 9999) return ""
+  return `${String(year).padStart(4, "0")}-${pad(clock.getMonth() + 1)}-${pad(clock.getDate())}`
+}
+
+/**
+ * The Monday→Sunday civil week that contains `selected`, matching the calendar's `firstDay: 1`.
+ * `getUTCDay()` is Sunday-first, so it is rotated to Monday-first before aligning.
+ */
+export function agendaWeekWindow(selected: string): { from: string; until: string } | undefined {
+  const date = civilDate(selected)
+  if (!date) return undefined
+  const monday = new Date(date)
+  monday.setUTCDate(monday.getUTCDate() - ((date.getUTCDay() + 6) % 7))
+  const sunday = new Date(monday)
+  sunday.setUTCDate(sunday.getUTCDate() + 6)
+  if (monday.getUTCFullYear() < 1 || sunday.getUTCFullYear() > 9999) return undefined
+  return { from: text(monday), until: text(sunday) }
+}
 
 export function agendaRange(selected: string, view: AgendaView): AgendaRange | undefined {
   const date = civilDate(selected)
   if (!date || !["day", "week", "month"].includes(view)) return undefined
-  const first = new Date(date)
-  const last = new Date(date)
-  if (view === "week") last.setUTCDate(last.getUTCDate() + 6)
+  let first = new Date(date)
+  let last = new Date(date)
+  if (view === "week") {
+    const week = agendaWeekWindow(selected)
+    if (!week) return undefined
+    first = civilDate(week.from)!
+    last = civilDate(week.until)!
+  }
   if (view === "month") {
     first.setUTCDate(1)
     last.setUTCMonth(last.getUTCMonth() + 1, 0)

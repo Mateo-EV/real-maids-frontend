@@ -4,7 +4,7 @@
   <app-catalog-frame
     titleId="agenda-title"
     title="Agenda"
-    description="Consulta de programación por fechas explícitas; los filtros se aplican solos. Sin cambios de programación desde el calendario."
+    description="Se abre en la semana actual. La fecha de referencia mueve día, semana o mes; los filtros se aplican solos y el calendario no cambia la programación."
     [busy]="busy()"
   >
     <app-catalog-filters
@@ -25,10 +25,10 @@
         </hlm-native-select>
       </div>
       <div class="flex flex-col gap-1">
-        <label for="agenda-staff" class="text-xs font-medium">Personal</label>
+        <label for="agenda-staff" class="text-xs font-medium">Personal asignado</label>
         <app-catalog-combobox
           [id]="'agenda-staff'"
-          label="Personal"
+          label="Personal asignado"
           placeholder="Todo el personal"
           emptyLabel="Sin personal para esta búsqueda."
           searchPlaceholder="Buscar personal…"
@@ -41,11 +41,15 @@
           (reload)="reloadStaff()"
         />
       </div>
+      <p class="text-muted-foreground basis-full text-xs">
+        Día = la fecha elegida · Semana = lunes a domingo de esa fecha · Mes = el mes completo. Cada
+        cambio se consulta solo y «Todo el personal» no filtra por personal.
+      </p>
     </app-catalog-filters>
-    @if (!store.query()) {
+    @if (!range()) {
       <p class="p-5 text-sm text-muted-foreground">
-        Selecciona una fecha para consultar la agenda. No se asume el día de hoy y el alcance real
-        del personal lo determina el servidor.
+        Elige una fecha de referencia para consultar la agenda. El alcance real del personal lo
+        determina el servidor.
       </p>
     }
     @if (store.loading()) {
@@ -80,14 +84,7 @@
     @if (store.result() !== undefined && range(); as calendar) {
       <section class="min-w-0 p-4" aria-label="Programación consultada">
         <h2 class="mb-4 text-sm font-semibold">
-          {{
-            model().view === "day"
-              ? "Día"
-              : model().view === "week"
-                ? "7 días desde la fecha seleccionada"
-                : "Mes completo"
-          }}
-          · {{ calendar.from }} → {{ calendar.until }}
+          {{ viewHeadings[model().view] }} · {{ calendar.from }} → {{ calendar.until }}
         </h2>
         @if (store.result()?.length === 0) {
           <p class="mb-4 text-sm text-muted-foreground">

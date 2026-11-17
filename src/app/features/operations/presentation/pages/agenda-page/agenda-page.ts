@@ -1,4 +1,5 @@
-import { Component, computed, DestroyRef, inject, signal } from "@angular/core"
+import { isPlatformBrowser } from "@angular/common"
+import { Component, computed, DestroyRef, inject, PLATFORM_ID, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { Router } from "@angular/router"
 import { EMPTY, of, Subject, switchMap, takeUntil, timer } from "rxjs"
@@ -23,7 +24,8 @@ import {
   agendaQuery,
   agendaRange,
   agendaStaffId,
-  AgendaView
+  AgendaView,
+  civilToday
 } from "../../navigation/agenda-calendar"
 import { AgendaStore } from "../../state/agenda.store"
 
@@ -43,12 +45,16 @@ interface PickerRequest {
 const staffPage = { offset: 0, limit: 20, isActive: true } as const
 const searchDebounceMs = 250
 const anyStaff: CatalogComboboxOption = { value: "", label: "Todo el personal" }
+/** Plain view names: the wording that explained the window lives in the hint under the controls. */
 const views: readonly { value: AgendaView; label: string }[] = [
   { value: "day", label: "Día" },
-  { value: "week", label: "7 días desde la fecha seleccionada" },
-  { value: "month", label: "Mes completo de la fecha seleccionada" }
+  { value: "week", label: "Semana" },
+  { value: "month", label: "Mes" }
 ]
-const blank: AgendaModel = { date: "", view: "day", staff: "" }
+const viewHeadings: Record<AgendaView, string> = { day: "Día", week: "Semana", month: "Mes" }
+/** The agenda opens on the current week: the day the user is living in anchors it. */
+const defaultView: AgendaView = "week"
+const blank: AgendaModel = { date: "", view: defaultView, staff: "" }
 
 @Component({
   selector: "app-agenda-page",
@@ -70,15 +76,19 @@ export class AgendaPage {
   private readonly staff = inject(FieldStaffStore)
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
+  /** SSR and prerender never read a clock the browser would render differently. */
+  private readonly browser = isPlatformBrowser(inject(PLATFORM_ID))
   /** Draft and applied filter are the same thing: every change applies at once (S5). */
-  readonly model = signal<AgendaModel>({ ...blank })
+  readonly model = signal<AgendaModel>(this.initialModel())
   readonly views = views
+  readonly viewHeadings = viewHeadings
   private readonly selectedStaff = signal<{ id: number; label: string } | null>(null)
   private readonly staffQuery = signal<FieldStaffQuery>({ ...staffPage })
   private readonly staffReads = new Subject<PickerRequest | null>()
   private readonly scope = createSessionReadScope(() => {
-    // A replaced session owns nothing: controls go back to blank and the agenda is not re-queried.
-    this.model.set({ ...blank })
+    // A replaced session owns nothing: controls return to the current-week default and the
+    // agenda is re-queried only after the new session admits reads.
+    this.model.set(this.initialModel())
     this.selectedStaff.set(null)
     this.staffQuery.set({ ...staffPage })
     this.staffReads.next(null)
@@ -87,9 +97,10 @@ export class AgendaPage {
     queueMicrotask(() => {
       if (!this.current(generation)) return
       this.staffReads.next({ search: "", force: false, delay: 0 })
+      this.dispatch()
     })
   })
-  /** No date means no calendar window: a blank control never invents "today". */
+  /** A blank reference date derives no window: the control never invents a date of its own. */
   readonly range = computed(() => {
     const { date, view } = this.model()
     return date ? agendaRange(date, view) : undefined
@@ -114,7 +125,7 @@ export class AgendaPage {
       : `${count} turnos devueltos están fuera del rango solicitado y no se dibujan.`
   })
   readonly filterDates = computed<readonly CatalogFilterDate[]>(() => [
-    { id: "agenda-date", label: "Fecha seleccionada (obligatoria)", value: this.model().date }
+    { id: "agenda-date", label: "Fecha de referencia", value: this.model().date }
   ])
   readonly staffEntry = computed(() => this.staff.selectStaff(this.staffQuery()))
   readonly staffError = computed(() =>
@@ -172,7 +183,15 @@ export class AgendaPage {
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
-    if (ready) this.staffReads.next({ search: "", force: false, delay: 0 })
+    if (ready) {
+      this.staffReads.next({ search: "", force: false, delay: 0 })
+      this.dispatch()
+    }
+  }
+
+  /** The seeded default: today's civil day in the browser, nothing on the server. */
+  private initialModel(): AgendaModel {
+    return this.browser ? { date: civilToday(), view: defaultView, staff: "" } : { ...blank }
   }
 
   setDate(value: string): void {
@@ -228,9 +247,14 @@ export class AgendaPage {
   /** S5: the derived window is dispatched on the control change itself. */
   private apply(patch: Partial<AgendaModel>): void {
     if (this.destroyRef.destroyed) return
-    const model = { ...this.model(), ...patch }
-    this.model.set(model)
-    const query = agendaQuery(model.date, model.view, model.staff)
+    this.model.set({ ...this.model(), ...patch })
+    this.dispatch()
+  }
+
+  /** A blank reference date derives no window, so it dispatches nothing. */
+  private dispatch(): void {
+    const { date, view, staff } = this.model()
+    const query = agendaQuery(date, view, staff)
     if (!query) return
     this.store.loadAgenda(query).pipe(takeUntilDestroyed(this.destroyRef)).subscribe()
   }
