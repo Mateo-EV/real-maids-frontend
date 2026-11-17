@@ -23,14 +23,16 @@
         [formField]="profile.propertyId"
         aria-describedby="preference-scope-help preference-propertyId-errors"
       >
+        <!-- A native select resets its selection when the option list changes (a verified choice
+             replacing the unverified option or vice versa), so every option mirrors the model. -->
         @if (unknownScope()) {
-          <option [value]="model().propertyId" disabled>
+          <option [value]="model().propertyId" [selected]="true" disabled>
             Propiedad sin verificar
           </option>
         }
         <option value="general">Todo el cliente</option>
         @for (property of context.choices().items; track property.id) {
-          <option [value]="'' + property.id">
+          <option [value]="'' + property.id" [selected]="model().propertyId === '' + property.id">
             {{ property.optionLabel }}
           </option>
         }

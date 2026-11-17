@@ -384,6 +384,34 @@ describe("WP5 preferences public owner consumer", () => {
     await s.submit()
     expect(s.create).toHaveBeenCalledOnce()
   })
+  it("keeps the captured scope selected across owner choice changes without a model change", async () => {
+    const s = await setup()
+    s.read.mockReturnValueOnce(
+      of(Result.success([CustomerPreference.create(9, 7, 12, "Tipo", "Detalle", true)]))
+    )
+    await s.loaded()
+    await s.click("Editar preferencia 9")
+    const scope = () => s.dialog().querySelector<HTMLSelectElement>("#preference-propertyId")!
+    expect(scope().value).toBe("12")
+    s.properties.mockReturnValueOnce(of(Result.success([property(12, 8)])))
+    TestBed.inject(CustomerPropertiesStore).loadProperties(7, true).subscribe()
+    await s.settle()
+    expect(s.dialog().textContent).toContain("Propiedad sin verificar")
+    expect(scope().value).toBe("12")
+    s.properties.mockReturnValueOnce(of(Result.success([property(12, 7)])))
+    TestBed.inject(CustomerPropertiesStore).loadProperties(7, true).subscribe()
+    await s.settle()
+    expect(s.dialog().textContent).not.toContain("Propiedad sin verificar")
+    expect(scope().value).toBe("12")
+    await s.submit()
+    expect(s.update).toHaveBeenCalledExactlyOnceWith(7, {
+      id: 9,
+      propertyId: 12,
+      type: "Tipo",
+      detail: "Detalle",
+      isActive: true
+    })
+  })
   it.each([
     "FORBIDDEN",
     "CONFLICT",

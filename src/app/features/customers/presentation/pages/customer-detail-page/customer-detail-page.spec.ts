@@ -114,6 +114,10 @@ async function setup(url = "/admin/customers/7", server = false) {
     await settle()
   }
   const element = () => harness.routeNativeElement!
+  const backLink = () =>
+    [...element().querySelectorAll<HTMLAnchorElement>("a")].find(
+      link => link.textContent?.trim() === "Volver a clientes"
+    )
   const click = async (text: string) => {
     const button = [...element().querySelectorAll("button")].find(
       b => b.textContent?.trim() === text
@@ -135,6 +139,7 @@ async function setup(url = "/admin/customers/7", server = false) {
     respondCustomer,
     respondProperties,
     element,
+    backLink,
     click
   }
 }
@@ -149,9 +154,7 @@ describe("Customer read-only detail", () => {
       expect(s.listProperties).not.toHaveBeenCalled()
       expect(s.list).not.toHaveBeenCalled()
       expect(s.element().textContent).toContain("identificador del cliente no es válido")
-      expect(s.element().querySelector("a")?.getAttribute("href")).toBe(
-        "/admin/customers?offset=0&limit=20"
-      )
+      expect(s.backLink()?.getAttribute("href")).toBe("/admin/customers?offset=0&limit=20")
     }
   )
   it("separates customer failure/retry from properties and never claims empty before success", async () => {
@@ -291,7 +294,7 @@ describe("Customer read-only detail", () => {
     await s.settle()
     await s.respondCustomer()
     await s.respondProperties(Result.success([]))
-    const back = s.element().querySelector<HTMLAnchorElement>("a")!
+    const back = s.backLink()!
     expect(back.getAttribute("href")).toBe("/admin/customers?offset=10&limit=5")
     back.click()
     await s.settle()
@@ -325,9 +328,7 @@ describe("Customer read-only detail", () => {
     expect(details.textContent).not.toContain("Código de acceso")
     expect(details.textContent).not.toContain("Instrucciones de acceso")
     expect(details.textContent).not.toContain("m²")
-    expect(s.element().querySelector("a")?.getAttribute("href")).toBe(
-      "/admin/customers?offset=0&limit=20"
-    )
+    expect(s.backLink()?.getAttribute("href")).toBe("/admin/customers?offset=0&limit=20")
   })
 
   it("cancels pending customer reads on logout before any property read", async () => {

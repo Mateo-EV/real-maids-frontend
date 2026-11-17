@@ -33,16 +33,17 @@ describe("lazy catalog notification ownership", () => {
     vi.unstubAllGlobals()
   })
 
-  for (const [name, routes] of [
-    ["Users", USERS_ROUTES],
-    ["CRM", CUSTOMERS_ROUTES]
+  for (const [name, consumerRoute] of [
+    ["Users", USERS_ROUTES[0]],
+    ["CRM", CUSTOMERS_ROUTES[0].children?.find(route => route.path === "")]
   ] as const) {
     it(`${name} gives the actual body container its consumer service and non-default route config`, () => {
       TestBed.configureTestingModule({ providers: appConfig.providers })
       const root = TestBed.inject(EnvironmentInjector)
+      expect(consumerRoute?.providers).toBeDefined()
       const route = createEnvironmentInjector(
         [
-          ...(routes[0].providers ?? []),
+          ...consumerRoute!.providers!,
           provideHotToastConfig({ position: "bottom-right", duration: 1234 })
         ],
         root
