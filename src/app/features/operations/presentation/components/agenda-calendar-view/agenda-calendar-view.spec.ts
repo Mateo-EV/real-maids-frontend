@@ -135,9 +135,10 @@ describe("AgendaCalendarView FullCalendar consumer", () => {
     expect(labels.some(label => /hoy|today|antes|siguiente/i.test(label ?? ""))).toBe(false)
   })
 
-  it("renders the seven-day window from the selected date, not the Monday-aligned week", async () => {
+  it("renders the Monday→Sunday week that contains the selected date", async () => {
     const s = await setup()
-    // Thursday 2024-02-29: the query covers 02-29..03-06, so the view must start there.
+    // Thursday 2024-02-29: the queried week is Monday 02-26 → Sunday 03-03, so the view must
+    // draw exactly those columns and never the 7 days that follow the anchor.
     s.host.date.set("2024-02-29")
     s.host.view.set("week")
     await s.settle()
@@ -146,7 +147,9 @@ describe("AgendaCalendarView FullCalendar consumer", () => {
       .filter((date): date is string => !!date)
     expect(columns.length).toBeGreaterThan(0)
     expect(columns.length % 7).toBe(0)
-    expect(s.element.querySelector('[data-date="2024-02-29"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-date="2024-02-26"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-date="2024-03-03"]')).not.toBeNull()
+    expect(s.element.querySelector('[data-date="2024-03-04"]')).toBeNull()
   })
 
   it("does not construct the calendar on the server", async () => {

@@ -16,8 +16,10 @@ import { provideOperationsRequestReads } from "../../../operations.providers"
 import { ServiceRequestsStore } from "../../state/service-requests.store"
 import { ServiceRequestsPage } from "./service-requests-page"
 import { AgendaPage } from "../agenda-page/agenda-page"
+import { agendaWeekWindow, civilToday } from "../../navigation/agenda-calendar"
 
 const api = "https://api.example.test/api/solicitudes"
+const agendaApi = "https://api.example.test/api/agenda"
 const inbox = "/admin/operations/requests"
 const deadline = 4102444800000
 const caller = (id = 19, expires = deadline, name = "Caller") =>
@@ -213,7 +215,7 @@ describe("ServiceRequestsPage inbox", () => {
     }
   )
 
-  it("opens the working blank agenda consumer from the routes, not from a page-local link", async () => {
+  it("opens the working agenda consumer on the current week from the routes, not from a page-local link", async () => {
     const s = await setup()
     const pending = s.request()
     expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
@@ -221,9 +223,20 @@ describe("ServiceRequestsPage inbox", () => {
     await s.settle()
     expect(pending.cancelled).toBe(true)
     expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
+    // This leaf composes only the operations reads, so opening the agenda issues exactly one read:
+    // the current Monday→Sunday window below (its staff picker's catalog store is not composed here).
+    const week = agendaWeekWindow(civilToday())!
+    const agenda = s.http.expectOne(r => r.url === agendaApi)
+    expect(agenda.request.method).toBe("GET")
+    expect(agenda.request.transferCache).toBe(false)
+    expect(agenda.request.params.keys().sort()).toEqual(["desde", "hasta"])
+    expect(agenda.request.params.get("desde")).toBe(week.from)
+    expect(agenda.request.params.get("hasta")).toBe(week.until)
+    agenda.flush([])
+    await s.settle()
     expect(
       s.harness.routeNativeElement!.querySelector<HTMLInputElement>("#agenda-date")?.value
-    ).toBe("")
+    ).toBe(civilToday())
     s.http.expectNone(r => r.url.includes("/api/"))
   })
 

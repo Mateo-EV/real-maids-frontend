@@ -16,9 +16,11 @@ import { provideOperationsRequestReads } from "../../../operations.providers"
 import { ServiceOrdersStore } from "../../state/service-orders.store"
 import { ServiceOrdersPage } from "./service-orders-page"
 import { AgendaPage } from "../agenda-page/agenda-page"
+import { agendaWeekWindow, civilToday } from "../../navigation/agenda-calendar"
 import { orderDto, ordersDtoPage } from "./service-orders-page.testing"
 
 const api = "https://api.example.test/api/ordenes"
+const agendaApi = "https://api.example.test/api/agenda"
 const inbox = "/admin/operations/orders"
 const deadline = 4102444800000
 const caller = (id = 19, expires = deadline, name = "Caller") =>
@@ -190,7 +192,7 @@ afterEach(() => {
 // T6D / S1,S3,S4,S5,S6: public unrouted leaf contracts, not root integration.
 // The typed RED scaffold intentionally has no observation, retry or page action.
 describe("ServiceOrdersPage read-only inbox", () => {
-  it("opens the working blank agenda consumer from the routes, not from a page-local link", async () => {
+  it("opens the working agenda consumer on the current week from the routes, not from a page-local link", async () => {
     const s = await setup()
     const pending = s.request()
     expect(s.element.querySelector('a[href="/admin/operations/agenda"]')).toBeNull()
@@ -198,9 +200,19 @@ describe("ServiceOrdersPage read-only inbox", () => {
     await s.settle()
     expect(pending.cancelled).toBe(true)
     expect(TestBed.inject(Router).url).toBe("/admin/operations/agenda")
+    // The agenda opens on the current Monday→Sunday week, so mounting reads exactly that window.
+    const week = agendaWeekWindow(civilToday())!
+    const agenda = s.http.expectOne(r => r.url === agendaApi)
+    expect(agenda.request.method).toBe("GET")
+    expect(agenda.request.transferCache).toBe(false)
+    expect(agenda.request.params.keys().sort()).toEqual(["desde", "hasta"])
+    expect(agenda.request.params.get("desde")).toBe(week.from)
+    expect(agenda.request.params.get("hasta")).toBe(week.until)
+    agenda.flush([])
+    await s.settle()
     expect(
       s.harness.routeNativeElement!.querySelector<HTMLInputElement>("#agenda-date")?.value
-    ).toBe("")
+    ).toBe(civilToday())
     s.http.expectNone(r => r.url.includes("/api/"))
   })
   // S3,S9: the shell owns the section tabs; the page owns the filter row.

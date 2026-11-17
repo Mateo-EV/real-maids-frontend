@@ -29,6 +29,7 @@ import { AgendaPage } from "./presentation/pages/agenda-page/agenda-page"
 import { OperationsShell } from "./presentation/pages/operations-shell/operations-shell"
 import { AgendaStore } from "./presentation/state/agenda.store"
 import { agendaDto } from "./presentation/state/agenda.testing"
+import { agendaWeekWindow, civilToday } from "./presentation/navigation/agenda-calendar"
 
 @Component({ template: "Login destination" })
 class LoginDestination {}
@@ -396,7 +397,7 @@ describe("Operations protected request integration", () => {
     }
   )
 
-  it("opens protected Agenda blank, then dispatches one explicit root-composed GET and links the actual order", async () => {
+  it("opens protected Agenda on the current week, then dispatches one explicit root-composed GET and links the actual order", async () => {
     const app = await setup(true)
     const harness = await RouterTestingHarness.create("/admin/operations/agenda")
     flushShellMetrics(app.http)
@@ -414,8 +415,17 @@ describe("Operations protected request integration", () => {
     )
     expect(consumer.injector.get(AuthStore)).toBe(app.auth)
     expect(consumer.injector.get(HotToastService)).toBeDefined()
-    // S5: a blank required date never queries the agenda; only its staff picker reads a catalog.
-    app.http.expectNone(r => r.url === "http://localhost:8080/api/agenda")
+    // The approved default is the current Monday→Sunday week, so mounting dispatches exactly one
+    // agenda read for that window next to the staff picker's own catalog page.
+    const week = agendaWeekWindow(civilToday())!
+    const mount = app.http.expectOne(r => r.url === "http://localhost:8080/api/agenda")
+    expect(mount.request.method).toBe("GET")
+    expect(mount.request.headers.get("Authorization")).toBe("Bearer fake-access")
+    expect(mount.request.transferCache).toBe(false)
+    expect(mount.request.params.keys().sort()).toEqual(["desde", "hasta"])
+    expect(mount.request.params.get("desde")).toBe(week.from)
+    expect(mount.request.params.get("hasta")).toBe(week.until)
+    mount.flush([])
     const shell = harness.routeNativeElement!
     expect(shell.querySelector('app-admin-sidebar a[href="/admin/operations/agenda"]')).toBeNull()
     expect(shell.querySelector('a[href="/admin/operations"]')?.getAttribute("aria-current")).toBe(
@@ -438,8 +448,10 @@ describe("Operations protected request integration", () => {
     staff.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
     await settle()
     const date = shell.querySelector<HTMLInputElement>("#agenda-date")!
-    expect(date.value).toBe("")
-    // S5: the explicit date applies at once, without any submit action.
+    expect(date.value).toBe(civilToday())
+    // S5: the explicit date applies at once, without any submit action, and the week view keeps
+    // asking for the Monday→Sunday window that contains it.
+    const explicit = agendaWeekWindow("2024-02-29")!
     date.value = "2024-02-29"
     date.dispatchEvent(new Event("input", { bubbles: true }))
     await settle()
@@ -448,8 +460,8 @@ describe("Operations protected request integration", () => {
     expect(pending.request.headers.get("Authorization")).toBe("Bearer fake-access")
     expect(pending.request.transferCache).toBe(false)
     expect(pending.request.params.keys().sort()).toEqual(["desde", "hasta"])
-    expect(pending.request.params.get("desde")).toBe("2024-02-29")
-    expect(pending.request.params.get("hasta")).toBe("2024-02-29")
+    expect(pending.request.params.get("desde")).toBe(explicit.from)
+    expect(pending.request.params.get("hasta")).toBe(explicit.until)
     pending.flush([agendaDto()])
     await settle()
     // S8: the calendar renders the shift as an event that carries the actual order id.

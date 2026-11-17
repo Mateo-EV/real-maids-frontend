@@ -27,7 +27,7 @@ import timeGridPlugin from "@fullcalendar/angular/timegrid"
 import classicTheme from "@fullcalendar/angular/themes/classic"
 import esLocale from "fullcalendar/locales/es"
 import { AgendaEntry } from "../../../domain/models/operations-read.models"
-import { AgendaView } from "../../navigation/agenda-calendar"
+import { AgendaView, agendaWeekWindow } from "../../navigation/agenda-calendar"
 
 /**
  * S8: FullCalendar renderer for the agenda. It owns only the library integration; the page keeps
@@ -49,10 +49,9 @@ const viewType: Record<AgendaView, string> = {
 }
 
 /**
- * The agenda queries seven days FROM the selected date, so the week view must show exactly
- * that window. `timeGridWeek` alone is Monday-aligned: with a Thursday anchor the returned
- * Mon-Wed of the next week would never be drawn while the unqueried Mon-Wed of this week
- * would appear empty. `visibleRange` anchors the seven columns to the queried window.
+ * The agenda queries a Monday→Sunday civil week (`agendaWeekWindow`), so the week view must show
+ * exactly that window: `timeGridWeek` alone rounds to its own week and would draw the wrong
+ * columns whenever the queried week is not the one the library computes.
  */
 function plusDays(iso: string, days: number): string {
   const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
@@ -168,10 +167,8 @@ export class AgendaCalendarView implements AfterViewInit {
       // control, which re-queries. A calendar-only paging button would show another period with
       // the previous period's data.
       headerToolbar: { left: "", center: "title", right: "" },
-      // The week window is the queried window, not the Monday-aligned calendar week.
-      ...(this.view() === "week" && anchor !== undefined
-        ? { visibleRange: { start: anchor, end: plusDays(anchor, 7) } }
-        : {}),
+      // The week window is the queried Monday→Sunday week; `visibleRange.end` is exclusive.
+      ...this.weekWindow(anchor),
       events: this.events(),
       eventClick: this.handleEventClick,
       eventDidMount: this.handleEventDidMount
@@ -207,6 +204,16 @@ export class AgendaCalendarView implements AfterViewInit {
     const text = summary(entry)
     info.el.setAttribute("aria-label", text)
     info.el.setAttribute("title", text)
+  }
+
+  /**
+   * Visible window of the week view: the queried Monday→Sunday week, never the library's own
+   * week arithmetic. `end` is exclusive, so it is the Sunday plus one day.
+   */
+  private weekWindow(anchor: string | undefined): Pick<CalendarOptions, "visibleRange"> {
+    if (this.view() !== "week" || anchor === undefined) return {}
+    const week = agendaWeekWindow(anchor.slice(0, 10))
+    return week ? { visibleRange: { start: week.from, end: plusDays(week.until, 1) } } : {}
   }
 
   private syncSelection(): void {
