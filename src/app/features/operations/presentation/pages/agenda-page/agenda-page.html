@@ -90,7 +90,7 @@
         @if (outOfRangeNote(); as note) {
           <p role="status" class="mb-4 text-sm text-muted-foreground">{{ note }}</p>
         }
-        <app-agenda-calendar-view
+        <app-agenda-board
           [entries]="store.result() ?? []"
           [selectedDate]="model().date"
           [view]="model().view"

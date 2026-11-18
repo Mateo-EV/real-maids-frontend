@@ -1,0 +1,389 @@
+/*
+ * Own agenda board: no calendar library, no literal color. Every surface reads the project's
+ * semantic tokens (`--card`, `--border`, `--foreground`, `--muted`, `--primary`, `--ring`,
+ * `--radius`, `--kpi-*`), so the light and dark schemes of `src/styles.css` apply unchanged.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.agenda-board {
+  --agenda-hour: 3.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 0.25rem);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 5%, transparent);
+}
+
+.agenda-board[aria-busy="true"] {
+  opacity: 0.72;
+}
+
+/* ── Day and week: hour axis plus one lane per queried date ─────────────────────────────── */
+
+.agenda-board__scroll {
+  overflow-x: auto;
+}
+
+.agenda-board__head,
+.agenda-board__body {
+  display: grid;
+  grid-template-columns: 3.75rem repeat(var(--agenda-columns, 1), minmax(6.5rem, 1fr));
+  min-width: 40rem;
+}
+
+/* Both renderings share the header surface and the hairline under it. */
+.agenda-board__head,
+.agenda-month__head {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 55%, var(--card));
+}
+
+.agenda-board__dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.4rem;
+  border-left: 1px solid var(--border);
+}
+
+.agenda-board__weekday {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.agenda-board__daynumber {
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-board__axis {
+  display: grid;
+  grid-column: 1;
+  grid-auto-rows: var(--agenda-hour);
+  border-right: 1px solid var(--border);
+}
+
+.agenda-board__hour {
+  padding: 0.15rem 0.4rem 0 0;
+  border-top: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--muted-foreground);
+}
+
+.agenda-board__lanes {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: repeat(var(--agenda-columns, 1), minmax(0, 1fr));
+}
+
+.agenda-board__lane {
+  position: relative;
+  height: calc(var(--agenda-hour) * var(--agenda-hours, 1));
+  border-left: 1px solid var(--border);
+  /* Hour rules are painted, not authored as extra nodes. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--border) 60%, transparent) 0 1px,
+    transparent 1px var(--agenda-hour)
+  );
+}
+
+.agenda-entry {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  overflow: hidden;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--agenda-tone-border, color-mix(in oklch, var(--primary) 40%, transparent));
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--agenda-tone-soft, color-mix(in oklch, var(--primary) 10%, var(--card)));
+  font: inherit;
+  line-height: 1.15;
+  text-align: left;
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+/* Entry card and month chip share hover, ring and truncation behaviour. */
+.agenda-entry:hover,
+.agenda-entry:focus-visible,
+.agenda-chip:hover,
+.agenda-chip:focus-visible {
+  background: var(--agenda-tone-strong, color-mix(in oklch, var(--primary) 18%, var(--card)));
+}
+
+.agenda-entry:focus-visible,
+.agenda-chip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* Every printed field truncates; the accessible label keeps the whole projection. */
+.agenda-entry__code,
+.agenda-entry__clock,
+.agenda-entry__meta,
+.agenda-entry__status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-entry__code {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.agenda-entry__clock {
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--agenda-tone-ink, var(--muted-foreground));
+}
+
+.agenda-entry__meta {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+.agenda-entry__status {
+  margin-top: auto;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--agenda-tone-ink, var(--muted-foreground));
+}
+
+/* ── Month: Monday-first day table with a compact list per day ──────────────────────────── */
+
+.agenda-month__head,
+.agenda-month__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.agenda-month__headcell {
+  padding: 0.45rem 0.6rem;
+  border-left: 1px solid var(--border);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.agenda-month__headcell:first-child {
+  border-left: 0;
+}
+
+.agenda-month__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 6.75rem;
+  padding: 0.4rem;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+.agenda-month__grid > .agenda-month__cell:nth-child(7n + 1) {
+  border-left: 0;
+}
+
+.agenda-month__grid > .agenda-month__cell:nth-child(-n + 7) {
+  border-top: 0;
+}
+
+.agenda-month__cell--outside {
+  background: color-mix(in oklch, var(--muted) 35%, var(--card));
+}
+
+.agenda-month__day {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.agenda-month__daynumber {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-month__dayname {
+  display: none;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.agenda-month__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  overflow: hidden;
+  width: 100%;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--agenda-tone-border, var(--border));
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--agenda-tone-soft, color-mix(in oklch, var(--muted) 60%, var(--card)));
+  font: inherit;
+  font-size: 0.6875rem;
+  text-align: left;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.agenda-chip__clock {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--agenda-tone-ink, var(--muted-foreground));
+}
+
+.agenda-chip__code {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Returned shifts that carry no usable clock stay visible ────────────────────────────── */
+
+.agenda-board__unplaced {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.agenda-board__unplacednote {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.agenda-board__unplacedlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-board__unplacedlist .agenda-chip {
+  width: auto;
+}
+
+/* ── Documented status tones: decoration only, the status text is always printed ───────── */
+/*
+ * One raw tone per status derives the soft, strong, border and ink shades once, so a new tone is
+ * one line here instead of a whole block.
+ */
+[data-tone] {
+  --agenda-tone-soft: color-mix(in oklch, var(--agenda-tone) 12%, var(--card));
+  --agenda-tone-strong: color-mix(in oklch, var(--agenda-tone) 20%, var(--card));
+  --agenda-tone-border: color-mix(in oklch, var(--agenda-tone) 45%, transparent);
+  --agenda-tone-ink: var(--agenda-tone);
+}
+
+[data-tone="navy"] {
+  --agenda-tone: var(--kpi-navy);
+}
+
+[data-tone="amber"] {
+  --agenda-tone: var(--kpi-amber);
+  --agenda-tone-soft: var(--kpi-amber-soft);
+}
+
+[data-tone="green"] {
+  --agenda-tone: var(--kpi-green);
+  --agenda-tone-soft: var(--kpi-green-soft);
+}
+
+[data-tone="coral"] {
+  --agenda-tone: var(--destructive);
+}
+
+[data-tone="muted"] {
+  --agenda-tone: var(--muted);
+  --agenda-tone-soft: color-mix(in oklch, var(--muted) 60%, var(--card));
+  --agenda-tone-ink: var(--muted-foreground);
+}
+
+/* ── Narrow screens: the month becomes a day list, the week keeps horizontal scrolling ── */
+
+@media (max-width: 48rem) {
+  .agenda-month__head {
+    display: none;
+  }
+
+  .agenda-month__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agenda-month__cell {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.6rem;
+    min-height: 0;
+    padding: 0.35rem 0.6rem;
+    border-left: 0;
+  }
+
+  .agenda-month__grid > .agenda-month__cell:nth-child(-n + 7) {
+    border-top: 1px solid var(--border);
+  }
+
+  .agenda-month__grid > .agenda-month__cell:first-child {
+    border-top: 0;
+  }
+
+  .agenda-month__cell--outside {
+    display: none;
+  }
+
+  .agenda-month__dayname {
+    display: inline;
+  }
+
+  .agenda-month__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .agenda-month__list .agenda-chip {
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-entry {
+    transition: none;
+  }
+}

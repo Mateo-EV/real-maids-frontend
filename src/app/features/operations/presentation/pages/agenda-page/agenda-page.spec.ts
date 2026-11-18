@@ -257,11 +257,11 @@ describe("AgendaPage current-week/day/month consumer", () => {
       expect(
         s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
       ).toContain(label)
-      // S8: the real calendar renders the explicit window (day/week/month) instead of the old grid.
-      expect(s.element.querySelectorAll("[data-date]")).toHaveLength(
-        view === "day" ? 3 : view === "week" ? 21 : 42
+      // S8: the board renders the explicit window (day/week/month) instead of the old grid.
+      expect(s.element.querySelectorAll("[data-agenda-date]")).toHaveLength(
+        view === "day" ? 1 : view === "week" ? 7 : 29
       )
-      expect(s.element.querySelector("[data-time]") !== null).toBe(view !== "month")
+      expect(s.element.querySelector("[data-agenda-hour]") !== null).toBe(view !== "month")
       const event = s.element.querySelector("[data-agenda-entry]")
       // The entry's own order id, date and clocks are displayed literally, not inferred.
       expect(event?.getAttribute("data-agenda-order-id")).toBe("17")
@@ -283,17 +283,17 @@ describe("AgendaPage current-week/day/month consumer", () => {
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
     ).toContain("Semana")
-    // S8: a Monday→Sunday window is seven day cells in the calendar, one per queried date.
-    expect(s.element.querySelectorAll("[data-date]")).toHaveLength(21)
+    // S8: a Monday→Sunday window is seven day columns, one per queried date.
+    expect(s.element.querySelectorAll("[data-agenda-date]")).toHaveLength(7)
     await s.field("agenda-view", "month")
     s.request("2024-02-01", "2024-02-29").flush([agendaDto()])
     await s.settle()
     expect(
       s.element.querySelector('section[aria-label="Programación consultada"] h2')?.textContent
     ).toContain("Mes")
-    // The month grid renders the whole selected month and no hour slots at all.
-    expect(s.element.querySelectorAll("[data-date]")).toHaveLength(42)
-    expect(s.element.querySelector("[data-time]")).toBeNull()
+    // The month board renders every day of the selected month and no hour axis at all.
+    expect(s.element.querySelectorAll("[data-agenda-date]")).toHaveLength(29)
+    expect(s.element.querySelector("[data-agenda-hour]")).toBeNull()
     // The explicit date is never replaced by a default: no /hoy, no inferred staff.
     expect(s.element.querySelector<HTMLInputElement>("#agenda-date")?.value).toBe("2024-02-29")
     s.http.expectNone(r => r.method !== "GET")
@@ -409,7 +409,7 @@ describe("AgendaPage current-week/day/month consumer", () => {
     expect(TestBed.inject(Router).url).toBe("/admin/operations/orders/22")
     s.http.expectNone(r => r.method !== "GET")
   })
-  // R3-003: FullCalendar draws only its own window, so a returned shift dated outside the
+  // R3-003: the board draws only its own window, so a returned shift dated outside the
   // requested range must be reported instead of disappearing without explanation.
   it("reports returned shifts outside the requested window instead of dropping them silently", async () => {
     const s = await setup()
@@ -426,7 +426,7 @@ describe("AgendaPage current-week/day/month consumer", () => {
     // The note is plain text placed above the calendar: no link and no access detail.
     expect(note!.querySelector("a")).toBeNull()
     expect(note!.textContent).not.toMatch(/SYNTHETIC|instrucciones|código/i)
-    const calendar = s.element.querySelector("app-agenda-calendar-view")!
+    const calendar = s.element.querySelector("app-agenda-board")!
     const siblings = Array.from(note!.parentElement!.children)
     expect(siblings.indexOf(note!)).toBeLessThan(siblings.indexOf(calendar))
     // The window shift is drawn; the outside one is the reason for the note.

@@ -1,0 +1,142 @@
+@if (renderable() && hasContent()) {
+  <div
+    class="agenda-board"
+    [style]="boardVars()"
+    [attr.data-agenda-view]="view()"
+    [attr.aria-busy]="busy()"
+  >
+    @if (monthCells().length) {
+      <div class="agenda-month">
+        <div class="agenda-month__head" aria-hidden="true">
+          @for (name of weekdays; track name) {
+            <span class="agenda-month__headcell">{{ name }}</span>
+          }
+        </div>
+        <div class="agenda-month__grid">
+          @for (cell of monthCells(); track $index) {
+            <div
+              class="agenda-month__cell"
+              [class.agenda-month__cell--outside]="!cell.inMonth"
+              [attr.data-agenda-date]="cell.date"
+            >
+              @if (cell.date) {
+                <header class="agenda-month__day">
+                  <span class="agenda-month__dayname">{{ cell.weekday }}</span>
+                  <span class="agenda-month__daynumber">{{ cell.dayNumber }}</span>
+                </header>
+                @if (cell.chips.length) {
+                  <ul class="agenda-month__list">
+                    @for (chip of cell.chips; track chip.entry.orderId) {
+                      <li>
+                        <button
+                          type="button"
+                          class="agenda-chip"
+                          data-agenda-entry
+                          [attr.data-agenda-order-id]="chip.entry.orderId"
+                          [attr.data-tone]="chip.tone"
+                          [attr.aria-label]="chip.label"
+                          [title]="chip.label"
+                          (click)="select(chip.entry)"
+                        >
+                          <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
+                          <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+            </div>
+          }
+        </div>
+      </div>
+    } @else if (axis(); as hours) {
+      <div class="agenda-board__scroll">
+        <div class="agenda-board__head">
+          <div class="agenda-board__corner" aria-hidden="true"></div>
+          @for (column of columns(); track column.date) {
+            <div class="agenda-board__dayhead">
+              <span class="agenda-board__weekday">{{ column.weekday }}</span>
+              <span class="agenda-board__daynumber">{{ column.dayNumber }}</span>
+            </div>
+          }
+        </div>
+        <div class="agenda-board__body">
+          <div class="agenda-board__axis">
+            @for (hour of hours.hours; track hour) {
+              <span class="agenda-board__hour" [attr.data-agenda-hour]="hour">{{
+                hourLabel(hour)
+              }}</span>
+            }
+          </div>
+          <div class="agenda-board__lanes">
+            @for (column of columns(); track column.date) {
+              <div
+                class="agenda-board__lane"
+                role="group"
+                [attr.aria-label]="column.date"
+                [attr.data-agenda-date]="column.date"
+              >
+                @for (slot of column.slots; track slot.entry.orderId) {
+                  <button
+                    type="button"
+                    class="agenda-entry"
+                    data-agenda-entry
+                    [attr.data-agenda-order-id]="slot.entry.orderId"
+                    [attr.data-agenda-lane]="slot.lane"
+                    [attr.data-agenda-lanes]="slot.lanes"
+                    [attr.data-tone]="slot.tone"
+                    [attr.aria-label]="slot.label"
+                    [title]="slot.label"
+                    [style.top.%]="slot.top"
+                    [style.height.%]="slot.height"
+                    [style.left]="slot.left"
+                    [style.width]="slot.width"
+                    (click)="select(slot.entry)"
+                  >
+                    <span class="agenda-entry__code">{{ slot.entry.code }}</span>
+                    <span class="agenda-entry__clock">
+                      {{ slot.entry.startTime }} → {{ slot.entry.endTime ?? "No registrado" }}
+                    </span>
+                    @if (dayView()) {
+                      <span class="agenda-entry__meta">
+                        {{ slot.entry.customerName }} · {{ slot.entry.propertyName }}
+                      </span>
+                    }
+                    <span class="agenda-entry__status">{{ slot.entry.status }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+    @if (unplaced().length) {
+      <div class="agenda-board__unplaced">
+        <p class="agenda-board__unplacednote" role="status">
+          Turnos devueltos sin horario utilizable en esta vista.
+        </p>
+        <ul class="agenda-board__unplacedlist">
+          @for (chip of unplaced(); track chip.entry.orderId) {
+            <li>
+              <button
+                type="button"
+                class="agenda-chip"
+                data-agenda-entry
+                [attr.data-agenda-order-id]="chip.entry.orderId"
+                [attr.data-tone]="chip.tone"
+                [attr.aria-label]="chip.label"
+                [title]="chip.label"
+                (click)="select(chip.entry)"
+              >
+                <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
+                <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+}

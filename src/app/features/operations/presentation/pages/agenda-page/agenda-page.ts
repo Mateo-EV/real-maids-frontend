@@ -19,7 +19,7 @@ import {
   CatalogFilters
 } from "@/app/shared/components/catalog-filters/catalog-filters"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
-import { AgendaCalendarView } from "../../components/agenda-calendar-view/agenda-calendar-view"
+import { AgendaBoard } from "../../components/agenda-board/agenda-board"
 import {
   agendaQuery,
   agendaRange,
@@ -60,7 +60,7 @@ const blank: AgendaModel = { date: "", view: defaultView, staff: "" }
   selector: "app-agenda-page",
   providers: [AgendaStore],
   imports: [
-    AgendaCalendarView,
+    AgendaBoard,
     CatalogCombobox,
     CatalogFilters,
     CatalogFrame,
@@ -107,7 +107,7 @@ export class AgendaPage {
   })
   readonly busy = computed(() => this.store.loading() || this.store.refreshing())
   /**
-   * FullCalendar only draws the window it was given, so a returned entry dated outside
+   * The board only draws the window it was given, so a returned entry dated outside
    * `[from, until]` would vanish silently. ISO `YYYY-MM-DD` compares correctly as text.
    */
   readonly outOfRange = computed(() => {
@@ -116,7 +116,7 @@ export class AgendaPage {
     if (!range || !result) return 0
     return result.filter(entry => entry.date < range.from || entry.date > range.until).length
   })
-  /** Plain-text report of the returned shifts the calendar cannot draw; empty when none. */
+  /** Plain-text report of the returned shifts the board cannot draw; empty when none. */
   readonly outOfRangeNote = computed(() => {
     const count = this.outOfRange()
     if (!count) return ""

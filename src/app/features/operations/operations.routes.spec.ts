@@ -466,7 +466,7 @@ describe("Operations protected request integration", () => {
     await settle()
     // S8: the calendar renders the shift as an event that carries the actual order id.
     const event = shell.querySelector(
-      'app-agenda-page app-agenda-calendar-view [data-agenda-order-id="17"]'
+      'app-agenda-page app-agenda-board [data-agenda-order-id="17"]'
     )
     expect(event, "Agenda event for the actual order").not.toBeNull()
     expect(event!.getAttribute("aria-label")).toContain("2024-02-29")
