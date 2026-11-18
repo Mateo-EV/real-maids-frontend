@@ -37,6 +37,13 @@ export const ADMIN_ROUTES: Routes = [
           import("../../features/operations/operations.routes").then(
             routes => routes.OPERATIONS_ROUTES
           )
+      },
+      {
+        path: "support",
+        loadChildren: () =>
+          import("../../features/customer-support/customer-support.routes").then(
+            routes => routes.CUSTOMER_SUPPORT_ROUTES
+          )
       }
     ]
   }

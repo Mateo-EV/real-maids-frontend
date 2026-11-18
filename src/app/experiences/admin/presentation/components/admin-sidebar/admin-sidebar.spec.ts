@@ -51,7 +51,8 @@ describe("AdminSidebar RRHH navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
-      "Operaciones"
+      "Operaciones",
+      "Soporte"
     ])
     const icon = fixture.debugElement
       .queryAll(By.directive(NgIcon))
@@ -62,7 +63,7 @@ describe("AdminSidebar RRHH navigation", () => {
     const iam = administration.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')!
     expect(crm.textContent?.trim()).toBe("CRM")
     expect(iam.textContent?.trim()).toBe("IAM")
-    expect(element.querySelectorAll("nav a")).toHaveLength(4)
+    expect(element.querySelectorAll("nav a")).toHaveLength(5)
     const router = TestBed.inject(Router)
     rrhh!.click()
     await fixture.whenStable()
@@ -135,7 +136,8 @@ describe("AdminSidebar CRM navigation", () => {
       "Landing",
       "CRM",
       "RRHH",
-      "Operaciones"
+      "Operaciones",
+      "Soporte"
     ])
     const crm = general.querySelector<HTMLAnchorElement>('a[href="/admin/customers"]')!
     expect(crm?.textContent?.trim()).toBe("CRM")

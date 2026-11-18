@@ -1,0 +1,222 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <app-catalog-frame
+    titleId="support-requests-title"
+    title="Soporte al cliente"
+    description="Bandeja de atenciones registradas"
+    [busy]="list().loading || list().refreshing"
+  >
+    <app-catalog-filters
+      catalogControls
+      [selects]="filterSelects()"
+      [dates]="filterDates()"
+      (selectChange)="setSelect($event.id, $event.value)"
+      (dateChange)="setDate($event.id, $event.value)"
+    >
+      <div class="flex flex-col gap-1">
+        <label for="support-filter-type" class="text-xs font-medium">Tipo de atención</label>
+        <hlm-native-select
+          [selectId]="'support-filter-type'"
+          [value]="filters().typeId"
+          (valueChange)="setType($event)"
+        >
+          <option value="">Todos los tipos</option>
+          @for (type of typeOptions(); track type.value) {
+            <option [value]="type.value">{{ type.label }}</option>
+          }
+        </hlm-native-select>
+        @if (typeEntry().loading) {
+          <p role="status" class="text-xs text-muted-foreground">Cargando tipos…</p>
+        }
+        @if (typeError()) {
+          <div class="flex flex-wrap items-center gap-2">
+            <p role="alert" class="text-xs text-destructive">{{ typeError() }}</p>
+            <button
+              hlmBtn
+              type="button"
+              size="sm"
+              variant="outline"
+              (click)="retryTypes()"
+              [disabled]="typeEntry().loading || typeEntry().refreshing"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+      </div>
+      <div class="flex flex-col gap-1">
+        <label for="support-filter-customer" class="text-xs font-medium">Cliente</label>
+        <app-catalog-combobox
+          [id]="'support-filter-customer'"
+          label="Cliente"
+          placeholder="Todos los clientes"
+          emptyLabel="Sin clientes para esta búsqueda."
+          searchPlaceholder="Buscar cliente…"
+          [selectedLabel]="customerLabel()"
+          [options]="customerOptions()"
+          [loading]="customerBusy()"
+          [errorLabel]="customerError()"
+          (searchChange)="searchCustomers($event)"
+          (selectChange)="setCustomer($event)"
+          (reload)="reloadCustomers()"
+        />
+      </div>
+    </app-catalog-filters>
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando atenciones…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando atenciones…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Atenciones de soporte registradas
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Asunto / cliente</th>
+                <th hlmTh scope="col">Tipo</th>
+                <th hlmTh scope="col">Estado</th>
+                <th hlmTh scope="col">Registro (UTC)</th>
+                <th hlmTh scope="col">Requiere respuesta</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (request of rows(); track request.id) {
+                <tr hlmTr>
+                  <td hlmTd class="whitespace-normal break-words">
+                    <p class="font-medium break-words">{{ request.subject }}</p>
+                    <p class="text-xs text-muted-foreground">{{ request.customerName }}</p>
+                    <p class="text-xs text-muted-foreground">Atención #{{ request.id }}</p>
+                  </td>
+                  <td hlmTd class="whitespace-normal break-words">{{ request.requestTypeName }}</td>
+                  <td hlmTd>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="request.state"
+                      badgeToneKind="catalog-name"
+                      >{{ request.state }} · {{ request.stateName }}</span
+                    >
+                  </td>
+                  <td hlmTd>{{ request.registeredAt.toISOString() }}</td>
+                  <td hlmTd>
+                    {{
+                      request.requiresResponse ? "Sí, requiere respuesta" : "No requiere respuesta"
+                    }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul
+          catalogMobile
+          class="flex flex-col gap-4 p-4"
+          aria-label="Atenciones de soporte registradas"
+        >
+          @for (request of rows(); track request.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">{{ request.subject }}</h2>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  [appBadgeTone]="request.state"
+                  badgeToneKind="catalog-name"
+                  >{{ request.state }} · {{ request.stateName }}</span
+                >
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {{ request.customerName }} · Atención #{{ request.id }}
+              </p>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Tipo</dt>
+                <dd class="break-words">{{ request.requestTypeName }}</dd>
+                <dt class="text-muted-foreground">Registro (UTC)</dt>
+                <dd class="break-words">{{ request.registeredAt.toISOString() }}</dd>
+                <dt class="text-muted-foreground">Requiere respuesta</dt>
+                <dd>
+                  {{ request.requiresResponse ? "Sí" : "No" }}
+                </dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{ page.total === 0 ? "No hay atenciones" : "Esta página ya no tiene registros" }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "El servidor no devolvió atenciones para esta consulta."
+                  : "El catálogo cambió. Selecciona otra página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (filtersActive() && page.total === 0) {
+            <button hlmBtn type="button" variant="outline" (click)="clearFilters()">
+              Limpiar filtros
+            </button>
+          }
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de atenciones"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>

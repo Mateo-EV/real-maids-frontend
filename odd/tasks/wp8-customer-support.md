@@ -106,6 +106,8 @@ separan en un commit propio.
 | S-2 | `0e282d0` | Transporte HTTP + validación de DTOs + specs (T1) | 790 |
 | S-3 | `040f7d9` | Repositorio, casos de uso, `useExisting` y composición root + specs (T2) | 329 |
 | S-4 | `744c78a` | Store raíz de lecturas con TTL 30000 ms + specs (T3) | 856 |
+| S-5 | `3a62c54` | Corrección obligada por el review (R3-001: offset y tope de página) + specs | 63 |
+| S-6 | (este commit) | Ruta `/admin/support`, entrada Soporte, bandeja con filtros y paginación + specs (T4) | ver commit |
 
 El objetivo de ~400 líneas se mide sobre código más specs, y acá los specs son la mitad del
 volumen: S-2 son 421 líneas de pruebas de transporte con sus negativos malformados, y S-4 son 643
@@ -131,6 +133,19 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   pone `expires: 0` (`shared/state/keyed-reads.ts:230`), no borra el dato — el resultado verificado
   sobrevive a una revalidación fallida, que es lo que pide S11; y el vocabulario de estados se importa
   de `SUPPORT_STATE_CODES`, no se duplica.
+- **L12.** Review nativo **cerrado en `approved`** y autoridad quemada
+  (`gentle-ai.review-acknowledged/v1`). Secuencia completa: consentimiento del humano → tres lentes →
+  refuter adversarial → hallazgo `R3-001` → corrección en `3a62c54` → validador dirigido → aprobado.
+  La corrección se verificó observando RED real: al revertir las dos líneas de producción fallan
+  exactamente los tres tests nuevos (75/75 → 3 fallas → 75/75). Aprobación de review ≠ autorización
+  de entrega: commit, push y PR siguen siendo política ordinaria del repo.
+- **L13.** T4 entregado: ruta lazy protegida `/admin/support` con su scope completo de toasts, bandeja
+  con filtros server-side (estado, tipo, cliente, desde/hasta), tabla en desktop y tarjetas en móvil,
+  metadata efectiva del servidor y una única recuperación acotada; entrada `Soporte` en General
+  después de `Operaciones` con `lucideLifeBuoy`. El worker se detuvo correctamente al romper seis
+  aserciones de conteo en `admin-sidebar.spec.ts` y `admin.routes.spec.ts`; autoricé la opción A y sólo
+  se actualizaron esas seis líneas (etiquetas y conteos), sin debilitar ninguna otra aserción. Las
+  filas todavía no son clickeables: el detalle y los enlaces llegan en T5.
 - **L11.** Review nativo del slice: consentimiento `granted` del humano, tres lentes corridas
   (risk, resilience, reliability), refuter adversarial requerido y **un hallazgo CRITICAL
   confirmado** (`R3-001`, `causal_disposition: introduced`, `evidence_class: deterministic`): con
