@@ -118,18 +118,17 @@ const percentOf = (minutes: number, axis: AgendaHourAxis): number => {
   return Math.min(100, Math.max(0, (offset / span) * 100))
 }
 
-const overlaps = (left: AgendaClock, right: AgendaClock): boolean =>
-  left.start < right.end && right.start < left.end
-
 interface Placed {
   readonly entry: AgendaEntry
   readonly clock: AgendaClock
 }
 
 /**
- * Greedy lane packing: a shift takes the first lane whose last shift already ended, and every
- * overlapping group is as wide as the lanes it actually needs. Two simultaneous orders therefore
- * sit side by side instead of hiding each other.
+ * Greedy lane packing over connected overlap groups. Shifts sorted by start belong to the same group
+ * while they start before the furthest end already seen, so a staggered run of shifts shares one
+ * group instead of each shift measuring only its direct neighbours. Every member of a group gets the
+ * group's lane count, which is what actually keeps simultaneous orders side by side instead of
+ * covering each other's click target.
  */
 function packLanes(items: readonly Placed[]): (Placed & { lane: number; lanes: number })[] {
   const ordered = [...items].sort(
@@ -138,24 +137,36 @@ function packLanes(items: readonly Placed[]): (Placed & { lane: number; lanes: n
       right.clock.end - left.clock.end ||
       left.entry.orderId - right.entry.orderId
   )
-  const laneEnds: number[] = []
-  const assigned = ordered.map(item => {
-    let lane = laneEnds.findIndex(end => end <= item.clock.start)
-    if (lane === -1) {
-      lane = laneEnds.length
-      laneEnds.push(item.clock.end)
-    } else {
-      laneEnds[lane] = item.clock.end
+  const packed: (Placed & { lane: number; lanes: number })[] = []
+  let group: Placed[] = []
+  let groupEnd = 0
+
+  const flush = () => {
+    if (!group.length) return
+    const laneEnds: number[] = []
+    for (const item of group) {
+      let lane = laneEnds.findIndex(end => end <= item.clock.start)
+      if (lane === -1) {
+        lane = laneEnds.length
+        laneEnds.push(item.clock.end)
+      } else {
+        laneEnds[lane] = item.clock.end
+      }
+      packed.push({ ...item, lane, lanes: laneEnds.length })
     }
-    return { ...item, lane }
-  })
-  return assigned.map(item => {
-    let lanes = item.lane + 1
-    for (const other of assigned) {
-      if (overlaps(item.clock, other.clock)) lanes = Math.max(lanes, other.lane + 1)
-    }
-    return { ...item, lanes }
-  })
+    // The group is sized by the lanes it used as a whole, so the count is final for every member.
+    const lanes = laneEnds.length
+    for (const item of packed.slice(packed.length - group.length)) item.lanes = lanes
+    group = []
+  }
+
+  for (const item of ordered) {
+    if (group.length && item.clock.start >= groupEnd) flush()
+    group.push(item)
+    groupEnd = group.length === 1 ? item.clock.end : Math.max(groupEnd, item.clock.end)
+  }
+  flush()
+  return packed
 }
 
 const weekdayFormat = new Intl.DateTimeFormat("es", { weekday: "short", timeZone: "UTC" })

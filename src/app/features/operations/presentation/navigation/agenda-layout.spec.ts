@@ -132,6 +132,29 @@ describe("agendaTimeGrid", () => {
     expect(grid.unplaced.map(item => item.orderId)).toEqual([17])
   })
 
+  it("gives every shift of a staggered overlap group the same lane count", () => {
+    // 09:00–10:00 only touches the 09:00–11:00 shift, yet the group it belongs to reaches three
+    // lanes. Sizing each card from its own neighbours made that first card 50% wide and let the
+    // third one cover part of it while both were clickable.
+    const staggered = agendaTimeGrid(
+      ["2024-02-29"],
+      [
+        entry(17, { startTime: "09:00", endTime: "10:00" }),
+        entry(22, { startTime: "09:00", endTime: "11:00" }),
+        entry(33, { startTime: "10:00", endTime: "12:00" }),
+        entry(44, { startTime: "10:00", endTime: "11:00" })
+      ]
+    )
+    expect(
+      staggered.columns[0].slots.map(slot => [slot.entry.orderId, slot.lane, slot.lanes])
+    ).toEqual([
+      [22, 0, 3],
+      [17, 1, 3],
+      [33, 1, 3],
+      [44, 2, 3]
+    ])
+  })
+
   it("gives simultaneous shifts their own lane and stacks sequential ones", () => {
     const overlapping = agendaTimeGrid(
       ["2024-02-29"],
