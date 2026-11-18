@@ -355,6 +355,54 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   line-height: 1.5;
 }
 
+/* Opt-in value badge tones: one global palette so CRM and Operations agree.
+   Unlayered on purpose, so the tone wins over the Helm outline utilities. */
+[data-slot="badge"][data-badge-tone] {
+  --badge-tone-bg: color-mix(in oklch, var(--muted-foreground) 12%, var(--paper));
+  --badge-tone-fg: var(--muted-ink);
+  --badge-tone-border: color-mix(in oklch, var(--muted-foreground) 24%, var(--paper));
+  background-color: var(--badge-tone-bg);
+  border-color: var(--badge-tone-border);
+  color: var(--badge-tone-fg);
+  font-weight: 600;
+}
+
+[data-slot="badge"][data-badge-tone="navy"] {
+  --badge-tone-bg: color-mix(in oklch, var(--navy) 10%, var(--paper));
+  --badge-tone-fg: var(--navy-deep);
+  --badge-tone-border: color-mix(in oklch, var(--navy) 26%, var(--paper));
+}
+
+[data-slot="badge"][data-badge-tone="blue"] {
+  --badge-tone-bg: oklch(0.97 0.018 262);
+  --badge-tone-fg: oklch(0.43 0.19 262);
+  --badge-tone-border: oklch(0.88 0.05 262);
+}
+
+[data-slot="badge"][data-badge-tone="amber"] {
+  --badge-tone-bg: color-mix(in oklch, var(--gold) 26%, var(--paper));
+  --badge-tone-fg: oklch(0.45 0.1 66);
+  --badge-tone-border: color-mix(in oklch, var(--gold) 55%, var(--paper));
+}
+
+[data-slot="badge"][data-badge-tone="green"] {
+  --badge-tone-bg: var(--fresh);
+  --badge-tone-fg: oklch(0.43 0.1 165);
+  --badge-tone-border: oklch(0.87 0.045 165);
+}
+
+[data-slot="badge"][data-badge-tone="teal"] {
+  --badge-tone-bg: oklch(0.96 0.03 205);
+  --badge-tone-fg: oklch(0.42 0.08 210);
+  --badge-tone-border: oklch(0.87 0.05 205);
+}
+
+[data-slot="badge"][data-badge-tone="coral"] {
+  --badge-tone-bg: color-mix(in oklch, var(--coral) 16%, var(--paper));
+  --badge-tone-fg: oklch(0.47 0.16 27);
+  --badge-tone-border: color-mix(in oklch, var(--coral) 42%, var(--paper));
+}
+
 /* Shared catalog rhythm, migrated from Users. Only projected catalog records opt in. */
 app-catalog-frame [hlmTable] {
   font-size: 0.75rem;
