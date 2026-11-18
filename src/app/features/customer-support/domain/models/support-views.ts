@@ -1,6 +1,11 @@
 // English projections of AtencionDtos, not substitutes for complete SQL entities.
-// State codes remain open strings (SQL has no CHECK); the current API documents
-// RECIBIDA, EN_REVISION, RESUELTA and CERRADA. Authorization stays on the backend.
+// The wire state is the backend's fixed `CodigoEstadoAtencion` enum; there is no
+// status catalog endpoint, so the closed set below is the only state vocabulary.
+// Authorization stays on the backend.
+export const SUPPORT_STATE_CODES = ["RECIBIDA", "EN_REVISION", "RESUELTA", "CERRADA"] as const
+
+export type SupportStateCode = (typeof SUPPORT_STATE_CODES)[number]
+
 export interface SupportRequestView {
   id: number
   customerId: number
@@ -10,7 +15,7 @@ export interface SupportRequestView {
   requestTypeId: number
   requestTypeName: string
   requiresResponse: boolean
-  state: string
+  state: SupportStateCode
   stateName: string
   subject: string
   description: string
