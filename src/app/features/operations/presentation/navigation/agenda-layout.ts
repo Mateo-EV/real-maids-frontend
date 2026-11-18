@@ -272,6 +272,17 @@ const clockRange = (entry: AgendaEntry): string =>
   `${entry.startTime} → ${entry.endTime ?? "No registrado"}`
 
 /**
+ * Names of the staff the API assigned to a shift. The backend decides who is assigned, so this only
+ * joins the supplied names; nobody is inferred from the order, the customer or the session.
+ */
+export function agendaStaffNames(entry: AgendaEntry): string {
+  const names = entry.assignedStaff
+    .map(member => member.name.trim())
+    .filter(name => name.length > 0)
+  return names.length ? names.join(", ") : "Sin personal asignado"
+}
+
+/**
  * The whole projection the query returned travels in the accessible label, so the compact card
  * never hides a supplied field and never invents one.
  */

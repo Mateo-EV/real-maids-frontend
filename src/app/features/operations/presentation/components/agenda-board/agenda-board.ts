@@ -15,6 +15,7 @@ import {
   AgendaSlot,
   agendaEntryLabel,
   agendaMonthCells,
+  agendaStaffNames,
   agendaStatusTone,
   agendaTimeGrid,
   hourLabel,
@@ -34,6 +35,10 @@ interface AgendaSlotView {
   readonly lanes: number
   readonly left: string
   readonly width: string
+  /** Supplied staff names, or the documented absence. */
+  readonly staff: string
+  readonly unassigned: boolean
+  readonly service: string
 }
 
 interface AgendaColumnView {
@@ -47,6 +52,8 @@ interface AgendaChipView {
   readonly entry: AgendaEntry
   readonly label: string
   readonly tone: string
+  /** Customer and assigned staff of the compact month chip. */
+  readonly meta: string
 }
 
 interface AgendaMonthCellView {
@@ -116,7 +123,6 @@ export class AgendaBoard {
   readonly monthCells = computed<readonly AgendaMonthCellView[]>(
     () => this.monthGrid()?.map(cell => this.monthCell(cell)) ?? []
   )
-  readonly dayView = computed(() => this.view() === "day")
   /**
    * Column and hour counts travel as CSS custom properties: the grid geometry lives in one CSS
    * rule instead of a per-run template style.
@@ -125,8 +131,20 @@ export class AgendaBoard {
     "--agenda-columns": String(Math.max(1, this.columns().length)),
     "--agenda-hours": String(Math.max(1, this.axis()?.hours.length ?? 1))
   }))
+  /**
+   * The drawn structure of the queried window: the board exists as soon as the window does, so a
+   * verified empty reading still shows the agenda instead of a sentence about no results.
+   */
   readonly hasContent = computed(
-    () => this.monthCells().length > 0 || this.axis() !== undefined || this.unplaced().length > 0
+    () => this.columns().length > 0 || this.monthCells().length > 0 || this.unplaced().length > 0
+  )
+  /** No shift of the window could be drawn: the agenda renders empty. */
+  readonly emptyBoard = computed(
+    () =>
+      this.hasContent() &&
+      !this.unplaced().length &&
+      !this.columns().some(column => column.slots.length > 0) &&
+      !this.monthCells().some(cell => cell.chips.length > 0)
   )
 
   select(entry: AgendaEntry): void {
@@ -136,21 +154,32 @@ export class AgendaBoard {
   }
 
   private chip(entry: AgendaEntry): AgendaChipView {
-    return { entry, label: agendaEntryLabel(entry), tone: agendaStatusTone(entry.status) }
+    return {
+      entry,
+      label: agendaEntryLabel(entry),
+      tone: agendaStatusTone(entry.status),
+      meta: `${entry.customerName} · ${agendaStaffNames(entry)}`
+    }
   }
 
   private slot(slot: AgendaSlot): AgendaSlotView {
+    const { entry } = slot
+    const assigned = entry.assignedStaff.some(member => member.name.trim().length > 0)
     return {
-      entry: slot.entry,
-      label: agendaEntryLabel(slot.entry),
-      tone: agendaStatusTone(slot.entry.status),
+      entry,
+      label: agendaEntryLabel(entry),
+      tone: agendaStatusTone(entry.status),
       top: slot.top,
       height: slot.height,
       lane: slot.lane,
       lanes: slot.lanes,
       // Two simultaneous orders share the lane area instead of hiding each other.
       left: `calc(${(slot.lane / slot.lanes) * 100}% + 2px)`,
-      width: `calc(${100 / slot.lanes}% - 4px)`
+      width: `calc(${100 / slot.lanes}% - 4px)`,
+      staff: agendaStaffNames(entry),
+      unassigned: !assigned,
+      // A service type the API did not supply prints nothing: the accessible label keeps the absence.
+      service: entry.serviceTypeName?.trim() ?? ""
     }
   }
 

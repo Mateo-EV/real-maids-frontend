@@ -3,6 +3,7 @@
     class="agenda-board"
     [style]="boardVars()"
     [attr.data-agenda-view]="view()"
+    [attr.data-agenda-empty]="emptyBoard() ? 'true' : null"
     [attr.aria-busy]="busy()"
   >
     @if (monthCells().length) {
@@ -38,8 +39,11 @@
                           [title]="chip.label"
                           (click)="select(chip.entry)"
                         >
-                          <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
-                          <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+                          <span class="agenda-chip__head">
+                            <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
+                            <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+                          </span>
+                          <span class="agenda-chip__meta">{{ chip.meta }}</span>
                         </button>
                       </li>
                     }
@@ -50,7 +54,7 @@
           }
         </div>
       </div>
-    } @else if (axis(); as hours) {
+    } @else {
       <div class="agenda-board__scroll">
         <div class="agenda-board__head">
           <div class="agenda-board__corner" aria-hidden="true"></div>
@@ -62,13 +66,15 @@
           }
         </div>
         <div class="agenda-board__body">
-          <div class="agenda-board__axis">
-            @for (hour of hours.hours; track hour) {
-              <span class="agenda-board__hour" [attr.data-agenda-hour]="hour">{{
-                hourLabel(hour)
-              }}</span>
-            }
-          </div>
+          @if (axis(); as hours) {
+            <div class="agenda-board__axis">
+              @for (hour of hours.hours; track hour) {
+                <span class="agenda-board__hour" [attr.data-agenda-hour]="hour">{{
+                  hourLabel(hour)
+                }}</span>
+              }
+            </div>
+          }
           <div class="agenda-board__lanes">
             @for (column of columns(); track column.date) {
               <div
@@ -94,16 +100,25 @@
                     [style.width]="slot.width"
                     (click)="select(slot.entry)"
                   >
-                    <span class="agenda-entry__code">{{ slot.entry.code }}</span>
+                    <span class="agenda-entry__head">
+                      <span class="agenda-entry__code">{{ slot.entry.code }}</span>
+                      <span class="agenda-entry__status">{{ slot.entry.status }}</span>
+                    </span>
                     <span class="agenda-entry__clock">
                       {{ slot.entry.startTime }} → {{ slot.entry.endTime ?? "No registrado" }}
                     </span>
-                    @if (dayView()) {
-                      <span class="agenda-entry__meta">
-                        {{ slot.entry.customerName }} · {{ slot.entry.propertyName }}
-                      </span>
+                    <span class="agenda-entry__customer">{{ slot.entry.customerName }}</span>
+                    @if (slot.entry.propertyName) {
+                      <span class="agenda-entry__property">{{ slot.entry.propertyName }}</span>
                     }
-                    <span class="agenda-entry__status">{{ slot.entry.status }}</span>
+                    <span
+                      class="agenda-entry__staff"
+                      [attr.data-unassigned]="slot.unassigned ? 'true' : null"
+                      >{{ slot.staff }}</span
+                    >
+                    @if (slot.service) {
+                      <span class="agenda-entry__service">{{ slot.service }}</span>
+                    }
                   </button>
                 }
               </div>
@@ -130,8 +145,11 @@
                 [title]="chip.label"
                 (click)="select(chip.entry)"
               >
-                <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
-                <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+                <span class="agenda-chip__head">
+                  <span class="agenda-chip__clock">{{ chip.entry.startTime }}</span>
+                  <span class="agenda-chip__code">{{ chip.entry.code }}</span>
+                </span>
+                <span class="agenda-chip__meta">{{ chip.meta }}</span>
               </button>
             </li>
           }

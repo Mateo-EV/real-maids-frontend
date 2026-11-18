@@ -78,6 +78,41 @@ describe("AgendaBoard", () => {
     expect(first.textContent).toContain("08:15:49.123456789")
     // The supplied status is printed, never only encoded as color.
     expect(first.textContent).toContain("PROGRAMADA")
+    // The card prints who works the shift and where, taken from the same projection.
+    expect(first.textContent).toContain("Personal suministrado")
+    expect(first.textContent).toContain("Cliente suministrado")
+    expect(first.textContent).toContain("Oficina suministrada")
+  })
+
+  it("prints the supplied detail on every card regardless of the view", async () => {
+    const s = await setup()
+    s.host.entries.set([{ ...agendaEntry(17), serviceTypeName: "Limpieza profunda" }])
+    await s.settle()
+    const card = () => s.element.querySelector('[data-agenda-order-id="17"]')!
+    for (const view of ["day", "week"] as const) {
+      s.host.view.set(view)
+      await s.settle()
+      // Clipping depends on the card's own height: no field is silently dropped by the view.
+      expect(card().textContent, view).toContain("Cliente suministrado")
+      expect(card().textContent, view).toContain("Oficina suministrada")
+      expect(card().textContent, view).toContain("Limpieza profunda")
+      expect(card().textContent, view).toContain("Personal suministrado")
+    }
+    // An assignment the API did not supply is stated as absence, never as a normal value.
+    s.host.entries.set([{ ...agendaEntry(17), assignedStaff: [] }])
+    await s.settle()
+    expect(card().textContent).toContain("Sin personal asignado")
+    expect(card().querySelector("[data-unassigned]")).not.toBeNull()
+  })
+
+  it("prints the customer and the staff on the compact month chip", async () => {
+    const s = await setup()
+    s.host.view.set("month")
+    s.host.entries.set([agendaEntry(17)])
+    await s.settle()
+    const chip = s.element.querySelector('[data-agenda-order-id="17"]')!
+    expect(chip.textContent).toContain("OS-17")
+    expect(chip.textContent).toContain("Cliente suministrado · Personal suministrado")
   })
 
   it("emits the real order id when a card is clicked", async () => {
@@ -187,10 +222,21 @@ describe("AgendaBoard", () => {
     expect(s.element.textContent?.trim()).toBe("")
   })
 
-  it("renders nothing for an agenda without entries", async () => {
+  it("draws the empty agenda of the queried window instead of a no-results sentence", async () => {
     const s = await setup()
     await s.settle()
-    expect(s.element.textContent?.trim()).toBe("")
+    // The window alone decides the structure: a verified empty reading still draws the board.
+    const board = s.element.querySelector(".agenda-board")
+    expect(board?.getAttribute("data-agenda-empty")).toBe("true")
+    expect(s.events()).toHaveLength(0)
+    expect(s.dates()).toEqual(["2024-02-29"])
+    // No shift, so no derived hour axis is invented for the empty surface.
+    expect(s.element.querySelectorAll("[data-agenda-hour]")).toHaveLength(0)
+    s.host.view.set("month")
+    await s.settle()
+    expect(s.events()).toHaveLength(0)
+    expect(s.dates()).toHaveLength(29)
+    expect(s.element.querySelector(".agenda-board")?.getAttribute("data-agenda-empty")).toBe("true")
   })
 
   it("does not render on the server", async () => {

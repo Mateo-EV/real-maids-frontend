@@ -22,6 +22,15 @@
   opacity: 0.72;
 }
 
+/*
+ * Verified empty window: the agenda itself is drawn, with no sentence about missing results. The
+ * hour rules are dropped because without shifts there is no derived axis to label them.
+ */
+.agenda-board[data-agenda-empty="true"] .agenda-board__lane {
+  min-height: 12rem;
+  background-image: none;
+}
+
 /* ── Day and week: hour axis plus one lane per queried date ─────────────────────────────── */
 
 .agenda-board__scroll {
@@ -99,17 +108,23 @@
   );
 }
 
-.agenda-entry {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
+/**
+ * Entry card and month chip share one surface; only their layout and density differ.
+ */
+.agenda-entry,
+.agenda-chip {
   overflow: hidden;
-  padding: 0.25rem 0.4rem;
+  padding: 0.2rem 0.4rem;
   border: 1px solid var(--agenda-tone-border, color-mix(in oklch, var(--primary) 40%, transparent));
   border-radius: calc(var(--radius) * 0.75);
-  background: var(--agenda-tone-soft, color-mix(in oklch, var(--primary) 10%, var(--card)));
+  /* The supplied state tints the surface and fades down, so a long shift still reads calm. */
+  background: linear-gradient(
+    to bottom,
+    var(--agenda-tone-soft, color-mix(in oklch, var(--primary) 10%, var(--card))),
+    color-mix(in oklch, var(--agenda-tone, var(--primary)) 5%, var(--card))
+  );
   font: inherit;
+  font-size: 0.6875rem;
   line-height: 1.15;
   text-align: left;
   color: var(--foreground);
@@ -117,6 +132,22 @@
   transition:
     background-color 120ms ease,
     border-color 120ms ease;
+}
+
+.agenda-entry {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  /* The state reads from the edge at a glance; the pill beside the code spells it out. */
+  border-left: 3px solid var(--agenda-tone, var(--primary));
+}
+
+.agenda-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  width: 100%;
 }
 
 /* Entry card and month chip share hover, ring and truncation behaviour. */
@@ -134,39 +165,100 @@
 }
 
 /* Every printed field truncates; the accessible label keeps the whole projection. */
+.agenda-entry__head,
+.agenda-chip__head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+}
+
+/* A narrow card stacks the status under the code instead of squeezing both to nothing. */
+.agenda-entry__head {
+  flex-wrap: wrap;
+  row-gap: 0.1rem;
+}
+
 .agenda-entry__code,
 .agenda-entry__clock,
-.agenda-entry__meta,
-.agenda-entry__status {
+.agenda-entry__customer,
+.agenda-entry__property,
+.agenda-entry__staff,
+.agenda-entry__service,
+.agenda-entry__status,
+.agenda-chip__code,
+.agenda-chip__meta {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .agenda-entry__code {
+  flex: 1 1 auto;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
+/* The state as a pill: the same tone as the edge, readable even on a one-line card. */
+.agenda-entry__status {
+  flex: 0 0 auto;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--agenda-tone-strong, var(--muted));
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--agenda-tone-ink, var(--muted-foreground));
+}
+
 .agenda-entry__clock {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
   color: var(--agenda-tone-ink, var(--muted-foreground));
 }
 
-.agenda-entry__meta {
-  font-size: 0.6875rem;
+/* Who the shift serves reads first; the place under it stays secondary. */
+.agenda-entry__customer {
+  font-weight: 600;
+}
+
+.agenda-entry__property,
+.agenda-entry__service {
   color: var(--muted-foreground);
 }
 
-.agenda-entry__status {
-  margin-top: auto;
-  font-size: 0.625rem;
-  font-weight: 600;
+.agenda-entry__staff {
+  font-weight: 500;
+}
+
+/* An assignment the API did not supply is stated as absence, not as a normal value. */
+.agenda-entry__staff[data-unassigned] {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+/* Field label drawn for the eye only: the card's accessible label already names every field. */
+.agenda-entry__staff::before,
+.agenda-entry__service::before {
+  margin-right: 0.3rem;
+  font-size: 0.5625rem;
+  font-weight: 400;
+  font-style: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--agenda-tone-ink, var(--muted-foreground));
+  color: var(--muted-foreground);
+}
+
+.agenda-entry__staff::before {
+  content: "Personal";
+}
+
+.agenda-entry__service::before {
+  content: "Servicio";
 }
 
 /* ── Month: Monday-first day table with a compact list per day ──────────────────────────── */
@@ -242,38 +334,24 @@
   list-style: none;
 }
 
-.agenda-chip {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  overflow: hidden;
-  width: 100%;
-  padding: 0.15rem 0.35rem;
-  border: 1px solid var(--agenda-tone-border, var(--border));
-  border-radius: calc(var(--radius) * 0.75);
-  background: var(--agenda-tone-soft, color-mix(in oklch, var(--muted) 60%, var(--card)));
-  font: inherit;
-  font-size: 0.6875rem;
-  text-align: left;
-  color: var(--foreground);
-  cursor: pointer;
-}
-
 .agenda-chip__clock {
+  flex: 0 0 auto;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--agenda-tone-ink, var(--muted-foreground));
 }
 
 .agenda-chip__code {
-  overflow: hidden;
+  flex: 1 1 auto;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.agenda-chip__meta {
+  font-size: 0.625rem;
+  color: var(--muted-foreground);
 }
 
 /* ── Returned shifts that carry no usable clock stay visible ────────────────────────────── */
-
 .agenda-board__unplaced {
   display: flex;
   flex-direction: column;
@@ -307,7 +385,7 @@
  */
 [data-tone] {
   --agenda-tone-soft: color-mix(in oklch, var(--agenda-tone) 12%, var(--card));
-  --agenda-tone-strong: color-mix(in oklch, var(--agenda-tone) 20%, var(--card));
+  --agenda-tone-strong: color-mix(in oklch, var(--agenda-tone) 30%, var(--card));
   --agenda-tone-border: color-mix(in oklch, var(--agenda-tone) 45%, transparent);
   --agenda-tone-ink: var(--agenda-tone);
 }

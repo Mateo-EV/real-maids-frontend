@@ -6,6 +6,7 @@ import {
   agendaEntryLabel,
   agendaHourAxis,
   agendaMonthCells,
+  agendaStaffNames,
   agendaStatusTone,
   agendaTimeGrid,
   civilWeekday,
@@ -230,6 +231,24 @@ describe("agendaEntryLabel", () => {
     expect(label).toContain("Cliente: Cliente suministrado")
     expect(label).toContain("Personal: Personal suministrado · ID 9 · responsable · No registrado")
     expect(agendaEntryLabel({ ...entry(17), assignedStaff: [] })).toContain("Sin personal asignado")
+  })
+})
+
+describe("agendaStaffNames", () => {
+  it("joins only the supplied staff names and states the documented absence", () => {
+    expect(agendaStaffNames(entry(17))).toBe("Personal suministrado")
+    expect(
+      agendaStaffNames(
+        entry(17, {
+          assignedStaff: [
+            { staffId: 9, name: "Ana", phone: null, role: "responsable" },
+            { staffId: 10, name: "   ", phone: null, role: "apoyo" },
+            { staffId: 11, name: "Luis", phone: "555", role: "apoyo" }
+          ]
+        })
+      )
+    ).toBe("Ana, Luis")
+    expect(agendaStaffNames(entry(17, { assignedStaff: [] }))).toBe("Sin personal asignado")
   })
 })
 

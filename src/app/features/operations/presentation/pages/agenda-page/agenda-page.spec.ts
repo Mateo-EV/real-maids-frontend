@@ -459,7 +459,11 @@ describe("AgendaPage current-week/day/month consumer", () => {
     await s.field("agenda-date", "2024-02-29")
     s.request().flush([])
     await s.settle()
-    expect(s.element.textContent).toContain("No se devolvieron servicios")
+    // A verified empty window draws the empty agenda itself, with no results sentence.
+    expect(s.element.textContent).not.toContain("No se devolvieron servicios")
+    const board = s.element.querySelector("app-agenda-board")!
+    expect(board.querySelector('[data-agenda-empty="true"]')).not.toBeNull()
+    expect(board.querySelectorAll("[data-agenda-entry]")).toHaveLength(0)
     expect(s.element.querySelector('[role="alert"]')).toBeNull()
   })
   it("preserves same-query verified rows on retry failure and retries only GET", async () => {
