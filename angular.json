@@ -29,12 +29,7 @@
                 "input": "public"
               }
             ],
-            "styles": [
-              "@ngxpert/hot-toast/styles.css",
-              "@fullcalendar/angular/skeleton.css",
-              "@fullcalendar/angular/themes/classic/theme.css",
-              "src/styles.css"
-            ],
+            "styles": ["@ngxpert/hot-toast/styles.css", "src/styles.css"],
             "server": "src/main.server.ts",
             "outputMode": "server",
             "security": {
