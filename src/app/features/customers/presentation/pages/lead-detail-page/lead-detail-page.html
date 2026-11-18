@@ -75,9 +75,14 @@
       }
       @if (lead(); as prospect) {
         <div class="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
-          <span hlmBadge variant="outline" class="self-start">{{
-            prospect.isConverted ? "Convertido" : "No convertido"
-          }}</span>
+          <span
+            hlmBadge
+            variant="outline"
+            class="self-start"
+            [appBadgeTone]="prospect.isConverted"
+            badgeToneKind="active-state"
+            >{{ prospect.isConverted ? "Convertido" : "No convertido" }}</span
+          >
           <dl class="grid min-w-0 gap-x-8 gap-y-5 sm:grid-cols-2">
             @for (field of profile(); track field[0]) {
               <div class="min-w-0">

@@ -9,6 +9,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { takeUntil } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -26,6 +27,7 @@ import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store
     CatalogFrame,
     HlmTableImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmEmptyImports,
     HlmAlertImports,
     HlmSpinnerImports,

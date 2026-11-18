@@ -22,6 +22,7 @@ import {
   tap
 } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -49,6 +50,7 @@ import { CustomerPreferences } from "../../components/customer-preferences/custo
     CatalogFrame,
     HlmButtonImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmAlertImports,
     HlmEmptyImports,
     HlmSpinnerImports,

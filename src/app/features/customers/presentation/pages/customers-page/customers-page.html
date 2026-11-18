@@ -79,9 +79,13 @@
                 <tr hlmTr>
                   <td hlmTd class="font-semibold">{{ customer.name }}</td>
                   <td hlmTd>
-                    <span hlmBadge variant="outline">{{
-                      customer.type === "residencial" ? "Residencial" : "Comercial"
-                    }}</span>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="customer.type"
+                      badgeToneKind="customer-type"
+                      >{{ customer.type === "residencial" ? "Residencial" : "Comercial" }}</span
+                    >
                   </td>
                   <td hlmTd>{{ customer.email ?? "No registrado" }}</td>
                   <td hlmTd>{{ customer.phone ?? "No registrado" }}</td>
@@ -101,9 +105,13 @@
             <li class="min-w-0 rounded-xl border p-4">
               <div class="flex items-center gap-3">
                 <h2 class="min-w-0 flex-1 font-semibold break-words">{{ customer.name }}</h2>
-                <span hlmBadge variant="outline">{{
-                  customer.type === "residencial" ? "Residencial" : "Comercial"
-                }}</span>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  [appBadgeTone]="customer.type"
+                  badgeToneKind="customer-type"
+                  >{{ customer.type === "residencial" ? "Residencial" : "Comercial" }}</span
+                >
               </div>
               <dl class="my-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
                 <dt class="text-muted-foreground">Correo</dt>

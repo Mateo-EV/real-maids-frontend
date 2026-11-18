@@ -63,9 +63,13 @@
                   <td hlmTd class="font-semibold">{{ origin.name }}</td>
                   <td hlmTd>{{ origin.description ?? "Sin descripción" }}</td>
                   <td hlmTd>
-                    <span hlmBadge variant="outline">{{
-                      origin.isActive ? "Activo" : "Inactivo"
-                    }}</span>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="origin.isActive"
+                      badgeToneKind="active-state"
+                      >{{ origin.isActive ? "Activo" : "Inactivo" }}</span
+                    >
                   </td>
                 </tr>
               }
@@ -77,9 +81,13 @@
             <li class="min-w-0 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-3">
                 <h2 class="min-w-0 flex-1 font-semibold break-words">{{ origin.name }}</h2>
-                <span hlmBadge variant="outline">{{
-                  origin.isActive ? "Activo" : "Inactivo"
-                }}</span>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  [appBadgeTone]="origin.isActive"
+                  badgeToneKind="active-state"
+                  >{{ origin.isActive ? "Activo" : "Inactivo" }}</span
+                >
               </div>
               <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
                 <dt class="text-muted-foreground">Descripción</dt>

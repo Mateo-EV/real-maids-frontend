@@ -11,6 +11,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { Observable, Subscription, takeUntil } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
@@ -22,7 +23,14 @@ import { CustomerHistoryStore } from "../../state/customer-history.store"
 @Component({
   selector: "app-customer-history-panel",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButtonImports, HlmAlertImports, HlmBadgeImports, HlmEmptyImports, HlmSpinnerImports],
+  imports: [
+    HlmButtonImports,
+    HlmAlertImports,
+    HlmBadgeImports,
+    BadgeTone,
+    HlmEmptyImports,
+    HlmSpinnerImports
+  ],
   templateUrl: "./customer-history-panel.html"
 })
 export class CustomerHistoryPanel implements OnInit {

@@ -17,6 +17,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router"
 import { leadPageContext } from "./lead-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmTableImports } from "@spartan-ng/helm/table"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
@@ -47,6 +48,7 @@ import { LeadDeleteDialog } from "../../components/lead-delete-dialog/lead-delet
     HlmButtonImports,
     HlmTableImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmEmptyImports,
     HlmAlertImports,
     HlmSpinnerImports,

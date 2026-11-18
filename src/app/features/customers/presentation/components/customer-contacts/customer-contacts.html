@@ -120,7 +120,13 @@
 </app-catalog-frame>
 <ng-template #status let-contact>
   <div class="flex flex-wrap gap-2">
-    <span hlmBadge variant="outline">{{ contact.isActive ? "Activo" : "Inactivo" }}</span>
+    <span
+      hlmBadge
+      variant="outline"
+      [appBadgeTone]="contact.isActive"
+      badgeToneKind="active-state"
+      >{{ contact.isActive ? "Activo" : "Inactivo" }}</span
+    >
     @if (contact.isPrimary) {
       <span hlmBadge variant="secondary">Principal</span>
     }

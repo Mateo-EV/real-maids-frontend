@@ -22,6 +22,7 @@ import {
   CatalogFilters
 } from "@/app/shared/components/catalog-filters/catalog-filters"
 import { HlmTableImports } from "@spartan-ng/helm/table"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
@@ -49,6 +50,7 @@ import { CustomerStatusDialog } from "../../components/customer-status-dialog/cu
     CatalogFilters,
     HlmTableImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmEmptyImports,
     HlmAlertImports,
     HlmSpinnerImports,

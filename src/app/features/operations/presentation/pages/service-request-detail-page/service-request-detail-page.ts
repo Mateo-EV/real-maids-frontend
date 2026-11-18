@@ -10,6 +10,7 @@ import {
 } from "@angular/router"
 import { distinctUntilChanged, EMPTY, map, startWith, Subject, switchMap } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
@@ -59,6 +60,7 @@ import {
     CatalogFrame,
     HlmAlertImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmButtonImports,
     HlmSpinnerImports
   ],

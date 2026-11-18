@@ -97,7 +97,13 @@
                   <td hlmTd class="whitespace-normal break-words">{{ request.propertyName }}</td>
                   <td hlmTd class="whitespace-normal break-words">{{ request.serviceTypeName }}</td>
                   <td hlmTd>
-                    <span hlmBadge variant="outline">{{ request.status }}</span>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="request.status"
+                      badgeToneKind="request-status"
+                      >{{ request.status }}</span
+                    >
                   </td>
                   <td hlmTd>{{ request.desiredDate ?? "No registrado" }}</td>
                   <td hlmTd>
@@ -129,7 +135,13 @@
                 <h2 class="min-w-0 flex-1 font-semibold break-words">
                   {{ request.customerName }}
                 </h2>
-                <span hlmBadge variant="outline">{{ request.status }}</span>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  [appBadgeTone]="request.status"
+                  badgeToneKind="request-status"
+                  >{{ request.status }}</span
+                >
               </div>
               <p class="mt-1 text-xs text-muted-foreground">Solicitud #{{ request.id }}</p>
               <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">

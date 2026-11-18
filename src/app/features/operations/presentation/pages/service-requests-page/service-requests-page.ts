@@ -5,6 +5,7 @@ import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucidePlus } from "@ng-icons/lucide"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -72,6 +73,7 @@ interface CustomerPickerRequest {
     TablePagination,
     HlmAlertImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmButtonImports,
     HlmEmptyImports,
     HlmSpinnerImports,

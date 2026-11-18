@@ -140,15 +140,31 @@
                     <td hlmTd>{{ lead.email ?? "No registrado" }}</td>
                     <td hlmTd>{{ lead.phone ?? "No registrado" }}</td>
                     <td hlmTd>
-                      <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                      <span
+                        hlmBadge
+                        variant="outline"
+                        [appBadgeTone]="originLabel(lead.originId)"
+                        badgeToneKind="catalog-name"
+                        >{{ originLabel(lead.originId) }}</span
+                      >
                     </td>
                     <td hlmTd>
-                      <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                      <span
+                        hlmBadge
+                        variant="outline"
+                        [appBadgeTone]="stageLabel(lead.stageId)"
+                        badgeToneKind="catalog-name"
+                        >{{ stageLabel(lead.stageId) }}</span
+                      >
                     </td>
                     <td hlmTd>
-                      <span hlmBadge variant="outline">{{
-                        lead.isConverted ? "Convertido" : "No convertido"
-                      }}</span>
+                      <span
+                        hlmBadge
+                        variant="outline"
+                        [appBadgeTone]="lead.isConverted"
+                        badgeToneKind="active-state"
+                        >{{ lead.isConverted ? "Convertido" : "No convertido" }}</span
+                      >
                     </td>
                     <td hlmTd>
                       <div class="flex flex-wrap items-center gap-1">
@@ -186,9 +202,13 @@
               <li class="min-w-0 rounded-xl border p-4">
                 <div class="flex flex-wrap items-center gap-3">
                   <h2 class="min-w-0 flex-1 font-semibold break-words">{{ lead.name }}</h2>
-                  <span hlmBadge variant="outline">{{
-                    lead.isConverted ? "Convertido" : "No convertido"
-                  }}</span>
+                  <span
+                    hlmBadge
+                    variant="outline"
+                    [appBadgeTone]="lead.isConverted"
+                    badgeToneKind="active-state"
+                    >{{ lead.isConverted ? "Convertido" : "No convertido" }}</span
+                  >
                 </div>
                 <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
                   <dt class="text-muted-foreground">Correo</dt>
@@ -197,11 +217,23 @@
                   <dd class="break-words">{{ lead.phone ?? "No registrado" }}</dd>
                   <dt class="text-muted-foreground">Origen</dt>
                   <dd>
-                    <span hlmBadge variant="outline">{{ originLabel(lead.originId) }}</span>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="originLabel(lead.originId)"
+                      badgeToneKind="catalog-name"
+                      >{{ originLabel(lead.originId) }}</span
+                    >
                   </dd>
                   <dt class="text-muted-foreground">Etapa</dt>
                   <dd>
-                    <span hlmBadge variant="outline">{{ stageLabel(lead.stageId) }}</span>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="stageLabel(lead.stageId)"
+                      badgeToneKind="catalog-name"
+                      >{{ stageLabel(lead.stageId) }}</span
+                    >
                   </dd>
                 </dl>
                 <div class="mt-4 flex flex-wrap items-center gap-1">

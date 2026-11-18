@@ -15,6 +15,7 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmTableImports } from "@spartan-ng/helm/table"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -36,6 +37,7 @@ import { ContactEditor } from "../contact-editor/contact-editor"
     HlmButtonImports,
     HlmTableImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmAlertImports,
     HlmEmptyImports,
     HlmSpinnerImports

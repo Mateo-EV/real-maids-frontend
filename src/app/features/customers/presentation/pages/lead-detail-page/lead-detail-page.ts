@@ -16,6 +16,7 @@ import { distinctUntilChanged, EMPTY, map, startWith, Subject, switchMap } from 
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
@@ -37,6 +38,7 @@ import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
     HlmAlertImports,
     HlmSpinnerImports,
     HlmBadgeImports,
+    BadgeTone,
     LeadFollowUps
   ],
   templateUrl: "./lead-detail-page.html"

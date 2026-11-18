@@ -48,7 +48,9 @@
         </button>
       }
       @if (customer(); as c) {
-        <span hlmBadge variant="outline">{{ c.isActive ? "Activo" : "Inactivo" }}</span>
+        <span hlmBadge variant="outline" [appBadgeTone]="c.isActive" badgeToneKind="active-state">{{
+          c.isActive ? "Activo" : "Inactivo"
+        }}</span>
         <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
           @for (field of profile(); track field[0]) {
             <div class="min-w-0">
@@ -141,9 +143,14 @@
                           class="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
                         >
                           <span class="font-semibold">{{ p.alias ?? p.address }}</span>
-                          <span hlmBadge variant="outline" class="ml-3">{{
-                            p.isActive ? "Activa" : "Inactiva"
-                          }}</span>
+                          <span
+                            hlmBadge
+                            variant="outline"
+                            class="ml-3"
+                            [appBadgeTone]="p.isActive"
+                            badgeToneKind="active-state"
+                            >{{ p.isActive ? "Activa" : "Inactiva" }}</span
+                          >
                           <span class="mt-1 block text-sm text-muted-foreground"
                             >{{ p.address }} · Ver detalle</span
                           >

@@ -35,6 +35,7 @@ import {
   tap
 } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
+import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
@@ -72,6 +73,7 @@ type DetailField = readonly [label: string, value: string | number | null]
     CatalogFrame,
     HlmAlertImports,
     HlmBadgeImports,
+    BadgeTone,
     HlmButtonImports,
     HlmEmptyImports,
     HlmSpinnerImports
