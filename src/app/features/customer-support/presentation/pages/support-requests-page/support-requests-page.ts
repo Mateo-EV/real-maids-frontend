@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { NavigationStart, Router } from "@angular/router"
+import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
 import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
@@ -28,6 +28,7 @@ import { CustomerSupportError } from "../../../domain/errors/customer-support.er
 import { SUPPORT_STATE_CODES } from "../../../domain/models/support-views"
 import { SupportRequestQuery } from "../../../domain/params/customer-support.params"
 import { SupportRequestsStore } from "../../state/support-requests.store"
+import { supportPageContext, supportPagingParams } from "../support-page-context"
 
 type Query = Required<PaginationParams> & SupportRequestQuery
 
@@ -70,6 +71,7 @@ interface CustomerPickerRequest {
     HlmNativeSelectImports,
     HlmSpinnerImports,
     HlmTableImports,
+    RouterLink,
     TablePagination
   ],
   templateUrl: "./support-requests-page.html"
@@ -77,9 +79,11 @@ interface CustomerPickerRequest {
 export class SupportRequestsPage implements OnInit {
   private readonly store = inject(SupportRequestsStore)
   private readonly customers = inject(CustomersStore)
+  private readonly route = inject(ActivatedRoute)
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
-  private readonly requested = signal<Query>({ offset: 0, limit: 20 })
+  // The linked page, not the filters: in-memory filters never travel in the URL.
+  private readonly requested = signal<Query>(supportPageContext(this.route.snapshot.queryParamMap))
   private readonly admissionError = signal<CustomerSupportError | undefined>(undefined)
   protected readonly filters = signal<FilterValues>(noFilters)
   /** Captured labels so an already-chosen filter never disappears from its own control. */
@@ -125,6 +129,7 @@ export class SupportRequestsPage implements OnInit {
     const page = this.result()
     return page ? { offset: page.offset, limit: page.limit } : this.requested()
   })
+  readonly paging = computed(() => supportPagingParams(this.query()))
   readonly currentPage = computed(() => this.query().offset / this.query().limit + 1)
   readonly pageCount = computed(() =>
     Math.max(1, Math.ceil((this.result()?.total ?? 0) / this.query().limit))

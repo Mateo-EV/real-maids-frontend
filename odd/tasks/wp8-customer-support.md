@@ -139,6 +139,16 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   La corrección se verificó observando RED real: al revertir las dos líneas de producción fallan
   exactamente los tres tests nuevos (75/75 → 3 fallas → 75/75). Aprobación de review ≠ autorización
   de entrega: commit, push y PR siguen siendo política ordinaria del repo.
+- **L14.** T5 en curso. Dos conflictos de la misma clase: specs que fijan *la ausencia del slice
+  siguiente* (`CUSTOMER_SUPPORT_ROUTES` con largo 1 y «no hay enlace de fila todavía»). Ambos eran
+  marcadores de frontera legítimos de T4 y ambos hubo que reescribirlos en T5. Resueltos con la
+  opción A en cada caso: sólo la aserción de conteo/enlace y su comentario, nada más. Regla que queda
+  para los próximos slices: no fijar en un test la inexistencia del slice siguiente; la frontera se
+  documenta en el README y en este archivo, no como aserción.
+- **L15.** Review nativo de T4 **diferido, no rechazado**: el proveedor exige fijar el inventario de
+  archivos sin seguimiento, y ese inventario cambia mientras el worker de T5 escribe. Reintentar en
+  cada cambio es churn y quema intentos. Se reintenta cuando el árbol esté quieto (worker terminado
+  y sin archivos a medio escribir).
 - **L13.** T4 entregado: ruta lazy protegida `/admin/support` con su scope completo de toasts, bandeja
   con filtros server-side (estado, tipo, cliente, desde/hasta), tabla en desktop y tarjetas en móvil,
   metadata efectiva del servidor y una única recuperación acotada; entrada `Soporte` en General

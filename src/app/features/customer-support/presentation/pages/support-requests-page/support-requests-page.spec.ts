@@ -179,8 +179,19 @@ describe("SupportRequestsPage inbox", () => {
       expect(records.textContent).toContain("2026-03-02T04:30:00.000Z")
       expect(records.textContent).toMatch(/requiere respuesta/i)
       expect(records.querySelector("b")).toBeNull()
-      // T4 boundary: no row link exists until the T5 detail consumer does.
-      expect(records.querySelector("a")).toBeNull()
+      // T5 boundary: every row links to its own detail with only the paging context the
+      // list owns; the in-memory filters stay out of the URL.
+      const rowLinks = Array.from(
+        records.querySelectorAll<HTMLAnchorElement>('a[href^="/admin/support/"]')
+      )
+      expect(rowLinks, selector).toHaveLength(1)
+      const rowUrl = new URL(rowLinks[0].getAttribute("href")!, "https://app.example.test")
+      expect(rowUrl.pathname).toBe("/admin/support/17")
+      expect(Array.from(rowUrl.searchParams.keys()).sort()).toEqual(["limit", "offset"])
+      expect([rowUrl.searchParams.get("offset"), rowUrl.searchParams.get("limit")]).toEqual([
+        "0",
+        "20"
+      ])
     }
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(1)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(1)

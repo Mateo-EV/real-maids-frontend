@@ -29,14 +29,15 @@ describe("Customer support route group", () => {
   const entry = () => CUSTOMER_SUPPORT_ROUTES[0]
 
   it("lazily opens one guarded inbox under the protected admin shell", async () => {
-    expect(CUSTOMER_SUPPORT_ROUTES).toHaveLength(1)
+    expect(CUSTOMER_SUPPORT_ROUTES).toHaveLength(2)
     const route = entry()
     expect(route.canActivate).toEqual([authGuard])
     expect(route.path).toBe("")
     expect(route.loadComponent).toBeTypeOf("function")
     expect(route.component).toBeUndefined()
     expect(await route.loadComponent!()).toBe(SupportRequestsPage)
-    // T4 boundary: no row link and no detail route exist yet.
+    // T5 boundary: the group keeps this inbox route untouched and adds the guarded `:id`
+    // detail as a sibling; its shape is asserted by the detail navigation spec.
     expect(route.children).toBeUndefined()
   })
 
