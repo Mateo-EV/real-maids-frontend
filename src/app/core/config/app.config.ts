@@ -35,6 +35,7 @@ import { CustomerHistoryRepositoryImpl } from "@/app/features/customers/infrastr
 
 import { provideFieldOperationsReads } from "@/app/features/field-operations/field-operations.providers"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
+import { provideCustomerSupportReads } from "@/app/features/customer-support/customer-support.providers"
 import { provideServiceCatalogReads } from "@/app/features/service-catalog/service-catalog.providers"
 
 export const appConfig: ApplicationConfig = {
@@ -46,6 +47,7 @@ export const appConfig: ApplicationConfig = {
     { provide: API_URL, useValue: environment.apiUrl },
     provideFieldOperationsReads(),
     provideOperationsRequestReads(),
+    provideCustomerSupportReads(),
     provideServiceCatalogReads(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
