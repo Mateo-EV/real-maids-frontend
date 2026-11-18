@@ -86,6 +86,27 @@ pantallas.
 | T9 | ~~Variante de cliente propio~~ — movida a WP10 por D3 | D3, S6 | — |
 | T10 | Documentación y evidencia (README, product guide, roadmap, suite, SSR, Prettier) | S12 | inline |
 
+## Slices de entrega
+
+Estrategia: una unidad revisable por grupo de tareas, en la rama `feat/wp8-customer-support`.
+Publicar, abrir PR y mergear sigue siendo decisión del humano; acá sólo se registran las fronteras.
+Cada slice incluye sus specs, porque en este repo los tests acompañan al comportamiento y no se
+separan en un commit propio.
+
+| Slice | Commit | Contenido | Líneas |
+| --- | --- | --- | --- |
+| S-1 | `d183d19` | Documento de feature (specs, decisiones, tasks) | 110 |
+| S-2 | `0e282d0` | Transporte HTTP + validación de DTOs + specs (T1) | 790 |
+| S-3 | `040f7d9` | Repositorio, casos de uso, `useExisting` y composición root + specs (T2) | 329 |
+| S-4 | `744c78a` | Store raíz de lecturas con TTL 30000 ms + specs (T3) | 856 |
+
+El objetivo de ~400 líneas se mide sobre código más specs, y acá los specs son la mitad del
+volumen: S-2 son 421 líneas de pruebas de transporte con sus negativos malformados, y S-4 son 643
+entre spec y fixtures del store. Separarlas en un commit aparte violaria la regla del repo de que el
+test viaja con el comportamiento, así que se acepta el tamaño y se declara acá. Fronteras siguientes:
+T4 (bandeja) sin navegación de fila todavía — los enlaces de fila y la ruta de detalle llegan en T5
+para no dejar enlaces muertos — y después T5–T7 por consumidor.
+
 ## Log
 
 - **L1.** Pedido del usuario, textual: "ok continuemos conn lo recomendado que es wp8, luego iremos
@@ -98,6 +119,23 @@ pantallas.
   estados de S4, las transiciones de S5, los permisos de S6 y los DTOs de S8. Hallazgo: tres métodos
   del contrato de dominio actual (`getStatuses`, `getSurveyByOrder`, `submitSurvey`) no tienen
   endpoint; no se cablean (S4, S9).
+- **L9.** Verificación del padre sobre S-4: suite de la feature 101/101 en 5 archivos, `tsc` app y
+  spec exit 0, Prettier correcto en `presentation/`. Revisión propia del store: `expireOnError` sólo
+  pone `expires: 0` (`shared/state/keyed-reads.ts:230`), no borra el dato — el resultado verificado
+  sobrevive a una revalidación fallida, que es lo que pide S11; y el vocabulario de estados se importa
+  de `SUPPORT_STATE_CODES`, no se duplica.
+- **L10.** Assess nativo del slice comprometido (`e2aae2d..HEAD`): riesgo `medium`, `reviewDue: false`
+  por presupuesto, sin verificador independiente. No es aprobación ni aceptación; es la clasificación
+  del candidato.
+- **L7.** Verificación del padre sobre S-2/S-3: `ng test --include` de la feature más
+  `app.config.spec.ts` → 92/92 en 5 archivos; `tsc -p tsconfig.app.json` y `tsc -p tsconfig.spec.json`
+  → exit 0. La revisión del padre confirma que la consistencia de página (`items.length` contra
+  `total`, `totalPaginas` contra `ceil(total/size)`) es la misma regla que ya usa `operations`, no
+  un criterio nuevo del worker.
+- **L8.** Deuda preexistente, no tocada: `prettier --check` falla en 9 archivos del `domain/` que
+  este slice no modificó (entidades, params, repositorio y los dos specs de dominio). Se dejaron
+  como estaban: la política del repo pide formatear sólo los archivos tocados. Queda registrado para
+  no confundirlo con una regresión de WP8.
 - **L6.** Decisión **D3** del humano: «Sólo el consumidor de personal (recomendado)». El transporte y
   el store se escriben agnósticos de audiencia; la UI de cliente pasa a WP10 y T9 se retira de este
   documento.
