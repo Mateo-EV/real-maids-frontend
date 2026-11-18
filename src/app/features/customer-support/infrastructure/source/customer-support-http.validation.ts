@@ -129,6 +129,9 @@ export function requestPagination(query: SupportRequestQuery) {
   if (
     !integer(offset) ||
     !positiveId(limit) ||
+    // The backend caps a page at 100 rows. Asking for more would make it return a
+    // different offset than the requested one, silently, so the request is refused.
+    limit > 100 ||
     offset % limit !== 0 ||
     offset / limit > 2147483647 ||
     (query.state !== undefined && typeof query.state !== "string") ||
@@ -164,7 +167,9 @@ export function requestPage(
     !integer(page) ||
     page !== requested.pagina ||
     !positiveId(size) ||
-    size > Math.min(100, requested.tamanio) ||
+    // The requested size is within the backend maximum, so any other effective size
+    // means the rows do not start at the offset the caller asked for.
+    size !== requested.tamanio ||
     !integer(total) ||
     !Number.isSafeInteger(page * size) ||
     !integer(p["totalPaginas"]) ||

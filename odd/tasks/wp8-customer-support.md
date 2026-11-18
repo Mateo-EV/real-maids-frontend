@@ -53,6 +53,13 @@ pantallas.
 - **S11.** Presentación: `CatalogFrame` + `CatalogFilters` + registros responsivos, estados de
   carga/vacío/error/stale/reintento independientes, paginación server-side con metadata efectiva y una
   única recuperación acotada de página fuera de rango por acción del usuario.
+- **S13.** Corrección obligada por el review nativo (hallazgo `R3-001`, CRITICAL, lente
+  `reliability`, confirmado por el refuter adversarial): el tamaño de página pedido al backend no
+  puede superar el máximo de 100, porque el servidor lo recorta y entonces `pagina` deja de
+  corresponder al `offset` pedido — se devolvían registros equivocados como éxito. Además, como el
+  tamaño pedido ya está dentro del máximo, una respuesta con tamaño efectivo distinto se rechaza
+  como respuesta inválida en vez de adoptarla con otro offset. El store aplica la misma cota antes
+  de admitir una clave, para no aceptar consultas que siempre van a fallar.
 - **S12.** Documentación y evidencia: `README` de la feature, `docs/README.md` (producto) y
   `docs/implementation-roadmap.md` (WP8) actualizados con lo implementado frente a lo pendiente; specs
   deterministas por capa, suite, build de producción con SSR y Prettier. Sin afirmar aceptación
@@ -124,6 +131,14 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   pone `expires: 0` (`shared/state/keyed-reads.ts:230`), no borra el dato — el resultado verificado
   sobrevive a una revalidación fallida, que es lo que pide S11; y el vocabulario de estados se importa
   de `SUPPORT_STATE_CODES`, no se duplica.
+- **L11.** Review nativo del slice: consentimiento `granted` del humano, tres lentes corridas
+  (risk, resilience, reliability), refuter adversarial requerido y **un hallazgo CRITICAL
+  confirmado** (`R3-001`, `causal_disposition: introduced`, `evidence_class: deterministic`): con
+  `offset 400` y `limit 200` se enviaba `pagina=2`; si el backend recorta el tamaño a 100, las filas
+  empiezan en el offset 200 y la validación lo aceptaba como éxito. Corregido según S13. El test que
+  antes fijaba ese comportamiento incorrecto se reemplazó por tres reglas: el offset pedido se
+  preserva, un tamaño efectivo distinto es respuesta inválida, y un tamaño pedido mayor a 100 se
+  rechaza sin despachar HTTP.
 - **L10.** Assess nativo del slice comprometido (`e2aae2d..HEAD`): riesgo `medium`, `reviewDue: false`
   por presupuesto, sin verificador independiente. No es aprobación ni aceptación; es la clasificación
   del candidato.

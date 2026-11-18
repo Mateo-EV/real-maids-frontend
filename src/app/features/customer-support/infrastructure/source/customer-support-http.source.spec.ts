@@ -99,26 +99,40 @@ describe("CustomerSupportHttpSource read transport", () => {
     expect(await pending).toEqual(Result.success({ items: [], total: 0, offset: 40, limit: 20 }))
   })
 
-  it("adopts the effective server metadata instead of the requested paging", async () => {
-    const pending = firstValueFrom(source.getRequests({ offset: 400, limit: 200 }))
+  it("keeps the requested offset by adopting the server totals of that page", async () => {
+    const pending = firstValueFrom(source.getRequests({ offset: 400, limit: 100 }))
     const request = http.expectOne(r => r.url === supportRequestsUrl)
-    expect(paramsOf(request)).toEqual({ pagina: "2", tamanio: "200" })
+    expect(paramsOf(request)).toEqual({ pagina: "4", tamanio: "100" })
     request.flush(
-      pageOf([atencionDto({ idAtencion: 18 }), atencionDto()], {
-        pagina: 2,
+      pageOf([atencionDto({ idAtencion: 18 })], {
+        pagina: 4,
         tamanio: 100,
-        totalElementos: 202,
-        totalPaginas: 3
+        totalElementos: 401,
+        totalPaginas: 5
       })
     )
     expect(await pending).toEqual(
-      Result.success({
-        items: [atencionView({ id: 18 }), atencionView()],
-        total: 202,
-        offset: 200,
-        limit: 100
+      Result.success({ items: [atencionView({ id: 18 })], total: 401, offset: 400, limit: 100 })
+    )
+  })
+
+  it("refuses a page the server resized, because its rows are not the requested offset", async () => {
+    const pending = firstValueFrom(source.getRequests({ offset: 0, limit: 100 }))
+    http.expectOne(r => r.url === supportRequestsUrl).flush(
+      pageOf([atencionDto(), atencionDto({ idAtencion: 18 })], {
+        pagina: 0,
+        tamanio: 50,
+        totalElementos: 2,
+        totalPaginas: 1
       })
     )
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
+
+  it("refuses a page size above the backend maximum instead of shifting the offset", async () => {
+    const pending = firstValueFrom(source.getRequests({ offset: 400, limit: 200 }))
+    http.expectNone(() => true)
+    expect(await pending).toMatchObject({ success: false, error: { code: "VALIDATION" } })
   })
 
   it.each([

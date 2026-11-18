@@ -330,6 +330,8 @@ describe("SupportRequestsStore root consumer-owned support reads", () => {
         { offset: 1, limit: 20 },
         { limit: 0 },
         { limit: 1.5 },
+        { limit: 101 },
+        { offset: 400, limit: 200 },
         { limit: 2147483648 },
         { offset: 2147483648, limit: 1 },
         { customerId: 0 },

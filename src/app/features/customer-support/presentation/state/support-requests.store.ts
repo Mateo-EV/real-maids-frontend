@@ -70,6 +70,7 @@ const normalize = (query: SupportRequestQuery): SupportRequestQuery | undefined 
       !Number.isSafeInteger(offset) ||
       offset < 0 ||
       !positiveId(limit) ||
+      limit > 100 ||
       offset % limit !== 0 ||
       offset / limit > 2147483647 ||
       (state !== undefined && typeof state !== "string") ||
