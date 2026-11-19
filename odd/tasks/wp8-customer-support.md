@@ -87,9 +87,9 @@ pantallas.
 | T3 | Store raíz de lecturas con TTL 30000 ms, frescura por éxito y fencing de sesión/SSR | D2, S10 | inline |
 | T4 | Consumidor de bandeja en `/admin/support`: filtros, listado responsivo y paginación efectiva | D1, S11 | worker |
 | T5 | Detalle con seguimiento (texto literal, instantes UTC, autor redactado) y enlace a la orden | S7, S11 | worker |
-| T6 | Alta de atención (personal): tipo desde catálogo real, asunto/descripción con límites | S3, S8, S6 | worker |
-| T7 | Registrar seguimiento y cambiar estado con las transiciones del backend, sin predecirlas | S5, S6 | worker |
-| T8 | Escrituras en el store raíz: coordinación de pendientes, invalidación confirmada | S10, S11 | inline |
+| T6 | Transporte y aplicación de las tres escrituras: alta, respuesta y cambio de estado | S3, S5, S6, S8 | worker |
+| T7 | Store raíz: compuerta de pendientes compartida e invalidación confirmada; el alta no siembra el detalle | S10, S11 | worker |
+| T8 | Consumidores de escritura: alta, respuesta y cambio de estado sobre el registro cargado | S5, S6, S11 | worker |
 | T9 | ~~Variante de cliente propio~~ — movida a WP10 por D3 | D3, S6 | — |
 | T10 | Documentación y evidencia (README, product guide, roadmap, suite, SSR, Prettier) | S12 | inline |
 
@@ -141,6 +141,21 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   La corrección se verificó observando RED real: al revertir las dos líneas de producción fallan
   exactamente los tres tests nuevos (75/75 → 3 fallas → 75/75). Aprobación de review ≠ autorización
   de entrega: commit, push y PR siguen siendo política ordinaria del repo.
+- **L19.** T7 (store de escrituras) entregado: las tres acciones viven en el store raíz detrás de
+  **una** compuerta de pendientes compartida (un segundo submit se rechaza con `CONFLICT`, no se
+  despacha), la validación ocurre antes de tomar la compuerta, y sólo un éxito confirmado de la
+  generación actual invalida todas las páginas y el detalle afectado; las claves observadas releen
+  una vez y las inactivas sólo expiran. Decisión aceptada sobre el registro recién creado:
+  **invalidar, nunca sembrar** — la entrada de detalle significa “resultado verificado de un GET que
+  un consumidor realmente pidió”, y sembrarla desde la respuesta de un POST le daría datos frescos a
+  una clave que nadie consultó. Consecuencia asumida: tras crear, la pantalla hace su propio GET y
+  no aparece una fila optimista.
+- **L18.** Decisión del humano sobre la deuda de review: **continuar con el hueco declarado**. El
+  candidato acumulado (`3a62c54..HEAD`) no se puede preparar en este entorno — dos `ETIMEDOUT`
+  reproducibles en `candidate-owner-preparation` — y no se insiste más. Consecuencia explícita: T4,
+  T5 y T6 no tienen review nativo; S-1 a S-5 sí lo tienen, y S-5 incluye un CRITICAL corregido y
+  aprobado. Nada de este documento presenta un slice sin review como aprobado, y RDD sigue activado
+  en el clon: la decisión es sobre este candidato, no sobre el interruptor.
 - **L17.** T6 (transporte y aplicación de escrituras) entregado: `POST /api/atenciones`,
   `POST /api/atenciones/{id}/seguimiento` y `PATCH /api/atenciones/{id}/estado`, con reuso del
   decodificador de detalle para toda respuesta. Los tres métodos del repositorio que devolvían

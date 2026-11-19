@@ -1,6 +1,18 @@
-import { inject, Injector } from "@angular/core"
-import { patchState, signalStore, withMethods, withState } from "@ngrx/signals"
-import { defer, defaultIfEmpty, Observable, of, take } from "rxjs"
+import { computed, inject, Injector } from "@angular/core"
+import { patchState, signalStore, withComputed, withMethods, withState } from "@ngrx/signals"
+import {
+  catchError,
+  defer,
+  defaultIfEmpty,
+  EMPTY,
+  finalize,
+  map,
+  Observable,
+  of,
+  take,
+  takeUntil,
+  tap
+} from "rxjs"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { createKeyedReads, keyedState, KeyedEntry } from "@/app/shared/state/keyed-reads"
@@ -11,6 +23,11 @@ import {
   ListSupportRequestsUseCase
 } from "../../application/use-cases/customer-support-read.use-cases"
 import {
+  AddSupportMessageUseCase,
+  ChangeSupportStateUseCase,
+  CreateSupportRequestUseCase
+} from "../../application/use-cases/customer-support-write.use-cases"
+import {
   CustomerSupportError,
   CustomerSupportErrorCode
 } from "../../domain/errors/customer-support.error"
@@ -20,7 +37,12 @@ import {
   SupportRequestTypeView,
   SupportRequestView
 } from "../../domain/models/support-views"
-import { SupportRequestQuery } from "../../domain/params/customer-support.params"
+import {
+  AddSupportMessageParams,
+  ChangeSupportStateParams,
+  CreateSupportRequestParams,
+  SupportRequestQuery
+} from "../../domain/params/customer-support.params"
 
 export interface SupportReadEntry<T> {
   readonly result: T | undefined
@@ -108,6 +130,7 @@ const queryKey = (query: SupportRequestQuery) =>
     query.toDate ?? null
   ])
 const initialState = {
+  _pendingWrites: 0,
   _pages: {} as Readonly<
     Record<string, KeyedEntry<SupportRequestQuery, Page, CustomerSupportError>>
   >,
@@ -116,14 +139,15 @@ const initialState = {
 }
 
 /**
- * Root presentation state for the customer-support reads (T3/D2/S10): one entry per
- * normalized request query, one per request id and one finite type catalog.
- * Verified results live here only; consumers own restarts, cancellation and retries.
- * Writes, invalidation and screens are later tasks, so none of them appear here.
+ * Root presentation state for customer support (T3/T8, D2, S10): one entry per
+ * normalized request query, one per request id, one finite type catalog and the
+ * three supported writes. Verified read results live here only; consumers own
+ * restarts, cancellation and retries. Screens are later tasks.
  */
 export const SupportRequestsStore = signalStore(
   { providedIn: "root" },
   withState(initialState),
+  withComputed(store => ({ writing: computed(() => store._pendingWrites() > 0) })),
   withMethods(store => {
     const injector = inject(Injector)
     const resets: (() => void)[] = []
@@ -183,7 +207,104 @@ export const SupportRequestsStore = signalStore(
       () => details.reset(),
       () => types.reset()
     )
+    /**
+     * One coordinate chain for the three writes: shared pending gate, session fence
+     * and confirmed-success invalidation. Input validation stays in each action and
+     * the transport remains the value/DTO authority.
+     */
+    const coordinate = (
+      dispatch: () => Observable<Result<SupportDetail, CustomerSupportError>>,
+      expectedId?: number
+    ): Observable<Result<SupportDetail, CustomerSupportError>> =>
+      defer(() => {
+        // SSR, no session or an expired credential fails closed: no request, no state.
+        if (!scope.check()) return EMPTY
+        if (expectedId !== undefined && !positiveId(expectedId))
+          return of(Result.failure(error("VALIDATION")))
+        // The gate is per store, i.e. per presentation, and never a global
+        // transaction across features: it refuses a duplicate submit from this
+        // store while a write is in flight and nothing more.
+        if (store._pendingWrites()) return of(Result.failure(error("CONFLICT")))
+        const generation = scope.generation()
+        const current = () => scope.check() && generation === scope.generation()
+        patchState(store, { _pendingWrites: store._pendingWrites() + 1 })
+        return defer(dispatch).pipe(
+          take(1),
+          defaultIfEmpty(Result.failure(error("INVALID_RESPONSE"))),
+          catchError((value: unknown) => of(Result.failure(normalizeError(value)))),
+          // An answer for another record is not this write's confirmed success.
+          map(result =>
+            result.success && expectedId !== undefined && result.data.request.id !== expectedId
+              ? Result.failure(error("INVALID_RESPONSE"))
+              : result
+          ),
+          tap(result => {
+            if (!result.success || !current()) return
+            // Only a confirmed current-generation success invalidates: observed keys
+            // re-read once each, inactive entries only expire and never self-refresh.
+            pages.markMutated()
+            if (!current()) return
+            details.markMutated(entry => entry.query === result.data.request.id)
+          }),
+          takeUntil(scope.cancelled$),
+          finalize(() => {
+            // A completion from a replaced/expired/destroyed generation touches nothing.
+            if (generation === scope.generation())
+              patchState(store, { _pendingWrites: store._pendingWrites() - 1 })
+          })
+        )
+      })
     return {
+      createRequest(
+        params: CreateSupportRequestParams
+      ): Observable<Result<SupportDetail, CustomerSupportError>> {
+        // Call-time capture of the documented payload only; an unknown params
+        // object fails inside the deferred chain instead of throwing synchronously.
+        let snapshot: CreateSupportRequestParams
+        try {
+          snapshot = {
+            customerId: params.customerId,
+            orderId: params.orderId,
+            requestTypeId: params.requestTypeId,
+            subject: params.subject,
+            description: params.description
+          }
+        } catch {
+          return failure<SupportDetail>("VALIDATION")
+        }
+        // The created answer's type/customer/order linkage is validated by the source.
+        // It is never seeded into the detail registry: that entry means "verified GET
+        // result for a key a consumer actually read", so a pre-filled record would
+        // hand fresh data to a key that was never read. A confirmed creation only
+        // expires an already-cached entry for that id; the detail screen reads its own.
+        return coordinate(() => injector.get(CreateSupportRequestUseCase).execute(snapshot))
+      },
+      addMessage(
+        id: number,
+        params: AddSupportMessageParams
+      ): Observable<Result<SupportDetail, CustomerSupportError>> {
+        let snapshot: AddSupportMessageParams
+        try {
+          snapshot = { message: params.message }
+        } catch {
+          return failure<SupportDetail>("VALIDATION")
+        }
+        // Server owns author, timestamp and any resulting state movement.
+        return coordinate(() => injector.get(AddSupportMessageUseCase).execute(id, snapshot), id)
+      },
+      changeState(
+        id: number,
+        params: ChangeSupportStateParams
+      ): Observable<Result<SupportDetail, CustomerSupportError>> {
+        let snapshot: ChangeSupportStateParams
+        try {
+          snapshot = { state: params.state, message: params.message }
+        } catch {
+          return failure<SupportDetail>("VALIDATION")
+        }
+        // The backend validates the target state and the transition, not this store.
+        return coordinate(() => injector.get(ChangeSupportStateUseCase).execute(id, snapshot), id)
+      },
       selectRequests(query: SupportRequestQuery = {}): SupportReadEntry<Page> {
         const snapshot = normalize(query)
         return snapshot ? (pages.select(snapshot) ?? empty<Page>()) : empty<Page>()
