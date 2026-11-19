@@ -141,3 +141,12 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
 - **L12.** Review nativo de la corrección del aviso (`review-532193cca49d7787`): **aprobado** con una lente
   (reliability), sin hallazgos. Con esto WP9 queda **sin deuda de review**: dashboard aprobado, reportes aprobado
   con advisory corregido, y la corrección del aviso aprobada. El hueco de review sigue siendo el de WP8 (T4–T7).
+
+- **L13.** W7 entregado: descarga del CSV con validación estricta de bytes, nombre tomado de
+  `Content-Disposition` o derivado de tipo y período, y adaptador de descarga sólo para navegador que
+  revoca la URL. Como el endpoint **también registra** un reporte en el histórico, un clic es una
+  petición y un refresco del histórico; el duplicado se rechaza, el error dice que el resultado es
+  desconocido y remite al histórico, y sólo un clic nuevo reintenta. Reportes 63/63 en 11 archivos,
+  `tsc` app y spec en 0, Prettier limpio. Límite declarado por el worker: la lista de tipos MIME
+  aceptados es su criterio, no del contrato; un backend que responda `application/vnd.ms-excel` sería
+  rechazado como respuesta inválida.

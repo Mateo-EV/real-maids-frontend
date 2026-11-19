@@ -238,3 +238,15 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   entrada de navegación, ni source, ni store, ni rutas. El patrón de referencia a replicar es el de
   `features/operations` (source → validador → repositorio impl → casos de uso → store → provider →
   rutas → páginas → specs).
+
+- **L21.** Reviews nativos de soporte, hechos con un worktree temporal detenido en cada commit (borrado al
+  terminar, como pidió el humano), porque el rango acumulado de la rama ya incluía WP9 y no se podía preparar.
+  Resultado: **T4 bandeja aprobado** (lente risk), **T5 detalle aprobado** (risk + reliability) con dos
+  hallazgos advisory, **T6 transporte de escrituras aprobado** (risk + reliability) y **T7 store de
+  escrituras aprobado** (risk + reliability). **T8 (los tres diálogos de escritura) sigue sin review**: su
+  candidato (~2000 líneas) expiró en la preparación de la vista del proveedor y no se reintenta a ciegas.
+  Hallazgos advisory de T5, registrados como trabajo pendiente y no como fallas de la aprobación:
+  `R1-001` — tras un 403 en un refresco el detalle sigue mostrando los datos del cliente y los mensajes ya
+  cargados, cuando la denegación es autoridad del backend; `R3-001` — al volver de un detalle abierto desde la
+  bandeja filtrada se conserva el offset pero no los filtros, así que la página puede mostrar registros
+  ajenos a lo que el usuario estaba mirando.
