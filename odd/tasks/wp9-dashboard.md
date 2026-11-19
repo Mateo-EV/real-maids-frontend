@@ -123,3 +123,9 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   y por instancia del store — otra pestaña puede generar por su cuenta y cancelar no deshace una generación ya
   registrada; no hay idempotencia ni rollback. Nueve aserciones de navegación preexistentes se actualizaron con
   autorización explícita (tercera vez en WP9); la fricción es real y queda anotada.
+
+- **L10.** Evidencia final de WP9 (dashboard + reportes sin CSV): suite completa **3678/3678 en 199 archivos**,
+  sin ninguna línea `FAIL` en el log; `tsc` app y spec en 0; build de producción con SSR **exit 0**; bundle inicial
+  **696.98/500 kB** (690.57 antes de reportes) y el aviso conocido de la hoja de la agenda. Review nativo del
+  dashboard **aprobado sin hallazgos** (dos lentes, sin refuter). Pendiente: W7 (CSV), la decisión sobre `Landing`,
+  la aceptación live/browser/permisos y el hueco de review de WP8.
