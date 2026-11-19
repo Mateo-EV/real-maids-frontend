@@ -1,71 +1,26 @@
-<app-catalog-frame
-  titleId="reports-title"
-  title="Reportes"
-  description="Generá un reporte del catálogo y consultá el historial de reportes generados. Generar registra el reporte en el servidor."
-  [busy]="busy()"
+<main
+  class="bg-background text-foreground mx-auto flex w-full max-w-[100rem] flex-col gap-4 px-4 py-6 sm:px-6"
 >
-  <div catalogControls class="flex flex-wrap items-end gap-2">
-    <app-catalog-filters
-      [selects]="typeSelects()"
-      [dates]="periodDates()"
-      (selectChange)="selectType($event.value)"
-      (dateChange)="setPeriodDate($event)"
-    />
-    <button
-      hlmBtn
-      type="button"
-      variant="default"
-      size="sm"
-      data-report-generate
-      [disabled]="!canGenerate()"
-      (click)="generate()"
+  <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+    <app-catalog-frame
+      titleId="report-table-title"
+      title="Reporte generado"
+      description="Elegí un tipo del catálogo del servidor y, si querés, acotá el período. Generar registra el reporte en el servidor."
+      [busy]="busy()"
     >
-      <ng-icon name="lucideChartColumn" aria-hidden="true" size="16" />
-      Generar
-    </button>
-  </div>
-
-  <div class="flex flex-col gap-6 p-4">
-    <p class="text-xs text-muted-foreground">
-      Elegí un tipo del catálogo del servidor y, si querés, acotá el período. Dejá las fechas en
-      blanco para usar el período por defecto del servidor. Un período es desde/hasta inclusive.
-    </p>
-
-    @if (periodError(); as message) {
-      <p role="alert" class="text-sm text-destructive">{{ message }}</p>
-    }
-
-    @if (typesLoading()) {
-      <p role="status" class="text-sm text-muted-foreground">Cargando tipos de reporte…</p>
-    }
-
-    @if (typesRefreshing()) {
-      <p role="status" class="text-sm text-muted-foreground">Actualizando tipos de reporte…</p>
-    }
-
-    @if (typesError(); as message) {
-      <div
-        role="alert"
-        class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
-      >
-        <p class="text-sm text-destructive">{{ message }}</p>
-        <button hlmBtn type="button" variant="outline" size="sm" (click)="retryTypes()">
-          Reintentar tipos de reporte
+      <div catalogFooter class="flex flex-wrap items-center justify-end gap-2">
+        <button
+          hlmBtn
+          type="button"
+          variant="default"
+          size="sm"
+          data-report-generate
+          [disabled]="!canGenerate()"
+          (click)="generate()"
+        >
+          <ng-icon name="lucideChartColumn" aria-hidden="true" size="16" />
+          Generar
         </button>
-      </div>
-    }
-
-    @if (!typesLoading() && !typesError() && typesVerified() && !typeOptions().length) {
-      <p class="text-sm text-muted-foreground">
-        El servidor no ofreció ningún tipo de reporte disponible.
-      </p>
-    }
-
-    <section aria-labelledby="report-table-title" class="flex flex-col gap-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="report-table-title" class="text-base font-semibold text-primary">
-          Reporte generado
-        </h2>
         <button
           hlmBtn
           type="button"
@@ -80,106 +35,147 @@
         </button>
       </div>
 
-      @if (downloading()) {
-        <p role="status" class="text-sm text-muted-foreground">Descargando CSV…</p>
-      }
+      <div class="flex flex-col gap-3 p-4">
+        <app-catalog-filters
+          [selects]="typeSelects()"
+          [dates]="periodDates()"
+          (selectChange)="selectType($event.value)"
+          (dateChange)="setPeriodDate($event)"
+        />
 
-      @if (downloadError(); as message) {
-        <div
-          role="alert"
-          data-download-error
-          class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
-        >
-          <p class="text-sm text-destructive">{{ message }}</p>
-          @if (downloadNote(); as note) {
-            <p class="text-xs text-muted-foreground">{{ note }}</p>
-          }
-        </div>
-      }
-
-      @if (generatingHere()) {
-        <p role="status" class="text-sm text-muted-foreground">Generando reporte…</p>
-      }
-
-      @if (generationError(); as message) {
-        <div
-          role="alert"
-          class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
-        >
-          <p class="text-sm text-destructive">{{ message }}</p>
-          <p class="text-xs text-muted-foreground">
-            La generación no llegó a confirmarse, así que el resultado es desconocido: si el
-            servidor alcanzó a registrarla, volver a generar crearía un registro nuevo. Revisá el
-            historial antes de reintentar. No se reintenta solo.
-          </p>
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            size="sm"
-            [disabled]="!canGenerate()"
-            (click)="generate()"
-          >
-            Reintentar generación
-          </button>
-        </div>
-      }
-
-      @if (report(); as table) {
-        <p class="text-sm text-muted-foreground">
-          {{ table.title }} · período devuelto por el servidor:
-          <time [attr.datetime]="table.from" data-report-period-from>{{ table.from }}</time>
-          –
-          <time [attr.datetime]="table.to" data-report-period-to>{{ table.to }}</time>
+        <p class="text-xs text-muted-foreground">
+          Dejá las fechas en blanco para usar el período por defecto del servidor. Un período es
+          desde/hasta inclusive.
         </p>
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-0 border-collapse text-sm" data-report-table>
-            <caption class="text-left text-xs text-muted-foreground">
-              Celdas tal como las devolvió el servidor, en el orden del documento
-            </caption>
-            <thead>
-              <tr class="border-b text-left">
-                @for (column of table.columns; track $index) {
-                  <th scope="col" class="py-2 pr-4 font-semibold" data-report-column>
-                    {{ column }}
-                  </th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of table.rows; track $index) {
-                <tr class="border-b last:border-0" data-report-row>
-                  @for (cell of row; track $index) {
-                    <td
-                      class="py-2 pr-4"
-                      [attr.data-report-cell]="cell === null ? 'empty' : 'value'"
-                    >
-                      {{ cellText(cell) }}
-                    </td>
+
+        @if (periodError(); as message) {
+          <p role="alert" class="text-sm text-destructive">{{ message }}</p>
+        }
+
+        @if (typesLoading()) {
+          <p role="status" class="text-sm text-muted-foreground">Cargando tipos de reporte…</p>
+        }
+
+        @if (typesRefreshing()) {
+          <p role="status" class="text-sm text-muted-foreground">Actualizando tipos de reporte…</p>
+        }
+
+        @if (typesError(); as message) {
+          <div
+            role="alert"
+            class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+          >
+            <p class="text-sm text-destructive">{{ message }}</p>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="retryTypes()">
+              Reintentar tipos de reporte
+            </button>
+          </div>
+        }
+
+        @if (!typesLoading() && !typesError() && typesVerified() && !typeOptions().length) {
+          <p class="text-sm text-muted-foreground">
+            El servidor no ofreció ningún tipo de reporte disponible.
+          </p>
+        }
+
+        @if (downloading()) {
+          <p role="status" class="text-sm text-muted-foreground">Descargando CSV…</p>
+        }
+
+        @if (downloadError(); as message) {
+          <div
+            role="alert"
+            data-download-error
+            class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+          >
+            <p class="text-sm text-destructive">{{ message }}</p>
+            @if (downloadNote(); as note) {
+              <p class="text-xs text-muted-foreground">{{ note }}</p>
+            }
+          </div>
+        }
+
+        @if (generatingHere()) {
+          <p role="status" class="text-sm text-muted-foreground">Generando reporte…</p>
+        }
+
+        @if (generationError(); as message) {
+          <div
+            role="alert"
+            class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+          >
+            <p class="text-sm text-destructive">{{ message }}</p>
+            <p class="text-xs text-muted-foreground">
+              La generación no llegó a confirmarse, así que el resultado es desconocido: si el
+              servidor alcanzó a registrarla, volver a generar crearía un registro nuevo. Revisá el
+              historial antes de reintentar. No se reintenta solo.
+            </p>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              size="sm"
+              [disabled]="!canGenerate()"
+              (click)="generate()"
+            >
+              Reintentar generación
+            </button>
+          </div>
+        }
+
+        @if (report(); as table) {
+          <p class="text-sm text-muted-foreground">
+            {{ table.title }} · período devuelto por el servidor:
+            <time [attr.datetime]="table.from" data-report-period-from>{{ table.from }}</time>
+            –
+            <time [attr.datetime]="table.to" data-report-period-to>{{ table.to }}</time>
+          </p>
+          <div hlmTableContainer>
+            <table hlmTable data-report-table>
+              <caption class="sr-only">
+                Celdas tal como las devolvió el servidor, en el orden del documento
+              </caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  @for (column of table.columns; track $index) {
+                    <th hlmTh scope="col" data-report-column>{{ column }}</th>
                   }
                 </tr>
-              } @empty {
-                <tr>
-                  <td [attr.colspan]="table.columns.length" class="py-2 text-muted-foreground">
-                    El reporte se generó sin filas.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      } @else if (!generatingHere() && !generationError()) {
-        <p class="text-sm text-muted-foreground" data-report-empty>
-          Todavía no generaste un reporte para este tipo y período.
-        </p>
-      }
-    </section>
+              </thead>
+              <tbody hlmTBody>
+                @for (row of table.rows; track $index) {
+                  <tr hlmTr data-report-row>
+                    @for (cell of row; track $index) {
+                      <td hlmTd [attr.data-report-cell]="cell === null ? 'empty' : 'value'">
+                        {{ cellText(cell) }}
+                      </td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr hlmTr>
+                    <td hlmTd [attr.colspan]="table.columns.length" class="text-muted-foreground">
+                      El reporte se generó sin filas.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else if (!generatingHere() && !generationError()) {
+          <p class="text-sm text-muted-foreground" data-report-empty>
+            Todavía no generaste un reporte para este tipo y período.
+          </p>
+        }
+      </div>
+    </app-catalog-frame>
 
-    <section aria-labelledby="report-history-title" class="flex flex-col gap-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="report-history-title" class="text-base font-semibold text-primary">
-          Historial de reportes generados
-        </h2>
+    <app-catalog-frame
+      titleId="report-history-title"
+      title="Historial de reportes generados"
+      description="Reportes registrados por el servidor, ordenados por el servidor."
+      [busy]="history().loading"
+    >
+      <div catalogControls class="flex flex-wrap items-end gap-2">
         <button
           hlmBtn
           type="button"
@@ -193,94 +189,96 @@
         </button>
       </div>
 
-      @if (history().loading) {
-        <p role="status" class="text-sm text-muted-foreground">Cargando historial de reportes…</p>
-      }
+      <div class="flex flex-col gap-3 p-4">
+        @if (history().loading) {
+          <p role="status" class="text-sm text-muted-foreground">Cargando historial de reportes…</p>
+        }
 
-      @if (history().refreshing) {
-        <p role="status" class="text-sm text-muted-foreground">
-          Actualizando historial de reportes…
-        </p>
-      }
+        @if (history().refreshing) {
+          <p role="status" class="text-sm text-muted-foreground">
+            Actualizando historial de reportes…
+          </p>
+        }
 
-      @if (historyError(); as message) {
-        <div
-          role="alert"
-          class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
-        >
-          @if (historyRows().length) {
-            <p class="text-sm font-medium text-destructive">
-              El historial puede estar desactualizado.
-            </p>
-          }
-          <p class="text-sm text-destructive">{{ message }}</p>
-          <button hlmBtn type="button" variant="outline" size="sm" (click)="retryHistory()">
-            Reintentar historial
-          </button>
-        </div>
-      }
+        @if (historyError(); as message) {
+          <div
+            role="alert"
+            class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+          >
+            @if (historyRows().length) {
+              <p class="text-sm font-medium text-destructive">
+                El historial puede estar desactualizado.
+              </p>
+            }
+            <p class="text-sm text-destructive">{{ message }}</p>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="retryHistory()">
+              Reintentar historial
+            </button>
+          </div>
+        }
 
-      @if (historyEmpty()) {
-        <p class="text-sm text-muted-foreground" data-history-empty>
-          Todavía no se generó ningún reporte en el servidor.
-        </p>
-      } @else if (historyRows().length) {
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-0 border-collapse text-sm" data-history-table>
-            <caption class="text-left text-xs text-muted-foreground">
-              Reportes registrados por el servidor, ordenados por el servidor
-            </caption>
-            <thead>
-              <tr class="border-b text-left">
-                <th scope="col" class="py-2 pr-4 font-semibold">Tipo</th>
-                <th scope="col" class="py-2 pr-4 font-semibold">Formato</th>
-                <th scope="col" class="py-2 pr-4 font-semibold">Parámetros</th>
-                <th scope="col" class="py-2 pr-4 font-semibold">Usuario</th>
-                <th scope="col" class="py-2 font-semibold">Generado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of historyRows(); track row.id) {
-                <tr class="border-b last:border-0" [attr.data-history-id]="row.id">
-                  <th scope="row" class="py-2 pr-4 text-left font-normal">{{ row.type }}</th>
-                  <td class="py-2 pr-4">{{ row.format }}</td>
-                  <td class="py-2 pr-4">{{ row.parameters ?? "—" }}</td>
-                  <td class="py-2 pr-4">{{ row.userName }}</td>
-                  <td class="py-2">
-                    <time [attr.datetime]="generatedText(row.generatedAt)">{{
-                      generatedText(row.generatedAt)
-                    }}</time>
-                  </td>
+        @if (historyEmpty()) {
+          <p class="text-sm text-muted-foreground" data-history-empty>
+            Todavía no se generó ningún reporte en el servidor.
+          </p>
+        } @else if (historyRows().length) {
+          <div hlmTableContainer>
+            <table hlmTable data-history-table>
+              <caption class="sr-only">
+                Reportes registrados por el servidor, ordenados por el servidor
+              </caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">Tipo</th>
+                  <th hlmTh scope="col">Formato</th>
+                  <th hlmTh scope="col">Parámetros</th>
+                  <th hlmTh scope="col">Usuario</th>
+                  <th hlmTh scope="col">Generado</th>
                 </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-  </div>
+              </thead>
+              <tbody hlmTBody>
+                @for (row of historyRows(); track row.id) {
+                  <tr hlmTr [attr.data-history-id]="row.id">
+                    <th hlmTh scope="row">{{ row.type }}</th>
+                    <td hlmTd>{{ row.format }}</td>
+                    <td hlmTd>{{ row.parameters ?? "—" }}</td>
+                    <td hlmTd>{{ row.userName }}</td>
+                    <td hlmTd>
+                      <time [attr.datetime]="generatedText(row.generatedAt)">{{
+                        generatedText(row.generatedAt)
+                      }}</time>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
 
-  <div
-    catalogFooter
-    class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"
-  >
-    <span data-history-range>
-      @if (historyTotal() !== undefined && historyRows().length) {
-        Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ historyTotal() }}
-      } @else if (historyTotal() === 0) {
-        Sin registros
-      } @else {
-        Historial sin verificar
-      }
-    </span>
-    @if (historyTotal() !== undefined && historyRows().length) {
-      <app-table-pagination
-        label="Paginación del historial de reportes"
-        [currentPage]="currentPage()"
-        [pageCount]="pageCount()"
-        [disabled]="history().loading"
-        (pageSelected)="setPage($event)"
-      />
-    }
+      <div
+        catalogFooter
+        class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"
+      >
+        <span data-history-range>
+          @if (historyTotal() !== undefined && historyRows().length) {
+            Mostrando {{ rangeStart() }}–{{ rangeEnd() }} de {{ historyTotal() }}
+          } @else if (historyTotal() === 0) {
+            Sin registros
+          } @else {
+            Historial sin verificar
+          }
+        </span>
+        @if (historyTotal() !== undefined && historyRows().length) {
+          <app-table-pagination
+            label="Paginación del historial de reportes"
+            [currentPage]="currentPage()"
+            [pageCount]="pageCount()"
+            [disabled]="history().loading"
+            (pageSelected)="setPage($event)"
+          />
+        }
+      </div>
+    </app-catalog-frame>
   </div>
-</app-catalog-frame>
+</main>

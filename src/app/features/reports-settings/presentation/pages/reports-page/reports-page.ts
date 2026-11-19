@@ -19,6 +19,7 @@ import {
   CatalogFilters
 } from "@/app/shared/components/catalog-filters/catalog-filters"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
+import { HlmTableImports } from "@spartan-ng/helm/table"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
@@ -116,7 +117,14 @@ interface ReadRequest {
 @Component({
   selector: "app-reports-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CatalogFilters, CatalogFrame, HlmButtonImports, NgIcon, TablePagination],
+  imports: [
+    CatalogFilters,
+    CatalogFrame,
+    HlmButtonImports,
+    HlmTableImports,
+    NgIcon,
+    TablePagination
+  ],
   providers: [provideIcons({ lucideChartColumn, lucideFileDown })],
   templateUrl: "./reports-page.html"
 })

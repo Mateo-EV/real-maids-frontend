@@ -406,3 +406,33 @@ describe("ReportsPage history", () => {
     page.noGeneration()
   })
 })
+
+// Layout contract: the screen is two inset section cards over the shared page surface, and its
+// data tables use the Helm table directives the frame styles instead of bare markup.
+describe("ReportsPage shared visual surface", () => {
+  it("renders two frames inside the page surface and styles every table with Helm", async () => {
+    const page = await setup()
+    page.catalog().flush(catalogWire())
+    page.history().flush(historyWire({ total: 42 }))
+    await page.settle()
+
+    const surface = page.element.querySelector("main")
+    expect(surface, "Missing the shared page surface").not.toBeNull()
+    expect(surface!.classList.contains("bg-background")).toBe(true)
+    expect(surface!.querySelectorAll("app-catalog-frame")).toHaveLength(2)
+    // The generation controls belong to the report card, the refresh to the history card.
+    expect(
+      surface!.querySelector('[aria-labelledby="report-table-title"] [data-report-generate]')
+    ).not.toBeNull()
+    expect(
+      surface!.querySelector('[aria-labelledby="report-history-title"] [data-history-refresh]')
+    ).not.toBeNull()
+
+    const historyTable = surface!.querySelector("table[data-history-table]")
+    expect(historyTable, "Missing the history table").not.toBeNull()
+    expect(historyTable!.hasAttribute("hlmTable")).toBe(true)
+    expect(historyTable!.closest("[hlmTableContainer]")).not.toBeNull()
+    expect(historyTable!.querySelectorAll("thead[hlmTHead] th[hlmTh]").length).toBe(5)
+    expect(surface!.querySelectorAll("table:not([hlmTable])")).toHaveLength(0)
+  })
+})
