@@ -119,7 +119,7 @@ describe("Admin dashboard entry route", () => {
   it("keeps every other admin child route unchanged", () => {
     const children = ADMIN_ROUTES[0].children!
     const paths = children.map(route => route.path).filter(path => path !== "")
-    expect(paths).toEqual(["users", "customers", "staff", "operations", "support"])
+    expect(paths).toEqual(["users", "customers", "staff", "operations", "support", "reports"])
     for (const path of paths) {
       expect(children.find(route => route.path === path)?.loadChildren).toBeTypeOf("function")
     }

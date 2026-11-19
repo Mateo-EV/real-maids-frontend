@@ -8,6 +8,7 @@ import {
   lucideFileText,
   lucideCalendarDays,
   lucideLifeBuoy,
+  lucideChartColumn,
   lucideShieldCheck
 } from "@ng-icons/lucide"
 import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
@@ -23,6 +24,7 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
       lucideFileText,
       lucideCalendarDays,
       lucideLifeBuoy,
+      lucideChartColumn,
       lucideShieldCheck
     })
   ],
@@ -104,6 +106,21 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
                       <span>{{ module.label }}</span>
                       <span class="active-dot" aria-hidden="true"></span>
                     </a>
+                  } @else if (module.label === "Reportes") {
+                    <a
+                      hlmSidebarMenuButton
+                      class="module-button"
+                      routerLink="/admin/reports"
+                      routerLinkActive
+                      #reports="routerLinkActive"
+                      [isActive]="reports.isActive"
+                      ariaCurrentWhenActive="page"
+                      [closeMobileSidebarOnClick]="true"
+                    >
+                      <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
+                      <span>{{ module.label }}</span>
+                      <span class="active-dot" aria-hidden="true"></span>
+                    </a>
                   } @else {
                     <button hlmSidebarMenuButton type="button" disabled class="module-button">
                       <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
@@ -151,7 +168,8 @@ export class AdminSidebar {
     { label: "CRM", icon: "lucideContactRound" },
     { label: "RRHH", icon: "lucideUsersRound" },
     { label: "Operaciones", icon: "lucideFileText" },
-    { label: "Soporte", icon: "lucideLifeBuoy" }
+    { label: "Soporte", icon: "lucideLifeBuoy" },
+    { label: "Reportes", icon: "lucideChartColumn" }
     // { label: "Cotizaciones", icon: "lucideFileText" },
     // { label: "Programaciones", icon: "lucideCalendarDays" }
   ]

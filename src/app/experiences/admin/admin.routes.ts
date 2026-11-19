@@ -54,6 +54,14 @@ export const ADMIN_ROUTES: Routes = [
           import("../../features/customer-support/customer-support.routes").then(
             routes => routes.CUSTOMER_SUPPORT_ROUTES
           )
+      },
+      {
+        // W6 reports: its own guarded lazy group with a route-local toast scope.
+        path: "reports",
+        loadChildren: () =>
+          import("../../features/reports-settings/reports-settings.routes").then(
+            routes => routes.REPORTS_SETTINGS_ROUTES
+          )
       }
     ]
   }

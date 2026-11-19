@@ -138,7 +138,8 @@ describe("AdminSidebar Soporte navigation", () => {
       "CRM",
       "RRHH",
       "Operaciones",
-      "Soporte"
+      "Soporte",
+      "Reportes"
     ])
     for (const [path, label] of [
       ["/admin/customers", "CRM"],
@@ -164,7 +165,7 @@ describe("AdminSidebar Soporte navigation", () => {
     expect(administration.querySelectorAll("a")).toHaveLength(1)
     expect(administration.querySelector("a")?.textContent?.trim()).toBe("IAM")
     // Exactly one added destination: four pre-existing anchors plus Soporte.
-    expect(element.querySelectorAll("nav a")).toHaveLength(5)
+    expect(element.querySelectorAll("nav a")).toHaveLength(6)
     const router = TestBed.inject(Router)
     const current = () => element.querySelectorAll('[aria-current="page"]')
     for (const url of ["/admin/support"]) {

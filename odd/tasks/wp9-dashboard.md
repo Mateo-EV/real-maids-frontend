@@ -111,3 +111,15 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   CSV primero (catálogo + generación explícita + histórico paginado en W6; CSV en W7). Estado al pausar: rama
   `feat/wp9-dashboard` con árbol limpio, sin trabajos en segundo plano y sin tareas a medio hacer. W6 y W7 no
   empezaron.
+
+- **L9.** W6 entregado: catálogo de tipos, histórico paginado y tabla generada en `/admin/reports`, con entrada
+  `Reportes` en General después de `Soporte`. La generación es alcanzable **sólo** por el botón explícito: ni el
+  montaje, ni editar el borrador, ni refrescar el histórico, ni un reintento automático despachan
+  `GET /api/reportes/{tipo}`. Tras un éxito confirmado se refresca el histórico una vez; si esa lectura falla se
+  conserva lo verificado y no se regenera. Interpretaciones adoptadas: el tipo elegido debe pertenecer al catálogo
+  verificado, pero el `tipo` de una fila histórica se preserva literal porque registros viejos pueden preceder al
+  catálogo actual; un reporte cuyo `tipo` no coincide con el pedido es respuesta inválida; el tamaño efectivo del
+  histórico debe coincidir con el pedido. Límite declarado en el código: la garantía de acción única es del cliente
+  y por instancia del store — otra pestaña puede generar por su cuenta y cancelar no deshace una generación ya
+  registrada; no hay idempotencia ni rollback. Nueve aserciones de navegación preexistentes se actualizaron con
+  autorización explícita (tercera vez en WP9); la fricción es real y queda anotada.

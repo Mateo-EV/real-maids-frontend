@@ -25,6 +25,17 @@ export interface GeneratedReportSummary {
   generatedAt: Date
 }
 
+/**
+ * Rendering of one supplied table cell. Strings, numbers and booleans print literally — no
+ * formatting, arithmetic or re-interpretation — and a null cell is an explicit empty cell
+ * rather than an absent column or an invented zero.
+ */
+export const REPORT_EMPTY_CELL = "—"
+
+export function reportCellText(cell: unknown): string {
+  return cell === null || cell === undefined ? REPORT_EMPTY_CELL : String(cell)
+}
+
 export interface DailyServices {
   date: string
   services: number
