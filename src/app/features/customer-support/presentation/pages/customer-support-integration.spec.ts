@@ -134,6 +134,7 @@ describe("AdminSidebar Soporte navigation", () => {
     const administration = element.querySelector('[role="group"][aria-label="Administración"]')!
     // Every pre-existing entry keeps its position, label, icon and disabled state.
     expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Inicio",
       "Landing",
       "CRM",
       "RRHH",
@@ -165,7 +166,7 @@ describe("AdminSidebar Soporte navigation", () => {
     expect(administration.querySelectorAll("a")).toHaveLength(1)
     expect(administration.querySelector("a")?.textContent?.trim()).toBe("IAM")
     // Exactly one added destination: four pre-existing anchors plus Soporte.
-    expect(element.querySelectorAll("nav a")).toHaveLength(6)
+    expect(element.querySelectorAll("nav a")).toHaveLength(7)
     const router = TestBed.inject(Router)
     const current = () => element.querySelectorAll('[aria-current="page"]')
     for (const url of ["/admin/support"]) {

@@ -93,6 +93,7 @@ describe("Reportes sidebar entry", () => {
     const element = fixture.nativeElement as HTMLElement
     const general = element.querySelector('[role="group"][aria-label="General"]')!
     expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Inicio",
       "Landing",
       "CRM",
       "RRHH",

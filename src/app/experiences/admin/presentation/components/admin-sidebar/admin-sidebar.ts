@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import {
   lucideHouse,
+  lucideLayoutDashboard,
   lucideContactRound,
   lucideUsersRound,
   lucideFileText,
@@ -19,6 +20,7 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
   providers: [
     provideIcons({
       lucideHouse,
+      lucideLayoutDashboard,
       lucideContactRound,
       lucideUsersRound,
       lucideFileText,
@@ -46,7 +48,23 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
             <ul hlmSidebarMenu class="module-menu">
               @for (module of placeholders; track module.label) {
                 <li hlmSidebarMenuItem>
-                  @if (module.label === "CRM") {
+                  @if (module.label === "Inicio") {
+                    <a
+                      hlmSidebarMenuButton
+                      class="module-button"
+                      routerLink="/admin"
+                      routerLinkActive
+                      #inicio="routerLinkActive"
+                      [routerLinkActiveOptions]="{ exact: true }"
+                      [isActive]="inicio.isActive"
+                      ariaCurrentWhenActive="page"
+                      [closeMobileSidebarOnClick]="true"
+                    >
+                      <ng-icon [name]="module.icon" size="18" aria-hidden="true" />
+                      <span>{{ module.label }}</span>
+                      <span class="active-dot" aria-hidden="true"></span>
+                    </a>
+                  } @else if (module.label === "CRM") {
                     <a
                       hlmSidebarMenuButton
                       class="module-button"
@@ -164,6 +182,8 @@ import { HlmSidebarImports } from "@spartan-ng/helm/sidebar"
 })
 export class AdminSidebar {
   readonly placeholders = [
+    // P02: the dashboard is reached through its own General entry; Landing is not repurposed.
+    { label: "Inicio", icon: "lucideLayoutDashboard" },
     { label: "Landing", icon: "lucideHouse" },
     { label: "CRM", icon: "lucideContactRound" },
     { label: "RRHH", icon: "lucideUsersRound" },

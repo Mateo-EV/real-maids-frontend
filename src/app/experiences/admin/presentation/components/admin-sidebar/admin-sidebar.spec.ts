@@ -48,6 +48,7 @@ describe("AdminSidebar RRHH navigation", () => {
     expect(rrhh!.textContent?.trim()).toBe("RRHH")
     expect(rrhh!.classList.contains("module-button")).toBe(true)
     expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Inicio",
       "Landing",
       "CRM",
       "RRHH",
@@ -64,7 +65,7 @@ describe("AdminSidebar RRHH navigation", () => {
     const iam = administration.querySelector<HTMLAnchorElement>('a[href="/admin/users"]')!
     expect(crm.textContent?.trim()).toBe("CRM")
     expect(iam.textContent?.trim()).toBe("IAM")
-    expect(element.querySelectorAll("nav a")).toHaveLength(6)
+    expect(element.querySelectorAll("nav a")).toHaveLength(7)
     const router = TestBed.inject(Router)
     rrhh!.click()
     await fixture.whenStable()
@@ -134,6 +135,7 @@ describe("AdminSidebar CRM navigation", () => {
     const element = fixture.nativeElement as HTMLElement
     const general = element.querySelector('[role="group"][aria-label="General"]')!
     expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Inicio",
       "Landing",
       "CRM",
       "RRHH",
@@ -213,5 +215,77 @@ describe("AdminSidebar approved Operations navigation", () => {
       await fixture.whenStable()
       expect(router.url).toBe("/admin/operations/requests/17")
     }
+  })
+})
+
+// P02 dashboard entry: the user decision is a NEW General entry, never repurposing Landing.
+describe("AdminSidebar dashboard navigation", () => {
+  it("adds Inicio as the first General entry, active only on the bare /admin dashboard", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+    )
+    TestBed.configureTestingModule({
+      imports: [AdminSidebar],
+      providers: [
+        HlmSidebarService,
+        provideRouter([
+          { path: "admin", component: Destination },
+          { path: "admin/users", component: Destination },
+          { path: "admin/customers", component: Destination },
+          { path: "admin/staff", component: Destination }
+        ])
+      ]
+    })
+    const fixture = TestBed.createComponent(AdminSidebar)
+    fixture.detectChanges()
+    await fixture.whenStable()
+    const element = fixture.nativeElement as HTMLElement
+    const general = element.querySelector('[role="group"][aria-label="General"]')!
+    const inicio = general.querySelector<HTMLAnchorElement>('a[href="/admin"]')
+    // The intended first failure is the absent public link, not a null dereference.
+    expect(inicio, "Missing Inicio anchor to /admin").not.toBeNull()
+    expect(inicio!.textContent?.trim()).toBe("Inicio")
+    expect(inicio!.classList.contains("module-button")).toBe(true)
+    expect(Array.from(general.querySelectorAll("li"), item => item.textContent?.trim())).toEqual([
+      "Inicio",
+      "Landing",
+      "CRM",
+      "RRHH",
+      "Operaciones",
+      "Soporte",
+      "Reportes"
+    ])
+    const icon = fixture.debugElement
+      .queryAll(By.directive(NgIcon))
+      .find(node => inicio!.contains(node.nativeElement))!
+    expect((icon.componentInstance as NgIcon).name()).toBe("lucideLayoutDashboard")
+    expect(icon.nativeElement.getAttribute("aria-hidden")).toBe("true")
+    const router = TestBed.inject(Router)
+    inicio!.click()
+    await fixture.whenStable()
+    fixture.detectChanges()
+    expect(router.url).toBe("/admin")
+    expect(inicio!.getAttribute("aria-current")).toBe("page")
+    expect(inicio!.querySelector('.active-dot[aria-hidden="true"]')).not.toBeNull()
+    // Exact match: the dashboard entry must not claim every /admin descendant.
+    for (const url of ["/admin/users", "/admin/customers", "/admin/staff"]) {
+      await router.navigateByUrl(url)
+      await fixture.whenStable()
+      fixture.detectChanges()
+      expect(inicio!.hasAttribute("aria-current")).toBe(false)
+      expect(element.querySelector(`a[href="${url}"]`)!.getAttribute("aria-current")).toBe("page")
+    }
+    // Landing stays the single disabled placeholder, untouched by this decision.
+    expect(general.querySelectorAll("button[disabled]")).toHaveLength(1)
+    const landing = Array.from(general.querySelectorAll<HTMLButtonElement>("button")).find(
+      item => item.textContent?.trim() === "Landing"
+    )!
+    expect(landing.disabled).toBe(true)
+    expect(landing.hasAttribute("href")).toBe(false)
   })
 })

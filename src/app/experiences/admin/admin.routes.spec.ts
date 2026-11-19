@@ -368,7 +368,7 @@ describe("Admin users navigation", () => {
     expect(leads).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 20 })
     const sidebar = element.querySelector("app-admin-sidebar")!
     expect(sidebar.querySelector('a[href="/admin/customers"]')?.textContent?.trim()).toBe("CRM")
-    expect(sidebar.querySelectorAll("a")).toHaveLength(6)
+    expect(sidebar.querySelectorAll("a")).toHaveLength(7)
     expect(sidebar.querySelector('a[href="/admin/operations"]')?.textContent?.trim()).toBe(
       "Operaciones"
     )
@@ -467,7 +467,7 @@ describe("Admin users navigation", () => {
     const administration = nav.querySelector('[role="group"][aria-label="Administración"]')!
     expect(general).not.toBeNull()
     expect(administration).not.toBeNull()
-    expect(general.querySelectorAll("a")).toHaveLength(5)
+    expect(general.querySelectorAll("a")).toHaveLength(6)
     expect(general.querySelector('a[href="/admin/operations"]')?.textContent?.trim()).toBe(
       "Operaciones"
     )
@@ -475,7 +475,7 @@ describe("Admin users navigation", () => {
     expect(crm.textContent?.trim()).toBe("CRM")
     expect(crm.querySelector('ng-icon[aria-hidden="true"]')).not.toBeNull()
     expect(administration.querySelectorAll("button")).toHaveLength(0)
-    expect(nav.querySelectorAll("a")).toHaveLength(6)
+    expect(nav.querySelectorAll("a")).toHaveLength(7)
     const iam = administration.querySelector("a")!
     expect(iam.textContent?.trim()).toBe("IAM")
     expect(iam.getAttribute("aria-current")).toBe("page")
