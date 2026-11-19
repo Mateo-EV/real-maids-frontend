@@ -16,6 +16,7 @@ proposal or an unverified acceptance gap.
 | Use cases (stateless)    | `application/use-cases/customer-support-read.use-cases.ts`, `customer-support-write.use-cases.ts`                                      |
 | Root read/write state    | `presentation/state/support-requests.store.ts`                                                                                         |
 | Inbox                    | `presentation/pages/support-requests-page/`                                                                                            |
+| KPI summary              | `presentation/components/support-metrics/`                                                                                             |
 | Detail                   | `presentation/pages/support-request-detail-page/`                                                                                      |
 | Write dialogs            | `presentation/components/support-request-create-dialog/`, `support-message-dialog/`, `support-state-dialog/`                           |
 
@@ -50,6 +51,14 @@ protected admin shell with their own complete toast scope. The sidebar entry is 
 - **A denied read stops rendering immediately**: a `403` on the detail clears the loaded customer, subject,
   description and follow-ups instead of leaving them on screen, because the denial is authoritative. Transient
   failures keep the verified data with a retryable error.
+- **The KPI block counts the module, not the page.** `Recibidas`, `En revisión`, `Resueltas` and
+  `Total de atenciones` are each the `total` of their own server page read with `tamanio=1`: three are filtered by
+  one of the documented state codes and the fourth is unfiltered. Nothing is summed, sliced or derived in the
+  client, and no statistics endpoint was invented. By explicit human decision the cards ignore the inbox filters
+  and stay module-wide, so they live above the `CatalogFrame` as their own consumer rather than inside the
+  filtered page. Each card keeps an unverified `—`, its own refreshing and stale/error states and its own forced
+  retry; the root store's 30000 ms success-only freshness, ref-counted flights and session/SSR fence apply
+  unchanged, and a confirmed write revalidates the four totals through the already open observers.
 
 ### Proposals still unwired
 
@@ -108,8 +117,9 @@ frontend does not authorize requests: a 403 is authoritative.
 Verified by this feature's tests: DTO mapping and rejection, query/body construction, error mapping, the closed
 state set, null-author preservation, ordered follow-up decoding, freshness and stale retention, pending
 coordination, invalidation of observed keys, session/SSR fencing, filter-to-query mapping, offset reset,
-bounded recovery, invalid-id dispatch, redaction rendering and the write dialogs' validation, pending,
-dismissal, draft-preservation and fence behavior.
+bounded recovery, invalid-id dispatch, redaction rendering, the KPI block's four independent server totals
+(including a verified zero, a failed card and its single forced retry, and no read on the server platform) and
+the write dialogs' validation, pending, dismissal, draft-preservation and fence behavior.
 
 **Not verified here**: live backend/CORS behavior, backend permission and redaction outcomes for denied or
 cross-customer access, real 201/409 payload differences, browser acceptance in Chrome/Edge/Firefox

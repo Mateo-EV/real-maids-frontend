@@ -1,0 +1,48 @@
+<section
+  class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+  aria-label="Resumen de soporte"
+>
+  @for (card of cards; track card.label; let index = $index) {
+    <article hlmCard>
+      <div hlmCardHeader>
+        <p class="kpi-label">{{ card.label }}</p>
+        <span hlmCardAction class="kpi-tile" [attr.data-kpi-tone]="card.tone">
+          <ng-icon [name]="card.icon" aria-hidden="true" size="24" />
+        </span>
+        <p class="kpi-value">{{ card.state().result?.total ?? "—" }}</p>
+        <p hlmCardDescription>
+          @if (card.state().result) {
+            Del total del servidor
+          } @else {
+            {{ card.state().loading ? "Cargando estadísticas…" : "Estadísticas sin verificar" }}
+          }
+        </p>
+        @if (card.state().refreshing) {
+          <p role="status" class="text-sm">Actualizando…</p>
+        }
+        @if (card.state().error || card.retrying()) {
+          @if (card.state().error) {
+            @if (card.state().result) {
+              <p role="alert" class="text-sm text-destructive">
+                Las estadísticas pueden estar desactualizadas.
+              </p>
+            }
+            <p role="alert" class="text-sm text-destructive">
+              No se pudo cargar el total de {{ card.label }}.
+            </p>
+          }
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            size="sm"
+            (click)="retry(index)"
+            [disabled]="card.state().loading || card.state().refreshing || card.retrying()"
+          >
+            Reintentar {{ card.label }}
+          </button>
+        }
+      </div>
+    </article>
+  }
+</section>

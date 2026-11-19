@@ -119,19 +119,29 @@ async function mount(url = `${inbox}?offset=20&limit=20`) {
   const http = TestBed.inject(HttpTestingController)
   const router = TestBed.inject(Router)
   const harness = await RouterTestingHarness.create(url)
-  const settle = async () => {
-    harness.detectChanges()
-    await harness.fixture.whenStable()
-    harness.detectChanges()
-  }
-  await settle()
-  const element = () => harness.routeNativeElement!
+  /** The inbox page read; the KPI block owns its own `tamanio=1` totals on the same URL. */
   const list = () => {
-    const request = http.expectOne(candidate => candidate.url === api)
+    const request = http.expectOne(
+      candidate => candidate.url === api && candidate.params.get("tamanio") !== "1"
+    )
     expect(request.request.method).toBe("GET")
     expect(request.request.transferCache).toBe(false)
     return request
   }
+  /** The summary above the page reads four module totals; they are not this spec's subject. */
+  const flushMetrics = () =>
+    http
+      .match(request => request.url === api && request.params.get("tamanio") === "1")
+      .forEach((pending, index) => pending.flush(page(0, 1, [3, 1, 7, 11][index] ?? 0)))
+  const settle = async () => {
+    harness.detectChanges()
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    flushMetrics()
+    harness.detectChanges()
+  }
+  await settle()
+  const element = () => harness.routeNativeElement!
   const flushCatalog = async () => {
     http.expectOne(typesApi).flush(types)
     await settle()

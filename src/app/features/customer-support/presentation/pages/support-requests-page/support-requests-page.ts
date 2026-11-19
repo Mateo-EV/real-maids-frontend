@@ -36,6 +36,7 @@ import {
   SupportRequestCreateContext,
   SupportRequestCreateDialog
 } from "../../components/support-request-create-dialog/support-request-create-dialog"
+import { SupportMetrics } from "../../components/support-metrics/support-metrics"
 import { SupportRequestsStore } from "../../state/support-requests.store"
 import {
   noSupportFilters,
@@ -104,6 +105,7 @@ interface CustomerPickerRequest {
     HlmTableImports,
     NgIcon,
     RouterLink,
+    SupportMetrics,
     TablePagination
   ],
   providers: [provideIcons({ lucidePlus })],

@@ -95,17 +95,32 @@ async function mount(options: { server?: boolean; guest?: boolean } = {}, url: s
     ]
   })
   const harness = await RouterTestingHarness.create(url)
+  const http = TestBed.inject(HttpTestingController)
+  /**
+   * The support KPI block is a real consumer of this page: it reads four module totals and
+   * revalidates them on every invalidation. Settling them here keeps each test focused on its
+   * own page behaviour instead of on the summary above it.
+   */
+  const flushMetrics = () =>
+    http
+      .match(request => request.url === api && request.params.get("tamanio") === "1")
+      .forEach((pending, index) =>
+        pending.flush(page(0, 1, [3, 1, 7, 11][index] ?? 0, dto(900 + index)))
+      )
   const settle = async () => {
     harness.detectChanges()
     await harness.fixture.whenStable()
     harness.detectChanges()
+    flushMetrics()
+    harness.detectChanges()
   }
   await settle()
   const element = harness.routeNativeElement!
-  const http = TestBed.inject(HttpTestingController)
-  /** The single in-flight inbox read; paging and business keys are asserted per test. */
+  /** The inbox page read; the KPI block owns its own `tamanio=1` totals on the same URL. */
   const list = () => {
-    const pending = http.expectOne(request => request.url === api)
+    const pending = http.expectOne(
+      request => request.url === api && request.params.get("tamanio") !== "1"
+    )
     expect(pending.request.method).toBe("GET")
     expect(pending.request.transferCache).toBe(false)
     return pending
@@ -196,6 +211,21 @@ describe("SupportRequestsPage inbox", () => {
     expect(s.element.querySelectorAll("[catalogDesktop] tbody tr")).toHaveLength(1)
     expect(s.element.querySelectorAll("ul[catalogMobile] > li")).toHaveLength(1)
     s.http.expectNone(() => true)
+  })
+
+  it("renders the KPI block above the frame with its own four module totals", async () => {
+    const s = await mount()
+    const metrics = s.element.querySelector(".catalog-metrics")!
+    expect(metrics, "Missing support KPI block").not.toBeNull()
+    expect(metrics.getAttribute("aria-label")).toBe("Resumen de soporte")
+    // The block is a running total of the module: it is not part of the frame or its page.
+    expect(s.element.querySelector("app-catalog-frame")?.contains(metrics)).toBe(false)
+    expect(
+      Array.from(metrics.querySelectorAll(".kpi-label")).map(item => item.textContent?.trim())
+    ).toEqual(["Recibidas", "En revisión", "Resueltas", "Total de atenciones"])
+    expect(
+      Array.from(metrics.querySelectorAll(".kpi-value")).map(item => item.textContent?.trim())
+    ).toEqual(["3", "1", "7", "11"])
   })
 
   it("sends each chosen filter as its documented server key and omits every blank one", async () => {

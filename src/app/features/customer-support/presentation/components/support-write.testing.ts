@@ -136,12 +136,23 @@ export async function setupSupportWrites(
   })
   const http = TestBed.inject(HttpTestingController)
   const harness = await RouterTestingHarness.create(url)
+  /**
+   * The support KPI block is a real consumer of the inbox: it reads four module totals and
+   * revalidates them after every invalidation. Draining them here keeps each spec's exact
+   * request assertions and `http.verify()` about the page read it is actually testing.
+   */
+  const flushMetrics = () =>
+    http
+      .match(request => request.url === requestsUrl && request.params.get("tamanio") === "1")
+      .forEach((pending, index) => pending.flush(pageDto(0, 1, [3, 1, 7, 11][index] ?? 0)))
   // A post-await write continuation is not tracked by whenStable, so drain the
   // macrotask/microtask queues before re-rendering the overlay.
   const settle = async () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     harness.detectChanges()
     await harness.fixture.whenStable()
+    harness.detectChanges()
+    flushMetrics()
     harness.detectChanges()
   }
   await settle()
