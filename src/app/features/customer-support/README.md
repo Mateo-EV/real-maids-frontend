@@ -43,8 +43,13 @@ protected admin shell with their own complete toast scope. The sidebar entry is 
   dispatched), validation before the gate, and only a confirmed current-generation success expires the page
   variants and the affected detail. A creation does **not** seed the detail entry — that entry means a verified
   GET for a key a consumer actually read.
-- **Links carry only what the list owns**: offset and limit. Filters stay in-memory page state and never enter a
-  URL. An order link is rendered only when the response supplies a real order id.
+- **The inbox filters live in the URL** (type, customer, state, from/to) together with offset and limit, by explicit
+  human decision, so returning from a detail restores the filtered page; blanks are omitted, unknown or duplicated
+  values are dropped, and a filter change resets the offset. An order link is rendered only when the response
+  supplies a real order id.
+- **A denied read stops rendering immediately**: a `403` on the detail clears the loaded customer, subject,
+  description and follow-ups instead of leaving them on screen, because the denial is authoritative. Transient
+  failures keep the verified data with a retryable error.
 
 ### Proposals still unwired
 

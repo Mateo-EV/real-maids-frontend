@@ -409,7 +409,9 @@ and is not implemented.
 
 - **Reads**: server-paged inbox with `estado`, `idTipo`, `idCliente` and business-local `desde`/`hasta`
   filters, effective returned metadata and one bounded out-of-range recovery; detail with the server-ordered
-  follow-up timeline. 30000 ms success-only freshness in one root store; a failed revalidation keeps verified
+  follow-up timeline. By explicit human decision the inbox filters and paging live in the URL, so returning
+  from a detail restores the filtered page, and a `403` on the detail stops rendering the loaded record at
+  once instead of leaving it on screen. 30000 ms success-only freshness in one root store; a failed revalidation keeps verified
   data and only zeroes its freshness.
 - **States**: the backend's fixed `RECIBIDA`/`EN_REVISION`/`RESUELTA`/`CERRADA` vocabulary with its supplied
   display name. There is no status catalogue endpoint and no frontend transition engine: the state dialog

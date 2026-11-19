@@ -60,6 +60,15 @@ requiereRespuesta)`. Validación de entrada: `asunto` obligatorio ≤150, `descr
   tamaño pedido ya está dentro del máximo, una respuesta con tamaño efectivo distinto se rechaza
   como respuesta inválida en vez de adoptarla con otro offset. El store aplica la misma cota antes
   de admitir una clave, para no aceptar consultas que siempre van a fallar.
+- **S14.** Decisión del humano que invierte la regla anterior: los filtros de la bandeja **viajan en la URL**
+  (tipo, cliente, estado y el par de fechas), junto con `offset`/`limit`, para que volver al listado restaure
+  la página filtrada. Los valores vacíos se omiten, los desconocidos o duplicados se descartan y un cambio de
+  filtro vuelve el offset a cero conservando el tamaño efectivo. El enlace de vuelta del detalle arrastra esos
+  filtros. Esto reemplaza la regla previa de "filtros sólo en memoria, nunca serializados".
+- **S15.** Hallazgo `R1-001` del review de T5, aceptado como corrección: ante un `403` el detalle debe dejar de
+  mostrar de inmediato el cliente, asunto, descripción y seguimiento ya cargados, porque la denegación es
+  autoridad del backend. Los errores transitorios conservan el comportamiento actual: dato verificado visible
+  con error reintentable.
 - **S12.** Documentación y evidencia: `README` de la feature, `docs/README.md` (producto) y
   `docs/implementation-roadmap.md` (WP8) actualizados con lo implementado frente a lo pendiente; specs
   deterministas por capa, suite, build de producción con SSR y Prettier. Sin afirmar aceptación
@@ -250,3 +259,8 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   cargados, cuando la denegación es autoridad del backend; `R3-001` — al volver de un detalle abierto desde la
   bandeja filtrada se conserva el offset pero no los filtros, así que la página puede mostrar registros
   ajenos a lo que el usuario estaba mirando.
+
+- **L22.** Pedido del humano, textual: "ok haz los dos primeros, y el 4. Sobre los filtros que viajen por url".
+  Alcance: corregir `R1-001` (el detalle no puede seguir mostrando datos tras un 403) y `R3-001` con la
+  decisión de que **los filtros viajen por URL** (S14), y luego la aceptación real (S12 de WP9 / punto 4 de la
+  lista de pendientes). La regla de S11 sobre filtros sólo en memoria queda **reemplazada** por S14.
