@@ -49,8 +49,8 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
 - **D2 — Frescura (tomada, revisable):** sin caché entre visitas (S6). Es la opción que no inventa política
   de TTL ni arriesga números viejos en un tablero operativo; si preferís un TTL, se cambia en el store sin
   tocar la presentación.
-- **D3 — Alcance de reportes:** abierta. La generación bajo acción explícita (S5) necesita decisión sobre
-  dónde vive el histórico y qué se muestra del CSV.
+- **D3 — Alcance de reportes (resuelta por el humano):** "Reportes sin CSV primero". W6 entrega catálogo de
+  tipos, generación bajo acción explícita e histórico paginado; el CSV queda en W7, después.
 
 ## Tasks
 
@@ -106,3 +106,8 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
 - **L7.** Decisión abierta D3 (reportes): dónde vive el histórico y qué se muestra del CSV. Hasta resolverla no se
   escribe código de reportes, porque la generación es un efecto sobre un GET (S5) y equivocarse ahí duplica
   registros en el histórico del backend.
+
+- **L8.** Pausa pedida por el humano al cerrar el dashboard. Decisión D3 registrada antes de parar: reportes sin
+  CSV primero (catálogo + generación explícita + histórico paginado en W6; CSV en W7). Estado al pausar: rama
+  `feat/wp9-dashboard` con árbol limpio, sin trabajos en segundo plano y sin tareas a medio hacer. W6 y W7 no
+  empezaron.
