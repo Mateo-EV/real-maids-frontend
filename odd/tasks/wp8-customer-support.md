@@ -36,10 +36,10 @@ pantallas.
   consulta el cliente. El frontend muestra el nombre tal como llega y, si es `null`, no lo inventa ni
   lo deduce de otro campo.
 - **S8.** DTOs y validación: `AtencionResponse(idAtencion, idCliente, cliente, idOrden, codigoOrden,
-  idTipo, tipo, requiereRespuesta, estado, estadoNombre, asunto, descripcion, fechaRegistro,
-  fechaCierre)`; `SeguimientoResponse(idSeguimiento, autor, delCliente, mensaje, fecha)`;
+idTipo, tipo, requiereRespuesta, estado, estadoNombre, asunto, descripcion, fechaRegistro,
+fechaCierre)`; `SeguimientoResponse(idSeguimiento, autor, delCliente, mensaje, fecha)`;
   `AtencionDetalleResponse(atencion, seguimiento)`; `TipoAtencionResponse(idTipo, nombre,
-  requiereRespuesta)`. Validación de entrada: `asunto` obligatorio ≤150, `descripcion` obligatoria
+requiereRespuesta)`. Validación de entrada: `asunto` obligatorio ≤150, `descripcion` obligatoria
   ≤4000, `mensaje` obligatorio ≤4000, `idTipo` obligatorio positivo, `idOrden` opcional positivo. Las
   marcas de tiempo son `OffsetDateTime`; los filtros de fecha son días ISO del negocio.
 - **S9.** Fuera de alcance: encuestas de satisfacción (`encuesta_satisfaccion` existe como tabla pero
@@ -80,18 +80,18 @@ pantallas.
 
 ## Tasks
 
-| ID | Tarea | Specs | Ruta |
-| --- | --- | --- | --- |
-| T1 | Transporte HTTP de lista/detalle/tipos con validadores de DTOs y errores propios | S3, S4, S7, S8, S10 | inline |
-| T2 | Repositorio de infraestructura, binding `useExisting` y casos de uso stateless (lecturas) | S3, S10 | inline |
-| T3 | Store raíz de lecturas con TTL 30000 ms, frescura por éxito y fencing de sesión/SSR | D2, S10 | inline |
-| T4 | Consumidor de bandeja en `/admin/support`: filtros, listado responsivo y paginación efectiva | D1, S11 | worker |
-| T5 | Detalle con seguimiento (texto literal, instantes UTC, autor redactado) y enlace a la orden | S7, S11 | worker |
-| T6 | Transporte y aplicación de las tres escrituras: alta, respuesta y cambio de estado | S3, S5, S6, S8 | worker |
-| T7 | Store raíz: compuerta de pendientes compartida e invalidación confirmada; el alta no siembra el detalle | S10, S11 | worker |
-| T8 | Consumidores de escritura: alta, respuesta y cambio de estado sobre el registro cargado | S5, S6, S11 | worker |
-| T9 | ~~Variante de cliente propio~~ — movida a WP10 por D3 | D3, S6 | — |
-| T10 | Documentación y evidencia (README, product guide, roadmap, suite, SSR, Prettier) | S12 | inline |
+| ID  | Tarea                                                                                                   | Specs               | Ruta   |
+| --- | ------------------------------------------------------------------------------------------------------- | ------------------- | ------ |
+| T1  | Transporte HTTP de lista/detalle/tipos con validadores de DTOs y errores propios                        | S3, S4, S7, S8, S10 | inline |
+| T2  | Repositorio de infraestructura, binding `useExisting` y casos de uso stateless (lecturas)               | S3, S10             | inline |
+| T3  | Store raíz de lecturas con TTL 30000 ms, frescura por éxito y fencing de sesión/SSR                     | D2, S10             | inline |
+| T4  | Consumidor de bandeja en `/admin/support`: filtros, listado responsivo y paginación efectiva            | D1, S11             | worker |
+| T5  | Detalle con seguimiento (texto literal, instantes UTC, autor redactado) y enlace a la orden             | S7, S11             | worker |
+| T6  | Transporte y aplicación de las tres escrituras: alta, respuesta y cambio de estado                      | S3, S5, S6, S8      | worker |
+| T7  | Store raíz: compuerta de pendientes compartida e invalidación confirmada; el alta no siembra el detalle | S10, S11            | worker |
+| T8  | Consumidores de escritura: alta, respuesta y cambio de estado sobre el registro cargado                 | S5, S6, S11         | worker |
+| T9  | ~~Variante de cliente propio~~ — movida a WP10 por D3                                                   | D3, S6              | —      |
+| T10 | Documentación y evidencia (README, product guide, roadmap, suite, SSR, Prettier)                        | S12                 | inline |
 
 ## Slices de entrega
 
@@ -100,16 +100,19 @@ Publicar, abrir PR y mergear sigue siendo decisión del humano; acá sólo se re
 Cada slice incluye sus specs, porque en este repo los tests acompañan al comportamiento y no se
 separan en un commit propio.
 
-| Slice | Commit | Contenido | Líneas |
-| --- | --- | --- | --- |
-| S-1 | `d183d19` | Documento de feature (specs, decisiones, tasks) | 110 |
-| S-2 | `0e282d0` | Transporte HTTP + validación de DTOs + specs (T1) | 790 |
-| S-3 | `040f7d9` | Repositorio, casos de uso, `useExisting` y composición root + specs (T2) | 329 |
-| S-4 | `744c78a` | Store raíz de lecturas con TTL 30000 ms + specs (T3) | 856 |
-| S-5 | `3a62c54` | Corrección obligada por el review (R3-001: offset y tope de página) + specs | 63 |
-| S-6 | `83ae5d3` | Ruta `/admin/support`, entrada Soporte, bandeja con filtros y paginación + specs (T4) | 1200 |
-| S-7 | `0e8897a` | Detalle con línea de seguimiento, contexto de página en URL, enlaces de fila y de orden + specs (T5) | 1151 |
-| S-8 | (este commit) | Transporte y aplicación de las tres escrituras (alta, respuesta, cambio de estado) + specs | ver commit |
+| Slice | Commit    | Contenido                                                                                            | Líneas |
+| ----- | --------- | ---------------------------------------------------------------------------------------------------- | ------ |
+| S-1   | `d183d19` | Documento de feature (specs, decisiones, tasks)                                                      | 110    |
+| S-2   | `0e282d0` | Transporte HTTP + validación de DTOs + specs (T1)                                                    | 790    |
+| S-3   | `040f7d9` | Repositorio, casos de uso, `useExisting` y composición root + specs (T2)                             | 329    |
+| S-4   | `744c78a` | Store raíz de lecturas con TTL 30000 ms + specs (T3)                                                 | 856    |
+| S-5   | `3a62c54` | Corrección obligada por el review (R3-001: offset y tope de página) + specs                          | 63     |
+| S-6   | `83ae5d3` | Ruta `/admin/support`, entrada Soporte, bandeja con filtros y paginación + specs (T4)                | 1200   |
+| S-7   | `0e8897a` | Detalle con línea de seguimiento, contexto de página en URL, enlaces de fila y de orden + specs (T5) | 1151   |
+| S-8   | `bf32025` | Transporte y aplicación de las tres escrituras + specs (T6)                                          | 787    |
+| S-9   | `fc06fa6` | Store: compuerta de pendientes, invalidación confirmada + specs (T7)                                 | 646    |
+| S-10  | `42b6fbf` | Alta, respuesta y cambio de estado sobre el registro cargado + specs (T8)                            | 1913   |
+| S-11  | `e2de56a` | Documentación: feature README, guía de producto, roadmap y AGENTS.md (T10)                           | 144    |
 
 El objetivo de ~400 líneas se mide sobre código más specs, y acá los specs son la mitad del
 volumen: S-2 son 421 líneas de pruebas de transporte con sus negativos malformados, y S-4 son 643
@@ -141,6 +144,18 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   La corrección se verificó observando RED real: al revertir las dos líneas de producción fallan
   exactamente los tres tests nuevos (75/75 → 3 fallas → 75/75). Aprobación de review ≠ autorización
   de entrega: commit, push y PR siguen siendo política ordinaria del repo.
+- **L20.** Cierre técnico de WP8. Evidencia observada por el padre al terminar: suite completa
+  **3610/3610 en 189 archivos**, sin fallas — las dos fallas de Auth que el repo arrastraba ya no
+  aparecen y no se tocó Auth; build de producción con SSR **exit 0**, un prerender, aviso de bundle
+  inicial **685.81/500 kB** (era 668.47 antes de WP8) y el aviso conocido de la hoja de la agenda
+  (7.44/4 kB, decisión previa del humano). Documentación actualizada en la feature README, la guía de
+  producto, el roadmap (WP8 con párrafo de entregado) y `AGENTS.md` (restricciones de ingeniería).
+  Riesgo declarado: el slice S-6 tocó código compartido de navegación (sidebar y rutas del shell
+  admin); las suites de admin y operaciones pasan sin cambios salvo las seis líneas de conteo
+  autorizadas, y ningún otro consumidor del sidebar se vio afectado. Queda abierto, y así está escrito:
+  aceptación live/backend/CORS, permisos y redacción entre clientes, payloads reales 201/409,
+  navegador (Chrome/Edge/Firefox, teclado y responsive), accesibilidad exhaustiva, la audiencia de
+  cliente (WP10) y los reviews de T4–T7.
 - **L19.** T7 (store de escrituras) entregado: las tres acciones viven en el store raíz detrás de
   **una** compuerta de pendientes compartida (un segundo submit se rechaza con `CONFLICT`, no se
   despacha), la validación ocurre antes de tomar la compuerta, y sólo un éxito confirmado de la
@@ -176,8 +191,8 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   de código identificado; es una limitación de este entorno con un candidato de ese tamaño. Se anota
   como deuda, no como aprobación ni como revisión fallida del código. Los slices S-1 a S-5 sí tienen
   review cerrado (S-5 con hallazgo CRITICAL corregido y aprobado).
-- **L14.** T5 en curso. Dos conflictos de la misma clase: specs que fijan *la ausencia del slice
-  siguiente* (`CUSTOMER_SUPPORT_ROUTES` con largo 1 y «no hay enlace de fila todavía»). Ambos eran
+- **L14.** T5 en curso. Dos conflictos de la misma clase: specs que fijan _la ausencia del slice
+  siguiente_ (`CUSTOMER_SUPPORT_ROUTES` con largo 1 y «no hay enlace de fila todavía»). Ambos eran
   marcadores de frontera legítimos de T4 y ambos hubo que reescribirlos en T5. Resueltos con la
   opción A en cada caso: sólo la aserción de conteo/enlace y su comentario, nada más. Regla que queda
   para los próximos slices: no fijar en un test la inexistencia del slice siguiente; la frontera se
