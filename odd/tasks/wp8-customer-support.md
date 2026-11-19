@@ -264,3 +264,17 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   Alcance: corregir `R1-001` (el detalle no puede seguir mostrando datos tras un 403) y `R3-001` con la
   decisión de que **los filtros viajen por URL** (S14), y luego la aceptación real (S12 de WP9 / punto 4 de la
   lista de pendientes). La regla de S11 sobre filtros sólo en memoria queda **reemplazada** por S14.
+
+- **L23.** Aceptación contra el backend real (`localhost:8080`, datos reales; se usó un usuario de prueba que no
+  se guardó en ningún archivo). Verificado por HTTP: los 12 endpoints del contrato responden `401` sin token y el
+  login valida (400 con cuerpo vacío); CORS permite `http://localhost:4200` y expone `Content-Disposition`.
+  **Soporte**: catálogo con 5 tipos reales, bandeja vacía verificada (total 0), alta `201` con la forma exacta del
+  contrato (incluido `fechaRegistro` con 7 decimales y `idOrden`/`codigoOrden` nulos), respuesta que mueve
+  `RECIBIDA → EN_REVISION` y crea el seguimiento con `autor` y `delCliente`, `PATCH` que mueve a `RESUELTA`,
+  transición inválida rechazada con `400` y el mensaje autoritativo que enumera los destinos permitidos, cierre a
+  `CERRADA` con `fechaCierre`, y `CERRADA` final (`400` ante cualquier cambio posterior). Los datos creados por la
+  verificación: atención `id 1` (hoy `CERRADA`, con un seguimiento) y dos registros de reporte en el histórico
+  (formato JSON y CSV); el humano puede eliminarlos.
+  **Sigue sin verificar**: el camino `403` (requiere un segundo usuario sin el permiso), la redacción entre
+  clientes (requiere un usuario de cliente), y todo lo de navegador — teclado, responsive y accesibilidad en
+  Chrome/Edge/Firefox.

@@ -150,3 +150,13 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   `tsc` app y spec en 0, Prettier limpio. Límite declarado por el worker: la lista de tipos MIME
   aceptados es su criterio, no del contrato; un backend que responda `application/vnd.ms-excel` sería
   rechazado como respuesta inválida.
+
+- **L14.** Aceptación del dashboard y reportes contra el backend real. **Se resuelven las dos dudas abiertas**:
+  los decimales viajan como **número JSON** (`montoCompletado: 1342.5`), no como texto, así que el decoder es
+  correcto; y `tasaCumplimiento: 77.8` es un **porcentaje**, no una fracción, lo que confirma que no correspondía
+  aplicar una cota de unidad. Dashboard devuelto con los seis códigos de estado, ventana por defecto de 30 días y
+  series reales. Reportes: catálogo con los tipos reales, generación que devuelve columnas y filas genéricas,
+  histórico que pasó de 0 a 1 tras generar y de 1 a 2 tras descargar el CSV (`formato` JSON y CSV) — el efecto
+  sobre GET quedó comprobado empíricamente. CSV: `text/csv;charset=UTF-8`, `filename="reporte-clientes-2026-11-19.csv"`,
+  161 bytes, UTF-8 válido y sin bytes de control, con BOM al inicio que no es byte de control y por tanto no se
+  rechaza. Sin verificar: navegador (teclado, responsive, accesibilidad) y permisos denegados.
