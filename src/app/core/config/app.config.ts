@@ -37,6 +37,7 @@ import { provideFieldOperationsReads } from "@/app/features/field-operations/fie
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
 import { provideCustomerSupportReads } from "@/app/features/customer-support/customer-support.providers"
 import { provideServiceCatalogReads } from "@/app/features/service-catalog/service-catalog.providers"
+import { provideDashboardReads } from "@/app/features/dashboard/dashboard.providers"
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -49,6 +50,7 @@ export const appConfig: ApplicationConfig = {
     provideOperationsRequestReads(),
     provideCustomerSupportReads(),
     provideServiceCatalogReads(),
+    provideDashboardReads(),
     { useExisting: AuthRepositoryImpl, provide: AUTH_REPOSITORY },
     { useExisting: CustomerRepositoryImpl, provide: CUSTOMER_REPOSITORY },
     { useExisting: AcquisitionRepositoryImpl, provide: ACQUISITION_REPOSITORY },
