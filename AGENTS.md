@@ -213,6 +213,15 @@ Current S8 development status: order leaves have53 parent-tested UI cases but no
 - Unwired and unimplemented: `getStatuses`, `getSurveyByOrder`, `submitSurvey` (no endpoints), surveys, attachments/photos, message templates and catalogue administration.
 - Evidence boundary: mapping/validation/paging/freshness/pending/invalidation/fencing behavior is covered by the feature's specs; live backend/CORS, cross-customer permission and redaction, real 201/409 payloads, browser keyboard/responsive acceptance and exhaustive accessibility remain unverified. The native review of the inbox, detail and write slices could not be prepared by the provider here (reproducible `ETIMEDOUT` on the accumulated candidate) and is recorded as a gap, not as an approval.
 
+### Bounded WP9 dashboard (P02)
+
+- M10/RF13/HU13/P12 + M11/RF14/HU14/P02 (RNF01/RNF04/RNF07–RNF10/RNF12). `/admin` opens the dashboard instead of redirecting to `users`; the empty admin child keeps `pathMatch: "full"` with `loadChildren`, which is load-bearing because an empty-path prefix child with a lazy group would swallow `/admin/users`, `/admin/customers` and the rest of the shell.
+- `GET /api/dashboard?desde&hasta` requires `DASHBOARD_LEER` and defaults to the last 30 days. Counts, amounts and the compliance rate are printed exactly as supplied: no client arithmetic, no rounding, no percentage re-scaling, and `tasaCumplimiento` null renders as absent rather than zero. The JSON serialization of those decimals (number vs string) and the rate's units are acceptance items, never guessed.
+- **No cross-visit cache**: entering reads once, only an explicit refresh re-reads, no TTL and no polling. Because a settled read is never replayed, **a new subscription is a new read**: the page owns exactly one subscription per entry and per accepted window (`Subject` + `switchMap` + `takeUntilDestroyed`), and the template never calls a subscribing method, so change detection cannot open a request.
+- A window owns its numbers: a different window clears the entry and shows loading, and the page displays the period the server returned, never the typed one. Verified zero stays data; a `403` is an explicit `DASHBOARD_LEER` error and never an empty board.
+- Not connected: report catalogue, generated-report history and CSV. `GET /api/reportes/{tipo}` **generates** a report and appends to the history — a side effect over a GET — so it must stay behind an explicit user action and is never triggered on mount, refresh or retry.
+- `Landing` stays a disabled non-navigating sidebar button even though `/admin` now renders the dashboard; enabling or repurposing it is an open product decision, not part of this slice.
+
 ## Security and backend integration
 
 - Angular consumes only the internal REST/JSON API; require HTTPS in production. Backend business validation and authorization are authoritative. Role-aware navigation and private-route protection improve UX but do not authorize requests; never infer a complete ACL from role names or planned landing screens.

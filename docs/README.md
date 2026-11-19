@@ -434,3 +434,34 @@ accessibility remain unverified. The native review of the inbox, detail and writ
 by the provider in this environment (reproducible `ETIMEDOUT` on the accumulated candidate); the earlier
 transport and store slices do have their review closed, including one corrected CRITICAL finding about paging.
 See the [support implementation boundary](../src/app/features/customer-support/README.md).
+
+## WP9 — Dashboard P02
+
+M10/RF13/HU13/P12 and M11/RF14/HU14/P02 (RNF01, RNF04, RNF07–RNF10, RNF12). `/admin` now opens the dashboard
+and no longer redirects to users, which was the temporary placeholder since the shell was built.
+
+- **Contract**: `GET /api/dashboard?desde&hasta`, authority `DASHBOARD_LEER`, window defaulting to the last 30
+  days. The response carries the current situation (orders by state, services today and over the next 7 days per
+  day and per collaborator, unscheduled orders, requests pending, open support) and the period activity
+  (requests, orders created/completed/cancelled, compliance rate, completed amount, complaints).
+- **No client arithmetic**: counts, amounts and the rate are printed exactly as supplied; `tasaCumplimiento` is
+  null when there were no closures and renders as absent rather than zero.
+- **No cross-visit cache**: entering reads once and only an explicit refresh re-reads. Because no settled read is
+  replayed, a new subscription is a new read, so the page owns exactly one subscription per entry and per
+  accepted window.
+- **A window owns its numbers**: a different window clears the board and shows loading, and the displayed period
+  is the one the server returned, never the one typed.
+- **403 is an error, not an empty board**: a missing `DASHBOARD_LEER` is shown as an explicit permission error,
+  because an empty board and a denied board look identical to a reader.
+
+Reports, the generated-report history and the CSV export are **not** connected yet. Their contract is verified —
+`GET /api/reportes`, `/generados`, `/{tipo}` and `/{tipo}/csv` — with one hazard that governs their design:
+`GET /api/reportes/{tipo}` **generates** a report and appends it to the history, so it is a side effect over a GET
+and must stay behind an explicit user action, never on mount, refresh or retry. Where that history lives and what
+the CSV shows is still an open decision.
+
+Acceptance gap, recorded rather than implied: live backend/CORS, real permission outcomes, the live JSON
+serialization of the decimal fields (the decoder expects JSON numbers), the undocumented units of the compliance
+rate, browser acceptance in Chrome/Edge/Firefox and exhaustive accessibility remain unverified. The `Landing`
+sidebar entry stays a disabled non-navigating button even though `/admin` now renders the dashboard; enabling it
+is a separate product decision. See the [dashboard boundary](../src/app/features/dashboard/README.md).
