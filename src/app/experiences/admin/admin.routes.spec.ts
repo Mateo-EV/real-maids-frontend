@@ -162,7 +162,9 @@ describe("Admin staff route integration", () => {
     expect(staff.component).toBeUndefined()
     expect(staff.providers).toBeUndefined()
     const children = ADMIN_ROUTES[0].children!
-    expect(children.find(route => route.path === "")?.redirectTo).toBe("users")
+    // P02/W4: the empty admin path is the dashboard entry, no longer a users redirect.
+    expect(children.find(route => route.path === "")?.redirectTo).toBeUndefined()
+    expect(children.find(route => route.path === "")?.loadChildren).toBeTypeOf("function")
     expect(children.find(route => route.path === "users")?.loadChildren).toBeDefined()
     expect(children.find(route => route.path === "customers")?.loadChildren).toBeDefined()
   })
@@ -258,7 +260,9 @@ describe("Admin staff route integration", () => {
 describe("Admin users navigation", () => {
   it("lazily composes customers while retaining the users entry redirect", async () => {
     const children = ADMIN_ROUTES[0].children!
-    expect(children.find(route => route.path === "")?.redirectTo).toBe("users")
+    // P02/W4: the empty admin path is the dashboard entry, no longer a users redirect.
+    expect(children.find(route => route.path === "")?.redirectTo).toBeUndefined()
+    expect(children.find(route => route.path === "")?.loadChildren).toBeTypeOf("function")
     const customers = children.find(route => route.path === "customers")
     expect(customers?.loadChildren).toBeDefined()
     const { CUSTOMERS_ROUTES } = await import("../../features/customers/customers.routes")
@@ -391,8 +395,8 @@ describe("Admin users navigation", () => {
     const auth = setup(false)
     const harness = await RouterTestingHarness.create("/admin")
     expect(auth.restoreSession).toHaveBeenCalled()
-    // Angular resolves the empty-child redirect before evaluating the existing auth guard.
-    expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin%2Fusers")
+    // The dashboard entry is evaluated by the existing auth guard in place of the old redirect.
+    expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fadmin")
     expect(harness.routeNativeElement?.querySelector("app-admin-sidebar")).toBeNull()
   })
 
@@ -418,7 +422,13 @@ describe("Admin users navigation", () => {
 
   it("redirects /admin to lazy users inside one shared shell", async () => {
     setup(true)
-    const harness = await RouterTestingHarness.create("/admin")
+    // P02/W4: `/admin` is now the dashboard entry, so the legacy users destination is asserted
+    // through the entry contract plus `/admin/users` itself; this spec has no HTTP providers.
+    const entry = ADMIN_ROUTES[0].children!.find(route => route.path === "")
+    expect(entry?.redirectTo).toBeUndefined()
+    expect(entry?.pathMatch).toBe("full")
+    expect(entry?.loadChildren).toBeTypeOf("function")
+    const harness = await RouterTestingHarness.create("/admin/users")
     expect(TestBed.inject(Router).url).toBe("/admin/users")
     expect(harness.routeNativeElement?.textContent).toContain("Demo Identity")
     const link =

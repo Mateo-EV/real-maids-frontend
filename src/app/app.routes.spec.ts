@@ -43,7 +43,11 @@ describe("Application route composition", () => {
     expect(login.title).toBe("Iniciar sesión | The Real Maids")
     expect(login.canActivate).toEqual([guestGuard])
     expect(await login.loadComponent!()).toBe(LoginPage)
-    expect(admin.children?.[0]).toEqual({ path: "", pathMatch: "full", redirectTo: "users" })
+    // P02/W4: the empty admin path is the dashboard entry, no longer a users redirect.
+    expect(admin.children?.[0].path).toBe("")
+    expect(admin.children?.[0].pathMatch).toBe("full")
+    expect(admin.children?.[0].redirectTo).toBeUndefined()
+    expect(admin.children?.[0].loadChildren).toBeTypeOf("function")
     expect(admin.children?.[1].path).toBe("users")
     expect(admin.canActivate).toEqual([authGuard])
     expect(await admin.loadComponent!()).toBe(AdminShell)

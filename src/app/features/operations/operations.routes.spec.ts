@@ -172,10 +172,10 @@ describe("Operations protected request integration", () => {
     expect(route.providers).toBeUndefined()
     expect(ADMIN_ROUTES[0].canActivate).toEqual([authGuard])
     const children = ADMIN_ROUTES[0].children!
-    expect(children.find(route => route.path === "")).toMatchObject({
-      pathMatch: "full",
-      redirectTo: "users"
-    })
+    // P02/W4: the empty admin path is the dashboard entry, no longer a users redirect.
+    expect(children.find(route => route.path === "")).toMatchObject({ pathMatch: "full" })
+    expect(children.find(route => route.path === "")?.redirectTo).toBeUndefined()
+    expect(children.find(route => route.path === "")?.loadChildren).toBeTypeOf("function")
     for (const path of ["users", "customers", "staff"])
       expect(children.find(route => route.path === path)?.loadChildren).toBeTypeOf("function")
   })

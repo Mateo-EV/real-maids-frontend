@@ -10,8 +10,18 @@ export const ADMIN_ROUTES: Routes = [
         component => component.AdminShell
       ),
     children: [
-      // Temporary entry destination until the approved dashboard scope is implemented.
-      { path: "", pathMatch: "full", redirectTo: "users" },
+      // P02: `/admin` opens the dashboard (W4, S2); the other children are unchanged.
+      // `pathMatch: "full"` is load-bearing: an empty-path prefix child with `loadChildren` would
+      // swallow every sibling URL (`/admin/users`, `/admin/customers`, ...) and then fail to match
+      // inside the dashboard's own routes, so the lazy group is admitted only for the bare `/admin`.
+      {
+        path: "",
+        pathMatch: "full",
+        loadChildren: () =>
+          import("../../features/dashboard/dashboard.routes").then(
+            routes => routes.DASHBOARD_ROUTES
+          )
+      },
       {
         path: "users",
         loadChildren: () =>
