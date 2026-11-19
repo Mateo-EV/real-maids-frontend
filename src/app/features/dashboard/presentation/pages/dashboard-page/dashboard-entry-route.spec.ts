@@ -104,7 +104,7 @@ describe("Admin dashboard entry route", () => {
     // The dashboard replaces the previous users destination inside the same shell.
     expect(shell.querySelector("app-dashboard-page")).not.toBeNull()
     expect(shell.querySelector("app-users-page")).toBeNull()
-    expect(shell.querySelector("app-catalog-frame")).not.toBeNull()
+    expect(shell.querySelector("h1#dashboard-title")).not.toBeNull()
 
     const request = app.http.expectOne(candidate => candidate.url === endpoint)
     expect(request.request.method).toBe("GET")

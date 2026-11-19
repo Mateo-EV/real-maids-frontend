@@ -1,211 +1,174 @@
-<app-catalog-frame
-  titleId="dashboard-title"
-  title="Panel operativo"
-  description="Indicadores suministrados por el servidor: situación actual y actividad del período."
-  [busy]="busy()"
+<main
+  class="dashboard bg-background text-foreground mx-auto flex w-full max-w-[100rem] flex-col gap-5 px-4 py-6 sm:px-6"
 >
-  <div catalogControls class="flex flex-wrap items-end gap-2">
-    <app-catalog-filters [dates]="filterDates()" (dateChange)="setDate($event)" />
-    <button
-      hlmBtn
-      type="button"
-      variant="outline"
-      size="sm"
-      (click)="refresh()"
-      [disabled]="busy()"
-    >
+  <header class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 id="dashboard-title" class="text-2xl font-bold tracking-tight text-primary">
+        Panel operativo
+      </h1>
+      <p class="mt-1 text-sm text-muted-foreground">Resumen de servicios, órdenes y solicitudes.</p>
+    </div>
+    <button hlmBtn type="button" size="sm" (click)="refresh()" [disabled]="busy()">
       Actualizar panel
     </button>
-  </div>
+  </header>
 
-  <div class="flex flex-col gap-6 p-4">
-    <p class="text-xs text-muted-foreground">
-      Dejá las fechas en blanco para usar la ventana por defecto del servidor (últimos 30 días).
-    </p>
-
-    @if (windowError(); as message) {
-      <p role="alert" class="text-sm text-destructive">{{ message }}</p>
-    }
-
-    @if (loading()) {
-      <p role="status" class="text-sm text-muted-foreground">Cargando panel operativo…</p>
-    }
-
-    @if (refreshing()) {
-      <p role="status" class="text-sm text-muted-foreground">Actualizando panel…</p>
-    }
-
-    @if (errorMessage(); as message) {
-      <div
-        role="alert"
-        class="flex flex-col items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
-      >
+  @if (loading()) {
+    <p role="status" class="text-sm text-muted-foreground">Cargando panel operativo…</p>
+  }
+  @if (refreshing()) {
+    <p role="status" class="text-sm text-muted-foreground">Actualizando panel…</p>
+  }
+  @if (errorMessage(); as message) {
+    <div
+      role="alert"
+      class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+    >
+      <div class="text-sm text-destructive">
         @if (view()) {
-          <p class="text-sm font-medium text-destructive">El panel puede estar desactualizado.</p>
+          <p class="font-medium">El panel puede estar desactualizado.</p>
         }
-        <p class="text-sm text-destructive">{{ message }}</p>
-        <button hlmBtn type="button" variant="outline" size="sm" (click)="refresh()">
-          Reintentar
-        </button>
+        <p>{{ message }}</p>
       </div>
-    }
+      <button hlmBtn type="button" variant="outline" size="sm" (click)="refresh()">
+        Reintentar
+      </button>
+    </div>
+  }
 
-    @if (view(); as board) {
-      <section aria-labelledby="dashboard-current-title" class="flex flex-col gap-3">
-        <h2 id="dashboard-current-title" class="text-base font-semibold text-primary">
-          Situación actual
-        </h2>
-        <div class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  @if (view()) {
+    <section hlmCard aria-labelledby="dashboard-current-title" class="min-w-0">
+      <header hlmCardHeader>
+        <h2 id="dashboard-current-title" hlmCardTitle>Situación actual</h2>
+        <p hlmCardDescription>Estado de la operación, independiente del filtro de fechas.</p>
+      </header>
+      <div hlmCardContent>
+        <dl class="metrics metrics--current">
           @for (metric of currentMetrics(); track metric.key) {
-            <article hlmCard>
-              <div hlmCardHeader>
-                <p class="kpi-label">{{ metric.label }}</p>
-                <span hlmCardAction class="kpi-tile" [attr.data-kpi-tone]="metric.tone">
-                  <ng-icon [name]="metric.icon" aria-hidden="true" size="24" />
-                </span>
-                <p class="kpi-value" [attr.data-kpi]="metric.key">{{ metric.value }}</p>
-                <p hlmCardDescription>{{ metric.detail }}</p>
+            <div class="metric metric--current">
+              <span class="kpi-tile" [attr.data-kpi-tone]="metric.tone" aria-hidden="true">
+                <ng-icon [name]="metric.icon" size="18" />
+              </span>
+              <div class="min-w-0">
+                <dt class="metric-label">{{ metric.label }}</dt>
+                <dd class="metric-value" [attr.data-kpi]="metric.key">{{ metric.value }}</dd>
               </div>
-            </article>
+            </div>
           }
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-0 border-collapse text-sm">
-            <caption class="text-left text-xs text-muted-foreground">
-              Órdenes por estado (sólo los estados que el servidor reportó)
-            </caption>
-            <thead>
-              <tr class="border-b text-left">
-                <th scope="col" class="py-2 pr-4 font-semibold">Estado</th>
-                <th scope="col" class="py-2 text-right font-semibold">Órdenes</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (state of orderStates(); track state.code) {
-                <tr class="border-b last:border-0" [attr.data-order-state]="state.code">
-                  <th scope="row" class="py-2 pr-4 text-left font-normal">{{ state.code }}</th>
-                  <td class="py-2 text-right tabular-nums">{{ state.total }}</td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="2" class="py-2 text-muted-foreground">
-                    El servidor no reportó órdenes por estado.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
+        </dl>
+      </div>
+    </section>
+  }
 
-      <section aria-labelledby="dashboard-period-title" class="flex flex-col gap-3">
-        <h2 id="dashboard-period-title" class="text-base font-semibold text-primary">
-          Actividad del período
-        </h2>
-        <p class="text-sm text-muted-foreground">
-          Período devuelto por el servidor:
-          <time [attr.datetime]="board.period.fromDate" data-period-from>{{
-            board.period.fromDate
-          }}</time>
-          –
-          <time [attr.datetime]="board.period.toDate" data-period-to>{{
-            board.period.toDate
-          }}</time>
+  <div class="dashboard-grid">
+    <section hlmCard aria-labelledby="dashboard-period-title" class="min-w-0">
+      <header hlmCardHeader>
+        <h2 id="dashboard-period-title" hlmCardTitle>Actividad del período</h2>
+        <p hlmCardDescription>
+          Rango del período mostrado. Al entrar se completa con la ventana que devuelve el servidor.
         </p>
-        <div class="catalog-metrics grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          @for (metric of periodMetrics(); track metric.key) {
-            <article hlmCard>
-              <div hlmCardHeader>
-                <p class="kpi-label">{{ metric.label }}</p>
-                <span hlmCardAction class="kpi-tile" [attr.data-kpi-tone]="metric.tone">
-                  <ng-icon [name]="metric.icon" aria-hidden="true" size="24" />
-                </span>
-                <p class="kpi-value" [attr.data-kpi]="metric.key">{{ metric.value }}</p>
-                <p hlmCardDescription>{{ metric.detail }}</p>
+      </header>
+      <div hlmCardContent class="flex flex-col gap-3">
+        <app-catalog-filters
+          class="period-dates"
+          [dates]="filterDates()"
+          (dateChange)="setDate($event)"
+        />
+        @if (windowError(); as message) {
+          <p role="alert" class="text-sm text-destructive">{{ message }}</p>
+        }
+        @if (view(); as board) {
+          <p class="text-xs text-muted-foreground">
+            Período mostrado:
+            <time [attr.datetime]="board.period.fromDate" data-period-from>{{
+              board.period.fromDate
+            }}</time>
+            –
+            <time [attr.datetime]="board.period.toDate" data-period-to>{{
+              board.period.toDate
+            }}</time>
+          </p>
+          <dl class="metrics metrics--period">
+            @for (metric of periodMetrics(); track metric.key) {
+              <div class="metric metric--period">
+                <dt class="metric-label">{{ metric.label }}</dt>
+                <dd class="metric-value" [attr.data-kpi]="metric.key">{{ metric.value }}</dd>
+                @if (metric.detail) {
+                  <dd class="text-xs text-muted-foreground">{{ metric.detail }}</dd>
+                }
               </div>
-            </article>
+            }
+          </dl>
+        }
+      </div>
+    </section>
+
+    @if (view()) {
+      <section hlmCard aria-labelledby="dashboard-daily-title" class="min-w-0">
+        <header hlmCardHeader>
+          <h2 id="dashboard-daily-title" hlmCardTitle>Servicios por día</h2>
+          <p hlmCardDescription>Servicios registrados en el período mostrado.</p>
+        </header>
+        <div hlmCardContent class="chart-body">
+          @if (dailyColumns().length) {
+            <app-dashboard-columns
+              [columns]="dailyColumns()"
+              label="Servicios por día en el período devuelto"
+            />
+          } @else {
+            <p class="chart-empty">No se reportaron servicios por día para este período.</p>
           }
         </div>
       </section>
 
-      <section aria-labelledby="dashboard-daily-title" class="flex flex-col gap-3">
-        <h2 id="dashboard-daily-title" class="text-base font-semibold text-primary">
-          Servicios por día
-        </h2>
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-0 border-collapse text-sm">
-            <caption class="text-left text-xs text-muted-foreground">
-              Servicios por día en el período devuelto
-            </caption>
-            <thead>
-              <tr class="border-b text-left">
-                <th scope="col" class="py-2 pr-4 font-semibold">Fecha</th>
-                <th scope="col" class="py-2 text-right font-semibold">Servicios</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (point of board.current.servicesPerDay; track point.date) {
-                <tr class="border-b last:border-0" [attr.data-daily-date]="point.date">
-                  <th scope="row" class="py-2 pr-4 text-left font-normal">{{ point.date }}</th>
-                  <td class="py-2 text-right tabular-nums">{{ point.services }}</td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="2" class="py-2 text-muted-foreground">
-                    El servidor no reportó días con servicios en el período.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+      <section hlmCard aria-labelledby="dashboard-states-title" class="min-w-0">
+        <header hlmCardHeader>
+          <h2 id="dashboard-states-title" hlmCardTitle>Órdenes por estado</h2>
+          <p hlmCardDescription>Distribución de las órdenes reportadas.</p>
+        </header>
+        <div hlmCardContent>
+          @if (orderStateBars().length) {
+            <app-dashboard-bars
+              [bars]="orderStateBars()"
+              label="Órdenes por estado"
+              tone="primary"
+            />
+          } @else {
+            <p class="chart-empty">No se reportaron órdenes por estado.</p>
+          }
         </div>
       </section>
 
-      <section aria-labelledby="dashboard-load-title" class="flex flex-col gap-3">
-        <h2 id="dashboard-load-title" class="text-base font-semibold text-primary">
-          Carga de colaboradores en los próximos 7 días
-        </h2>
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-0 border-collapse text-sm">
-            <caption class="text-left text-xs text-muted-foreground">
-              Servicios y horas por colaborador, suministrados por el servidor
-            </caption>
-            <thead>
-              <tr class="border-b text-left">
-                <th scope="col" class="py-2 pr-4 font-semibold">Colaborador</th>
-                <th scope="col" class="py-2 pr-4 text-right font-semibold">Servicios</th>
-                <th scope="col" class="py-2 text-right font-semibold">Horas</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (load of board.current.next7DaysLoad; track load.staffId) {
-                <tr class="border-b last:border-0" [attr.data-collaborator]="load.staffId">
-                  <th scope="row" class="py-2 pr-4 text-left font-normal">{{ load.name }}</th>
-                  <td class="py-2 pr-4 text-right tabular-nums">{{ load.services }}</td>
-                  <td class="py-2 text-right tabular-nums">{{ load.hours }}</td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="3" class="py-2 text-muted-foreground">
-                    El servidor no reportó carga de colaboradores para los próximos 7 días.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+      <section hlmCard aria-labelledby="dashboard-load-title" class="min-w-0">
+        <header hlmCardHeader>
+          <h2 id="dashboard-load-title" hlmCardTitle>Carga de colaboradores</h2>
+          <p hlmCardDescription>Servicios y horas en los próximos 7 días.</p>
+        </header>
+        <div hlmCardContent>
+          @if (staffBars().length) {
+            <app-dashboard-bars
+              [bars]="staffBars()"
+              label="Carga de colaboradores en los próximos 7 días"
+              tone="gold"
+            />
+          } @else {
+            <p class="chart-empty">
+              No se reportó carga de colaboradores para los próximos 7 días.
+            </p>
+          }
         </div>
       </section>
     }
   </div>
 
-  <div catalogFooter class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-    @if (view()) {
-      <span>
-        Generado por el servidor:
-        <time [attr.datetime]="generatedText()">{{ generatedText() }}</time>
-      </span>
-    } @else {
-      <span>Panel sin verificar</span>
-    }
-  </div>
-</app-catalog-frame>
+  @if (view()) {
+    <p class="text-xs text-muted-foreground">
+      Datos generados el
+      <time [attr.datetime]="generatedText()"
+        >{{ generatedText().slice(0, 10) }} · {{ generatedText().slice(11, 16) }} UTC</time
+      >
+    </p>
+  } @else {
+    <p class="text-xs text-muted-foreground">Panel sin verificar.</p>
+  }
+</main>

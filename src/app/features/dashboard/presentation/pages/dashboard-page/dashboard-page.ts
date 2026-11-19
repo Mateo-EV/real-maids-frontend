@@ -16,12 +16,16 @@ import {
 } from "@ng-icons/lucide"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmCardImports } from "@spartan-ng/helm/card"
-import { Subject, switchMap } from "rxjs"
+import { Subject, switchMap, tap } from "rxjs"
 import {
   CatalogFilterDate,
   CatalogFilters
 } from "@/app/shared/components/catalog-filters/catalog-filters"
-import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
+import { DashboardBar, DashboardBars } from "../../components/dashboard-bars/dashboard-bars"
+import {
+  DashboardColumn,
+  DashboardColumns
+} from "../../components/dashboard-columns/dashboard-columns"
 import { DashboardErrorCode } from "../../../domain/errors/dashboard.error"
 import { ORDER_STATE_CODES, OrderStateCode } from "../../../domain/models/dashboard-views"
 import { DashboardParams, normalizeDashboardParams } from "../../../domain/params/dashboard.params"
@@ -75,11 +79,19 @@ const invalidWindowMessage =
 @Component({
   selector: "app-dashboard-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CatalogFilters, CatalogFrame, HlmButtonImports, HlmCardImports, NgIcon],
+  imports: [
+    CatalogFilters,
+    DashboardBars,
+    DashboardColumns,
+    HlmButtonImports,
+    HlmCardImports,
+    NgIcon
+  ],
   providers: [
     provideIcons({ lucideActivity, lucideCalendarDays, lucideClipboardList, lucideClock })
   ],
-  templateUrl: "./dashboard-page.html"
+  templateUrl: "./dashboard-page.html",
+  styleUrl: "./dashboard-page.css"
 })
 export class DashboardPage {
   private readonly store = inject(DashboardStore)
@@ -88,6 +100,17 @@ export class DashboardPage {
   private readonly reads = new Subject<ReadRequest>()
 
   readonly model = signal<DashboardParams>({})
+  /**
+   * The window actually requested, which is not the same thing as what the controls show: a
+   * prefilled control displays the returned window while the entry it belongs to was asked
+   * without parameters. Keeping them apart stops a refresh from looking like a new window.
+   */
+  private readonly requested = signal<DashboardParams>({})
+  /**
+   * Once the operator edits a date, the returned window stops rewriting the controls: the
+   * typed values belong to the user, and only the server period label follows the response.
+   */
+  private readonly windowEdited = signal(false)
   readonly windowError = signal("")
   readonly view = computed(() => this.store.result())
   readonly loading = computed(() => this.store.loading())
@@ -111,6 +134,34 @@ export class DashboardPage {
       return total === undefined ? [] : [{ code, total }]
     })
   })
+  /** The supplied counts as bars: the label and the figure are text, the bar is decoration. */
+  readonly orderStateBars = computed<readonly DashboardBar[]>(() =>
+    this.orderStates().map(state => ({
+      key: state.code,
+      label: state.code,
+      value: state.total,
+      valueText: String(state.total)
+    }))
+  )
+  /** Supplied calendar days, printed literally: no instant, no browser timezone, no re-sorting. */
+  readonly dailyColumns = computed<readonly DashboardColumn[]>(() =>
+    (this.view()?.current.servicesPerDay ?? []).map(point => ({
+      key: point.date,
+      axisLabel: axisDay(point.date),
+      accessibleLabel: `${point.date}: ${point.services} servicios`,
+      value: point.services,
+      valueText: String(point.services)
+    }))
+  )
+  readonly staffBars = computed<readonly DashboardBar[]>(() =>
+    (this.view()?.current.next7DaysLoad ?? []).map(load => ({
+      key: String(load.staffId),
+      label: load.name,
+      value: load.services,
+      valueText: String(load.services),
+      detail: `${load.hours} h`
+    }))
+  )
   readonly currentMetrics = computed<readonly DashboardMetric[]>(() => {
     const current = this.view()?.current
     if (!current) return []
@@ -166,7 +217,7 @@ export class DashboardPage {
         key: "requests-registered",
         label: "Solicitudes registradas",
         value: String(period.requestsRegistered),
-        detail: "En el período devuelto",
+        detail: "",
         tone: "navy",
         icon: "lucideClipboardList"
       },
@@ -174,7 +225,7 @@ export class DashboardPage {
         key: "orders-created",
         label: "Órdenes creadas",
         value: String(period.ordersCreated),
-        detail: "En el período devuelto",
+        detail: "",
         tone: "blue",
         icon: "lucideCalendarDays"
       },
@@ -182,7 +233,7 @@ export class DashboardPage {
         key: "orders-completed",
         label: "Órdenes completadas",
         value: String(period.ordersCompleted),
-        detail: "En el período devuelto",
+        detail: "",
         tone: "green",
         icon: "lucideActivity"
       },
@@ -190,7 +241,7 @@ export class DashboardPage {
         key: "orders-cancelled",
         label: "Órdenes canceladas",
         value: String(period.ordersCancelled),
-        detail: "En el período devuelto",
+        detail: "",
         tone: "amber",
         icon: "lucideClock"
       },
@@ -198,10 +249,7 @@ export class DashboardPage {
         key: "compliance-rate",
         label: "Tasa de cumplimiento",
         value: period.complianceRate ?? "—",
-        detail:
-          period.complianceRate === null
-            ? "No hubo cierres en el período"
-            : "Valor suministrado por el servidor",
+        detail: period.complianceRate === null ? "No hubo cierres en el período" : "",
         tone: "green",
         icon: "lucideActivity"
       },
@@ -209,7 +257,7 @@ export class DashboardPage {
         key: "completed-amount",
         label: "Monto completado",
         value: period.completedAmount,
-        detail: "Importe suministrado por el servidor",
+        detail: "",
         tone: "navy",
         icon: "lucideActivity"
       },
@@ -217,7 +265,7 @@ export class DashboardPage {
         key: "complaints",
         label: "Quejas",
         value: String(period.complaints),
-        detail: "En el período devuelto",
+        detail: "",
         tone: "amber",
         icon: "lucideClipboardList"
       }
@@ -230,16 +278,30 @@ export class DashboardPage {
     this.reads
       .pipe(
         switchMap(request => this.store.observe(request.params, request.force)),
+        tap(read => this.adoptServerWindow(read.success ? read.data.period : null)),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
     // One read per entry: mounting the page dispatches the default (server) window once.
-    this.reads.next({ params: this.model(), force: false })
+    this.reads.next({ params: this.requested(), force: false })
+  }
+
+  /**
+   * The server owns its default window (last 30 days), so the controls start by showing the
+   * window it returned instead of four empty placeholders. Presentation only: assigning the
+   * model opens no read, and an edited window is never overwritten.
+   */
+  private adoptServerWindow(period: { fromDate: string; toDate: string } | null | undefined): void {
+    if (this.windowEdited() || !period) return
+    const current = this.model()
+    if (current.fromDate === period.fromDate && current.toDate === period.toDate) return
+    this.model.set({ fromDate: period.fromDate, toDate: period.toDate })
   }
 
   /** S7: an unusable typed window dispatches nothing and keeps the verified board. */
   setDate(change: { id: string; value: string }): void {
     if (this.destroyRef.destroyed) return
+    this.windowEdited.set(true)
     const patch =
       change.id === "dashboard-from"
         ? { fromDate: change.value }
@@ -256,12 +318,22 @@ export class DashboardPage {
     }
     this.windowError.set("")
     this.model.set(window)
+    this.requested.set(window)
     this.reads.next({ params: window, force: false })
   }
 
   /** The only way to re-read (S6): no polling and no automatic retry. */
   refresh(): void {
     if (this.destroyRef.destroyed || this.busy()) return
-    this.reads.next({ params: this.model(), force: true })
+    this.reads.next({ params: this.requested(), force: true })
   }
+}
+
+/**
+ * Compact axis text for a supplied `YYYY-MM-DD` day. Pure string slicing: the day is never
+ * turned into an instant, so the axis cannot drift with the browser or an operational timezone.
+ */
+function axisDay(day: string): string {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(day)
+  return match ? `${match[2]}/${match[1]}` : day
 }
