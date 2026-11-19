@@ -95,3 +95,14 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   spec; se autorizó su corrección mínima y sólo esas líneas cambiaron. Decisión pendiente del humano: el botón
   `Landing` del sidebar sigue deshabilitado, así que hay una inconsistencia visible entre la navegación y lo que
   sí existe.
+
+- **L6.** W5 y cierre técnico del dashboard. Documentación en el README de la feature, la guía de producto, el
+  roadmap y `AGENTS.md` (commit `dd48b58`). Evidencia: suite completa **3644/3644 en 194 archivos** en tres
+  corridas consecutivas, `tsc` app y spec en 0, Prettier limpio, build de producción con SSR **exit 0** y un
+  prerender, bundle inicial **690.57/500 kB**. **Observación honesta:** una corrida anterior de la suite dio
+  5 archivos y 8 tests fallidos que **no se reprodujeron** en las tres corridas siguientes; el log de esa corrida
+  se truncó con `tail` y no conservó los nombres, así que la inestabilidad queda registrada sin atribuir. No se
+  presenta como determinismo probado.
+- **L7.** Decisión abierta D3 (reportes): dónde vive el histórico y qué se muestra del CSV. Hasta resolverla no se
+  escribe código de reportes, porque la generación es un efecto sobre un GET (S5) y equivocarse ahí duplica
+  registros en el histórico del backend.
