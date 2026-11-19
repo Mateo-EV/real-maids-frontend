@@ -395,3 +395,42 @@ database; conflict preserves the draft and does not merge clients. Repeating com
 still returns the existing linked customer. Lead create/edit remains permitted with duplicate
 warnings on the email field, using a permission-guarded boolean lookup rather than a catalog download.
 Missing emails remain optional. See the [customer implementation boundary](../src/app/features/customers/README.md#reserved-customer-emails-and-lead-duplicate-warnings).
+
+## WP8 — Customer support
+
+M09/RF11/HU11/P10, with RF12/HU12 history context (RNF01, RNF08–RNF10, RNF12). Support requests are not
+service requests: the module is `Atencion`, exposed at `/api/atenciones` by the backend, and the frontend
+consumes it as its own capability, not as an order or request editor.
+
+Connected under `/admin/support` (inbox) and `/admin/support/:id` (detail), both guarded and lazy inside the
+protected admin shell, with the `Soporte` entry in the General group after `Operaciones`. The staff audience is
+connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal
+and is not implemented.
+
+- **Reads**: server-paged inbox with `estado`, `idTipo`, `idCliente` and business-local `desde`/`hasta`
+  filters, effective returned metadata and one bounded out-of-range recovery; detail with the server-ordered
+  follow-up timeline. 30000 ms success-only freshness in one root store; a failed revalidation keeps verified
+  data and only zeroes its freshness.
+- **States**: the backend's fixed `RECIBIDA`/`EN_REVISION`/`RESUELTA`/`CERRADA` vocabulary with its supplied
+  display name. There is no status catalogue endpoint and no frontend transition engine: the state dialog
+  offers the documented targets minus the current one and the server's answer — including a 400 — is
+  authoritative.
+- **Writes**: create, add message and change state go through one root store gate, so a duplicate submit is
+  refused instead of dispatched. Only a confirmed current-generation success invalidates the page variants and
+  the affected detail; observed keys re-read once, inactive entries only expire, a failed write invalidates
+  nothing, and a creation does not seed the detail cache because that entry means a verified GET a consumer
+  actually read.
+- **Redaction**: a follow-up with a null author renders an explicit "not shown" case. No name, user id or
+  fallback from another field is invented, and the frontend does not certify backend redaction.
+- **Paging safety**: a page size above the backend maximum is refused before dispatch, and a returned
+  effective size different from the requested one is an invalid response — otherwise the server would silently
+  answer a different offset than the one asked for.
+- **Surveys, attachments/photos, message templates and catalogue administration** have no endpoint and stay
+  unimplemented.
+
+Acceptance gap, recorded rather than implied: live backend/CORS, cross-customer permission and redaction
+outcomes, real 201/409 payload differences, browser acceptance in Chrome/Edge/Firefox and exhaustive
+accessibility remain unverified. The native review of the inbox, detail and write slices could not be prepared
+by the provider in this environment (reproducible `ETIMEDOUT` on the accumulated candidate); the earlier
+transport and store slices do have their review closed, including one corrected CRITICAL finding about paging.
+See the [support implementation boundary](../src/app/features/customer-support/README.md).
