@@ -11,6 +11,7 @@ import { ReportsSettingsError } from "../errors/reports-settings.error"
 import {
   ReportType,
   ReportTable,
+  ReportCsvFile,
   GeneratedReportSummary,
   DashboardSnapshot
 } from "../models/report.models"
@@ -30,7 +31,9 @@ export interface ReportsSettingsRepository {
   generateReport(
     params: GenerateReportParams
   ): Observable<Result<ReportTable, ReportsSettingsError>>
-  exportReportCsv(params: GenerateReportParams): Observable<Result<Blob, ReportsSettingsError>>
+  exportReportCsv(
+    params: GenerateReportParams
+  ): Observable<Result<ReportCsvFile, ReportsSettingsError>>
   getGeneratedReports(
     query: PaginationParams
   ): Observable<Result<PaginationResponse<GeneratedReportSummary>, ReportsSettingsError>>

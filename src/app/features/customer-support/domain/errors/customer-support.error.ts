@@ -7,6 +7,8 @@ export type CustomerSupportErrorCode =
   | "UNAVAILABLE"
   | "INVALID_RESPONSE"
   | "UNEXPECTED"
+  // The domain contract proposes operations the backend does not expose yet.
+  | "UNSUPPORTED"
 
 export class CustomerSupportError extends Error {
   constructor(public readonly code: CustomerSupportErrorCode) {

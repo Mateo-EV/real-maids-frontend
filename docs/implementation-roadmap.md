@@ -332,6 +332,7 @@ S8 («continua con wp7 hasta terminar») continues T6F route/navigation integrat
 - **Acceptance/evidence:** preserve `Recibida → En revisión → Resuelta → Cerrada`, caller-relative fields and author redaction. Test denied ownership, response requirements, pending states and retryable errors without replaying writes.
 - **Traceability:** M09/RF11/HU11/P10; RF12/HU12 history context; RNF01/RNF08–RNF10/RNF12.
 - **Exit:** accepted support journey; complaint photos/uploads and surveys remain separate until their contracts and approval exist.
+- **Delivered (staff audience):** inbox and detail connected under `/admin/support` inside the protected shell with the `Soporte` sidebar entry, server-paged filters, 30000 ms success-only freshness in one root store, create/message/state dialogs behind a single shared pending gate, confirmed-current-generation invalidation, the closed state vocabulary with the transition table left on the server, and explicit null-author redaction rendering. The customer-own audience belongs to WP10. Not delivered: surveys (no endpoint), attachments/photos, message templates and catalogue administration. See [WP8 in the product guide](README.md#wp8--customer-support) and the [support boundary](../src/app/features/customer-support/README.md); live backend/CORS, cross-customer permission/redaction and browser acceptance remain unverified, and the native review of the inbox, detail and write slices could not be prepared by the provider here.
 
 ### WP9 — Dashboard and reports
 
@@ -341,6 +342,7 @@ S8 («continua con wp7 hasta terminar») continues T6F route/navigation integrat
 - **Acceptance/evidence:** server global totals are not current-page counts; charts preserve response meaning. Verify CSV/headers/download behavior and generation side effects; do not automatically replay report generation merely because its transport is GET.
 - **Traceability:** M10/RF13/HU13/P12 and M11/RF14/HU14/P02; RNF01/RNF04/RNF07–RNF10/RNF12.
 - **Exit:** backend/browser-verified oversight with no invented profitability, payroll, split or closing rules.
+- **Delivered (read-only oversight):** `/admin` renders the P02 dashboard, replacing the temporary redirect to `users`. Strict DTO validation, a root store with no cross-visit cache, one read per entry and per accepted window, verbatim figures with a null compliance rate preserved as absent, verified zero kept distinct from absence, and `403` shown as an explicit `DASHBOARD_LEER` error instead of an empty board. Not delivered: report catalogue, generated-report history and CSV export, whose generation is a side effect over `GET` and needs an explicit-action design plus the open decision about where the history lives. Live backend/CORS, real permissions, decimal serialization, browser acceptance and accessibility remain unverified. See [WP9 in the product guide](README.md#wp9--dashboard-p02) and the [dashboard boundary](../src/app/features/dashboard/README.md).
 
 ### WP10 — Customer portal
 

@@ -395,3 +395,75 @@ database; conflict preserves the draft and does not merge clients. Repeating com
 still returns the existing linked customer. Lead create/edit remains permitted with duplicate
 warnings on the email field, using a permission-guarded boolean lookup rather than a catalog download.
 Missing emails remain optional. See the [customer implementation boundary](../src/app/features/customers/README.md#reserved-customer-emails-and-lead-duplicate-warnings).
+
+## WP8 — Customer support
+
+M09/RF11/HU11/P10, with RF12/HU12 history context (RNF01, RNF08–RNF10, RNF12). Support requests are not
+service requests: the module is `Atencion`, exposed at `/api/atenciones` by the backend, and the frontend
+consumes it as its own capability, not as an order or request editor.
+
+Connected under `/admin/support` (inbox) and `/admin/support/:id` (detail), both guarded and lazy inside the
+protected admin shell, with the `Soporte` entry in the General group after `Operaciones`. The staff audience is
+connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal
+and is not implemented.
+
+- **Reads**: server-paged inbox with `estado`, `idTipo`, `idCliente` and business-local `desde`/`hasta`
+  filters, effective returned metadata and one bounded out-of-range recovery; detail with the server-ordered
+  follow-up timeline. By explicit human decision the inbox filters and paging live in the URL, so returning
+  from a detail restores the filtered page, and a `403` on the detail stops rendering the loaded record at
+  once instead of leaving it on screen. 30000 ms success-only freshness in one root store; a failed revalidation keeps verified
+  data and only zeroes its freshness.
+- **States**: the backend's fixed `RECIBIDA`/`EN_REVISION`/`RESUELTA`/`CERRADA` vocabulary with its supplied
+  display name. There is no status catalogue endpoint and no frontend transition engine: the state dialog
+  offers the documented targets minus the current one and the server's answer — including a 400 — is
+  authoritative.
+- **Writes**: create, add message and change state go through one root store gate, so a duplicate submit is
+  refused instead of dispatched. Only a confirmed current-generation success invalidates the page variants and
+  the affected detail; observed keys re-read once, inactive entries only expire, a failed write invalidates
+  nothing, and a creation does not seed the detail cache because that entry means a verified GET a consumer
+  actually read.
+- **Redaction**: a follow-up with a null author renders an explicit "not shown" case. No name, user id or
+  fallback from another field is invented, and the frontend does not certify backend redaction.
+- **Paging safety**: a page size above the backend maximum is refused before dispatch, and a returned
+  effective size different from the requested one is an invalid response — otherwise the server would silently
+  answer a different offset than the one asked for.
+- **Surveys, attachments/photos, message templates and catalogue administration** have no endpoint and stay
+  unimplemented.
+
+Acceptance gap, recorded rather than implied: live backend/CORS, cross-customer permission and redaction
+outcomes, real 201/409 payload differences, browser acceptance in Chrome/Edge/Firefox and exhaustive
+accessibility remain unverified. The native review of the inbox, detail and write slices could not be prepared
+by the provider in this environment (reproducible `ETIMEDOUT` on the accumulated candidate); the earlier
+transport and store slices do have their review closed, including one corrected CRITICAL finding about paging.
+See the [support implementation boundary](../src/app/features/customer-support/README.md).
+
+## WP9 — Dashboard P02
+
+M10/RF13/HU13/P12 and M11/RF14/HU14/P02 (RNF01, RNF04, RNF07–RNF10, RNF12). `/admin` now opens the dashboard
+and no longer redirects to users, which was the temporary placeholder since the shell was built.
+
+- **Contract**: `GET /api/dashboard?desde&hasta`, authority `DASHBOARD_LEER`, window defaulting to the last 30
+  days. The response carries the current situation (orders by state, services today and over the next 7 days per
+  day and per collaborator, unscheduled orders, requests pending, open support) and the period activity
+  (requests, orders created/completed/cancelled, compliance rate, completed amount, complaints).
+- **No client arithmetic**: counts, amounts and the rate are printed exactly as supplied; `tasaCumplimiento` is
+  null when there were no closures and renders as absent rather than zero.
+- **No cross-visit cache**: entering reads once and only an explicit refresh re-reads. Because no settled read is
+  replayed, a new subscription is a new read, so the page owns exactly one subscription per entry and per
+  accepted window.
+- **A window owns its numbers**: a different window clears the board and shows loading, and the displayed period
+  is the one the server returned, never the one typed.
+- **403 is an error, not an empty board**: a missing `DASHBOARD_LEER` is shown as an explicit permission error,
+  because an empty board and a denied board look identical to a reader.
+
+Reports, the generated-report history and the CSV export are **not** connected yet. Their contract is verified —
+`GET /api/reportes`, `/generados`, `/{tipo}` and `/{tipo}/csv` — with one hazard that governs their design:
+`GET /api/reportes/{tipo}` **generates** a report and appends it to the history, so it is a side effect over a GET
+and must stay behind an explicit user action, never on mount, refresh or retry. Where that history lives and what
+the CSV shows is still an open decision.
+
+Acceptance gap, recorded rather than implied: live backend/CORS, real permission outcomes, the live JSON
+serialization of the decimal fields (the decoder expects JSON numbers), the undocumented units of the compliance
+rate, browser acceptance in Chrome/Edge/Firefox and exhaustive accessibility remain unverified. The `Landing`
+sidebar entry stays a disabled non-navigating button even though `/admin` now renders the dashboard; enabling it
+is a separate product decision. See the [dashboard boundary](../src/app/features/dashboard/README.md).

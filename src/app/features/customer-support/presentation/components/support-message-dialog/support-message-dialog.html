@@ -1,0 +1,56 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Agregar mensaje</h2>
+  <p hlmDialogDescription>
+    Atención #{{ context.request.id }} · {{ context.request.subject }}. El servidor registra el
+    autor y la fecha, y decide si el mensaje mueve el estado.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se agregó el mensaje</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Mensaje de seguimiento</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-message-text">Mensaje (obligatorio)</label>
+      <textarea
+        hlmTextarea
+        id="support-message-text"
+        rows="5"
+        [formField]="profile.message"
+        aria-describedby="support-message-text-help support-message-text-errors"
+      ></textarea>
+      <p hlmFieldDescription id="support-message-text-help">
+        Hasta 4000 caracteres. Se omiten espacios al inicio y al final.
+      </p>
+      <div id="support-message-text-errors">
+        @if (profile.message().touched()) {
+          @for (error of profile.message().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      id="support-message-cancel"
+      type="button"
+      variant="outline"
+      [disabled]="pending()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+      @if (pending()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ pending() ? "Agregando…" : "Agregar mensaje" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

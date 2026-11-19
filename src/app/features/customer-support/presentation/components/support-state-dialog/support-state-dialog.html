@@ -1,0 +1,78 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Cambiar estado</h2>
+  <p hlmDialogDescription>
+    Atención #{{ context.request.id }} · {{ context.request.subject }}. Estado actual:
+    {{ context.request.state }} · {{ context.request.stateName }}. El servidor decide si el cambio
+    es válido para este estado; su respuesta manda.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se cambió el estado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Cambio de estado</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-state-target">Estado destino (obligatorio)</label>
+      <hlm-native-select
+        selectId="support-state-target"
+        [formField]="profile.state"
+        aria-describedby="support-state-target-errors"
+        class="w-full"
+      >
+        <option value="">Selecciona estado destino</option>
+        @for (target of targets(); track target.value) {
+          <option [value]="target.value">{{ target.label }}</option>
+        }
+      </hlm-native-select>
+      <div id="support-state-target-errors">
+        @if (profile.state().touched()) {
+          @for (error of profile.state().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-state-message">Mensaje (opcional)</label>
+      <textarea
+        hlmTextarea
+        id="support-state-message"
+        rows="4"
+        [formField]="profile.message"
+        aria-describedby="support-state-message-help support-state-message-errors"
+      ></textarea>
+      <p hlmFieldDescription id="support-state-message-help">
+        Hasta 4000 caracteres. Algunos cambios exigen responder al cliente; el servidor lo valida.
+      </p>
+      <div id="support-state-message-errors">
+        @if (profile.message().touched()) {
+          @for (error of profile.message().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      id="support-state-cancel"
+      type="button"
+      variant="outline"
+      [disabled]="pending()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+      @if (pending()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ pending() ? "Cambiando…" : "Cambiar estado" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
