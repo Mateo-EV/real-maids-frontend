@@ -15,13 +15,24 @@ import {
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HlmEmptyImports } from "@spartan-ng/helm/empty"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { CustomerSupportError } from "../../../domain/errors/customer-support.error"
-import { SupportFollowUpView } from "../../../domain/models/support-views"
+import { SupportFollowUpView, SupportRequestView } from "../../../domain/models/support-views"
+import {
+  SupportMessageContext,
+  SupportMessageDialog
+} from "../../components/support-message-dialog/support-message-dialog"
+import {
+  SupportStateContext,
+  SupportStateDialog
+} from "../../components/support-state-dialog/support-state-dialog"
 import { SupportRequestsStore } from "../../state/support-requests.store"
 import { supportPageContext, supportRouteId } from "../support-page-context"
 
@@ -49,6 +60,12 @@ export class SupportRequestDetailPage {
   private readonly route = inject(ActivatedRoute)
   private readonly destroyRef = inject(DestroyRef)
   private readonly store = inject(SupportRequestsStore)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private dialog: BrnDialogRef | undefined
+  private dialogIdentity: object | undefined
+  /** The root store owns the shared pending gate; the page only mirrors it into controls. */
+  readonly writing = this.store.writing
   private readonly retries = new Subject<boolean>()
   private readonly ownerChanged = new Subject<void>()
   private readonly observationError = signal<CustomerSupportError | undefined>(undefined)
@@ -186,6 +203,94 @@ export class SupportRequestDetailPage {
     this.retries.next(true)
   }
 
+  /** Reply composer for the verified record; the store owns the write and its invalidation. */
+  addMessage(): void {
+    const request = this.openTarget()
+    if (!request) return
+    const revision = this.ownerRevision()
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      this.dialogIdentity === identity &&
+      !!this.dialog?.open &&
+      this.current(request.id, revision) &&
+      generation === this.scope.generation()
+    const context: SupportMessageContext = {
+      request,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onSaved: () => {
+        if (current()) this.toast.success("Mensaje agregado correctamente.")
+      }
+    }
+    this.dialog = this.dialogs.open(SupportMessageDialog, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
+  /**
+   * Target state control. The offered codes are the documented ones; which transition is
+   * legal and when a note is required stays the backend's authority, so its 400 is surfaced.
+   */
+  changeState(): void {
+    const request = this.openTarget()
+    if (!request) return
+    const revision = this.ownerRevision()
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      this.dialogIdentity === identity &&
+      !!this.dialog?.open &&
+      this.current(request.id, revision) &&
+      generation === this.scope.generation()
+    const context: SupportStateContext = {
+      request,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onSaved: () => {
+        if (current()) this.toast.success("Estado de la atención actualizado correctamente.")
+      }
+    }
+    this.dialog = this.dialogs.open(SupportStateDialog, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
+  /** A loaded, matching record with an open, idle overlay is the only safe target. */
+  private openTarget(): SupportRequestView | undefined {
+    const selected = this.request()
+    if (
+      this.destroyRef.destroyed ||
+      !selected ||
+      selected.id !== this.id() ||
+      this.writing() ||
+      !this.current(this.id(), this.ownerRevision()) ||
+      this.dialog?.open
+    )
+      return undefined
+    return { ...selected }
+  }
+
+  private stopEditor(): void {
+    const dialog = this.dialog
+    this.dialog = undefined
+    this.dialogIdentity = undefined
+    this.ownerChanged.next()
+    // A component-scoped overlay cannot schedule an exit render after teardown.
+    if (this.destroyRef.destroyed) dialog?.forceClose()
+    else dialog?.close()
+  }
+
   private current(id: number | null, revision: number): boolean {
     return (
       !this.destroyRef.destroyed &&
@@ -199,6 +304,7 @@ export class SupportRequestDetailPage {
   }
 
   private stopOwner(): void {
+    this.stopEditor()
     this.ownerActive.set(false)
     this.ownerGeneration = -1
     this.observationError.set(undefined)

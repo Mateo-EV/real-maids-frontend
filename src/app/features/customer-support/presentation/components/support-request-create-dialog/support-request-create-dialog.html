@@ -1,0 +1,150 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Crear atención</h2>
+  <p hlmDialogDescription>
+    Registra una atención de soporte para un cliente. El servidor valida el alta y los permisos.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se creó la atención</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Datos de la atención</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-create-customerId">Cliente (obligatorio)</label>
+      <app-catalog-combobox
+        [id]="'support-create-customerId'"
+        [label]="'Cliente'"
+        [placeholder]="'Selecciona cliente'"
+        [emptyLabel]="'Sin clientes para esta búsqueda.'"
+        [searchPlaceholder]="'Buscar cliente…'"
+        [selectedLabel]="customerLabel()"
+        [options]="customerOptions()"
+        [loading]="customerBusy()"
+        [errorLabel]="customerFailed() ? 'No se pudieron cargar los clientes.' : ''"
+        [page]="currentPage()"
+        [pageCount]="pageCount()"
+        (searchChange)="searchCustomers($event)"
+        (selectChange)="customerChanged($event)"
+        (reload)="loadCustomers(true)"
+        (pageChange)="goToPage($event)"
+      />
+      <!-- The picker is not a native form control, so its message is rendered directly. -->
+      <div id="support-create-customerId-errors">
+        @if (profile.customerId().touched()) {
+          @for (error of profile.customerId().errors(); track error.kind) {
+            <p role="alert" class="text-xs text-destructive">{{ error.message }}</p>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-create-typeId">Tipo de atención (obligatorio)</label>
+      <hlm-native-select
+        selectId="support-create-typeId"
+        [formField]="profile.requestTypeId"
+        aria-describedby="support-create-typeId-status support-create-typeId-errors"
+        class="w-full"
+      >
+        <option value="">Selecciona tipo de atención</option>
+        @for (type of typeOptions(); track type.value) {
+          <option [value]="type.value">{{ type.label }}</option>
+        }
+      </hlm-native-select>
+      <div id="support-create-typeId-status">
+        @if (typeEntry().loading) {
+          <p role="status" class="text-xs text-muted-foreground">Cargando tipos…</p>
+        }
+        @if (typeFailed()) {
+          <div class="flex flex-wrap items-center gap-2">
+            <p role="alert" class="text-xs text-destructive">
+              No se pudieron cargar los tipos de atención.
+            </p>
+            <button
+              hlmBtn
+              type="button"
+              size="sm"
+              variant="outline"
+              [disabled]="typeBusy()"
+              (click)="loadTypes(true)"
+            >
+              Reintentar
+            </button>
+          </div>
+        } @else if (typeEntry().result && !typeOptions().length) {
+          <p role="status" class="text-xs text-muted-foreground">
+            No hay tipos de atención en el catálogo recibido.
+          </p>
+        }
+      </div>
+      <div id="support-create-typeId-errors">
+        @if (profile.requestTypeId().touched()) {
+          @for (error of profile.requestTypeId().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-create-subject">Asunto (obligatorio)</label>
+      <input
+        hlmInput
+        id="support-create-subject"
+        type="text"
+        [formField]="profile.subject"
+        aria-describedby="support-create-subject-help support-create-subject-errors"
+      />
+      <p hlmFieldDescription id="support-create-subject-help">
+        Hasta 150 caracteres. Se omiten espacios al inicio y al final.
+      </p>
+      <div id="support-create-subject-errors">
+        @if (profile.subject().touched()) {
+          @for (error of profile.subject().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="support-create-description">Descripción (obligatoria)</label>
+      <textarea
+        hlmTextarea
+        id="support-create-description"
+        rows="5"
+        [formField]="profile.description"
+        aria-describedby="support-create-description-help support-create-description-errors"
+      ></textarea>
+      <p hlmFieldDescription id="support-create-description-help">
+        Hasta 4000 caracteres. Se omiten espacios al inicio y al final.
+      </p>
+      <div id="support-create-description-errors">
+        @if (profile.description().touched()) {
+          @for (error of profile.description().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      id="support-create-cancel"
+      type="button"
+      variant="outline"
+      [disabled]="pending()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+      @if (pending()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ pending() ? "Creando…" : "Crear atención" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

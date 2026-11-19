@@ -153,9 +153,11 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
 - **L18.** Decisión del humano sobre la deuda de review: **continuar con el hueco declarado**. El
   candidato acumulado (`3a62c54..HEAD`) no se puede preparar en este entorno — dos `ETIMEDOUT`
   reproducibles en `candidate-owner-preparation` — y no se insiste más. Consecuencia explícita: T4,
-  T5 y T6 no tienen review nativo; S-1 a S-5 sí lo tienen, y S-5 incluye un CRITICAL corregido y
-  aprobado. Nada de este documento presenta un slice sin review como aprobado, y RDD sigue activado
-  en el clon: la decisión es sobre este candidato, no sobre el interruptor.
+  T5, T6 y T7 no tienen review nativo; S-1 a S-5 sí lo tienen, y S-5 incluye un CRITICAL corregido y
+  aprobado. El hueco sigue la misma causa en cada generación nueva (el candidato acumulado sólo
+  crece), así que la decisión vale para las siguientes mientras no se pida lo contrario; no se gasta
+  un intento más en cada commit. Nada de este documento presenta un slice sin review como aprobado, y
+  RDD sigue activado en el clon: la decisión es sobre este candidato, no sobre el interruptor.
 - **L17.** T6 (transporte y aplicación de escrituras) entregado: `POST /api/atenciones`,
   `POST /api/atenciones/{id}/seguimiento` y `PATCH /api/atenciones/{id}/estado`, con reuso del
   decodificador de detalle para toda respuesta. Los tres métodos del repositorio que devolvían

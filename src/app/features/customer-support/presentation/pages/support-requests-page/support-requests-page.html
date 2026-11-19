@@ -60,6 +60,16 @@
           (reload)="reloadCustomers()"
         />
       </div>
+      <button
+        hlmBtn
+        class="catalog-action-with-plus"
+        size="sm"
+        type="button"
+        [disabled]="writing()"
+        (click)="create()"
+      >
+        <ng-icon name="lucidePlus" aria-hidden="true" />Crear atención
+      </button>
     </app-catalog-filters>
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">

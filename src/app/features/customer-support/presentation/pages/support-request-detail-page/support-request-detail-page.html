@@ -11,6 +11,26 @@
       <a hlmBtn variant="outline" routerLink="/admin/support" [queryParams]="backContext()"
         >Volver a soporte</a
       >
+      @if (request()) {
+        <button
+          hlmBtn
+          variant="outline"
+          type="button"
+          [disabled]="writing()"
+          (click)="addMessage()"
+        >
+          Agregar mensaje
+        </button>
+        <button
+          hlmBtn
+          variant="outline"
+          type="button"
+          [disabled]="writing()"
+          (click)="changeState()"
+        >
+          Cambiar estado
+        </button>
+      }
     </div>
     @if (id() === null) {
       <div class="p-5" hlmAlert variant="destructive" role="alert">

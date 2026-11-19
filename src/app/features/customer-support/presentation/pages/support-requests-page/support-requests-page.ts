@@ -2,6 +2,11 @@ import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angula
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
 import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from "rxjs"
+import { NgIcon, provideIcons } from "@ng-icons/core"
+import { lucidePlus } from "@ng-icons/lucide"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -27,6 +32,10 @@ import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { CustomerSupportError } from "../../../domain/errors/customer-support.error"
 import { SUPPORT_STATE_CODES } from "../../../domain/models/support-views"
 import { SupportRequestQuery } from "../../../domain/params/customer-support.params"
+import {
+  SupportRequestCreateContext,
+  SupportRequestCreateDialog
+} from "../../components/support-request-create-dialog/support-request-create-dialog"
 import { SupportRequestsStore } from "../../state/support-requests.store"
 import { supportPageContext, supportPagingParams } from "../support-page-context"
 
@@ -71,9 +80,11 @@ interface CustomerPickerRequest {
     HlmNativeSelectImports,
     HlmSpinnerImports,
     HlmTableImports,
+    NgIcon,
     RouterLink,
     TablePagination
   ],
+  providers: [provideIcons({ lucidePlus })],
   templateUrl: "./support-requests-page.html"
 })
 export class SupportRequestsPage implements OnInit {
@@ -82,6 +93,12 @@ export class SupportRequestsPage implements OnInit {
   private readonly route = inject(ActivatedRoute)
   private readonly router = inject(Router)
   private readonly destroyRef = inject(DestroyRef)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private dialog: BrnDialogRef | undefined
+  private dialogIdentity: object | undefined
+  /** The root store owns the shared pending gate; the page only mirrors it into controls. */
+  readonly writing = this.store.writing
   // The linked page, not the filters: in-memory filters never travel in the URL.
   private readonly requested = signal<Query>(supportPageContext(this.route.snapshot.queryParamMap))
   private readonly admissionError = signal<CustomerSupportError | undefined>(undefined)
@@ -100,6 +117,7 @@ export class SupportRequestsPage implements OnInit {
   private recoveryUsed = false
   private departing = false
   private readonly scope = createSessionReadScope(() => {
+    this.stopEditor()
     this.revision++
     this.queries.next(null)
     this.typeReads.next(null)
@@ -328,11 +346,53 @@ export class SupportRequestsPage implements OnInit {
     return query
   }
 
+  /**
+   * Create-only overlay: the dialog owns the form and the store owns the write. The page
+   * captures this dialog's identity so a late completion of a replaced overlay emits nothing.
+   */
+  create(): void {
+    if (
+      this.destroyRef.destroyed ||
+      this.departing ||
+      this.writing() ||
+      !this.scope.check() ||
+      this.dialog?.open
+    )
+      return
+    const revision = this.revision
+    const generation = this.scope.generation()
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      !this.departing &&
+      this.dialogIdentity === identity &&
+      revision === this.revision &&
+      this.scope.check() &&
+      generation === this.scope.generation() &&
+      !!this.dialog?.open
+    const context: SupportRequestCreateContext = {
+      owner: this.destroyRef,
+      current,
+      onCreated: () => {
+        if (current()) this.toast.success("Atención creada correctamente.")
+      }
+    }
+    this.dialog = this.dialogs.open(SupportRequestCreateDialog, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-xl max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => this.stopEditor())
     const ready = this.scope.check()
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event instanceof NavigationStart) {
         this.departing = true
+        this.stopEditor()
         this.revision++
         this.customerReads.next(null)
         this.typeReads.next(null)
@@ -442,6 +502,15 @@ export class SupportRequestsPage implements OnInit {
     this.admissionError.set(undefined)
     this.requested.set(query)
     this.queries.next({ query, force })
+  }
+
+  /** The overlay cannot schedule an exit render after its injector is destroyed. */
+  private stopEditor(): void {
+    const dialog = this.dialog
+    this.dialog = undefined
+    this.dialogIdentity = undefined
+    if (this.destroyRef.destroyed) dialog?.forceClose()
+    else dialog?.close()
   }
 
   retry(): void {
