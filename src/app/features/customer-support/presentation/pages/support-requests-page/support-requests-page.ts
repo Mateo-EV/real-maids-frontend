@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router"
+import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from "@angular/router"
 import { catchError, EMPTY, of, Subject, switchMap, takeUntil, tap, timer } from "rxjs"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucidePlus } from "@ng-icons/lucide"
@@ -37,20 +37,33 @@ import {
   SupportRequestCreateDialog
 } from "../../components/support-request-create-dialog/support-request-create-dialog"
 import { SupportRequestsStore } from "../../state/support-requests.store"
-import { supportPageContext, supportPagingParams } from "../support-page-context"
+import {
+  noSupportFilters,
+  SupportFilterValues,
+  supportFilterContext,
+  supportListParams,
+  supportPageContext,
+  supportParamsKey
+} from "../support-page-context"
 
 type Query = Required<PaginationParams> & SupportRequestQuery
 
-/** Blank means "no filter": the adapter only ever receives documented query keys. */
-interface FilterValues {
-  state: string
-  typeId: string
-  customerId: string
-  from: string
-  until: string
+/**
+ * The server query of one filtered page: documented keys only, and a blank filter is an
+ * absent key instead of an empty value.
+ */
+function listQuery(offset: number, limit: number, filters: SupportFilterValues): Query {
+  const query: Query = { offset, limit }
+  if (filters.state) query.state = filters.state
+  const typeId = filters.typeId ? Number(filters.typeId) : 0
+  if (Number.isSafeInteger(typeId) && typeId > 0) query.requestTypeId = typeId
+  const customerId = filters.customerId ? Number(filters.customerId) : 0
+  if (Number.isSafeInteger(customerId) && customerId > 0) query.customerId = customerId
+  if (filters.from) query.fromDate = filters.from
+  if (filters.until) query.toDate = filters.until
+  return query
 }
 
-const noFilters: FilterValues = { state: "", typeId: "", customerId: "", from: "", until: "" }
 /**
  * One searched page at a time: the picker never downloads a catalog nor slices it locally,
  * and only the cleared filter offers an empty value (an absence of identity, not a name).
@@ -59,6 +72,15 @@ const customerPage = { offset: 0, limit: 20 } as const
 const anyCustomer: CatalogComboboxOption = { value: "", label: "Todos los clientes" }
 const searchDebounceMs = 250
 const anyState = ""
+
+/**
+ * A filter that only the URL named yet still has an identity, so its control keeps the
+ * selection visible while the catalog verifies a name for it.
+ */
+function filterIdentity(value: string): { id: number; label: string } | null {
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id > 0 ? { id, label: "" } : null
+}
 
 interface CustomerPickerRequest {
   readonly search: string
@@ -99,13 +121,25 @@ export class SupportRequestsPage implements OnInit {
   private dialogIdentity: object | undefined
   /** The root store owns the shared pending gate; the page only mirrors it into controls. */
   readonly writing = this.store.writing
-  // The linked page, not the filters: in-memory filters never travel in the URL.
-  private readonly requested = signal<Query>(supportPageContext(this.route.snapshot.queryParamMap))
+  /**
+   * S14: the inbox filters live in the URL so leaving and returning restores the filtered
+   * page. The entry snapshot is read once here and every later URL change is adopted below.
+   */
+  private readonly entry = this.route.snapshot.queryParamMap
+  protected readonly filters = signal<SupportFilterValues>(supportFilterContext(this.entry))
+  private readonly requested = signal<Query>(this.entryQuery(this.entry))
   private readonly admissionError = signal<CustomerSupportError | undefined>(undefined)
-  protected readonly filters = signal<FilterValues>(noFilters)
+  /** Canonical key of the context this page published last, so its own URL write is not a read. */
+  private published = supportParamsKey(
+    supportListParams(supportPageContext(this.entry), supportFilterContext(this.entry))
+  )
   /** Captured labels so an already-chosen filter never disappears from its own control. */
-  private readonly selectedCustomer = signal<{ id: number; label: string } | null>(null)
-  private readonly selectedType = signal<{ id: number; label: string } | null>(null)
+  private readonly selectedCustomer = signal<{ id: number; label: string } | null>(
+    filterIdentity(this.filters().customerId)
+  )
+  private readonly selectedType = signal<{ id: number; label: string } | null>(
+    filterIdentity(this.filters().typeId)
+  )
   /** Observed picker query; only one key is active at a time so typing cannot fill the registry. */
   private readonly customerQuery = signal<{ offset: number; limit: number; search?: string }>(
     customerPage
@@ -123,7 +157,7 @@ export class SupportRequestsPage implements OnInit {
     this.typeReads.next(null)
     this.customerReads.next(null)
     this.admissionError.set(undefined)
-    this.filters.set(noFilters)
+    this.filters.set(noSupportFilters)
     this.selectedCustomer.set(null)
     this.selectedType.set(null)
     this.customerQuery.set(customerPage)
@@ -147,7 +181,11 @@ export class SupportRequestsPage implements OnInit {
     const page = this.result()
     return page ? { offset: page.offset, limit: page.limit } : this.requested()
   })
-  readonly paging = computed(() => supportPagingParams(this.query()))
+  /**
+   * The filtered page as links and the URL carry it: filters plus effective paging, blanks
+   * omitted. A detail opened from here can therefore return to exactly this page.
+   */
+  readonly listParams = computed(() => supportListParams(this.query(), this.filters()))
   readonly currentPage = computed(() => this.query().offset / this.query().limit + 1)
   readonly pageCount = computed(() =>
     Math.max(1, Math.ceil((this.result()?.total ?? 0) / this.query().limit))
@@ -186,7 +224,13 @@ export class SupportRequestsPage implements OnInit {
     }))
     const selected = this.selectedType()
     return selected && !loaded.some(option => option.value === String(selected.id))
-      ? [...loaded, { value: String(selected.id), label: `${selected.label} · no disponible` }]
+      ? [
+          ...loaded,
+          {
+            value: String(selected.id),
+            label: `${this.retainedLabel(selected, "Tipo")} · no disponible`
+          }
+        ]
       : loaded
   })
   private readonly loadedCustomers = computed<readonly CatalogComboboxOption[]>(() =>
@@ -202,7 +246,7 @@ export class SupportRequestsPage implements OnInit {
         ? [
             {
               value: String(selected.id),
-              label: `${selected.label} · no disponible en esta página`
+              label: `${this.retainedLabel(selected, "Cliente")} · no disponible en esta página`
             }
           ]
         : []
@@ -212,7 +256,10 @@ export class SupportRequestsPage implements OnInit {
     const selected = this.selectedCustomer()
     if (!selected) return ""
     const value = String(selected.id)
-    return this.customerOptions().find(option => option.value === value)?.label ?? selected.label
+    return (
+      this.customerOptions().find(option => option.value === value)?.label ??
+      this.retainedLabel(selected, "Cliente")
+    )
   })
   readonly filterSelects = computed<readonly CatalogFilterSelect[]>(() => [
     {
@@ -277,7 +324,10 @@ export class SupportRequestsPage implements OnInit {
     const loaded = this.loadedCustomers().find(option => option.value === value)
     const retained = this.selectedCustomer()
     const label =
-      loaded?.label ?? (retained && String(retained.id) === value ? retained.label : undefined)
+      loaded?.label ??
+      (retained && String(retained.id) === value
+        ? this.retainedLabel(retained, "Cliente")
+        : undefined)
     if (!label) return
     this.selectedCustomer.set({ id: customerId, label })
     this.changeFilters({ customerId: value })
@@ -314,7 +364,7 @@ export class SupportRequestsPage implements OnInit {
     if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
     this.selectedCustomer.set(null)
     this.selectedType.set(null)
-    this.changeFilters(noFilters)
+    this.changeFilters(noSupportFilters)
   }
 
   private queueCustomerRead(request: CustomerPickerRequest): void {
@@ -326,24 +376,66 @@ export class SupportRequestsPage implements OnInit {
     return (SUPPORT_STATE_CODES as readonly string[]).includes(value) ? value : anyState
   }
 
-  private changeFilters(patch: Partial<FilterValues>): void {
+  /**
+   * A blank label is a filter that only the URL named yet, so the identity is described by
+   * its own value instead of borrowing a name from somewhere else.
+   */
+  private retainedLabel(selected: { id: number; label: string }, kind: string): string {
+    return selected.label || `${kind} #${selected.id}`
+  }
+
+  private entryQuery(params: ParamMap): Query {
+    const page = supportPageContext(params)
+    return listQuery(page.offset, page.limit, supportFilterContext(params))
+  }
+
+  private changeFilters(patch: Partial<SupportFilterValues>): void {
     const filters = { ...this.filters(), ...patch }
     this.filters.set(filters)
     this.recoveryUsed = false
     // Every filter change restarts at page zero and keeps the effective size.
-    this.load(this.buildQuery(0, this.query().limit, filters))
+    this.load(listQuery(0, this.query().limit, filters))
   }
 
-  private buildQuery(offset: number, limit: number, filters = this.filters()): Query {
-    const query: Query = { offset, limit }
-    if (filters.state) query.state = filters.state
-    const typeId = filters.typeId ? Number(filters.typeId) : 0
-    if (Number.isSafeInteger(typeId) && typeId > 0) query.requestTypeId = typeId
-    const customerId = filters.customerId ? Number(filters.customerId) : 0
-    if (Number.isSafeInteger(customerId) && customerId > 0) query.customerId = customerId
-    if (filters.from) query.fromDate = filters.from
-    if (filters.until) query.toDate = filters.until
-    return query
+  /**
+   * S14: publishes the filtered page in the URL. An unchanged context is not a navigation,
+   * and the key is recorded first so this page never mistakes its own write for a new context.
+   * A bare entry therefore ends up with `?offset=0&limit=20`: offset and limit are always
+   * serialized, filters only when they exist, so the URL always describes a restorable page.
+   */
+  private publish(query: Query): void {
+    const params = supportListParams(query, this.filters())
+    const key = supportParamsKey(params)
+    if (key === this.published) return
+    this.published = key
+    void this.router
+      .navigate([], { relativeTo: this.route, queryParams: params, replaceUrl: true })
+      .catch(() => undefined)
+  }
+
+  /** A URL change this page did not publish is a new context: adopt it, then read once. */
+  private adopt(params: ParamMap): void {
+    const key = supportParamsKey(
+      supportListParams(supportPageContext(params), supportFilterContext(params))
+    )
+    if (key === this.published) return
+    this.published = key
+    if (this.destroyRef.destroyed || this.departing || !this.scope.check()) return
+    const filters = supportFilterContext(params)
+    this.filters.set(filters)
+    this.selectedType.set(filterIdentity(filters.typeId))
+    this.selectedCustomer.set(filterIdentity(filters.customerId))
+    this.recoveryUsed = false
+    this.load(this.entryQuery(params))
+  }
+
+  /** Publishing into this same location keeps the owner alive; only leaving stops it. */
+  private samePath(url: string): boolean {
+    const path = (value: string) => {
+      const segments = value.split(/[?#]/)[0]
+      return segments.length > 1 && segments.endsWith("/") ? segments.slice(0, -1) : segments
+    }
+    return path(url) === path(this.router.url)
   }
 
   /**
@@ -391,6 +483,8 @@ export class SupportRequestsPage implements OnInit {
     const ready = this.scope.check()
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
       if (event instanceof NavigationStart) {
+        // S14: publishing this page into the URL keeps the same location, so it is not leaving.
+        if (this.samePath(event.url)) return
         this.departing = true
         this.stopEditor()
         this.revision++
@@ -398,6 +492,10 @@ export class SupportRequestsPage implements OnInit {
         this.typeReads.next(null)
         this.queries.next(null)
       }
+    })
+    // S14: a URL this page did not publish is the new filter and page context.
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      this.adopt(params)
     })
     // One picker query is observed at a time: a new search supersedes the previous read, so
     // typing cannot exhaust the pinned registry that keeps the current view alive.
@@ -463,9 +561,10 @@ export class SupportRequestsPage implements OnInit {
               queueMicrotask(() => {
                 if (!this.current(generation, revision)) return
                 this.load(
-                  this.buildQuery(
+                  listQuery(
                     Math.floor((page.total - 1) / page.limit) * page.limit,
-                    page.limit
+                    page.limit,
+                    this.filters()
                   ),
                   true
                 )
@@ -501,6 +600,7 @@ export class SupportRequestsPage implements OnInit {
     this.revision++
     this.admissionError.set(undefined)
     this.requested.set(query)
+    this.publish(query)
     this.queries.next({ query, force })
   }
 
@@ -529,6 +629,6 @@ export class SupportRequestsPage implements OnInit {
     )
       return
     this.recoveryUsed = false
-    this.load(this.buildQuery((page - 1) * this.query().limit, this.query().limit))
+    this.load(listQuery((page - 1) * this.query().limit, this.query().limit, this.filters()))
   }
 }

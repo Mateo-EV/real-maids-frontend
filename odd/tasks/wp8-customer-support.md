@@ -278,3 +278,14 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   **Sigue sin verificar**: el camino `403` (requiere un segundo usuario sin el permiso), la redacción entre
   clientes (requiere un usuario de cliente), y todo lo de navegador — teclado, responsive y accesibilidad en
   Chrome/Edge/Firefox.
+
+- **L24.** `R1-001` y `R3-001` corregidos (S14, S15) y verificados: suite de soporte **291/291** con admin y
+  `app.routes` incluidos, `tsc` app y spec en 0, Prettier limpio. El detalle deja de renderizar el registro ante
+  un `403` (cliente, asunto, descripción, seguimiento, enlace a la orden y botones de escritura) y conserva el
+  dato verificado sólo para fallas transitorias; los filtros de la bandeja viven en la URL (`estado`, `idTipo`,
+  `idCliente`, `desde`, `hasta` + `offset`/`limit`), con vacíos omitidos, desconocidos y duplicados descartados,
+  offset a cero al cambiar un filtro, y los enlaces de fila y de vuelta arrastrando la página filtrada. Dos
+  aserciones preexistentes fijaban las reglas invertidas: la de refresco con `403` se reescribió para usar un
+  fallo transitorio (conservando sus tres pines) y la del enlace de vuelta ahora incluye `estado` e verifica que
+  una clave desconocida sigue sin serializarse. Entrar a `/admin/support` normaliza la URL a `?offset=0&limit=20`
+  porque offset/limit siempre se serializan; queda comentado en el código.

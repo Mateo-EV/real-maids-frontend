@@ -124,7 +124,7 @@
                     <a
                       class="font-medium underline underline-offset-4 break-words"
                       [routerLink]="['/admin/support', request.id]"
-                      [queryParams]="paging()"
+                      [queryParams]="listParams()"
                       [attr.aria-label]="
                         'Ver detalle de la atención ' + request.id + ' de ' + request.customerName
                       "
@@ -166,7 +166,7 @@
                   <a
                     class="underline underline-offset-4 break-words"
                     [routerLink]="['/admin/support', request.id]"
-                    [queryParams]="paging()"
+                    [queryParams]="listParams()"
                     [attr.aria-label]="
                       'Ver detalle de la atención ' + request.id + ' de ' + request.customerName
                     "

@@ -1,5 +1,6 @@
 import type { ParamMap } from "@angular/router"
 import type { PaginationParams } from "@/app/shared/pagination/pagination.params"
+import { SUPPORT_STATE_CODES } from "../../domain/models/support-views"
 
 const maxInt32 = 2147483647
 // The backend caps a page at 100 rows and the store refuses a larger key (S13), so the
@@ -17,10 +18,66 @@ function decimal(value: string | null): number | null {
 }
 
 /**
- * Detail-route URL context: only the offset/limit the inbox actually owns. Filters stay
- * in-memory page state and are never serialized here; a missing, duplicated or malformed
- * pair falls back to the documented 0/20 defaults.
+ * The inbox filters the URL carries (S14). Blank means "no filter": the list is unfiltered
+ * for that dimension, so the key is simply absent from the URL and from the query.
  */
+export interface SupportFilterValues {
+  readonly state: string
+  readonly typeId: string
+  readonly customerId: string
+  readonly from: string
+  readonly until: string
+}
+
+export const noSupportFilters: SupportFilterValues = {
+  state: "",
+  typeId: "",
+  customerId: "",
+  from: "",
+  until: ""
+}
+
+/** One documented value per key: a duplicated parameter is not a filter. */
+function single(params: ParamMap, key: string): string {
+  const values = params.getAll(key)
+  return values.length === 1 ? (values[0] ?? "") : ""
+}
+
+function positive(value: string): string {
+  const id = decimal(value)
+  return id !== null && id > 0 ? String(id) : ""
+}
+
+/** A calendar day is an ISO `YYYY-MM-DD` string, never a browser-local instant. */
+function calendarDay(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return ""
+  const instant = Date.parse(`${value}T00:00:00Z`)
+  return Number.isNaN(instant) || new Date(instant).toISOString().slice(0, 10) !== value
+    ? ""
+    : value
+}
+
+/**
+ * Same rules for URL input and for values the page already holds, so a malformed or
+ * unknown value falls back to "no filter" instead of dispatching a bad query. An
+ * inverted range is dropped as a pair: the store refuses it and the user never asked
+ * for a range that cannot be read.
+ */
+function normalize(filters: SupportFilterValues): SupportFilterValues {
+  const from = calendarDay(filters.from)
+  const until = calendarDay(filters.until)
+  const inverted = !!from && !!until && from > until
+  return {
+    // S4: the closed backend enum; there is no status catalog to resolve another value.
+    state: (SUPPORT_STATE_CODES as readonly string[]).includes(filters.state) ? filters.state : "",
+    typeId: positive(filters.typeId),
+    customerId: positive(filters.customerId),
+    from: inverted ? "" : from,
+    until: inverted ? "" : until
+  }
+}
+
+/** Detail-route URL context: only the offset/limit the inbox actually owns. */
 export function supportPageContext(params: ParamMap): Required<PaginationParams> {
   if (params.getAll("offset").length !== 1 || params.getAll("limit").length !== 1) return defaults()
   const offset = decimal(params.get("offset")),
@@ -35,7 +92,18 @@ export function supportPageContext(params: ParamMap): Required<PaginationParams>
     : defaults()
 }
 
-/** The effective page the list is showing, as the only query parameters it may link with. */
+/** The URL filters of a support list: unknown, duplicated, malformed and blank are dropped. */
+export function supportFilterContext(params: ParamMap): SupportFilterValues {
+  return normalize({
+    state: single(params, "estado"),
+    typeId: single(params, "idTipo"),
+    customerId: single(params, "idCliente"),
+    from: single(params, "desde"),
+    until: single(params, "hasta")
+  })
+}
+
+/** The effective page the list is showing, as the only paging it may link with. */
 export function supportPagingParams(context: PaginationParams): Required<PaginationParams> {
   const offset = context.offset === undefined ? 0 : context.offset,
     limit = context.limit === undefined ? 20 : context.limit
@@ -49,6 +117,37 @@ export function supportPagingParams(context: PaginationParams): Required<Paginat
     offset / limit <= maxInt32
     ? { offset, limit }
     : defaults()
+}
+
+/**
+ * The documented query parameters of one filtered page, in a stable order. Blank filters
+ * are omitted rather than serialized as empty values, so the URL never carries a key that
+ * the list would not send.
+ */
+export function supportListParams(
+  paging: PaginationParams,
+  filters: SupportFilterValues = noSupportFilters
+): Record<string, string> {
+  const page = supportPagingParams(paging)
+  const values = normalize(filters)
+  const params: Record<string, string> = {
+    offset: String(page.offset),
+    limit: String(page.limit)
+  }
+  if (values.state) params["estado"] = values.state
+  if (values.typeId) params["idTipo"] = values.typeId
+  if (values.customerId) params["idCliente"] = values.customerId
+  if (values.from) params["desde"] = values.from
+  if (values.until) params["hasta"] = values.until
+  return params
+}
+
+/** Canonical identity of a query context: key order never makes equal states look different. */
+export function supportParamsKey(params: Record<string, string>): string {
+  return Object.keys(params)
+    .sort()
+    .map(key => `${key}=${params[key]}`)
+    .join("&")
 }
 
 /** A support route id is a positive decimal int32; anything else dispatches no read. */

@@ -34,7 +34,12 @@ import {
   SupportStateDialog
 } from "../../components/support-state-dialog/support-state-dialog"
 import { SupportRequestsStore } from "../../state/support-requests.store"
-import { supportPageContext, supportRouteId } from "../support-page-context"
+import {
+  supportFilterContext,
+  supportListParams,
+  supportPageContext,
+  supportRouteId
+} from "../support-page-context"
 
 type DetailField = readonly [label: string, value: string | number | null]
 
@@ -76,14 +81,25 @@ export class SupportRequestDetailPage {
 
   readonly id = signal<number | null>(null)
   readonly ownerRevision = signal(0)
-  // Only the paging the inbox owns travels in the URL; filters stay page state.
-  readonly backContext = computed(() => supportPageContext(this.params()))
+  // S14: the return link restores the filtered page the list owns — filters plus paging —
+  // and only what this URL already carries, never an invented filter.
+  readonly backContext = computed(() =>
+    supportListParams(supportPageContext(this.params()), supportFilterContext(this.params()))
+  )
   // Root state owns TTL, flights and session fencing; this page only observes its own id.
   readonly detail = computed(() => {
     const id = this.id()
     return id === null || !this.ownerActive() ? undefined : this.store.selectRequest(id)
   })
+  /**
+   * R1-001: a denial is the backend's authority over this record. From a 403 on, nothing of a
+   * previously verified record is rendered — the store keeps its own cache, the page does not
+   * show it. Every other error keeps the verified data visible with a retryable notice.
+   */
+  readonly error = computed(() => this.detail()?.error ?? this.observationError())
+  readonly denied = computed(() => this.error()?.code === "FORBIDDEN")
   readonly selected = computed(() => {
+    if (this.denied()) return undefined
     const result = this.detail()?.result
     return result && result.request.id === this.id() ? result : undefined
   })
@@ -91,7 +107,6 @@ export class SupportRequestDetailPage {
   readonly followUps = computed<readonly SupportFollowUpView[]>(
     () => this.selected()?.followUps ?? []
   )
-  readonly error = computed(() => this.detail()?.error ?? this.observationError())
   readonly busy = computed(() => !!this.detail()?.loading || !!this.detail()?.refreshing)
   readonly orderId = computed(() => this.request()?.orderId ?? null)
   readonly orderCode = computed(() => this.request()?.orderCode ?? null)

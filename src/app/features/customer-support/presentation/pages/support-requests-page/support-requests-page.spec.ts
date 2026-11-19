@@ -2,7 +2,7 @@ import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { PLATFORM_ID, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
-import { provideRouter } from "@angular/router"
+import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
 import { BehaviorSubject } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -73,7 +73,7 @@ const customersStub = {
   }
 }
 
-async function mount(options: { server?: boolean; guest?: boolean } = {}) {
+async function mount(options: { server?: boolean; guest?: boolean } = {}, url: string = inbox) {
   customerItems.set([
     { id: 8, name: "Cliente autorizado", isActive: true },
     { id: 9, name: "Cliente inactivo", isActive: false },
@@ -94,7 +94,7 @@ async function mount(options: { server?: boolean; guest?: boolean } = {}) {
       { provide: PLATFORM_ID, useValue: options.server ? "server" : "browser" }
     ]
   })
-  const harness = await RouterTestingHarness.create(inbox)
+  const harness = await RouterTestingHarness.create(url)
   const settle = async () => {
     harness.detectChanges()
     await harness.fixture.whenStable()
@@ -504,4 +504,121 @@ describe("SupportRequestsPage inbox", () => {
       expect(s.element.textContent).not.toMatch(/No hay atenciones|0–0 de 0/)
     }
   )
+
+  // S14: the inbox filters live in the URL, so the filtered page survives leaving and
+  // returning. Values are the documented query keys and blanks are never serialized.
+  it("applies the filters carried by the URL on entry and sends only documented keys", async () => {
+    const s = await mount(
+      undefined,
+      `${inbox}?offset=20&limit=20&estado=RESUELTA&idTipo=7&idCliente=8&desde=2024-01-01&hasta=2024-01-31`
+    )
+    const first = s.list()
+    expect(first.request.params.keys().sort()).toEqual([
+      "desde",
+      "estado",
+      "hasta",
+      "idCliente",
+      "idTipo",
+      "pagina",
+      "tamanio"
+    ])
+    expect([
+      first.request.params.get("pagina"),
+      first.request.params.get("tamanio"),
+      first.request.params.get("estado"),
+      first.request.params.get("idTipo"),
+      first.request.params.get("idCliente"),
+      first.request.params.get("desde"),
+      first.request.params.get("hasta")
+    ]).toEqual(["1", "20", "RESUELTA", "7", "8", "2024-01-01", "2024-01-31"])
+    first.flush(page(1, 20, 45))
+    await s.settle()
+    await s.flushCatalog()
+    // The controls show the URL state instead of silently resetting to "all".
+    expect(s.stateSelect().value).toBe("RESUELTA")
+    expect(s.typeSelect().value).toBe("7")
+    expect(s.element.textContent).toContain("21–40 de 45")
+    s.http.expectNone(() => true)
+  })
+
+  it("falls back to no filter for malformed, unknown or duplicated URL values", async () => {
+    const s = await mount(
+      undefined,
+      `${inbox}?offset=0&limit=20&estado=NOPE&idTipo=0&idCliente=-8&desde=2024-02-31&hasta=x&desconocido=1`
+    )
+    const first = s.list()
+    expect(first.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    first.flush(page(0, 20, 1))
+    await s.settle()
+    await s.flushCatalog()
+    expect(s.stateSelect().value).toBe("")
+    expect(s.typeSelect().value).toBe("")
+    s.http.expectNone(() => true)
+  })
+
+  it("drops duplicated and blank URL filters instead of dispatching them", async () => {
+    const s = await mount(
+      undefined,
+      `${inbox}?offset=0&limit=20&estado=RESUELTA&estado=CERRADA&idTipo=&idCliente=&desde=&hasta=`
+    )
+    const first = s.list()
+    expect(first.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    first.flush(page(0, 20, 1))
+    await s.settle()
+    await s.flushCatalog()
+    expect(s.stateSelect().value).toBe("")
+    s.http.expectNone(() => true)
+  })
+
+  it("writes a filter change to the URL at offset zero while keeping the effective size", async () => {
+    const s = await mount()
+    await s.send(page(0, 20, 45))
+    await s.flushCatalog()
+    await s.click("Página 2")
+    const second = s.list()
+    second.flush(page(1, 20, 45))
+    await s.settle()
+    const router = TestBed.inject(Router)
+    expect(router.url).toBe(`${inbox}?offset=20&limit=20`)
+
+    const state = s.stateSelect()
+    state.value = "CERRADA"
+    state.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect(router.url).toBe(`${inbox}?offset=0&limit=20&estado=CERRADA`)
+    const filtered = s.list()
+    expect([
+      filtered.request.params.get("pagina"),
+      filtered.request.params.get("tamanio"),
+      filtered.request.params.get("estado")
+    ]).toEqual(["0", "20", "CERRADA"])
+    filtered.flush(page(0, 20, 45))
+    await s.settle()
+
+    // Clearing a filter removes the key instead of serializing a blank value.
+    state.value = ""
+    state.dispatchEvent(new Event("change", { bubbles: true }))
+    await s.settle()
+    expect(router.url).toBe(`${inbox}?offset=0&limit=20`)
+    // The unfiltered first page is still verified, so returning to it needs no new read.
+    s.http.expectNone(() => true)
+  })
+
+  it("links each row with the filtered page so the detail can return to it", async () => {
+    const s = await mount(undefined, `${inbox}?offset=0&limit=20&estado=RESUELTA&idTipo=7`)
+    s.list().flush(page(0, 20, 1, dto(17, "Consulta filtrada")))
+    await s.settle()
+    await s.flushCatalog()
+    const link = s.element.querySelector<HTMLAnchorElement>(
+      '[catalogDesktop] a[href^="/admin/support/"]'
+    )!
+    const url = new URL(link.getAttribute("href")!, "https://app.example.test")
+    expect(url.pathname).toBe("/admin/support/17")
+    expect(Array.from(url.searchParams.keys())).toEqual(["offset", "limit", "estado", "idTipo"])
+    expect([url.searchParams.get("estado"), url.searchParams.get("idTipo")]).toEqual([
+      "RESUELTA",
+      "7"
+    ])
+    s.http.expectNone(() => true)
+  })
 })

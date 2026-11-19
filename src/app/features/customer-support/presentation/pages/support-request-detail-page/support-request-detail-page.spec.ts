@@ -285,6 +285,8 @@ describe("SupportRequestDetailPage", () => {
     app.http.expectNone(() => true)
   })
 
+  // The pin for everything that is not an authorization denial: a transient refresh failure
+  // keeps the verified record. R1-001 (the 403 case) is pinned by its own spec below.
   it("keeps the verified detail visible while a same-id refresh fails and retries with GET only", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1000)
     const app = await setup()
@@ -299,12 +301,12 @@ describe("SupportRequestDetailPage", () => {
     expect(app.text()).toContain("Cliente autorizado")
     expect(app.text()).toMatch(/actualizando atenci[oó]n/i)
 
-    refresh.flush({ mensaje: "Private denial" }, { status: 403, statusText: "Forbidden" })
+    refresh.flush({ mensaje: "Private denial" }, { status: 500, statusText: "Server Error" })
     await app.settle()
     expect(app.text()).toContain("Cliente autorizado")
     expect(app.text()).toContain("Revisando el caso")
     expect(app.text()).toMatch(/desactualizados/i)
-    expect(app.text()).toMatch(/no tienes permiso/i)
+    expect(app.text()).toMatch(/no est[aá] disponible/i)
     expect(app.text()).not.toContain("Private denial")
     expect(app.text()).not.toMatch(/actualizando atenci[oó]n/i)
 
@@ -398,10 +400,15 @@ describe("SupportRequestDetailPage", () => {
       expect(back()?.search, malformed).toBe("?offset=0&limit=20")
       app.http.expectNone(() => true)
     }
-    // A stray filter parameter is never re-serialized: only the paging context survives.
+    // S14: the documented filter keys travel with the paging, so a filtered page and its
+    // detail restore each other. A key the list does not own is still never re-serialized.
     await app.navigate("/admin/support/17?offset=20&limit=20&estado=RECIBIDA")
-    expect(back()?.search).toBe("?offset=20&limit=20")
+    expect(back()?.search).toBe("?offset=20&limit=20&estado=RECIBIDA")
     expect(app.text()).toContain("Cliente autorizado")
+    app.http.expectNone(() => true)
+
+    await app.navigate("/admin/support/17?offset=20&limit=20&estado=RECIBIDA&desconocido=1")
+    expect(back()?.search).toBe("?offset=20&limit=20&estado=RECIBIDA")
     app.http.expectNone(() => true)
   })
 
@@ -412,5 +419,105 @@ describe("SupportRequestDetailPage", () => {
     expect(app.text()).not.toContain("No registrado")
     expect(app.timeline()).toHaveLength(0)
     app.http.expectNone(() => true)
+  })
+
+  // R1-001: a denial is backend authority, so a refused refresh stops showing the record
+  // at once instead of keeping customer, subject, description and follow-ups on screen.
+  it("stops showing the loaded record as soon as a same-id refresh is denied", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    const app = await setup()
+    app.pending().flush(detailDto())
+    await app.settle()
+    expect(app.text()).toContain("Cliente autorizado")
+    expect(app.timeline()).toHaveLength(1)
+
+    await app.navigate("/admin/support")
+    now.mockReturnValue(31001)
+    await app.navigate("/admin/support/17")
+    const refresh = app.pending()
+    expect(app.text()).toContain("Cliente autorizado")
+
+    refresh.flush({ mensaje: "Private denial" }, { status: 403, statusText: "Forbidden" })
+    await app.settle()
+
+    expect(app.text()).toMatch(/no tienes permiso/i)
+    expect(app.text()).not.toContain("Private denial")
+    // Nothing of the refused record survives: no customer, subject, description or order.
+    expect(app.text()).not.toContain("Cliente autorizado")
+    expect(app.text()).not.toContain("No puedo ver mi factura")
+    expect(app.text()).not.toContain("Descripción literal de la atención")
+    expect(app.text()).not.toContain("ORD-41")
+    expect(app.element().querySelector('a[href^="/admin/operations/orders/"]')).toBeNull()
+    // The follow-up line and the write affordances go with it.
+    expect(app.text()).not.toContain("Revisando el caso")
+    expect(app.timeline()).toHaveLength(0)
+    expect(app.text()).not.toMatch(/agregar mensaje|cambiar estado/i)
+    expect(app.text()).not.toMatch(/actualizando atenci[oó]n/i)
+    app.http.expectNone(() => true)
+  })
+
+  // The narrowing above must not be widened: a transient failure still keeps verified data.
+  it("keeps the verified record visible for a transient refresh failure and retries with GET only", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000)
+    const app = await setup()
+    app.pending().flush(detailDto())
+    await app.settle()
+
+    await app.navigate("/admin/support")
+    now.mockReturnValue(31001)
+    await app.navigate("/admin/support/17")
+    const refresh = app.pending()
+    refresh.error(new ProgressEvent("error"))
+    await app.settle()
+
+    expect(app.text()).toContain("Cliente autorizado")
+    expect(app.text()).toContain("No puedo ver mi factura")
+    expect(app.text()).toContain("Revisando el caso")
+    expect(app.text()).toMatch(/desactualizados/i)
+    expect(app.text()).not.toMatch(/no tienes permiso/i)
+    expect(app.text()).not.toMatch(/actualizando atenci[oó]n/i)
+
+    await app.retry()
+    expect(app.text()).toContain("Cliente autorizado")
+    app.pending().flush(detailDto(17, {}, [followUpDto(95, "Agente dos", false, "Caso resuelto")]))
+    await app.settle()
+    expect(app.text()).toContain("Caso resuelto")
+    expect(app.text()).not.toMatch(/desactualizados/i)
+    app.http.expectNone(() => true)
+  })
+
+  // S14: the return link restores the filtered page the user left and invents no filter.
+  it("carries the inbox filters plus paging in the return link without inventing any", async () => {
+    const app = await setup(
+      "/admin/support/17?offset=20&limit=20&estado=RESUELTA&idTipo=7&idCliente=8&desde=2024-01-01&hasta=2024-01-31&desconocido=1"
+    )
+    app.pending().flush(detailDto())
+    await app.settle()
+
+    const back = () => app.links().find(link => link.path === "/admin/support")
+    expect(back()?.search).toBe(
+      "?offset=20&limit=20&estado=RESUELTA&idTipo=7&idCliente=8&desde=2024-01-01&hasta=2024-01-31"
+    )
+
+    // Malformed, unknown, duplicated and blank values fall back to no filter, never invented.
+    for (const [url, search] of [
+      ["/admin/support/17?limit=20", "?offset=0&limit=20"],
+      [
+        "/admin/support/17?offset=20&limit=20&estado=NOPE&idTipo=0&idCliente=-8&desde=2024-02-31&hasta=x",
+        "?offset=20&limit=20"
+      ],
+      [
+        "/admin/support/17?offset=20&limit=20&estado=RESUELTA&estado=CERRADA&idTipo=7&idTipo=4&idCliente=&desde=&hasta=",
+        "?offset=20&limit=20"
+      ],
+      [
+        "/admin/support/17?offset=20&limit=20&desde=2024-02-01&hasta=2024-01-01",
+        "?offset=20&limit=20"
+      ]
+    ] as const) {
+      await app.navigate(url)
+      expect(back()?.search, url).toBe(search)
+      app.http.expectNone(() => true)
+    }
   })
 })
