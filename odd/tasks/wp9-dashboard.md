@@ -137,3 +137,7 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   Corregido como trabajo posterior: el aviso ahora dice que el resultado es **desconocido** y pide revisar el
   historial antes de reintentar, con una aserción que además prohíbe volver a la redacción anterior. Reportes
   44/44 en 7 archivos, `tsc` spec en 0 y Prettier limpio después del cambio.
+
+- **L12.** Review nativo de la corrección del aviso (`review-532193cca49d7787`): **aprobado** con una lente
+  (reliability), sin hallazgos. Con esto WP9 queda **sin deuda de review**: dashboard aprobado, reportes aprobado
+  con advisory corregido, y la corrección del aviso aprobada. El hueco de review sigue siendo el de WP8 (T4–T7).
