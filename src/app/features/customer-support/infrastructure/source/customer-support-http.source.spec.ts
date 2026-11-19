@@ -118,14 +118,16 @@ describe("CustomerSupportHttpSource read transport", () => {
 
   it("refuses a page the server resized, because its rows are not the requested offset", async () => {
     const pending = firstValueFrom(source.getRequests({ offset: 0, limit: 100 }))
-    http.expectOne(r => r.url === supportRequestsUrl).flush(
-      pageOf([atencionDto(), atencionDto({ idAtencion: 18 })], {
-        pagina: 0,
-        tamanio: 50,
-        totalElementos: 2,
-        totalPaginas: 1
-      })
-    )
+    http
+      .expectOne(r => r.url === supportRequestsUrl)
+      .flush(
+        pageOf([atencionDto(), atencionDto({ idAtencion: 18 })], {
+          pagina: 0,
+          tamanio: 50,
+          totalElementos: 2,
+          totalPaginas: 1
+        })
+      )
     expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
   })
 

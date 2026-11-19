@@ -179,20 +179,11 @@ describe("Customer support public read composition", () => {
     http.expectNone(() => true)
   })
 
-  it("keeps the six unwired capabilities UNSUPPORTED with zero HTTP", async () => {
+  it("keeps the three endpoint-less capabilities UNSUPPORTED with zero HTTP", async () => {
     const operations: Observable<Result<unknown, CustomerSupportError>>[] = [
       repository.getStatuses(),
       repository.getSurveyByOrder(8),
-      repository.submitSurvey({ orderId: 8, customerId: 2, rating: 5, comment: null }),
-      repository.createRequest({
-        customerId: 2,
-        orderId: null,
-        requestTypeId: 4,
-        subject: "Asunto",
-        description: "Descripción"
-      }),
-      repository.addMessage(17, { message: "Mensaje" }),
-      repository.changeState(17, { state: "RESUELTA", message: null })
+      repository.submitSurvey({ orderId: 8, customerId: 2, rating: 5, comment: null })
     ]
     for (const operation of operations) {
       const result = await firstValueFrom(operation)

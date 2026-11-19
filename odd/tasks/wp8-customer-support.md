@@ -107,7 +107,9 @@ separan en un commit propio.
 | S-3 | `040f7d9` | Repositorio, casos de uso, `useExisting` y composición root + specs (T2) | 329 |
 | S-4 | `744c78a` | Store raíz de lecturas con TTL 30000 ms + specs (T3) | 856 |
 | S-5 | `3a62c54` | Corrección obligada por el review (R3-001: offset y tope de página) + specs | 63 |
-| S-6 | (este commit) | Ruta `/admin/support`, entrada Soporte, bandeja con filtros y paginación + specs (T4) | ver commit |
+| S-6 | `83ae5d3` | Ruta `/admin/support`, entrada Soporte, bandeja con filtros y paginación + specs (T4) | 1200 |
+| S-7 | `0e8897a` | Detalle con línea de seguimiento, contexto de página en URL, enlaces de fila y de orden + specs (T5) | 1151 |
+| S-8 | (este commit) | Transporte y aplicación de las tres escrituras (alta, respuesta, cambio de estado) + specs | ver commit |
 
 El objetivo de ~400 líneas se mide sobre código más specs, y acá los specs son la mitad del
 volumen: S-2 son 421 líneas de pruebas de transporte con sus negativos malformados, y S-4 son 643
@@ -139,6 +141,24 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   La corrección se verificó observando RED real: al revertir las dos líneas de producción fallan
   exactamente los tres tests nuevos (75/75 → 3 fallas → 75/75). Aprobación de review ≠ autorización
   de entrega: commit, push y PR siguen siendo política ordinaria del repo.
+- **L17.** T6 (transporte y aplicación de escrituras) entregado: `POST /api/atenciones`,
+  `POST /api/atenciones/{id}/seguimiento` y `PATCH /api/atenciones/{id}/estado`, con reuso del
+  decodificador de detalle para toda respuesta. Los tres métodos del repositorio que devolvían
+  `UNSUPPORTED` ya tienen transporte; `getStatuses` y las encuestas siguen sin endpoint. Decisiones
+  que el worker dejó planteadas y que acepto: `idOrden` nulo se omite (no viaja como `null`);
+  `idCliente` nulo se acepta y un valor provisto debe ser int32 positivo (sirve para la audiencia de
+  cliente de WP10); **no** se valida pertenencia ni transición de estado en el cliente — se envía y
+  el 400 del backend es autoridad; `estado` no tiene tope documentado; y el guard de vinculación en
+  el alta (tipo/cliente/orden enviados deben coincidir con la respuesta) sigue el precedente de
+  Operaciones. La única edición a un spec existente aplicó la regla de L14: la aserción que fijaba
+  “las tres escrituras no existen” se redujo a los tres métodos que sí siguen sin endpoint.
+- **L16.** **Hueco de review declarado:** T4 (`83ae5d3`) y T5 (`0e8897a`) no tienen review nativo.
+  El candidato acumulado `3a62c54..0e8897a` (~2350 líneas) falla en la preparación de la vista del
+  candidato con `ETIMEDOUT`, de forma reproducible: ocurrió con la solicitud derivada, con la
+  explícita por `baseRef` y en el reintento autorizado por el humano. No hay lock probado ni defecto
+  de código identificado; es una limitación de este entorno con un candidato de ese tamaño. Se anota
+  como deuda, no como aprobación ni como revisión fallida del código. Los slices S-1 a S-5 sí tienen
+  review cerrado (S-5 con hallazgo CRITICAL corregido y aprobado).
 - **L14.** T5 en curso. Dos conflictos de la misma clase: specs que fijan *la ausencia del slice
   siguiente* (`CUSTOMER_SUPPORT_ROUTES` con largo 1 y «no hay enlace de fila todavía»). Ambos eran
   marcadores de frontera legítimos de T4 y ambos hubo que reescribirlos en T5. Resueltos con la

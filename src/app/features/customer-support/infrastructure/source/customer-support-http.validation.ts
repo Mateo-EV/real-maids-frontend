@@ -104,7 +104,9 @@ export function followUpView(value: unknown): SupportFollowUpView {
   }
 }
 
-export function requestDetail(value: unknown, expectedId: number): SupportDetail {
+// A create answer carries an ID the caller could not know beforehand, so the expected
+// target ID is optional; every other detail consumer pins it.
+export function requestDetail(value: unknown, expectedId?: number): SupportDetail {
   const p = record(value)
   const request = requestView(p["atencion"], expectedId)
   const followUps = list(p["seguimiento"], followUpView)

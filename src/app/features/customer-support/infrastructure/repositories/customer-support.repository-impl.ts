@@ -17,10 +17,12 @@ export class CustomerSupportRepositoryImpl implements CustomerSupportRepository 
     this.source.getRequests(query)
   getRequest: CustomerSupportRepository["getRequest"] = id => this.source.getRequest(id)
 
-  // The backend exposes these writes, but their transport belongs to their own slice.
-  createRequest: CustomerSupportRepository["createRequest"] = unsupported
-  addMessage: CustomerSupportRepository["addMessage"] = unsupported
-  changeState: CustomerSupportRepository["changeState"] = unsupported
+  createRequest: CustomerSupportRepository["createRequest"] = params =>
+    this.source.createRequest(params)
+  addMessage: CustomerSupportRepository["addMessage"] = (id, params) =>
+    this.source.addMessage(id, params)
+  changeState: CustomerSupportRepository["changeState"] = (id, params) =>
+    this.source.changeState(id, params)
 
   // Proposed schema contracts: the backend has no status catalog or survey endpoint.
   getStatuses: CustomerSupportRepository["getStatuses"] = unsupported

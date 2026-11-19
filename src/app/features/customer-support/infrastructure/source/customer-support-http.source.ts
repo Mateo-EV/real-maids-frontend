@@ -12,7 +12,12 @@ import {
   SupportRequestTypeView,
   SupportRequestView
 } from "../../domain/models/support-views"
-import { SupportRequestQuery } from "../../domain/params/customer-support.params"
+import {
+  AddSupportMessageParams,
+  ChangeSupportStateParams,
+  CreateSupportRequestParams,
+  SupportRequestQuery
+} from "../../domain/params/customer-support.params"
 import {
   failure,
   positiveId,
@@ -22,6 +27,14 @@ import {
   requestPagination,
   requestTypes
 } from "./customer-support-http.validation"
+import {
+  captureAddMessage,
+  captureChangeState,
+  captureCreateRequest,
+  changeStateRequestBody,
+  createSupportRequestBody,
+  followUpRequestBody
+} from "./customer-support-write.validation"
 
 @Injectable({ providedIn: "root" })
 export class CustomerSupportHttpSource {
@@ -31,8 +44,8 @@ export class CustomerSupportHttpSource {
   private readonly requestsUrl = `${this.origin}/api/atenciones`
   private readonly typesUrl = `${this.origin}/api/catalogos/tipos-atencion`
 
-  // Cold and SSR-safe: no request is dispatched without a browser and a valid origin.
-  private read<T>(send: () => Observable<T>): Observable<Result<T, CustomerSupportError>> {
+  // Cold and SSR-safe: no request or write is dispatched without a browser and a valid origin.
+  private dispatch<T>(send: () => Observable<T>): Observable<Result<T, CustomerSupportError>> {
     return defer(() => {
       if (!this.browser || !this.origin) return of(Result.failure(failure("UNAVAILABLE")))
       return defer(send).pipe(
@@ -46,7 +59,7 @@ export class CustomerSupportHttpSource {
     query: SupportRequestQuery = {}
   ): Observable<Result<PaginationResponse<SupportRequestView>, CustomerSupportError>> {
     const snapshot = { ...query }
-    return this.read(() => {
+    return this.dispatch(() => {
       const params = requestPagination(snapshot)
       return this.http
         .get<unknown>(this.requestsUrl, { params, transferCache: false })
@@ -55,7 +68,7 @@ export class CustomerSupportHttpSource {
   }
 
   getRequest(id: number): Observable<Result<SupportDetail, CustomerSupportError>> {
-    return this.read(() => {
+    return this.dispatch(() => {
       if (!positiveId(id)) throw failure("VALIDATION")
       return this.http
         .get<unknown>(`${this.requestsUrl}/${id}`, { transferCache: false })
@@ -64,10 +77,62 @@ export class CustomerSupportHttpSource {
   }
 
   getRequestTypes(): Observable<Result<SupportRequestTypeView[], CustomerSupportError>> {
-    return this.read(() =>
+    return this.dispatch(() =>
       this.http
         .get<unknown>(this.typesUrl, { transferCache: false })
         .pipe(map(value => requestTypes(value)))
     )
+  }
+
+  createRequest(
+    params: CreateSupportRequestParams
+  ): Observable<Result<SupportDetail, CustomerSupportError>> {
+    const snapshot = captureCreateRequest(params)
+    return this.dispatch(() => {
+      const body = createSupportRequestBody(snapshot)
+      return this.http.post<unknown>(this.requestsUrl, body, { transferCache: false }).pipe(
+        map(value => {
+          const detail = requestDetail(value)
+          // The answer is the read DTO; the registered identity must be the requested one.
+          if (
+            detail.request.requestTypeId !== body.idTipo ||
+            (body.idCliente !== null && detail.request.customerId !== body.idCliente) ||
+            (body.idOrden !== undefined && detail.request.orderId !== body.idOrden)
+          )
+            throw failure("INVALID_RESPONSE")
+          return detail
+        })
+      )
+    })
+  }
+
+  addMessage(
+    requestId: number,
+    params: AddSupportMessageParams
+  ): Observable<Result<SupportDetail, CustomerSupportError>> {
+    const snapshot = captureAddMessage(params)
+    return this.dispatch(() => {
+      if (!positiveId(requestId)) throw failure("VALIDATION")
+      const body = followUpRequestBody(snapshot)
+      return this.http
+        .post<unknown>(`${this.requestsUrl}/${requestId}/seguimiento`, body, {
+          transferCache: false
+        })
+        .pipe(map(value => requestDetail(value, requestId)))
+    })
+  }
+
+  changeState(
+    requestId: number,
+    params: ChangeSupportStateParams
+  ): Observable<Result<SupportDetail, CustomerSupportError>> {
+    const snapshot = captureChangeState(params)
+    return this.dispatch(() => {
+      if (!positiveId(requestId)) throw failure("VALIDATION")
+      const body = changeStateRequestBody(snapshot)
+      return this.http
+        .patch<unknown>(`${this.requestsUrl}/${requestId}/estado`, body, { transferCache: false })
+        .pipe(map(value => requestDetail(value, requestId)))
+    })
   }
 }
