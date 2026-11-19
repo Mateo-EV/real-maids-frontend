@@ -259,7 +259,11 @@ describe("ReportsPage explicit generation", () => {
     page.generation("ORDENES").flush("boom", { status: 500, statusText: "Server Error" })
     await page.settle()
     expect(page.alertText()).toContain("No se pudo contactar al servidor")
-    expect(page.alertText()).toContain("Volver a generar es una acción explícita")
+    // The outcome is unknown, not "nothing was registered": the server may have registered the
+    // report before the transport failed, and claiming otherwise invites a duplicate record.
+    expect(page.alertText()).toContain("resultado es desconocido")
+    expect(page.alertText()).toContain("Revisá el historial")
+    expect(page.alertText()).not.toContain("no se registró ningún reporte")
     // A failed generation neither reads the history nor generates again on its own.
     page.http.expectNone(() => true)
     expect(page.success).not.toHaveBeenCalled()

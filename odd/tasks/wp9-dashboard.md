@@ -129,3 +129,11 @@ tasaCumplimiento, montoCompletado, quejas}`. `tasaCumplimiento` es nula cuando n
   **696.98/500 kB** (690.57 antes de reportes) y el aviso conocido de la hoja de la agenda. Review nativo del
   dashboard **aprobado sin hallazgos** (dos lentes, sin refuter). Pendiente: W7 (CSV), la decisión sobre `Landing`,
   la aceptación live/browser/permisos y el hueco de review de WP8.
+
+- **L11.** Review nativo de reportes (`review-13076073a3d9e0da`): **aprobado** con dos lentes (risk,
+  reliability), sin refuter y sin correcciones obligatorias. Dejó un hallazgo **advisory** no bloqueante
+  (`R3-001`): el mensaje de error afirmaba "no se registró ningún reporte" cuando un fallo de transporte puede
+  ocurrir **después** de que el servidor ya lo registró, lo que invita a reintentar y duplicar el historial.
+  Corregido como trabajo posterior: el aviso ahora dice que el resultado es **desconocido** y pide revisar el
+  historial antes de reintentar, con una aserción que además prohíbe volver a la redacción anterior. Reportes
+  44/44 en 7 archivos, `tsc` spec en 0 y Prettier limpio después del cambio.
