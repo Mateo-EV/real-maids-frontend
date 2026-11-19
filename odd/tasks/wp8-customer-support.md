@@ -289,3 +289,13 @@ para no dejar enlaces muertos — y después T5–T7 por consumidor.
   fallo transitorio (conservando sus tres pines) y la del enlace de vuelta ahora incluye `estado` e verifica que
   una clave desconocida sigue sin serializarse. Entrar a `/admin/support` normaliza la URL a `?offset=0&limit=20`
   porque offset/limit siempre se serializan; queda comentado en el código.
+
+- **L25.** Verificación del camino `403` con el segundo usuario (`campo`, rol 3: `ASIGNACION_LEER_PROPIA`,
+  `ORDEN_ESTADO_ASIGNADA`, `ORDEN_LEER_ASIGNADA`, `PERSONAL_LEER_PROPIO`, sin ningún permiso de atención).
+  Confirmado por HTTP: `GET /api/atenciones`, `GET /api/atenciones/1`, `POST /api/atenciones` y
+  `PATCH /{id}/estado` responden **403**, igual que `/api/dashboard` y `/api/reportes`. Única excepción:
+  `GET /api/catalogos/tipos-atencion` responde **200** a un usuario sin permisos de atención — es un catálogo de
+  baja sensibilidad y el backend no le exige autoridad; queda anotado como observación del backend, no como
+  defecto del frontend (nuestro diálogo de alta lo lee, y funciona con cualquier usuario autenticado).
+  El comportamiento del cliente ante ese 403 (dejar de mostrar el registro) está cubierto por specs; falta
+  únicamente verlo en un navegador, que sigue fuera de alcance por la decisión de diferir E2E.
