@@ -141,6 +141,18 @@ describe("ReportsHttpSource CSV export", () => {
     }
   })
 
+  it("accepts the Excel type many servers use to serve a CSV download", async () => {
+    const { source, http } = setup()
+    const read = firstValueFrom(source.exportReportCsv({ type: "CLIENTES" }))
+    http
+      .expectOne(candidate => candidate.url === csvUrl)
+      .flush(csvBytes("a,b\n1,2\n"), {
+        headers: { "content-type": "application/vnd.ms-excel; charset=UTF-8" }
+      })
+    const result = await read
+    expect(result.success).toBe(true)
+  })
+
   it("maps a forbidden export to FORBIDDEN and dispatches nothing on the server", async () => {
     const { source, http } = setup()
     const read = firstValueFrom(source.exportReportCsv({ type: "CLIENTES" }))

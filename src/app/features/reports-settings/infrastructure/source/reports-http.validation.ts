@@ -173,6 +173,9 @@ const csvMediaTypes = new Set([
   "text/csv",
   "application/csv",
   "text/plain",
+  // Excel's registered type is how many servers serve a CSV download, so refusing it would drop a
+  // real file the backend already recorded. The bytes stay validated, which is the actual guard.
+  "application/vnd.ms-excel",
   // A proxy or a client that lost the type conveys no information, so the bytes decide.
   "application/octet-stream"
 ])
