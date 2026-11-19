@@ -465,5 +465,11 @@ the CSV shows is still an open decision.
 Acceptance gap, recorded rather than implied: live backend/CORS, real permission outcomes, the live JSON
 serialization of the decimal fields (the decoder expects JSON numbers), the undocumented units of the compliance
 rate, browser acceptance in Chrome/Edge/Firefox and exhaustive accessibility remain unverified. The `Landing`
-sidebar entry stays a disabled non-navigating button even though `/admin` now renders the dashboard; enabling it
-is a separate product decision. See the [dashboard boundary](../src/app/features/dashboard/README.md).
+sidebar entry stays a disabled non-navigating button; the dashboard is reached through its own `Inicio` entry in the
+General group, which is active only on the bare `/admin` route.
+
+The dashboard uses separate Helm cards over the shared page background. A compact *Situación actual* strip sits
+above a responsive grid of period metrics and charts. The date fields stay in *Actividad del período*, even while
+changing the range reloads the data. The dashboard displays the range returned by the server and preserves
+chart labels and values without adding a chart dependency. See the
+[dashboard boundary](../src/app/features/dashboard/README.md).
