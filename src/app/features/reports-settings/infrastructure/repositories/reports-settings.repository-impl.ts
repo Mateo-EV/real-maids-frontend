@@ -10,9 +10,9 @@ const unsupported = (): Observable<Result<never, ReportsSettingsError>> =>
   of(Result.failure(new ReportsSettingsError("UNSUPPORTED")))
 
 /**
- * Infrastructure implementation of the area J contract. Only the confirmed, wired read
- * operations delegate to the HTTP source; CSV export (W7) and the proposed KPI / public
- * parameter / migration operations stay refused rather than inventing endpoints.
+ * Infrastructure implementation of the area J contract. The confirmed read/adapter
+ * operations (and the CSV bytes of a loaded report) delegate to the HTTP source; the proposed
+ * KPI / public parameter / migration operations stay refused rather than inventing endpoints.
  */
 @Injectable({ providedIn: "root" })
 export class ReportsSettingsRepositoryImpl implements ReportsSettingsRepository {
@@ -26,8 +26,10 @@ export class ReportsSettingsRepositoryImpl implements ReportsSettingsRepository 
   getGeneratedReports: ReportsSettingsRepository["getGeneratedReports"] = query =>
     this.source.getGeneratedReports(query)
 
-  // CSV bytes are a later slice (W7); the dashboard is owned by the dashboard feature.
-  exportReportCsv: ReportsSettingsRepository["exportReportCsv"] = unsupported
+  exportReportCsv: ReportsSettingsRepository["exportReportCsv"] = params =>
+    this.source.exportReportCsv(params)
+
+  // The dashboard is owned by the dashboard feature, not by this repository.
   getDashboard: ReportsSettingsRepository["getDashboard"] = unsupported
 
   // Proposed schema-backed operations: no endpoint exists, so nothing is dispatched.

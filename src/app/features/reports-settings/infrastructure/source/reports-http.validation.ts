@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from "@angular/common/http"
+import { HttpErrorResponse, HttpResponse } from "@angular/common/http"
 import { AuthError } from "@/app/features/auth/domain/errors/auth.error"
 import { dtoRecord } from "@/app/shared/infrastructure/http/dto-validation"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
@@ -6,7 +6,12 @@ import {
   ReportsSettingsError,
   ReportsSettingsErrorCode
 } from "../../domain/errors/reports-settings.error"
-import { GeneratedReportSummary, ReportTable, ReportType } from "../../domain/models/report.models"
+import {
+  GeneratedReportSummary,
+  ReportCsvFile,
+  ReportTable,
+  ReportType
+} from "../../domain/models/report.models"
 import {
   GenerateReportParams,
   ReportHistoryQuery,
@@ -160,6 +165,79 @@ export function reportTable(value: unknown, requested: GenerateReportParams): Re
     generatedAt: instant(p["generadoEn"]),
     columns,
     rows
+  }
+}
+
+/** Media types a UTF-8 CSV body may legitimately arrive with; nothing else is accepted. */
+const csvMediaTypes = new Set([
+  "text/csv",
+  "application/csv",
+  "text/plain",
+  // A proxy or a client that lost the type conveys no information, so the bytes decide.
+  "application/octet-stream"
+])
+
+function declaredCsvType(header: string | null): boolean {
+  // An absent declaration is not a lie that can be refuted; the bytes are still validated.
+  if (!header) return true
+  const media = header.split(";")[0].trim().toLowerCase()
+  if (!media) return true
+  return csvMediaTypes.has(media) || media.endsWith("+csv")
+}
+
+/**
+ * Filename supplied by the server, or `null` when it sent none. The value is only read here;
+ * it is reduced to a safe download name by `reportCsvFileName` before touching the DOM.
+ */
+export function dispositionFileName(header: string | null): string | null {
+  if (typeof header !== "string" || !header.trim()) return null
+  // RFC 6266 extended form wins: it is the only one that can carry a non-ASCII name.
+  const extended = /filename\*\s*=\s*[^;]*?''([^;]+)/i.exec(header)
+  if (extended) {
+    try {
+      const decoded = decodeURIComponent(extended[1].trim())
+      return decoded.trim() ? decoded : null
+    } catch {
+      return null
+    }
+  }
+  const quoted = /filename\s*=\s*"([^"]*)"/i.exec(header)
+  if (quoted) return quoted[1].trim() ? quoted[1] : null
+  const bare = /filename\s*=\s*([^;]+)/i.exec(header)
+  if (!bare) return null
+  const trimmed = bare[1].trim()
+  return trimmed ? trimmed : null
+}
+
+/** A byte buffer from another realm (a Node `TextEncoder`) still has to be recognised. */
+function isByteBuffer(value: unknown): value is ArrayBuffer {
+  return (
+    value instanceof ArrayBuffer || Object.prototype.toString.call(value) === "[object ArrayBuffer]"
+  )
+}
+
+/**
+ * `GET /api/reportes/{tipo}/csv`: the CSV bytes as sent. A body that is not a non-empty byte
+ * buffer of UTF-8 text is refused instead of being saved as garbage, and the server's own
+ * filename is kept verbatim for the caller to sanitize.
+ */
+export function reportCsvBytes(response: HttpResponse<ArrayBuffer>): ReportCsvFile {
+  const body = response.body
+  if (!isByteBuffer(body) || body.byteLength === 0) return invalid()
+  if (!declaredCsvType(response.headers.get("content-type"))) return invalid()
+  let text: string
+  try {
+    // Fatal decode: invalid or truncated UTF-8 is a malformed answer, not mojibake to save.
+    text = new TextDecoder("utf-8", { fatal: true }).decode(body)
+  } catch {
+    return invalid()
+  }
+  // NUL and the other C0 controls are binary, not tabular text.
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)) return invalid()
+  return {
+    // A view over the received bytes: nothing is re-encoded, and the blob is built in this realm.
+    bytes: new Blob([new Uint8Array(body)], { type: "text/csv" }),
+    fileName: dispositionFileName(response.headers.get("content-disposition"))
   }
 }
 

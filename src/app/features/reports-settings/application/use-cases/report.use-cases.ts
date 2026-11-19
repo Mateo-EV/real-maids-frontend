@@ -37,3 +37,17 @@ export class GenerateReportUseCase {
     return this.repository.generateReport(params)
   }
 }
+
+/**
+ * Stateless action for the CSV of a loaded report. Like the JSON generation it is a `GET` with
+ * a side effect — the backend registers the download in the history — so it is only reachable
+ * from an explicit user action and is never retried by this layer.
+ */
+@Injectable({ providedIn: "root" })
+export class ExportReportCsvUseCase {
+  private readonly repository = inject(REPORTS_SETTINGS_REPOSITORY)
+
+  execute(params: GenerateReportParams) {
+    return this.repository.exportReportCsv(params)
+  }
+}

@@ -9,7 +9,7 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucideChartColumn } from "@ng-icons/lucide"
+import { lucideChartColumn, lucideFileDown } from "@ng-icons/lucide"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { catchError, EMPTY, map, mergeMap, Subject, switchMap, take, tap } from "rxjs"
@@ -24,6 +24,7 @@ import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import {
   GeneratedReportSummary,
+  ReportCsvFile,
   ReportTable,
   reportCellText
 } from "../../../domain/models/report.models"
@@ -36,6 +37,7 @@ import {
   reportRequestKey
 } from "../../../domain/params/reports-settings.params"
 import { ReportsSettingsErrorCode } from "../../../domain/errors/reports-settings.error"
+import { ReportCsvDownload } from "../../../infrastructure/export/report-csv-download"
 import { ReportsStore } from "../../state/reports.store"
 
 /** One message per closed error code: a 403 is a permission error, never an empty screen. */
@@ -54,6 +56,29 @@ const errorMessages: Record<ReportsSettingsErrorCode, string> = {
 
 const invalidPeriodMessage =
   "El período elegido no es válido: usá fechas reales y una fecha desde que no sea posterior a la hasta."
+
+/** Download-specific copy: a CONFLICT here means another download, never another generation. */
+const downloadMessages: Partial<Record<ReportsSettingsErrorCode, string>> = {
+  CONFLICT: "Ya hay una descarga en curso. Esperá a que termine antes de descargar de nuevo.",
+  VALIDATION:
+    "El reporte generado ya no corresponde al tipo y período elegidos. Volvé a generarlo antes de descargarlo.",
+  UNSUPPORTED: "El navegador no pudo iniciar la descarga del CSV.",
+  INVALID_RESPONSE: "El servidor devolvió un archivo que no se puede descargar como CSV.",
+  UNEXPECTED: "El navegador no pudo iniciar la descarga del CSV."
+}
+
+const downloadMessage = (code: ReportsSettingsErrorCode): string =>
+  downloadMessages[code] ?? errorMessages[code]
+
+/**
+ * A failed download is never reported as "nothing was registered": the server can register the
+ * record and still fail on the way back, and a same-page retry would then duplicate the history.
+ */
+const downloadUnknownNote =
+  "El resultado de la descarga es desconocido: el servidor pudo haber registrado el reporte igual. Revisá el historial antes de volver a descargar. No se reintenta solo."
+
+const downloadRegisteredNote =
+  "El servidor ya registró el reporte en el historial; la descarga del archivo no llegó a iniciarse."
 
 const initialPage: NormalizedPagination = { offset: 0, limit: 20 }
 
@@ -79,6 +104,12 @@ interface ReadRequest {
  *   visible, and a failure of that read is never turned into a second generation;
  * - a failed generation is only retried by another explicit click.
  *
+ * The CSV download (W7) is the same kind of effect, so it is wired the same way: it starts only
+ * from the explicit "Descargar CSV" action on the report this screen already shows, never on
+ * entry, never on a period change and never on a retry; one confirmed download issues exactly
+ * one history read so the new record appears, and a failure reports an unknown outcome instead
+ * of inviting a duplicate.
+ *
  * There is no polling, no TTL and no read of the store from the template that could
  * subscribe: the component owns one subscription per read stream.
  */
@@ -86,17 +117,19 @@ interface ReadRequest {
   selector: "app-reports-page",
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CatalogFilters, CatalogFrame, HlmButtonImports, NgIcon, TablePagination],
-  providers: [provideIcons({ lucideChartColumn })],
+  providers: [provideIcons({ lucideChartColumn, lucideFileDown })],
   templateUrl: "./reports-page.html"
 })
 export class ReportsPage implements OnInit {
   private readonly store = inject(ReportsStore)
   private readonly destroyRef = inject(DestroyRef)
   private readonly toast = inject(HotToastService)
+  private readonly download = inject(ReportCsvDownload)
   /** The single subscription owners: every read and every explicit action flows through them. */
   private readonly typesReads = new Subject<boolean | null>()
   private readonly historyReads = new Subject<ReadRequest | null>()
   private readonly generations = new Subject<GenerateReportParams>()
+  private readonly downloads = new Subject<GenerateReportParams>()
   private revision = 0
   private recoveryUsed = false
 
@@ -159,6 +192,9 @@ export class ReportsPage implements OnInit {
       : undefined
   })
   readonly generating = computed(() => this.store.generating())
+  readonly downloading = computed(() => this.store.downloading())
+  readonly downloadError = signal("")
+  readonly downloadNote = signal("")
   readonly generatingHere = computed(() => {
     const entry = this.reportEntry()
     return (
@@ -185,6 +221,13 @@ export class ReportsPage implements OnInit {
       !this.periodError() &&
       !this.generating() &&
       this.request() !== undefined
+  )
+  /**
+   * A download needs a report this screen already verified for the drafted request, and it is
+   * unavailable while a generation or another download is in flight.
+   */
+  readonly canDownload = computed(
+    () => this.report() !== undefined && !this.generating() && !this.downloading()
   )
   readonly history = computed(() => this.store.selectHistory())
   readonly historyRows = computed(() => this.history().result?.items ?? [])
@@ -266,6 +309,32 @@ export class ReportsPage implements OnInit {
           () => undefined
         )
       })
+    this.downloads
+      .pipe(
+        mergeMap(request =>
+          this.store.downloadCsv(request).pipe(
+            take(1),
+            map(result => ({ request, result }))
+          )
+        ),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe(({ request, result }) => {
+        if (this.destroyRef.destroyed) return
+        result.either(
+          file => {
+            // Confirmed download: the backend registered the report, so the history is read once.
+            this.historyReads.next({ query: this.effectiveQuery(), force: true })
+            this.startDownload(file, request)
+          },
+          // Unknown outcome on purpose: the server may have registered it anyway. Nothing is
+          // read and nothing is retried; the user decides whether to ask again.
+          error => {
+            this.downloadError.set(downloadMessage(error.code))
+            this.downloadNote.set(downloadUnknownNote)
+          }
+        )
+      })
   }
 
   ngOnInit(): void {
@@ -297,7 +366,23 @@ export class ReportsPage implements OnInit {
     if (this.destroyRef.destroyed || !this.canGenerate()) return
     const request = this.request()
     if (!request) return
+    this.downloadError.set("")
+    this.downloadNote.set("")
     this.generations.next(request)
+  }
+
+  /**
+   * The only path to a CSV download in this screen. It needs the report this screen already
+   * shows, so entering the page, editing the draft or retrying a read never downloads, and the
+   * root store refuses a duplicate while one is in flight.
+   */
+  downloadCsv(): void {
+    if (this.destroyRef.destroyed || !this.canDownload()) return
+    const request = this.request()
+    if (!request) return
+    this.downloadError.set("")
+    this.downloadNote.set("")
+    this.downloads.next(request)
   }
 
   retryTypes(): void {
@@ -355,6 +440,20 @@ export class ReportsPage implements OnInit {
 
   private current(revision: number): boolean {
     return !this.destroyRef.destroyed && revision === this.revision
+  }
+
+  /** Browser half of the confirmed download: bytes to a file, then feedback for that outcome. */
+  private startDownload(file: ReportCsvFile, request: GenerateReportParams): void {
+    this.download.download(file, request).either(
+      () => {
+        this.toast.success("Descarga del reporte iniciada.")
+      },
+      error => {
+        this.downloadError.set(downloadMessage(error.code))
+        // The registration did happen: say so instead of implying an unknown outcome.
+        this.downloadNote.set(downloadRegisteredNote)
+      }
+    )
   }
 
   private load(query: ReportHistoryQuery, force = false): void {

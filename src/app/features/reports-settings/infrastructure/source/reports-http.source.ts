@@ -7,7 +7,12 @@ import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-pol
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import { ReportsSettingsError } from "../../domain/errors/reports-settings.error"
-import { GeneratedReportSummary, ReportTable, ReportType } from "../../domain/models/report.models"
+import {
+  GeneratedReportSummary,
+  ReportCsvFile,
+  ReportTable,
+  ReportType
+} from "../../domain/models/report.models"
 import {
   GenerateReportParams,
   ReportHistoryQuery,
@@ -19,18 +24,19 @@ import {
   generatedReportPage,
   generateQuery,
   historyPagination,
+  reportCsvBytes,
   reportTable,
   reportTypes,
   reportsError
 } from "./reports-http.validation"
 
 /**
- * Confirmed read/adapter surface for area J reports (W6, S4, S5): the type catalog, the
- * paged generated-report history and the report table itself.
+ * Confirmed read/adapter surface for area J reports (W6–W7, S4, S5): the type catalog, the
+ * paged generated-report history, the report table itself and the CSV bytes of that report.
  *
- * Generating travels over `GET /api/reportes/{tipo}` but is an *effect*: the backend records
- * the report in the history. This source only ever dispatches it when a caller explicitly
- * asks for one, and it adds no retry, no revalidation and no eager read of its own.
+ * Generating and exporting the CSV both travel over a `GET` but are *effects*: the backend
+ * records each of them in the history. This source only ever dispatches them when a caller
+ * explicitly asks for one, and it adds no retry, no revalidation and no eager read of its own.
  */
 @Injectable({ providedIn: "root" })
 export class ReportsHttpSource {
@@ -88,6 +94,26 @@ export class ReportsHttpSource {
           transferCache: false
         })
         .pipe(map(value => reportTable(value, requested)))
+    })
+  }
+
+  exportReportCsv(
+    params: GenerateReportParams
+  ): Observable<Result<ReportCsvFile, ReportsSettingsError>> {
+    const captured = capturedGenerate(params)
+    return this.dispatch(() => {
+      const requested = normalizeGenerateReportParams(captured)
+      if (!requested) throw failure("VALIDATION")
+      const query = generateQuery(requested)
+      // Bytes, not a decoded body: the CSV is saved exactly as the server sent it.
+      return this.http
+        .get(`${this.reportsUrl}/${encodeURIComponent(requested.type)}/csv`, {
+          params: query,
+          transferCache: false,
+          responseType: "arraybuffer",
+          observe: "response"
+        })
+        .pipe(map(response => reportCsvBytes(response)))
     })
   }
 }

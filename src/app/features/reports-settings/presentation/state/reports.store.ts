@@ -20,6 +20,7 @@ import {
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import {
+  ExportReportCsvUseCase,
   GenerateReportUseCase,
   ListGeneratedReportsUseCase,
   ListReportTypesUseCase
@@ -28,7 +29,12 @@ import {
   ReportsSettingsError,
   ReportsSettingsErrorCode
 } from "../../domain/errors/reports-settings.error"
-import { GeneratedReportSummary, ReportTable, ReportType } from "../../domain/models/report.models"
+import {
+  GeneratedReportSummary,
+  ReportCsvFile,
+  ReportTable,
+  ReportType
+} from "../../domain/models/report.models"
 import {
   GenerateReportParams,
   ReportHistoryQuery,
@@ -136,6 +142,8 @@ function createGroup<T, K>(options: GroupOptions<T, K>) {
 const initialState = {
   /** One shared pending gate: a second explicit generation is refused, never queued. */
   _pendingGenerations: 0,
+  /** Separate gate for the CSV download: it is likewise never queued. */
+  _pendingDownloads: 0,
   _types: entry<ReportType[], null>(),
   _history: entry<HistoryPage, ReportHistoryQuery>(),
   _report: entry<ReportTable, GenerateReportParams>()
@@ -159,6 +167,7 @@ export const ReportsStore = signalStore(
   withState(initialState),
   withComputed(store => ({
     generating: computed(() => store._pendingGenerations() > 0),
+    downloading: computed(() => store._pendingDownloads() > 0),
     /** Verified catalog types, or none: an unverified catalog offers no choice. */
     reportTypes: computed(() => store._types().result ?? [])
   })),
@@ -250,7 +259,45 @@ export const ReportsStore = signalStore(
         })
       },
       /** Identity of one generation: callers compare it to hide a stale report. */
-      reportRequestKey
+      reportRequestKey,
+      /**
+       * The only dispatch path of `GET /api/reportes/{tipo}/csv` (W7).
+       *
+       * It is the same shape as a generation, for the same reason: the backend registers the
+       * download in the history, so the request is an effect wearing a GET. It therefore starts
+       * only from an explicit user action *on a report this store already verified for exactly
+       * that request* — no loaded report, no download — it refuses a concurrent duplicate with
+       * `CONFLICT` instead of queueing it, and it never retries. A failed download leaves the
+       * verified report untouched so the caller can decide whether to ask again.
+       */
+      downloadCsv(params: GenerateReportParams): Observable<Read<ReportCsvFile>> {
+        return defer(() => {
+          if (!scope.check()) return EMPTY
+          const requested = normalizeGenerateReportParams(params)
+          if (!requested) return of(failure<ReportCsvFile>("VALIDATION"))
+          const loaded = store._report()
+          if (
+            !loaded.result ||
+            !loaded.params ||
+            reportRequestKey(loaded.params) !== reportRequestKey(requested)
+          )
+            return of(failure<ReportCsvFile>("VALIDATION"))
+          if (store._pendingDownloads()) return of(failure<ReportCsvFile>("CONFLICT"))
+          const generation = scope.generation()
+          const current = () => generation === scope.generation()
+          patchState(store, { _pendingDownloads: store._pendingDownloads() + 1 })
+          return defer(() => injector.get(ExportReportCsvUseCase).execute(requested)).pipe(
+            take(1),
+            defaultIfEmpty(failure<ReportCsvFile>("INVALID_RESPONSE")),
+            catchError(() => of(failure<ReportCsvFile>("UNEXPECTED"))),
+            takeUntil(scope.cancelled$),
+            finalize(() => {
+              if (!current()) return
+              patchState(store, { _pendingDownloads: store._pendingDownloads() - 1 })
+            })
+          )
+        })
+      }
     }
   })
 )
