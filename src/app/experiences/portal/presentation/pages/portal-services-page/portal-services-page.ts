@@ -1,6 +1,6 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { ActivatedRoute, ParamMap, RouterLink } from "@angular/router"
+import { ActivatedRoute, RouterLink } from "@angular/router"
 import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
 import { HlmBadge } from "@spartan-ng/helm/badge"
@@ -26,9 +26,9 @@ import { OperationsError } from "@/app/features/operations/domain/errors/operati
 import { ServiceOrderSummary } from "@/app/features/operations/domain/models/operations-read.models"
 import { ServiceOrdersStore } from "@/app/features/operations/presentation/state/service-orders.store"
 import {
-  serviceOrderPageContext,
-  serviceOrderPagingParams
-} from "@/app/features/operations/presentation/navigation/service-order-page-context"
+  portalPageContext,
+  portalPagingParams
+} from "@/app/experiences/portal/presentation/navigation/portal-paging"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { TablePagination } from "@/app/shared/components/table-pagination/table-pagination"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
@@ -38,20 +38,6 @@ import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 type Query = Required<PaginationParams>
 type Page = PaginationResponse<ServiceOrderSummary>
 
-const firstPage: Query = { offset: 0, limit: 20 }
-/** Documented backend maximum page size; anything larger is out of contract and never dispatched. */
-const maxPageSize = 100
-
-/**
- * Entry paging comes from the URL so a detail's return link restores the visited page. The list
- * itself never writes paging back. A malformed, missing, duplicated, negative, non-int32 or
- * out-of-contract pair falls back to the documented first page instead of inventing an offset.
- */
-function entryQuery(params: ParamMap): Query {
-  const query = serviceOrderPageContext(params)
-  return query.limit > maxPageSize ? { ...firstPage } : query
-}
-
 /**
  * WP10 T4 / S7 — `/portal/services`, the customer's own read-only service orders.
  *
@@ -60,8 +46,9 @@ function entryQuery(params: ParamMap): Query {
  * back. Paging, freshness (30000 ms, success-only), same-key stale data and session fencing stay in
  * the existing root store; this page owns only its query, its state feedback and its cancellation.
  *
- * Its initial offset/limit are read from `page`/`size` once, on entry, so returning from a detail
- * lands on the page the customer came from; later navigation is not written back to the URL.
+ * Its initial offset/limit are read from `page`/`size` once, on entry, through the single portal
+ * paging contract (`navigation/portal-paging`), so returning from a detail lands on the page the
+ * customer came from; later navigation is not written back to the URL.
  *
  * This is the customer-facing surface, so it prints strictly less than the staff list: no customer
  * column, no amount total, no assigned staff contact and no action. Rows open their own read-only
@@ -103,8 +90,8 @@ export class PortalServicesPage implements OnInit {
   private readonly store = inject(ServiceOrdersStore)
   private readonly destroyRef = inject(DestroyRef)
   private readonly route = inject(ActivatedRoute)
-  /** Captured once: entry paging only, never a live URL binding. */
-  private readonly entry = entryQuery(this.route.snapshot.queryParamMap)
+  /** Captured once, through the portal's single paging contract: entry only, never a live binding. */
+  private readonly entry = portalPageContext(this.route.snapshot.queryParamMap)
   private readonly requested = signal<Query>(this.entry)
   private readonly admissionError = signal<OperationsError | undefined>(undefined)
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()
@@ -137,7 +124,7 @@ export class PortalServicesPage implements OnInit {
     Math.max(1, Math.ceil((this.result()?.total ?? 0) / this.query().limit))
   )
   /** URL page/size pair for the detail link, derived from the effective returned metadata. */
-  readonly paging = computed(() => serviceOrderPagingParams(this.query()))
+  readonly paging = computed(() => portalPagingParams(this.query()))
   readonly rangeStart = computed(() => (this.rows().length ? this.result()!.offset + 1 : 0))
   readonly rangeEnd = computed(() =>
     this.rows().length ? this.result()!.offset + this.rows().length : 0

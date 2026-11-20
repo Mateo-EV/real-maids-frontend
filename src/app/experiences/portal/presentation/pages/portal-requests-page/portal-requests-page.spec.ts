@@ -266,28 +266,20 @@ describe("PortalRequestsPage", () => {
       s.http.expectNone(() => true)
     })
 
-    it.each([
-      "page=2",
-      "size=10",
-      "page=-1&size=10",
-      "page=1.5&size=10",
-      "page=abc&size=10",
-      "page=2147483648&size=10",
-      "page=1&size=0",
-      "page=1&size=one",
-      "page=1&size=2147483648",
-      "page=1&page=2&size=10",
-      "page=0&size=10&size=20",
-      "page=&size=10",
-      "page=1&size="
-    ])("falls back to the first page for the malformed pair %s", async search => {
-      const s = await setup({ url: `/portal/requests?${search}` })
-      s.request(0, 20).flush(page(0, 20, 12))
-      await s.settle()
-      expect(s.element.textContent).toContain("1–12 de 12")
-      // Only the documented pagina/tamanio pair travels: no invented offset or clamp.
-      s.http.expectNone(() => true)
-    })
+    // One representative per fallback family: incomplete, duplicated, negative and out-of-int32.
+    // The whole fallback matrix belongs to the shared contract suite (portal-paging.spec.ts), so it
+    // is asserted once there instead of three times, once per list.
+    it.each(["page=2", "page=1&page=2&size=10", "page=-1&size=10", "page=2147483648&size=10"])(
+      "falls back to the first page for the malformed pair %s",
+      async search => {
+        const s = await setup({ url: `/portal/requests?${search}` })
+        s.request(0, 20).flush(page(0, 20, 12))
+        await s.settle()
+        expect(s.element.textContent).toContain("1–12 de 12")
+        // Only the documented pagina/tamanio pair travels: no invented offset or clamp.
+        s.http.expectNone(() => true)
+      }
+    )
 
     it("never dispatches a size above the documented maximum", async () => {
       const s = await setup({ url: "/portal/requests?page=1&size=101" })

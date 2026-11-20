@@ -9,10 +9,10 @@ import { HlmSpinner } from "@spartan-ng/helm/spinner"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { ServiceOrdersStore } from "@/app/features/operations/presentation/state/service-orders.store"
 import {
-  serviceOrderPageContext,
-  serviceOrderPagingParams,
-  serviceOrderRouteId
-} from "@/app/features/operations/presentation/navigation/service-order-page-context"
+  portalPageContext,
+  portalPagingParams,
+  portalRouteId
+} from "@/app/experiences/portal/presentation/navigation/portal-paging"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 
@@ -92,9 +92,8 @@ export class PortalServiceDetailPage {
     const error = this.detail()?.error
     return error && error.code !== "NOT_FOUND" ? error : undefined
   })
-  readonly backContext = computed(() =>
-    serviceOrderPagingParams(serviceOrderPageContext(this.params()))
-  )
+  /** The return link carries the same effective page, through the portal's paging contract. */
+  readonly backContext = computed(() => portalPagingParams(portalPageContext(this.params())))
   /** Supplied fields only, printed literally: no invented total, price, duration or status. */
   readonly profile = computed<readonly DetailField[]>(() => {
     const order = this.record()?.order
@@ -169,7 +168,7 @@ export class PortalServiceDetailPage {
     // Route identity only: `distinctUntilChanged` keeps a repeated URL from restarting the read.
     this.route.paramMap
       .pipe(
-        map(params => serviceOrderRouteId(params)),
+        map(params => portalRouteId(params)),
         distinctUntilChanged(),
         takeUntilDestroyed(this.destroyRef)
       )

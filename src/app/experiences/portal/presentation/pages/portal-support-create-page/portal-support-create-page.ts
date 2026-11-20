@@ -40,6 +40,7 @@ import { SupportRequestTypeView } from "@/app/features/customer-support/domain/m
 import { SupportRequestsStore } from "@/app/features/customer-support/presentation/state/support-requests.store"
 import { ServiceOrderSummary } from "@/app/features/operations/domain/models/operations-read.models"
 import { ServiceOrdersStore } from "@/app/features/operations/presentation/state/service-orders.store"
+import { portalFirstPage } from "@/app/experiences/portal/presentation/navigation/portal-paging"
 import {
   CatalogCombobox,
   CatalogComboboxOption
@@ -48,7 +49,8 @@ import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 
 type OrderQuery = Required<PaginationParams>
 
-const firstPage: OrderQuery = { offset: 0, limit: 20 }
+// The shared portal contract owns the documented first page; this page keeps no copy of it.
+const firstPage: Readonly<OrderQuery> = portalFirstPage
 /** Documented wire limits for the create payload; over-limit text is refused, never truncated. */
 const subjectLimit = 150
 const descriptionLimit = 4000

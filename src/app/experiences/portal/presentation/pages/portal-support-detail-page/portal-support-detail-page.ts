@@ -16,10 +16,10 @@ import { createSessionReadScope } from "@/app/features/auth/presentation/state/s
 import { SupportFollowUpView } from "@/app/features/customer-support/domain/models/support-views"
 import { SupportRequestsStore } from "@/app/features/customer-support/presentation/state/support-requests.store"
 import {
-  portalSupportPageContext,
-  portalSupportPagingParams,
-  portalSupportRouteId
-} from "@/app/experiences/portal/presentation/navigation/portal-support-page-context"
+  portalPageContext,
+  portalPagingParams,
+  portalRouteId
+} from "@/app/experiences/portal/presentation/navigation/portal-paging"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 
@@ -111,9 +111,8 @@ export class PortalSupportDetailPage {
     const error = this.detail()?.error
     return error && error.code !== "NOT_FOUND" ? error : undefined
   })
-  readonly backContext = computed(() =>
-    portalSupportPagingParams(portalSupportPageContext(this.params()))
-  )
+  /** The return link carries the same effective page, through the portal's paging contract. */
+  readonly backContext = computed(() => portalPagingParams(portalPageContext(this.params())))
   /** Supplied fields only, printed literally: no invented state, owner, actor or total. */
   readonly profile = computed<readonly DetailField[]>(() => {
     const attention = this.record()?.request
@@ -162,7 +161,7 @@ export class PortalSupportDetailPage {
     // Route identity only: `distinctUntilChanged` keeps a repeated URL from restarting the read.
     this.route.paramMap
       .pipe(
-        map(params => portalSupportRouteId(params.get("id"))),
+        map(params => portalRouteId(params)),
         distinctUntilChanged(),
         takeUntilDestroyed(this.destroyRef)
       )

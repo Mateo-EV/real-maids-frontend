@@ -994,6 +994,70 @@ the backend rejects a foreign `idOrden`, rendered Chrome/Edge/Firefox keyboard a
 of the form, and a manual pass over list → form → created detail. The `creada` confirmation has only
 been observed with deterministic tests, since the real transport refuses an id-less answer.
 
+## WP10 — One portal paging contract (and the paging inventory)
+
+RF15/HU15/P11 (RNF09/RNF10/RNF12). The portal's `page`/`size` vocabulary used to exist twice: the two
+request/order lists and their details imported the helpers of the operations feature, while support
+did the same work in a portal-local module. Both were byte-for-byte copies of the same reader, the
+same serializer and the same route-id parser, so a rule fixed in one place could silently stay broken
+in the other.
+
+- **One module owns it**: `src/app/experiences/portal/presentation/navigation/portal-paging.ts`.
+  `portalPageContext` reads the pair once from a route snapshot and returns the read context
+  (`offset = page × size`, `limit = size`); `portalPagingParams` serializes the effective page a row
+  link or a return link carries; `portalRouteId` accepts a record id; `portalMaxPageSize` (100) and
+  `portalFirstPage` (0/20) are the only copies of those two numbers in the portal.
+- **Whole-pair fallback, never a clamp**: missing, incomplete, duplicated, malformed, fractional,
+  negative, out-of-int32 or above-maximum input becomes `0/20` as a pair. The maximum belongs to the
+  reader, so an out-of-contract size is structurally impossible to dispatch — a page can no longer
+  forget the guard, because it no longer has one. The serializer refuses exactly what the reader
+  refuses (unaligned offsets, invalid numbers, size above 100), so a link the portal emits is always a
+  link the portal accepts back; both sides also insist on a `page × size` safe integer.
+- **Consumers**: the three lists (`/portal/requests`, `/portal/services`, `/portal/support`) read
+  their entry context there and serialize row links from the effective returned metadata; the three
+  details (`/:id`) parse their id and build their return link there; the own-support form takes the
+  documented first page from the module for its local own-orders picker (which is not URL paging). No
+  portal page keeps a private copy of the reader, the arithmetic or the maximum.
+- **Removed**: `navigation/portal-support-page-context.ts` (the support-specific duplicate). The
+  operations helpers are untouched — `service-requests-page.ts`, `service-request-detail-page.ts`,
+  `service-orders-page.ts` and `service-order-detail-page.ts` still consume them, and they are that
+  feature's own contract; the portal simply stopped importing them.
+- **Tests first**: `navigation/portal-paging.spec.ts` is the contract suite and the single home of the
+  fallback matrix — zero-based index and offset derivation, leading zeros, the accepted maximum of 100,
+  the missing/incomplete/duplicate family, the malformed/fractional/nonpositive family, the
+  out-of-int32 family, the over-maximum family that must not be clamped, fresh-object fallbacks, the
+  serializer's defaults and refusals, the read→link→read round trip (including a hand-edited pair both
+  sides refuse identically) and the route-id matrix. Each list spec keeps its integration proof: valid
+  pairs adopted, one representative malformed case per family, no dispatch above the maximum, and the
+  list → detail → return landing on the same effective page. The duplicated malformed rows were
+  removed from the three list specs (nine rows each: incomplete `size` only, fractional page,
+  non-numeric page and size, zero size, int32-overflow size, duplicated `size`, blank page, blank size)
+  because that suite now asserts the same cases once. RED was a compile failure for the missing module;
+  afterwards the ten portal spec files pass 192/192.
+- **Not refactored here**: nothing outside the portal. The inventory of the rest of `src/app` (below)
+  decides what, if anything, deserves a second slice; the portal's own 1-based navigation arithmetic
+  (`currentPage`, `pageCount`, `goToPage`, out-of-range recovery) also stays per page, because it is a
+  paging *control* over an already-decided query, not the URL/read contract this module owns.
+
+### Paging and page-size inventory outside the portal
+
+| Helper / place | Owner | Consumers | Verdict |
+| --- | --- | --- | --- |
+| `navigation/service-request-page-context.ts` (`page`/`size`) | operations | `service-requests-page`, `service-request-detail-page`, its spec | **Same concept** as the portal module (zero-based page → offset, whole-pair fallback, routes id), different feature contract; left untouched |
+| `navigation/service-order-page-context.ts` | operations | `service-orders-page`, `service-order-detail-page`, its spec | **Same concept**, duplicated inside operations; left untouched |
+| `navigation/staff-page-context.ts` (`staffPageContext`, `staffPagingParams`, `staffRouteId`, `staffReturnState`, `staffReturnFilters`) | field-operations | `staff-page`, staff profile pages, its spec | Same page/size→offset core **plus** an owner/session return-filter contract the portal has no use for |
+| `pages/support-page-context.ts` (`offset`/`limit`) | customer-support | `support-requests-page`, its spec | Same idea with the other URL vocabulary (`offset`/`limit`) and both-sides max-100 enforcement, plus filter/state serialization and `supportRouteId`; genuinely different URL contract |
+| `pages/customers-page/customer-page-context.ts` | customers | `customers-page` | **Look-alike**: reads `offset`/`limit` directly (no page/size), int32-aligned, no max-100 cap (the transport decides) |
+| `pages/leads-page/lead-page-context.ts` | customers | `leads-page` | Body identical to the customer one, separate module and owner — a **real duplicate inside customers**, candidate for a second slice |
+| `shared/pagination/normalize-pagination.ts` (`normalizePagination`, limit 1–100 → `Result`) | shared | **none in production** (its own spec only) | Not a URL context: it is the read-query validator, and it currently has no caller — reported, not changed |
+| `shared/pagination/pagination.params.ts` / `.response.ts` | shared | everything above | Shared vocabulary (`PaginationParams`, `NormalizedPagination`, `PaginationResponse`), not a helper |
+| `shared/components/table-pagination/table-pagination.ts` | shared | portal lists, users, customers, leads, staff, support, operations | Presentational 1-based control; emits a page number and computes no offset — same *UI* concept, not the same contract |
+| `pagina`/`tamanio` mapping in `*/infrastructure/source/*-http.validation.ts` | operations, customer-support, field-operations, customers | the HTTP sources | Same arithmetic at the adapter boundary, where it must also validate the returned metadata; moving it would couple transport validation to a navigation helper |
+| Inline 1-based paging in pages/dialogs (`currentPage`, `pageCount`, `goToPage`, `(page - 1) * limit`, `Math.floor((total - 1) / limit) * limit`) | portal lists and create page, support inbox/editor dialogs, customers, leads, staff, operations lists/editor, users page, audit viewer, user sessions, `CatalogCombobox` | their own templates | **Look-alike**: control arithmetic over an existing query, 12 sites; a shared "page control" helper would be a separate decision, not this contract |
+
+Pending acceptance: live backend/CORS and rendered browser passes for the portal remain the same as
+recorded for T2–T6; this change is deterministic-test and typecheck evidence only.
+
 ### Portal dependency declaration (dev-server defect, fixed for T2–T6)
 
 The portal pages' `Component.imports` used to be written as spreads of the imported
