@@ -27,6 +27,15 @@ export const PORTAL_ROUTES: Routes = [
           import("./presentation/pages/portal-requests-page/portal-requests-page").then(
             component => component.PortalRequestsPage
           )
+      },
+      // Declared after `requests`, so the static section path always wins over the id segment.
+      {
+        path: "requests/:id",
+        title: "Detalle de solicitud | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-request-detail-page/portal-request-detail-page").then(
+            component => component.PortalRequestDetailPage
+          )
       }
     ]
   }

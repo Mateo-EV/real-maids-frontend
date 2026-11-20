@@ -50,6 +50,7 @@
                 <th hlmTh scope="col">Estado</th>
                 <th hlmTh scope="col">Fecha deseada</th>
                 <th hlmTh scope="col">Registrada (UTC)</th>
+                <th hlmTh scope="col">Detalle</th>
               </tr>
             </thead>
             <tbody hlmTBody>
@@ -71,6 +72,17 @@
                   </td>
                   <td hlmTd>{{ request.desiredDate ?? "No registrado" }}</td>
                   <td hlmTd>{{ request.registeredAt.toISOString() }}</td>
+                  <td hlmTd>
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="['/portal/requests', request.id]"
+                      [queryParams]="paging()"
+                      [attr.aria-label]="'Ver detalle de la solicitud ' + request.id"
+                      >Ver detalle</a
+                    >
+                  </td>
                 </tr>
               }
             </tbody>
@@ -100,6 +112,16 @@
                 <dt class="text-muted-foreground">Registrada (UTC)</dt>
                 <dd class="break-words">{{ request.registeredAt.toISOString() }}</dd>
               </dl>
+              <a
+                hlmBtn
+                variant="outline"
+                size="sm"
+                class="mt-4"
+                [routerLink]="['/portal/requests', request.id]"
+                [queryParams]="paging()"
+                [attr.aria-label]="'Ver detalle de la solicitud ' + request.id"
+                >Ver detalle</a
+              >
             </li>
           }
         </ul>

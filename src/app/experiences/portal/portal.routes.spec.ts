@@ -74,12 +74,17 @@ describe("portal routes", () => {
     expect(portal.canActivate).toEqual([portalGuard])
     expect(portal.loadComponent).toBeTypeOf("function")
     const children = portal.children!
-    // No dead entries: `/portal` opens the only implemented section.
-    expect(children.map(route => route.path)).toEqual(["", "requests"])
+    // No dead entries: `/portal` opens the only implemented section, whose static path is
+    // declared ahead of its own view-more-specific `:id` child.
+    expect(children.map(route => route.path)).toEqual(["", "requests", "requests/:id"])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("requests")
     expect(children[1].loadComponent).toBeTypeOf("function")
     expect(children[1].canActivate).toBeUndefined()
+    // The own-request detail inherits the shell's audience guard and adds no local provider.
+    expect(children[2].loadComponent).toBeTypeOf("function")
+    expect(children[2].canActivate).toBeUndefined()
+    expect(children[2].providers).toBeUndefined()
   })
 
   it("protects the portal for anonymous visitors without any read or shell", async () => {

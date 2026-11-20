@@ -2,7 +2,7 @@ import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { PLATFORM_ID, signal } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
-import { provideRouter } from "@angular/router"
+import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
 import { EMPTY } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -11,6 +11,7 @@ import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-c
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
+import { PortalRequestDetailPage } from "../portal-request-detail-page/portal-request-detail-page"
 import { PortalRequestsPage } from "./portal-requests-page"
 
 const api = "http://localhost:8080/api/solicitudes"
@@ -58,7 +59,10 @@ async function setup(options: { url?: string; server?: boolean } = {}) {
       provideHttpClient(),
       provideHttpClientTesting(),
       provideOperationsRequestReads(),
-      provideRouter([{ path: "portal/requests", component: PortalRequestsPage }]),
+      provideRouter([
+        { path: "portal/requests", component: PortalRequestsPage },
+        { path: "portal/requests/:id", component: PortalRequestDetailPage }
+      ]),
       { provide: API_URL, useValue: "http://localhost:8080" },
       { provide: AuthStore, useValue: { session: () => session() } },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } },
@@ -74,6 +78,7 @@ async function setup(options: { url?: string; server?: boolean } = {}) {
   await settle()
   const element = harness.routeNativeElement!
   const http = TestBed.inject(HttpTestingController)
+  const router = TestBed.inject(Router)
   const request = (pagina = 0, tamanio = 20) => {
     const pending = http.expectOne(
       candidate =>
@@ -96,7 +101,7 @@ async function setup(options: { url?: string; server?: boolean } = {}) {
     button!.click()
     await settle()
   }
-  return { harness, element, http, request, settle, click, session }
+  return { harness, element, http, request, settle, click, session, router }
 }
 
 afterEach(() => {
@@ -138,8 +143,19 @@ describe("PortalRequestsPage", () => {
       "Mis solicitudes de servicio"
     )
 
-    // Plain data for now: no detail link and no write action is offered.
-    expect(s.element.querySelectorAll("a")).toHaveLength(0)
+    // Every row opens its own read-only detail, and the effective page context travels in the URL.
+    const desktop = Array.from(s.element.querySelectorAll<HTMLAnchorElement>("table a[href]"))
+    const mobile = Array.from(
+      s.element.querySelectorAll<HTMLAnchorElement>("ul[aria-label] a[href]")
+    )
+    expect(desktop).toHaveLength(12)
+    expect(mobile).toHaveLength(12)
+    expect(new URL(desktop[0].href).pathname).toBe("/portal/requests/17")
+    expect(new URL(desktop[0].href).search).toBe("?page=0&size=20")
+    expect(desktop[0].getAttribute("aria-label")).toBe("Ver detalle de la solicitud 17")
+    expect(new URL(mobile[0].href).pathname).toBe("/portal/requests/17")
+    expect(mobile[0].getAttribute("aria-label")).toBe("Ver detalle de la solicitud 17")
+    // Still no write action anywhere in the list.
     expect(
       Array.from(s.element.querySelectorAll("button")).filter(button =>
         /crear|editar|cancelar/i.test(button.textContent ?? "")
@@ -175,6 +191,9 @@ describe("PortalRequestsPage", () => {
     s.request(1, 10).flush(page(1, 10, 12))
     await s.settle()
     expect(s.element.textContent).toContain("11–12 de 12")
+    // The detail links follow the effective metadata, not the requested page.
+    const link = s.element.querySelector<HTMLAnchorElement>("table a[href]")!
+    expect(new URL(link.href).search).toBe("?page=1&size=10")
     s.http.expectNone(() => true)
   })
 
@@ -225,8 +244,91 @@ describe("PortalRequestsPage", () => {
   })
 
   it("dispatches no read on the server platform", async () => {
-    await setup({ server: true })
+    // URL paging is never a server-platform read: hydration dispatches nothing either way.
+    await setup({ server: true, url: "/portal/requests?page=2&size=10" })
     expect(TestBed.inject(HttpTestingController)).toBeTruthy()
     TestBed.inject(HttpTestingController).expectNone(() => true)
+  })
+
+  // Entry paging comes from the URL, so the detail's return link restores the visited page.
+  // The list still never writes paging back on its own navigation.
+  describe("URL paging on entry", () => {
+    it.each([
+      ["page=2&size=10", 2, 10],
+      ["page=0&size=100", 0, 100],
+      ["page=1&size=100", 1, 100]
+    ])("adopts %s as the initial request", async (search, pagina, tamanio) => {
+      const s = await setup({ url: `/portal/requests?${search}` })
+      s.request(pagina, tamanio).flush(page(pagina, tamanio, 250))
+      await s.settle()
+      expect(s.element.textContent).not.toMatch(/Cargando solicitudes/)
+      expect(s.element.querySelector('[role="alert"]')).toBeNull()
+      s.http.expectNone(() => true)
+    })
+
+    it.each([
+      "page=2",
+      "size=10",
+      "page=-1&size=10",
+      "page=1.5&size=10",
+      "page=abc&size=10",
+      "page=2147483648&size=10",
+      "page=1&size=0",
+      "page=1&size=one",
+      "page=1&size=2147483648",
+      "page=1&page=2&size=10",
+      "page=0&size=10&size=20",
+      "page=&size=10",
+      "page=1&size="
+    ])("falls back to the first page for the malformed pair %s", async search => {
+      const s = await setup({ url: `/portal/requests?${search}` })
+      s.request(0, 20).flush(page(0, 20, 12))
+      await s.settle()
+      expect(s.element.textContent).toContain("1–12 de 12")
+      // Only the documented pagina/tamanio pair travels: no invented offset or clamp.
+      s.http.expectNone(() => true)
+    })
+
+    it("never dispatches a size above the documented maximum", async () => {
+      const s = await setup({ url: "/portal/requests?page=1&size=101" })
+      // The whole pair falls back instead of sending an out-of-contract tamanio.
+      s.request(0, 20).flush(page(0, 20, 12))
+      await s.settle()
+      expect(s.element.textContent).toContain("1–12 de 12")
+      s.http.expectNone(() => true)
+    })
+
+    it("returns from a detail to the same effective page", async () => {
+      const clock = vi.spyOn(Date, "now").mockReturnValue(1000)
+      const s = await setup({ url: "/portal/requests?page=2&size=10" })
+      s.request(2, 10).flush(page(2, 10, 45))
+      await s.settle()
+      expect(s.element.textContent).toContain("21–30 de 45")
+
+      const link = s.element.querySelector<HTMLAnchorElement>("table a[href]")!
+      const target = new URL(link.href)
+      expect(target.pathname).toBe("/portal/requests/17")
+      expect(target.search).toBe("?page=2&size=10")
+
+      await s.router.navigateByUrl(`${target.pathname}${target.search}`)
+      await s.settle()
+      s.http.expectOne(candidate => candidate.url === `${api}/17`).flush(dto(17, "Casa centro"))
+      await s.settle()
+
+      const detail = s.harness.routeNativeElement!
+      const back = Array.from(detail.querySelectorAll<HTMLAnchorElement>("a[href]")).find(
+        item => new URL(item.href).pathname === portalRequests
+      )!
+      expect(new URL(back.href).search).toBe("?page=2&size=10")
+
+      // A new visit past the freshness window reads the page the customer came from.
+      clock.mockReturnValue(31000)
+      await s.router.navigateByUrl(`${new URL(back.href).pathname}${new URL(back.href).search}`)
+      await s.settle()
+      s.request(2, 10).flush(page(2, 10, 45))
+      await s.settle()
+      expect(s.harness.routeNativeElement!.textContent).toContain("21–30 de 45")
+      s.http.expectNone(() => true)
+    })
   })
 })

@@ -663,8 +663,9 @@ navigation and its own children. It is not part of the admin shell and does not 
   visit to its own home, and a settled session leaving the change screen goes through the same
   audience-aware destination. A pending password change still takes precedence over the audience
   redirect, so the forced step is never skipped by a cross-experience bounce.
-- **Mis solicitudes**: `/portal/requests` reads the existing root `ServiceRequestsStore`. It asks for
-  one page starting at offset 0 / limit 20 and shows exactly what the server returned: the backend
+- **Mi solicitudes**: `/portal/requests` reads the existing root `ServiceRequestsStore`. Its entry
+  paging comes from the URL (`page`/`size`, added by T3 below) and defaults to offset 0 / limit 20, and
+  it shows exactly what the server returned: the backend
   already scopes `GET /api/solicitudes` to the caller, so no customer ID travels, no row is filtered
   or sliced locally and no total is invented. The returned effective `offset`/`limit` are adopted for
   paging, with one fenced out-of-range recovery per user action. The documented 30000 ms success-only
@@ -675,8 +676,9 @@ navigation and its own children. It is not part of the admin shell and does not 
   retryable error that keeps the last verified rows and offers GET-only retry. Records are a real
   table above 64rem of available container width and cards below it, both labelled
   `Mis solicitudes de servicio`; the status is a badge whose text carries the value, so colour is
-  never the only signal; supplied UTC instants are printed literally. Copy is Spanish. Rows are plain
-  data in this slice: no detail link, no create/edit/cancel action, no filter, KPI or total.
+  never the only signal; supplied UTC instants are printed literally. Copy is Spanish. Rows stay plain
+  data apart from their own read-only detail link (T3 below): no create/edit/cancel action, no filter,
+  KPI or total.
 - **Tests first**: the redirect matrix (customer, staff, anonymous, pending password change), the
   guard matrix, the loop-freedom property, the login destination per role, the lazy composition and
   the list's loading/empty/error/stale states, effective-metadata adoption and bounded recovery were
@@ -694,5 +696,66 @@ Pending acceptance: live backend/CORS with a real customer session (own list onl
 403/404), manual cross-audience checks in a browser (customer deep link into `/admin`, staff deep link
 into `/portal`, anonymous deep link into both, customer first login with a provisional password), and
 Chrome/Edge/Firefox keyboard and responsive checks of the portal shell and its records. The customer
-own-request detail, own orders and own support remain unimplemented, and no role-aware API
-authorization is claimed: the backend remains authoritative.
+own-request detail now exists (section below); own orders and own support remain unimplemented, and
+no role-aware API authorization is claimed: the backend remains authoritative.
+
+## WP10 T3 — Own request detail in the portal
+
+S7 with the read side of M04/RF04/HU04/P05 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer can open one of their own service requests from the portal list
+at `/portal/requests/:id`, read-only, inside the existing guarded portal shell. Nothing writes: no
+cancel, no edit, no status action, no order creation and no staff destination.
+
+- **Route and identity**: `requests/:id` is a lazy child of the same `portal` group, declared after the
+  static `requests` path so the section always wins, and it inherits the shell's `portalGuard`
+  audience decision without repeating it or adding a local provider. The id must be a positive decimal
+  int32; a malformed, zero, negative, fractional, non-numeric or out-of-range value dispatches no read
+  and renders a safe «no disponible» state instead of guessing an identity.
+- **Caller scope, not a permission claim**: no customer id, ownership claim or permission is sent or
+  displayed beyond the payload. A request that is not the caller's answers `404`, which is rendered as
+  «no disponible» — never as a permission hint, never as a retryable transient failure, and it drops an
+  already verified record because the answer is authoritative. A `404` on a refresh of a verified
+  record replaces it with the same unavailable state instead of keeping stale data.
+- **Projection**: only supplied fields are printed — request id, property, service type, desired
+  calendar date, the supplied UTC register/update instants, the supplied status code as a text badge and
+  the submitted description as plain text. Nullable values use the project's existing «No registrado»
+  copy, dates are printed as the supplied calendar string and instants as the supplied UTC value, so no
+  browser timezone shifts them. Staff-only payload data (for example the registering operator) is not
+  projected, and no status, owner, total or amount is invented.
+- **Reads and states**: the existing root `ServiceRequestsStore` keeps the documented 30000 ms
+  success-only freshness, ref-counted reads, same-id stale data and session/SSR fencing; the page owns
+  only its route identity, its state feedback and its cancellation. Route identity is
+  `distinctUntilChanged`, the observation is `switchMap`ped and destroyed with the route
+  (`takeUntilDestroyed`/`DestroyRef`), and a replaced session cancels the previous read before the new
+  identity gets its own read; same-session renewal preserves the work. States are loading, an
+  `Actualizando solicitud…` refresh over verified data, the verified record, a retryable transient error
+  that keeps the verified record and offers a GET-only `Reintentar`, and the two distinct
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all.
+- **Return context**: the back link to `Mis solicitudes` keeps the list's effective paging when the URL
+  carries a valid `page`/`size` pair, and the portal list now adopts that pair on entry as its initial
+  root-store read, so list → detail → return lands on the page the customer came from. The contract is
+  the one the operations lists already use: `page` is a zero-based index and `size` the page length,
+  both digits-only, with `page × size` a safe integer and `size` at most the documented backend maximum
+  of 100. Missing, duplicated, negative, fractional, non-numeric, out-of-int32 or over-maximum values
+  fall back to `page=0&size=20` as a pair — never a clamped size, never an invented offset — and the
+  request still carries only `pagina`/`tamanio`. The list itself never writes paging back to the URL,
+  so its own navigation keeps its in-memory behavior, and URL paging causes no read on the server
+  platform.
+- **Tests first**: the detail spec covers id validation without any dispatch, the literal projection and
+  the absence of write/staff affordances, the caller-scoped `404` as a distinct state, the `404`
+  overriding a verified record, stale retention during refresh and transient failure with a GET-only
+  retry, the return link with and without valid paging, session-replacement and route-destruction
+  cancellation, and no read on the server platform. The list spec adds the entry contract: a valid
+  pair adopted as the initial request, the malformed/duplicated/over-maximum matrix falling back to
+  `page=0&size=20` with only `pagina`/`tamanio` on the wire, no out-of-contract size, and the
+  list → detail → return round trip landing on the same effective page. RED was a compile failure for
+  the missing `PortalRequestDetailPage` and, for the entry contract, the list still dispatching
+  `pagina=0&tamanio=20` for every URL pair (4 cases); afterwards the three focused portal files pass
+  43/43 and a deliberate mutation of the `NOT_FOUND` treatment fails exactly the three `404`-dependent
+  cases.
+
+Pending acceptance: live backend/CORS with a real customer session (own request detail, cross-customer
+`404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of the new detail, and a manual
+pass over the list → detail → return round trip with a real page of results. Own orders and own support
+remain unimplemented, and the backend remains the authority on scope: the frontend validates shape and
+contract, never permissions.
