@@ -404,8 +404,9 @@ consumes it as its own capability, not as an order or request editor.
 
 Connected under `/admin/support` (inbox) and `/admin/support/:id` (detail), both guarded and lazy inside the
 protected admin shell, with the `Soporte` entry in the General group after `Operaciones`. The staff audience is
-connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal
-and is not implemented.
+connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal:
+the read side of it is connected by the WP10 T5 section below, and creating an own attention is
+T6, still unimplemented.
 
 - **Reads**: server-paged inbox with `estado`, `idTipo`, `idCliente` and business-local `desde`/`hasta`
   filters, effective returned metadata and one bounded out-of-range recovery; detail with the server-ordered
@@ -824,5 +825,82 @@ Pending acceptance: live backend/CORS with a real customer session (own order li
 cross-customer `404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of both new
 screens, an independent redaction check of the property access fields on this surface, and a manual
 pass over the list → detail → return round trip with a real page of results. Own support (T5) and the
-own-attention creation (T6) remain unimplemented, and no role-aware API authorization is claimed: the
-backend stays authoritative on scope.
+own-attention creation (T6) remained unimplemented at this checkpoint — the T5 section below
+supersedes the own-support part with a read-only list and detail, while own-attention creation is
+still T6 and still unimplemented — and no role-aware API authorization is claimed: the backend stays
+authoritative on scope.
+
+## WP10 T5 — Own support in the portal
+
+S7 with the read side of M09/RF11/HU11/P10 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer now reads their own support attentions at `/portal/support`
+and `/portal/support/:id`, read-only, inside the existing guarded portal shell. «Soporte» stops being
+a planned section and becomes a real destination, so the portal navigation has no dead entry.
+**Creating an own attention is T6 and is not part of this slice**: no create form, no reply, no state
+change, no close and no staff action exists on either screen.
+
+- **Routes and navigation**: `support` and `support/:id` are lazy children of the same guarded
+  `portal` group, with the static list declared before its own `:id` child, and they inherit the
+  shell's `portalGuard` audience decision without repeating it or adding a local provider. The shell
+  gains exactly one section link (`Soporte`); no KPI, no sidebar, no admin affordance and no dead
+  destination is added, and the rest of the shell is unchanged.
+- **Caller scope, not a permission claim**: the backend already scopes `GET /api/atenciones` and
+  `GET /api/atenciones/{id}` to the caller, so no customer id, ownership claim or permission is sent
+  or displayed. Only `pagina`/`tamanio` travel on the list and the detail sends no parameter at all.
+  No row is filtered or sliced locally and no total is invented.
+- **States, supplied and literal**: the vocabulary is the backend's closed
+  `RECIBIDA`/`EN_REVISION`/`RESUELTA`/`CERRADA` set with its supplied `estadoNombre`. The portal
+  prints that supplied text as received and never derives, translates or invents a state, and it
+  encodes no transition — which target state is legal stays the staff screen's and the backend's
+  authority. There is no status catalog endpoint and none is invented here.
+- **List projection**: the supplied subject, type name, state text and registration instant, plus the
+  attention id, printed literally. Records are a real table above 64rem of available container width
+  and cards below it, both labelled `Mis atenciones de soporte`; rows link to their own detail
+  carrying the effective `page`/`size`. No filters, KPIs, totals, customer column or internal contact
+  data are added.
+- **Detail projection**: supplied fields only — subject as a heading, the supplied state text as a
+  badge whose text carries the value, attention id, type name, register and close instants as the
+  supplied UTC value, the description as plain text, and the follow-up list in server order. Nullable
+  values use the existing «No registrado» copy. The only link is the way back.
+- **Redaction on this surface**: a follow-up whose author is null renders an explicit redacted case
+  (`Autor no mostrado`, marked in the DOM), never a substituted name, id, role or other field, and
+  never a generic "staff" label that pretends someone is identified. A supplied author is printed as
+  it arrived, and the supplied orientation (`Del cliente`/`Del personal`) is never combined into an
+  identity claim. The frontend does not certify backend redaction.
+- **Reads and states**: the existing root `SupportRequestsStore` keeps the documented 30000 ms
+  success-only freshness, shared ref-counted reads, same-key stale data, the pinned registry and
+  session/SSR fencing; the pages own only their query/route identity, their state feedback and their
+  cancellation. Matrix: loading, `Actualizando atenciones…`/`Actualizando atención…` over verified
+  data, verified rows or record, verified empty (`Aún no tienes atenciones`), a distinct
+  out-of-range empty state, a retryable transient error that keeps the verified data and offers a
+  GET-only `Reintentar`, one fenced out-of-range recovery per user action on the list, and the two
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all. A `404` on a
+  refresh replaces a verified record because the answer is authoritative.
+- **Entry paging**: the list adopts the same `page`/`size` contract the portal lists already use —
+  read once from the route snapshot, `offset = page × size`, whole-pair fallback to `page=0&size=20`
+  for anything missing, duplicated, negative, fractional, non-numeric or out of int32, and a size
+  above the documented maximum of 100 never dispatched. The list never writes paging back, and the
+  detail's return link restores the effective page. This module additionally refuses an answer whose
+  effective size differs from the requested one, because those rows would not start at the asked
+  offset; the portal list therefore navigates with the effective returned metadata and surfaces that
+  refusal as its retryable error instead of adopting a different size.
+- **Tests first**: the two new specs cover id validation without any dispatch, the literal projection
+  (including a supplied state text no lookup would produce), the null-author redaction with the
+  absence of a substituted identity and the preserved server order, the caller-scoped `404` as a
+  distinct state that also drops a verified record, stale retention during refresh and transient
+  failure with a GET-only retry, navigation with the effective metadata plus the size-mismatch
+  refusal, the entry-paging fallback matrix, the list → detail → return round trip, the absence of any
+  create/reply/transition control, and no read on the server platform. The route spec pins the two new
+  children and the third real navigation entry. RED was a compile failure for the missing
+  `PortalSupportPage`/`PortalSupportDetailPage`; afterwards the seven portal spec files pass 126/126.
+  A deliberate mutation (printing the state code instead of the supplied name) failed exactly the two
+  literal-state cases, and making the `404` a transient failure failed exactly the three
+  `404`-dependent cases.
+
+Pending acceptance: live backend/CORS with a real customer session (own attention list and detail,
+cross-customer `404`, the `ATENCION_LEER_PROPIA` authority), an independent redaction check with a
+real null-author follow-up, rendered Chrome/Edge/Firefox keyboard and responsive checks of both
+screens, and a manual pass over the list → detail → return round trip with a real page of results.
+Creating an own attention (T6), surveys, attachments/photos and message templates remain
+unimplemented, and no role-aware API authorization is claimed: the backend stays authoritative on
+scope.

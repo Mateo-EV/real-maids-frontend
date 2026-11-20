@@ -1,7 +1,7 @@
 import { Component, inject } from "@angular/core"
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucideFileText, lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
+import { lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
 import { HlmAvatarImports } from "@spartan-ng/helm/avatar"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -31,7 +31,7 @@ interface PortalSection {
     HlmBadgeImports,
     HlmButtonImports
   ],
-  providers: [provideIcons({ lucideFileText, lucideLogOut, lucideSparkles })],
+  providers: [provideIcons({ lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles })],
   templateUrl: "./portal-shell.html",
   styleUrl: "./portal-shell.css"
 })
@@ -41,7 +41,8 @@ export class PortalShell {
   readonly session = this.auth.session
   readonly sections: readonly PortalSection[] = [
     { label: "Mis solicitudes", path: "/portal/requests", icon: "lucideFileText" },
-    { label: "Mis servicios", path: "/portal/services", icon: "lucideSparkles" }
+    { label: "Mis servicios", path: "/portal/services", icon: "lucideSparkles" },
+    { label: "Soporte", path: "/portal/support", icon: "lucideLifeBuoy" }
   ]
 
   sessionInitials(): string {

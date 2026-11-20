@@ -11,6 +11,7 @@ import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-c
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { portalGuard } from "@/app/features/auth/presentation/guards/auth.guard"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { provideCustomerSupportReads } from "@/app/features/customer-support/customer-support.providers"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
 import { PORTAL_ROUTES } from "./portal.routes"
 
@@ -42,6 +43,7 @@ function setup(session: AuthSession | null) {
       provideHttpClient(),
       provideHttpClientTesting(),
       provideOperationsRequestReads(),
+      provideCustomerSupportReads(),
       { provide: API_URL, useValue: "http://localhost:8080" },
       { provide: AuthStore, useValue: auth },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } }
@@ -67,7 +69,7 @@ afterEach(() => {
 })
 
 describe("portal routes", () => {
-  it("composes one lazy guarded portal experience with a single real section", () => {
+  it("composes one lazy guarded portal experience with its real sections", () => {
     expect(PORTAL_ROUTES).toHaveLength(1)
     const portal = PORTAL_ROUTES[0]
     expect(portal.path).toBe("portal")
@@ -81,7 +83,9 @@ describe("portal routes", () => {
       "requests",
       "requests/:id",
       "services",
-      "services/:id"
+      "services/:id",
+      "support",
+      "support/:id"
     ])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("requests")
@@ -97,6 +101,13 @@ describe("portal routes", () => {
     expect(children[4].loadComponent).toBeTypeOf("function")
     expect(children[4].canActivate).toBeUndefined()
     expect(children[4].providers).toBeUndefined()
+    // Own support mirrors it too: static list before its id detail, no local guard or provider.
+    expect(children[5].loadComponent).toBeTypeOf("function")
+    expect(children[5].canActivate).toBeUndefined()
+    expect(children[5].providers).toBeUndefined()
+    expect(children[6].loadComponent).toBeTypeOf("function")
+    expect(children[6].canActivate).toBeUndefined()
+    expect(children[6].providers).toBeUndefined()
   })
 
   it("protects the portal for anonymous visitors without any read or shell", async () => {
@@ -133,17 +144,21 @@ describe("portal routes", () => {
     expect(element.querySelector(".catalog-metrics")).toBeNull()
     expect(element.querySelector(".status-header")).toBeNull()
 
-    // Two real sections; the current one is marked, the other is a working destination.
+    // Three real sections; the current one is marked, the others are working destinations.
     const nav = element.querySelector('nav[aria-label="Navegación del portal"]')!
     expect(nav).not.toBeNull()
     const links = Array.from(nav.querySelectorAll("a"))
-    expect(links).toHaveLength(2)
+    expect(links).toHaveLength(3)
     expect(links[0].textContent?.trim()).toBe("Mis solicitudes")
     expect(links[0].getAttribute("href")).toBe("/portal/requests")
     expect(links[0].getAttribute("aria-current")).toBe("page")
     expect(links[1].textContent?.trim()).toBe("Mis servicios")
     expect(links[1].getAttribute("href")).toBe("/portal/services")
     expect(links[1].getAttribute("aria-current")).toBeNull()
+    // «Soporte» exists because its consumer exists: own attentions are implemented by T5.
+    expect(links[2].textContent?.trim()).toBe("Soporte")
+    expect(links[2].getAttribute("href")).toBe("/portal/support")
+    expect(links[2].getAttribute("aria-current")).toBeNull()
     expect(element.querySelector("app-portal-requests-page")).not.toBeNull()
 
     // Nothing administrative is reachable from the customer shell.
@@ -171,6 +186,33 @@ describe("portal routes", () => {
     expect(element.textContent).toContain("Aún no tienes solicitudes")
     TestBed.inject(HttpTestingController).expectNone(() => true)
     expect(auth.session()?.role).toBe("CLIENTE")
+  })
+
+  it("opens Soporte for a customer with its own caller-scoped read and no admin affordance", async () => {
+    setup(customer())
+    const harness = await RouterTestingHarness.create("/portal/support")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    const element = harness.routeNativeElement!
+    expect(TestBed.inject(Router).url).toBe("/portal/support")
+    expect(element.querySelector("app-portal-support-page")).not.toBeNull()
+    expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
+    const active = element.querySelector('nav[aria-label="Navegación del portal"] a[aria-current]')
+    expect(active?.textContent?.trim()).toBe("Soporte")
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      candidate =>
+        candidate.url === "http://localhost:8080/api/atenciones" &&
+        candidate.params.get("pagina") === "0" &&
+        candidate.params.get("tamanio") === "20"
+    )
+    // The backend scopes the list to the caller: no customer id travels.
+    expect(request.request.params.has("idCliente")).toBe(false)
+    request.flush(emptyPage)
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    expect(element.textContent).toContain("Aún no tienes atenciones")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
   })
 
   it("logs the customer out from its own shell", async () => {

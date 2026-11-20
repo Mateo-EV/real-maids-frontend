@@ -8,7 +8,8 @@ import { Routes } from "@angular/router"
  *
  * `/portal` opens the first implemented section. Every later section adds its route and its
  * navigation entry in the same slice that connects its consumer, so no dead destination is created
- * here: `requests` (own service requests) and `services` (own service orders) are both implemented.
+ * here: `requests` (own service requests), `services` (own service orders) and `support` (own support
+ * attentions) are all implemented. Creation of an attention is a later slice and is not declared.
  */
 export const PORTAL_ROUTES: Routes = [
   {
@@ -52,6 +53,23 @@ export const PORTAL_ROUTES: Routes = [
         loadComponent: () =>
           import("./presentation/pages/portal-service-detail-page/portal-service-detail-page").then(
             component => component.PortalServiceDetailPage
+          )
+      },
+      // Own support attentions (WP10 T5). The static list precedes its own `:id` child.
+      {
+        path: "support",
+        title: "Soporte | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-support-page/portal-support-page").then(
+            component => component.PortalSupportPage
+          )
+      },
+      {
+        path: "support/:id",
+        title: "Detalle de atención | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-support-detail-page/portal-support-detail-page").then(
+            component => component.PortalSupportDetailPage
           )
       }
     ]
