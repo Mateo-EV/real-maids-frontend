@@ -6,9 +6,9 @@ import { Routes } from "@angular/router"
  * one guarded lazy shell with its own children. The audience guard is the same decision the admin
  * tree uses, so a staff session never renders the portal and a customer never reaches `/admin`.
  *
- * `/portal` opens the only implemented section today. Later sections (own orders, own support) add
- * their route and their navigation entry in the same slice that connects their consumer, so no dead
- * destination is created here.
+ * `/portal` opens the first implemented section. Every later section adds its route and its
+ * navigation entry in the same slice that connects its consumer, so no dead destination is created
+ * here: `requests` (own service requests) and `services` (own service orders) are both implemented.
  */
 export const PORTAL_ROUTES: Routes = [
   {
@@ -35,6 +35,23 @@ export const PORTAL_ROUTES: Routes = [
         loadComponent: () =>
           import("./presentation/pages/portal-request-detail-page/portal-request-detail-page").then(
             component => component.PortalRequestDetailPage
+          )
+      },
+      // Own service orders (WP10 T4). The static list precedes its own `:id` child.
+      {
+        path: "services",
+        title: "Mis servicios | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-services-page/portal-services-page").then(
+            component => component.PortalServicesPage
+          )
+      },
+      {
+        path: "services/:id",
+        title: "Detalle del servicio | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-service-detail-page/portal-service-detail-page").then(
+            component => component.PortalServiceDetailPage
           )
       }
     ]

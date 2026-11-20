@@ -74,9 +74,15 @@ describe("portal routes", () => {
     expect(portal.canActivate).toEqual([portalGuard])
     expect(portal.loadComponent).toBeTypeOf("function")
     const children = portal.children!
-    // No dead entries: `/portal` opens the only implemented section, whose static path is
+    // No dead entries: `/portal` opens the first implemented section, and every static path is
     // declared ahead of its own view-more-specific `:id` child.
-    expect(children.map(route => route.path)).toEqual(["", "requests", "requests/:id"])
+    expect(children.map(route => route.path)).toEqual([
+      "",
+      "requests",
+      "requests/:id",
+      "services",
+      "services/:id"
+    ])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("requests")
     expect(children[1].loadComponent).toBeTypeOf("function")
@@ -85,6 +91,12 @@ describe("portal routes", () => {
     expect(children[2].loadComponent).toBeTypeOf("function")
     expect(children[2].canActivate).toBeUndefined()
     expect(children[2].providers).toBeUndefined()
+    // The own-orders section mirrors it: static list before its id detail, no local guard.
+    expect(children[3].loadComponent).toBeTypeOf("function")
+    expect(children[3].canActivate).toBeUndefined()
+    expect(children[4].loadComponent).toBeTypeOf("function")
+    expect(children[4].canActivate).toBeUndefined()
+    expect(children[4].providers).toBeUndefined()
   })
 
   it("protects the portal for anonymous visitors without any read or shell", async () => {
@@ -121,14 +133,17 @@ describe("portal routes", () => {
     expect(element.querySelector(".catalog-metrics")).toBeNull()
     expect(element.querySelector(".status-header")).toBeNull()
 
-    // One real section, and it is the current one.
+    // Two real sections; the current one is marked, the other is a working destination.
     const nav = element.querySelector('nav[aria-label="Navegación del portal"]')!
     expect(nav).not.toBeNull()
     const links = Array.from(nav.querySelectorAll("a"))
-    expect(links).toHaveLength(1)
+    expect(links).toHaveLength(2)
     expect(links[0].textContent?.trim()).toBe("Mis solicitudes")
     expect(links[0].getAttribute("href")).toBe("/portal/requests")
     expect(links[0].getAttribute("aria-current")).toBe("page")
+    expect(links[1].textContent?.trim()).toBe("Mis servicios")
+    expect(links[1].getAttribute("href")).toBe("/portal/services")
+    expect(links[1].getAttribute("aria-current")).toBeNull()
     expect(element.querySelector("app-portal-requests-page")).not.toBeNull()
 
     // Nothing administrative is reachable from the customer shell.

@@ -20,8 +20,7 @@ interface PortalSection {
  *
  * The navigation lists only sections that are actually implemented; a later slice adds its own
  * entry when its consumer exists, so the portal never shows a dead destination.
- */
-@Component({
+ */ @Component({
   selector: "app-portal-shell",
   imports: [
     RouterOutlet,
@@ -41,7 +40,8 @@ export class PortalShell {
   private readonly router = inject(Router)
   readonly session = this.auth.session
   readonly sections: readonly PortalSection[] = [
-    { label: "Mis solicitudes", path: "/portal/requests", icon: "lucideFileText" }
+    { label: "Mis solicitudes", path: "/portal/requests", icon: "lucideFileText" },
+    { label: "Mis servicios", path: "/portal/services", icon: "lucideSparkles" }
   ]
 
   sessionInitials(): string {

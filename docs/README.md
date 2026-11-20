@@ -642,11 +642,12 @@ at `/portal`, composed exactly like `/admin`: one guarded shell with `router-out
 navigation and its own children. It is not part of the admin shell and does not reuse its sidebar.
 
 - **Route**: `src/app/experiences/portal/portal.routes.ts` declares the guarded `portal` group;
-  `/portal` opens `/portal/requests`, the only implemented section. Later sections (own order
-  detail, own support) add their route and navigation entry in the slice that connects their
-  consumer, so no dead destination exists today. The shell owns brand, session identity, `Salir`
-  and the single real section link; it has no sidebar, no KPIs, no environment/security banner and
-  no administrative action.
+  `/portal` opens `/portal/requests`, the first implemented section. Later sections (own order detail,
+  own support) add their route and navigation entry in the slice that connects their consumer, so no
+  dead destination exists. (The T4 section below adds `services` as the second real section; the shell
+  structure, the audience rule and the list behavior described here are unchanged.) The shell owns
+  brand, session identity, `Salir` and the real section links; it has no sidebar, no KPIs, no
+  environment/security banner and no administrative action.
 - **Audience, not permissions**: the audience comes from the role label the backend returned in the
   profile (`AuthSession.role`). Exactly one role name is the customer audience — the backend's own
   `CLIENTE` (`CuentaClienteService.ROL_CLIENTE`, the same identity the users form uses) — and every
@@ -756,6 +757,72 @@ cancel, no edit, no status action, no order creation and no staff destination.
 
 Pending acceptance: live backend/CORS with a real customer session (own request detail, cross-customer
 `404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of the new detail, and a manual
-pass over the list → detail → return round trip with a real page of results. Own orders and own support
-remain unimplemented, and the backend remains the authority on scope: the frontend validates shape and
-contract, never permissions.
+pass over the list → detail → return round trip with a real page of results. Own support remains
+unimplemented; own service orders are delivered by the T4 section below, and the backend remains the
+authority on scope: the frontend validates shape and contract, never permissions.
+
+## WP10 T4 — Own services (orders) in the portal
+
+S7 with the read side of M05/RF05/HU05/P06 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer now reads their own service orders at `/portal/services` and
+`/portal/services/:id`, read-only, inside the existing guarded portal shell. «Mis servicios» stops
+being a planned section and becomes a real destination, so the portal navigation has no dead entry.
+
+- **Routes**: `services` and `services/:id` are lazy children of the same `portal` group, with the
+  static list declared before its own `:id` child, and they inherit the shell's `portalGuard`
+  audience decision without repeating it or adding a local provider. `/portal` still opens
+  `requests`, the shell keeps only brand/session/`Salir` and the two section links, and no KPI, no
+  sidebar and no administrative affordance is added.
+- **Caller scope, not a permission claim**: the backend already scopes `GET /api/ordenes` and
+  `GET /api/ordenes/{id}` to the caller, so no customer id, ownership claim or permission is sent or
+  displayed. Only `pagina`/`tamanio` travel on the list; the detail sends no parameter at all. An
+  order that is not the caller's answers `404`, rendered as «no disponible» — never a permission
+  hint, never a retryable transient failure, and it replaces an already verified record because the
+  answer is authoritative. No row is filtered or sliced locally and no total is invented.
+- **Privacy on this surface**: this is the customer-facing view, so it prints strictly less than the
+  staff screens. The order detail wrapper carries the property block with `instruccionesAcceso` and
+  `codigoPuerta`, and those two fields are dropped from the projection — they never reach the
+  template, an accessible name, a `title` or any attribute. Assigned staff appear by **name and role
+  only**; the supplied `telefono` is never projected. The list also omits the customer column, the
+  estimated amount and the assigned staff entirely.
+- **List projection**: the supplied order code, the supplied status text (`estadoNombre`) in a badge
+  whose text carries the value, the supplied property and service type, and the supplied schedule
+  date plus start/end clock text printed literally (no timezone shifting, no reformatting). Records
+  are a real table above 64rem of available container width and cards below it, both labelled
+  `Mis servicios de limpieza`; rows link to their own detail carrying the effective `page`/`size`.
+- **Detail projection**: supplied fields only — id, code, origin request id, service type, estimated
+  duration and amount as supplied, register/update instants as the supplied UTC value, the safe
+  property fields (alias, address, city, region, postal code, area, rooms, bathrooms, pets), the
+  schedule date and clock text, the assigned staff name and role, and the observation as plain text.
+  Nullable values use the existing «No registrado» copy. Nothing writes: no schedule, no team change,
+  no cancellation, no status change and no administrative destination — the only link is the way
+  back.
+- **Reads and states**: the existing root `ServiceOrdersStore` keeps the documented 30000 ms
+  success-only freshness, shared ref-counted reads, same-key stale data, the 20-entry pinned registry
+  and session/SSR fencing; the pages own only their query/route identity, their state feedback and
+  their cancellation. Matrix: loading, `Actualizando servicios…`/`Actualizando servicio…` over verified
+  data, verified rows or record, verified empty (`Aún no tienes servicios`), a distinct out-of-range
+  empty state, a retryable transient error that keeps the verified data and offers a GET-only
+  `Reintentar`, one fenced out-of-range recovery per user action on the list, and the two
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all.
+- **Entry paging**: the list adopts the same `page`/`size` contract T3 established — read once from
+  the route snapshot, `offset = page × size`, whole-pair fallback to `page=0&size=20` for anything
+  missing, duplicated, negative, fractional, non-numeric or out of int32, and a size above the
+  documented maximum of 100 never dispatched. The list never writes paging back, and the detail's
+  return link restores the effective page the customer came from.
+- **Tests first**: the two new specs cover id validation without any dispatch, the literal projection
+  with staff name/role, the caller-scoped `404` as a distinct state that also drops a verified record,
+  stale retention during refresh and transient failure with a GET-only retry, effective paging
+  adoption plus the list → detail → return round trip, the entry-paging fallback matrix, the privacy
+  rule (no access instruction, no door code, no staff phone anywhere in the rendered text or
+  attributes), the absence of any write affordance, and no read on the server platform. The route spec
+  pins the two new children and the second real navigation entry. RED was a compile failure for the
+  missing `PortalServicesPage`/`PortalServiceDetailPage`; afterwards the five portal spec files pass
+  83/83.
+
+Pending acceptance: live backend/CORS with a real customer session (own order list and detail,
+cross-customer `404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of both new
+screens, an independent redaction check of the property access fields on this surface, and a manual
+pass over the list → detail → return round trip with a real page of results. Own support (T5) and the
+own-attention creation (T6) remain unimplemented, and no role-aware API authorization is claimed: the
+backend stays authoritative on scope.
