@@ -340,7 +340,7 @@ Open assigned services (P09), inspect the client, date/time and current state, t
 
 ### Customer portal
 
-Open “My requests and services” (P11), inspect details and follow progress, then access customer support (P10) when needed. Direct creation of a service request by a customer is unresolved and must not be assumed from the portal's name.
+Open “My requests and services” (P11), inspect details and follow progress, then access customer support (P10) when needed. Direct creation of a *service request* by a customer is unresolved and must not be assumed from the portal's name. Registering an own *support attention* is implemented (WP10 T6, below) and is the only write the portal offers.
 
 ### Supervision and integrations
 
@@ -901,6 +901,77 @@ Pending acceptance: live backend/CORS with a real customer session (own attentio
 cross-customer `404`, the `ATENCION_LEER_PROPIA` authority), an independent redaction check with a
 real null-author follow-up, rendered Chrome/Edge/Firefox keyboard and responsive checks of both
 screens, and a manual pass over the list → detail → return round trip with a real page of results.
-Creating an own attention (T6), surveys, attachments/photos and message templates remain
-unimplemented, and no role-aware API authorization is claimed: the backend stays authoritative on
-scope.
+Surveys, attachments/photos and message templates remain unimplemented, and no role-aware API
+authorization is claimed: the backend stays authoritative on scope. Creating an own attention is the
+next slice (T6, below) and is no longer planned.
+
+## WP10 T6 — Registering an own support attention
+
+S7 with the customer-write side of M09/RF11/HU11/P10 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). `/portal/support/new` is the **only write in the customer portal**: the
+customer registers one support attention in their own name. Everything else in the portal still
+reads and never mutates — no own-service-request creation, no reschedule, no cancellation, no
+survey, no attachment and no state change.
+
+- **Route**: `support/new` is a lazy child of the same guarded `portal` group, declared **before**
+  `support/:id` so the static path is never taken for an id, and it inherits the shell's
+  `portalGuard` audience decision without repeating it or adding a local provider. The «Soporte» list
+  gains exactly one control, `Nueva atención`, which opens it; nothing else on the list changed.
+  `canDeactivate` carries the pending-write decision: a POST in flight refuses the navigation and the
+  page reports that it must finish first, so the request is never abandoned mid-flight. A confirmed
+  creation allows the navigation it triggers itself.
+- **Own audience, not an identity claim**: the payload is `idCliente: null`. The backend resolves the
+  customer from the session, so this form has **no customer picker**, never sends, infers or displays
+  a customer id, and shows no staff, administrative or role affordance. The copy states that the
+  attention is registered in the customer's name and that the support team updates its state; it
+  promises no response time, no resolution and no state transition the backend does not guarantee.
+- **Payload**: exactly `idTipo`, `asunto` and `descripcion` — plus `idOrden` only when the customer
+  chose one of their own services. Asunto is required and trimmed to at most 150 characters,
+  descripción is required and trimmed to at most 4000, both matching the documented wire limits that
+  the existing transport already validates; over-limit text is refused, never truncated. No actor,
+  status, availability, browser-today or generated id is sent.
+- **Optional own service**: `idOrden` is optional and can only reference one of the customer's own
+  orders. The picker is populated from the existing caller-scoped `GET /api/ordenes` read
+  (`ServiceOrdersStore`, one page at a time with its paging inside the panel and an explicit reload),
+  never from a global catalog, and it never accepts a typed id. Because the picker is a choice rather
+  than a text field, the page keeps the receipt of the ids its own reads actually returned and
+  re-verifies the chosen id at dispatch; a choice whose verified read is gone is blocked with a
+  visible message instead of being trusted. Labels show the supplied code, service type and property;
+  the customer's own name is not printed, and no access instruction or door code is ever exposed.
+- **Type catalog**: `idTipo` comes from the existing finite `GET /api/catalogos/tipos-atencion` read
+  with its own loading, verified-empty, failure and explicit retry states. Only a verified, unexpired
+  option is dispatchable; a supplied name is printed as received and no status catalog is invented.
+- **Write discipline**: one POST through the existing root `SupportRequestsStore.createRequest` — no
+  second HTTP path and no widened feature boundary. `pending` is the form's submitting state plus the
+  store's writing gate, so a duplicate submission is refused rather than dispatched. The page keeps
+  all three writes of that store serialized by its own shared gate. Inline errors preserve the draft,
+  the page never resends the POST by itself, and an outcome the client cannot prove (network failure,
+  unexpected status, invalid answer) is reported as *unconfirmed* with the advice to check «Soporte»
+  before retrying. Feedback follows a confirmed success only. A session replacement fences the answer
+  — the write is unsubscribed, the draft/choices/receipts of the previous identity are dropped and no
+  completion navigates or reports — and route destruction completes the wait instead of leaving the
+  form stuck. Cancelling cannot undo a dispatched write.
+- **Destination**: a confirmed success opens the created attention at `/portal/support/{id}`. When the
+  answer carries no usable id, the page returns to `/portal/support?creada=1` instead of guessing a
+  destination, and the list prints the confirmed message there; that flag is presentation only and
+  never travels as a read filter, so the list still asks for `pagina`/`tamanio` alone.
+- **Tests first**: the new page spec covers the entry reads (supplied type catalog plus the
+  caller-scoped own-orders page with no `idCliente`), the required type/subject/description
+  validation with the accessible help/error association and the optional service left without error,
+  the exact payload `{ idCliente: null, idTipo, asunto, descripcion }` with no `idOrden` key and
+  trimmed text, the associable own service sending only its id, clearing that association, one
+  pending write with a duplicate submit refused, Cancel disabled and the navigation refused, an
+  inline `400` error that keeps the draft, an unconfirmed `503` reported as unconfirmed, an
+  authoritative `403` reported as such, no replay of the POST in any of them, the session-replacement
+  fence (write unsubscribed, draft dropped, no navigation), the destination without an id returning to
+  the list, and no read or write on the server platform. The route spec pins the new child between
+  `support` and `support/:id` with its `canDeactivate` and opens it as a real route; the list spec
+  pins the single creation action and the confirmation. RED was a compile failure for the missing
+  `PortalSupportCreatePage` and leave guard; afterwards the eight portal spec files pass 140/140. A
+  deliberate mutation (`customerId: null` → a customer id) failed exactly the four payload cases.
+
+Pending acceptance: live backend/CORS with a real customer session and the `ATENCION_CREAR_PROPIA`
+authority, the real accepted `201` payload and its error statuses, a cross-customer attempt proving
+the backend rejects a foreign `idOrden`, rendered Chrome/Edge/Firefox keyboard and responsive checks
+of the form, and a manual pass over list → form → created detail. The `creada` confirmation has only
+been observed with deterministic tests, since the real transport refuses an id-less answer.

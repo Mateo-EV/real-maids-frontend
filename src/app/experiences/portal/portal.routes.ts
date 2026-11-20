@@ -1,5 +1,6 @@
 import { portalGuard } from "@/app/features/auth/presentation/guards/auth.guard"
 import { Routes } from "@angular/router"
+import { portalPendingLeaveGuard } from "./presentation/navigation/portal-support-create-leave.guard"
 
 /**
  * WP10 T2 / S4 — the customer experience at `/portal`, composed exactly like the admin experience:
@@ -9,7 +10,7 @@ import { Routes } from "@angular/router"
  * `/portal` opens the first implemented section. Every later section adds its route and its
  * navigation entry in the same slice that connects its consumer, so no dead destination is created
  * here: `requests` (own service requests), `services` (own service orders) and `support` (own support
- * attentions) are all implemented. Creation of an attention is a later slice and is not declared.
+ * attentions, list, own creation and detail) are all implemented.
  */
 export const PORTAL_ROUTES: Routes = [
   {
@@ -62,6 +63,17 @@ export const PORTAL_ROUTES: Routes = [
         loadComponent: () =>
           import("./presentation/pages/portal-support-page/portal-support-page").then(
             component => component.PortalSupportPage
+          )
+      },
+      // Own attention creation (WP10 T6). Static before `support/:id`, so `new` is never taken for
+      // an id. The pending write owns the leave decision; a confirmed creation always leaves.
+      {
+        path: "support/new",
+        title: "Nueva atención | The Real Maids",
+        canDeactivate: [portalPendingLeaveGuard],
+        loadComponent: () =>
+          import("./presentation/pages/portal-support-create-page/portal-support-create-page").then(
+            component => component.PortalSupportCreatePage
           )
       },
       {

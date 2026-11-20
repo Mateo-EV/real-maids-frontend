@@ -175,20 +175,39 @@ describe("PortalSupportPage", () => {
     s.http.expectNone(() => true)
   })
 
-  it("renders no write affordance and no internal contact data", async () => {
+  it("offers only the own-attention creation action and no internal contact data", async () => {
     const s = await setup()
     s.request().flush(page(0, 20, 12))
     await s.settle()
     const html = s.element.outerHTML
     // Staff-only payload data never reaches the customer surface.
     expect(html).not.toContain("Cliente Propio")
-    // No create, reply, transition or close action exists on this read-only screen.
+    // No reply, transition, edit or close action exists on this screen.
     expect(
       Array.from(s.element.querySelectorAll("button")).filter(button =>
         /crear|editar|responder|cancelar|cerrar|cambiar estado/i.test(button.textContent ?? "")
       )
     ).toHaveLength(0)
     expect(s.element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
+    // WP10 T6: the single action opens the own-attention form, and it is not a customer picker.
+    const actions = Array.from(
+      s.element.querySelectorAll<HTMLAnchorElement>("app-catalog-frame header a[href]")
+    ).map(anchor => [anchor.textContent?.trim(), new URL(anchor.href).pathname])
+    expect(actions).toEqual([["Nueva atención", "/portal/support/new"]])
+    // The creation confirmation is not part of a normal visit.
+    expect(s.element.textContent).not.toContain("Atención registrada")
+    s.http.expectNone(() => true)
+  })
+
+  it("confirms a creation that came back without an id instead of guessing one", async () => {
+    const s = await setup({ url: "/portal/support?creada=1" })
+    // The confirmation flag is not a read filter: only pagina/tamanio reach the backend.
+    s.request().flush(page(0, 20, 1))
+    await s.settle()
+    const status = s.element.querySelector('[role="status"]')!
+    expect(status.textContent).toMatch(/Atención registrada/i)
+    expect(status.textContent).toMatch(/no devolvió un identificador/i)
+    expect(s.element.textContent).toContain("1–1 de 1")
     s.http.expectNone(() => true)
   })
 

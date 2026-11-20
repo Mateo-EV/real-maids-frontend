@@ -5,6 +5,26 @@
     description="Atenciones de soporte que registramos a tu nombre"
     [busy]="list().loading || list().refreshing"
   >
+    <a
+      hlmBtn
+      catalogControls
+      size="sm"
+      class="catalog-action-with-plus"
+      routerLink="/portal/support/new"
+    >
+      <ng-icon name="lucidePlus" aria-hidden="true" />Nueva atención
+    </a>
+    @if (created) {
+      <div class="p-5 pb-0">
+        <div hlmAlert role="status">
+          <h2 hlmAlertTitle>Atención registrada</h2>
+          <p hlmAlertDescription>
+            El servidor no devolvió un identificador de la atención. Búscala en esta lista para
+            abrir su detalle.
+          </p>
+        </div>
+      </div>
+    }
     @if (list().loading) {
       <div role="status" class="flex min-h-64 items-center justify-center gap-3">
         <hlm-spinner />Cargando atenciones…

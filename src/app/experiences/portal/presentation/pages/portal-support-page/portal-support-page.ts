@@ -22,6 +22,8 @@ import { TablePagination } from "@/app/shared/components/table-pagination/table-
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
+import { NgIcon, provideIcons } from "@ng-icons/core"
+import { lucidePlus } from "@ng-icons/lucide"
 
 type Query = Required<PaginationParams> & SupportRequestQuery
 type Page = PaginationResponse<SupportRequestView>
@@ -56,13 +58,16 @@ function entryQuery(params: ParamMap): Query {
  * Its initial offset/limit are read from `page`/`size` once, on entry, so returning from a detail
  * lands on the page the customer came from; later navigation is not written back to the URL.
  *
- * Rows open their own read-only detail with the effective page context in the URL. No write action,
- * no invented filter, total or KPI is rendered here.
+ * Rows open their own read-only detail with the effective page context in the URL. The single action
+ * opens the own-attention creation form (`/portal/support/new`); no filter, total or KPI is invented
+ * here. `creada=1` is the confirmation carried back when the created record came without an id, so
+ * the customer sees a confirmed message instead of a guessed destination.
  */
 @Component({
   selector: "app-portal-support-page",
   imports: [
     RouterLink,
+    NgIcon,
     CatalogFrame,
     TablePagination,
     BadgeTone,
@@ -73,6 +78,7 @@ function entryQuery(params: ParamMap): Query {
     HlmSpinnerImports,
     HlmTableImports
   ],
+  providers: [provideIcons({ lucidePlus })],
   templateUrl: "./portal-support-page.html"
 })
 export class PortalSupportPage implements OnInit {
@@ -81,6 +87,8 @@ export class PortalSupportPage implements OnInit {
   private readonly route = inject(ActivatedRoute)
   /** Captured once: entry paging only, never a live URL binding. */
   private readonly entry = entryQuery(this.route.snapshot.queryParamMap)
+  /** Confirmed creation that reached this list without a record id to open. */
+  readonly created = this.route.snapshot.queryParamMap.get("creada") === "1"
   private readonly requested = signal<Query>(this.entry)
   private readonly admissionError = signal<CustomerSupportError | undefined>(undefined)
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()

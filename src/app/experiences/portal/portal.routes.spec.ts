@@ -13,6 +13,7 @@ import { portalGuard } from "@/app/features/auth/presentation/guards/auth.guard"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { provideCustomerSupportReads } from "@/app/features/customer-support/customer-support.providers"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
+import { portalPendingLeaveGuard } from "./presentation/navigation/portal-support-create-leave.guard"
 import { PORTAL_ROUTES } from "./portal.routes"
 
 @Component({ selector: "app-admin-destination", template: "<p>Admin destination</p>" })
@@ -85,6 +86,7 @@ describe("portal routes", () => {
       "services",
       "services/:id",
       "support",
+      "support/new",
       "support/:id"
     ])
     expect(children[0].pathMatch).toBe("full")
@@ -105,9 +107,17 @@ describe("portal routes", () => {
     expect(children[5].loadComponent).toBeTypeOf("function")
     expect(children[5].canActivate).toBeUndefined()
     expect(children[5].providers).toBeUndefined()
+    // The only portal write is declared between them: `support/new` before `support/:id`, so the
+    // static path is never taken for an id. It owns the pending-write leave decision.
     expect(children[6].loadComponent).toBeTypeOf("function")
     expect(children[6].canActivate).toBeUndefined()
     expect(children[6].providers).toBeUndefined()
+    expect(children[6].path).toBe("support/new")
+    expect(children[6].canDeactivate).toEqual([portalPendingLeaveGuard])
+    expect(children[7].loadComponent).toBeTypeOf("function")
+    expect(children[7].canActivate).toBeUndefined()
+    expect(children[7].canDeactivate).toBeUndefined()
+    expect(children[7].providers).toBeUndefined()
   })
 
   it("protects the portal for anonymous visitors without any read or shell", async () => {
@@ -213,6 +223,37 @@ describe("portal routes", () => {
     harness.detectChanges()
     expect(element.textContent).toContain("Aún no tienes atenciones")
     TestBed.inject(HttpTestingController).expectNone(() => true)
+  })
+
+  it("opens the own-attention form at the static support/new path, not as an id", async () => {
+    setup(customer())
+    const harness = await RouterTestingHarness.create("/portal/support/new")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    const element = harness.routeNativeElement!
+    expect(TestBed.inject(Router).url).toBe("/portal/support/new")
+    expect(element.querySelector("app-portal-support-create-page")).not.toBeNull()
+    expect(element.querySelector("app-portal-support-detail-page")).toBeNull()
+    const http = TestBed.inject(HttpTestingController)
+    // Two reads open the form: the supplied type catalog and the customer's own services.
+    http
+      .expectOne(
+        candidate => candidate.url === "http://localhost:8080/api/catalogos/tipos-atencion"
+      )
+      .flush([{ idTipo: 4, nombre: "Consulta", requiereRespuesta: true }])
+    const orders = http.expectOne(
+      candidate => candidate.url === "http://localhost:8080/api/ordenes"
+    )
+    expect(orders.request.method).toBe("GET")
+    expect(orders.request.params.keys().sort()).toEqual(["pagina", "tamanio"])
+    expect(orders.request.params.has("idCliente")).toBe(false)
+    orders.flush({ contenido: [], pagina: 0, tamanio: 20, totalElementos: 0, totalPaginas: 0 })
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    // No admin affordance and no customer id in the only write the portal has.
+    expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
+    expect(element.textContent).toContain("Servicio relacionado (opcional)")
+    http.expectNone(() => true)
   })
 
   it("logs the customer out from its own shell", async () => {
