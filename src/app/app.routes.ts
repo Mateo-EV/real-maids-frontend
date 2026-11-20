@@ -29,6 +29,13 @@ export const routes: Routes = [
       import("./experiences/admin/admin.routes").then(routes => routes.ADMIN_ROUTES)
   },
   {
+    // WP10 T2/S4: the customer experience. Its own lazy group and shell, guarded by the same
+    // audience decision that keeps a customer out of `/admin`.
+    path: "",
+    loadChildren: () =>
+      import("./experiences/portal/portal.routes").then(routes => routes.PORTAL_ROUTES)
+  },
+  {
     path: "**",
     redirectTo: "login"
   }

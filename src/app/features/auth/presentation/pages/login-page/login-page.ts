@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, inject } from "@angular/core"
 import { ActivatedRoute, Router } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideCheck, lucideSparkles } from "@ng-icons/lucide"
+import { destinationForRole } from "../../routing/audience-navigation"
 import { PASSWORD_CHANGE_PATH, safeDestination } from "../../routing/password-change-navigation"
 
 @Component({
@@ -28,8 +29,14 @@ export class LoginPage {
     const destination = safeDestination(this.route.snapshot.queryParamMap.get("returnUrl"))
     // A provisional password is a required step, not a suggestion: the destination is only kept as
     // the return URL of the change screen.
-    return this.authStore.mustChangePassword()
-      ? this.router.navigate([PASSWORD_CHANGE_PATH], { queryParams: { returnUrl: destination } })
-      : this.router.navigateByUrl(destination)
+    if (this.authStore.mustChangePassword())
+      return this.router.navigate([PASSWORD_CHANGE_PATH], {
+        queryParams: { returnUrl: destination }
+      })
+    // WP10 T2/S4: the captured destination is only kept when this role may open it; a customer
+    // always lands in the portal and staff in the backoffice, without a bounce off a guard.
+    return this.router.navigateByUrl(
+      destinationForRole(destination, this.authStore.session()?.role)
+    )
   }
 }

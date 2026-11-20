@@ -10,11 +10,17 @@ export const PASSWORD_CHANGE_PATH = "/change-password"
 /**
  * Only an internal, non-credential-bearing destination is accepted. The change screen and login are
  * excluded so a captured URL cannot send the person back into the same step or into a loop.
+ *
+ * `fallback` is the destination used when the captured value is unusable; it defaults to the staff
+ * experience so the existing contract is unchanged, and the portal audience passes its own home.
  */
-export function safeDestination(value: string | null | undefined): string {
-  if (typeof value !== "string") return "/admin"
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return "/admin"
+export function safeDestination(
+  value: string | null | undefined,
+  fallback: string = "/admin"
+): string {
+  if (typeof value !== "string") return fallback
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return fallback
   const path = value.split("?")[0]
-  if (path === PASSWORD_CHANGE_PATH || path === "/login") return "/admin"
+  if (path === PASSWORD_CHANGE_PATH || path === "/login") return fallback
   return value
 }

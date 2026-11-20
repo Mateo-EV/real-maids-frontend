@@ -1,0 +1,46 @@
+<div class="shell-body flex min-h-dvh flex-col">
+  <header class="border-b bg-card px-4 py-3 shadow-sm sm:px-6 lg:px-8">
+    <div class="mx-auto flex w-full flex-wrap items-center justify-between gap-3">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="brand-mark" aria-hidden="true">RM</span>
+        <div>
+          <p
+            class="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-primary"
+          >
+            The Real Maids
+            <span hlmBadge variant="outline" class="brand-accent">PORTAL DEL CLIENTE</span>
+          </p>
+          <p class="text-xs text-muted-foreground">Tus servicios, en un solo lugar</p>
+        </div>
+      </div>
+      <div class="session-controls flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+        <div class="min-w-0 text-right">
+          <p class="text-sm font-semibold">{{ session()?.name ?? session()?.email }}</p>
+          <p class="break-all text-xs text-muted-foreground">{{ session()?.email }}</p>
+        </div>
+        <hlm-avatar
+          ><span hlmAvatarFallback class="session-avatar">{{ sessionInitials() }}</span></hlm-avatar
+        >
+        <button hlmBtn variant="ghost" size="sm" type="button" (click)="logout()">
+          <ng-icon name="lucideLogOut" aria-hidden="true" />Salir
+        </button>
+      </div>
+    </div>
+    <nav aria-label="Navegación del portal" class="mx-auto mt-3 flex w-full flex-wrap gap-1">
+      @for (section of sections; track section.path) {
+        <a
+          hlmBtn
+          variant="ghost"
+          size="sm"
+          class="portal-section"
+          [routerLink]="section.path"
+          routerLinkActive="portal-section-active"
+          ariaCurrentWhenActive="page"
+        >
+          <ng-icon [name]="section.icon" aria-hidden="true" />{{ section.label }}
+        </a>
+      }
+    </nav>
+  </header>
+  <router-outlet />
+</div>

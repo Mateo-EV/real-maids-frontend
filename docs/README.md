@@ -633,3 +633,66 @@ payloads, a converted prospect whose email is already taken, a `403` from an acc
 create/update permissions, and Chrome/Edge/Firefox keyboard/responsive checks. The deterministic
 unit coverage (payloads, required password, the three markers, `EMAIL_RESERVED`, `403` copy, pending
 and retry behavior) is technical evidence, not native or live approval.
+
+## WP10 T2 — Portal shell, audience routing and own requests
+
+M01/RF01/HU01/P01 with S4 and S7, plus the read side of M04/RF04/HU04/P05 and the customer entry
+view P11 (RNF08/RNF09/RNF10/RNF12). The customer experience now exists as its own lazy route group
+at `/portal`, composed exactly like `/admin`: one guarded shell with `router-outlet`, its own
+navigation and its own children. It is not part of the admin shell and does not reuse its sidebar.
+
+- **Route**: `src/app/experiences/portal/portal.routes.ts` declares the guarded `portal` group;
+  `/portal` opens `/portal/requests`, the only implemented section. Later sections (own order
+  detail, own support) add their route and navigation entry in the slice that connects their
+  consumer, so no dead destination exists today. The shell owns brand, session identity, `Salir`
+  and the single real section link; it has no sidebar, no KPIs, no environment/security banner and
+  no administrative action.
+- **Audience, not permissions**: the audience comes from the role label the backend returned in the
+  profile (`AuthSession.role`). Exactly one role name is the customer audience — the backend's own
+  `CLIENTE` (`CuentaClienteService.ROL_CLIENTE`, the same identity the users form uses) — and every
+  other role, including an unusual or absent one, belongs to `/admin`. No permission, role ID or
+  inferred user type is consulted, and neither role name grants or denies an API call.
+- **One symmetric guard**: `authGuard` and `portalGuard` are the same decision. Authentication comes
+  first (anonymous visits keep their captured `returnUrl`), then the forced first-sign-in password
+  change of T16, and only then the audience rule. A customer opening any `/admin` URL is sent to
+  `/portal`; a staff session opening any `/portal` URL is sent to `/admin`. Both targets are the home
+  of the other audience, so re-evaluating the decision on the destination allows it and the two
+  guards cannot bounce a session forever.
+- **Honest destinations**: after login, the captured `returnUrl` is kept only when the session's role
+  may open it; otherwise the person goes to their own experience. `guestGuard` sends an authenticated
+  visit to its own home, and a settled session leaving the change screen goes through the same
+  audience-aware destination. A pending password change still takes precedence over the audience
+  redirect, so the forced step is never skipped by a cross-experience bounce.
+- **Mis solicitudes**: `/portal/requests` reads the existing root `ServiceRequestsStore`. It asks for
+  one page starting at offset 0 / limit 20 and shows exactly what the server returned: the backend
+  already scopes `GET /api/solicitudes` to the caller, so no customer ID travels, no row is filtered
+  or sliced locally and no total is invented. The returned effective `offset`/`limit` are adopted for
+  paging, with one fenced out-of-range recovery per user action. The documented 30000 ms success-only
+  freshness, shared ref-counted reads, same-key stale data on failure and session/SSR fencing stay
+  root-owned; the page owns only its query, its state feedback and its cancellation.
+- **States and accessibility**: loading, `Actualizando solicitudes…` while a verified page
+  revalidates, verified empty (`Aún no tienes solicitudes`), a distinct out-of-range empty state and a
+  retryable error that keeps the last verified rows and offers GET-only retry. Records are a real
+  table above 64rem of available container width and cards below it, both labelled
+  `Mis solicitudes de servicio`; the status is a badge whose text carries the value, so colour is
+  never the only signal; supplied UTC instants are printed literally. Copy is Spanish. Rows are plain
+  data in this slice: no detail link, no create/edit/cancel action, no filter, KPI or total.
+- **Tests first**: the redirect matrix (customer, staff, anonymous, pending password change), the
+  guard matrix, the loop-freedom property, the login destination per role, the lazy composition and
+  the list's loading/empty/error/stale states, effective-metadata adoption and bounded recovery were
+  written before the implementation. The RED run failed to compile against the missing
+  `audience-navigation`, `portalGuard`, `PORTAL_ROUTES` and `PortalRequestsPage`; afterwards the
+  focused portal files pass 11/11 and auth + portal + app composition pass 275/275 across 23 files.
+  `npx tsc -p tsconfig.app.json --noEmit` exits 0 and Prettier reports the touched files clean.
+- **One pin awaiting authorization**: `src/app/app.routes.spec.ts` enumerates the app-level lazy
+  groups (`["", ""]`, auth then admin) and now sees the third portal group, so the full suite reports
+  3894/3895 with that single failure. That spec file was not part of this task's edit surface, so it
+  was not modified; the assertion needs the authorized one-line update to `["", "", ""]` plus the
+  `PORTAL_ROUTES` identity. Nothing else in the suite fails.
+
+Pending acceptance: live backend/CORS with a real customer session (own list only, cross-customer
+403/404), manual cross-audience checks in a browser (customer deep link into `/admin`, staff deep link
+into `/portal`, anonymous deep link into both, customer first login with a provisional password), and
+Chrome/Edge/Firefox keyboard and responsive checks of the portal shell and its records. The customer
+own-request detail, own orders and own support remain unimplemented, and no role-aware API
+authorization is claimed: the backend remains authoritative.

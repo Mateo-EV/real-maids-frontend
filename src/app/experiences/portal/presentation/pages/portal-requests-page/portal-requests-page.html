@@ -1,0 +1,153 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <app-catalog-frame
+    titleId="portal-requests-title"
+    title="Mis solicitudes"
+    description="Solicitudes de servicio que registramos a tu nombre"
+    [busy]="list().loading || list().refreshing"
+  >
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando solicitudes…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando solicitudes…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Mis solicitudes de servicio
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Solicitud</th>
+                <th hlmTh scope="col">Propiedad</th>
+                <th hlmTh scope="col">Servicio</th>
+                <th hlmTh scope="col">Estado</th>
+                <th hlmTh scope="col">Fecha deseada</th>
+                <th hlmTh scope="col">Registrada (UTC)</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (request of rows(); track request.id) {
+                <tr hlmTr>
+                  <td hlmTd class="whitespace-normal break-words font-medium">#{{ request.id }}</td>
+                  <td hlmTd class="whitespace-normal break-words">{{ request.propertyName }}</td>
+                  <td hlmTd class="whitespace-normal break-words">
+                    {{ request.serviceTypeName }}
+                  </td>
+                  <td hlmTd>
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      [appBadgeTone]="request.status"
+                      badgeToneKind="request-status"
+                      >{{ request.status }}</span
+                    >
+                  </td>
+                  <td hlmTd>{{ request.desiredDate ?? "No registrado" }}</td>
+                  <td hlmTd>{{ request.registeredAt.toISOString() }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Mis solicitudes de servicio">
+          @for (request of rows(); track request.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">
+                  {{ request.propertyName }}
+                </h2>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  [appBadgeTone]="request.status"
+                  badgeToneKind="request-status"
+                  >{{ request.status }}</span
+                >
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground">Solicitud #{{ request.id }}</p>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Servicio</dt>
+                <dd class="break-words">{{ request.serviceTypeName }}</dd>
+                <dt class="text-muted-foreground">Fecha deseada</dt>
+                <dd>{{ request.desiredDate ?? "No registrado" }}</dd>
+                <dt class="text-muted-foreground">Registrada (UTC)</dt>
+                <dd class="break-words">{{ request.registeredAt.toISOString() }}</dd>
+              </dl>
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{
+                page.total === 0 ? "Aún no tienes solicitudes" : "Esta página ya no tiene registros"
+              }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "Cuando registremos una solicitud de servicio a tu nombre aparecerá aquí."
+                  : "La lista cambió. Vuelve a la primera página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de mis solicitudes"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>

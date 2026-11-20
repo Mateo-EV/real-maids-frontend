@@ -64,6 +64,23 @@ describe("LoginPage", () => {
     await firstValueFrom(page.store.login({ email: session.email, password: "provisional1" }))
   }
 
+  /** The backend's own CLIENTE role name (identity, never an ACL). */
+  async function signInCustomer(page: ReturnType<typeof createPage>): Promise<void> {
+    const session = AuthSession.create(
+      "Cliente Portal",
+      "cliente@example.test",
+      "CLIENTE",
+      null,
+      9,
+      4,
+      "es",
+      [],
+      false
+    )
+    page.login.mockReturnValue(of(Result.success(session)))
+    await firstValueFrom(page.store.login({ email: session.email, password: "provisional1" }))
+  }
+
   it("renders the dedicated login form", () => {
     const { fixture } = createPage()
 
@@ -115,6 +132,22 @@ describe("LoginPage", () => {
     await page.fixture.componentInstance.onAuthenticated()
 
     expect(page.navigateByUrl).toHaveBeenCalledWith("/admin/orders")
+    expect(page.navigate).not.toHaveBeenCalled()
+  })
+
+  // WP10 T2/S4: the customer audience owns /portal, so the login destination stays honest.
+  it.each([
+    [undefined, "/portal"],
+    ["/admin", "/portal"],
+    ["/admin/customers/7?offset=0&limit=10", "/portal"],
+    ["/portal/requests", "/portal/requests"]
+  ])("sends a CLIENTE session from %s to %s", async (returnUrl, expected) => {
+    const page = createPage(returnUrl)
+    await signInCustomer(page)
+
+    await page.fixture.componentInstance.onAuthenticated()
+
+    expect(page.navigateByUrl).toHaveBeenCalledExactlyOnceWith(expected)
     expect(page.navigate).not.toHaveBeenCalled()
   })
 
