@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { Component, PLATFORM_ID, signal } from "@angular/core"
@@ -17,6 +18,7 @@ import { provideOperationsRequestReads } from "@/app/features/operations/operati
 import { ServiceOrdersStore } from "@/app/features/operations/presentation/state/service-orders.store"
 import { Result } from "@/app/shared/utils/result"
 import { portalPendingLeaveGuard } from "../../navigation/portal-support-create-leave.guard"
+import { expectNamedImportEntries } from "../../portal-component-imports.testing"
 import { PortalSupportCreatePage } from "./portal-support-create-page"
 
 const origin = "http://localhost:8080"
@@ -231,6 +233,29 @@ afterEach(() => {
   } finally {
     vi.restoreAllMocks()
   }
+})
+
+/**
+ * The dev server re-applies this component's metadata when the page's template changes while it is
+ * open: `ɵɵreplaceMetadata` calls the rebuilt metadata function with a `ɵɵnamespaces` array and the
+ * dependencies are re-resolved by index. A dependency declared as a spread of an imported
+ * `*Imports` constant is re-read as `ɵɵnamespaces[i].HlmTextarea`, so any skew between that array and
+ * the chunk the browser loaded throws `Cannot read properties of undefined (reading 'HlmTextarea')`
+ * and the form never renders. That is a real, observed browser defect on `/portal/support/new`; a
+ * fixture-based render test cannot see it, because a spec always builds the metadata and the
+ * component definition from the same revision.
+ *
+ * Direct identifier imports are handed to the rebuilt metadata as plain arguments instead, so the
+ * page keeps rendering however the two revisions disagree. The shared guard pins that shape in the
+ * source, which is where the compiler reads it, and refuses a spread or a bare `*Imports` constant;
+ * it covers every portal component, not only this one.
+ */
+describe("Portal own-attention creation metadata", () => {
+  it("declares direct dependency values, never a spread of an imported *Imports constant", () => {
+    expectNamedImportEntries(
+      "src/app/experiences/portal/presentation/pages/portal-support-create-page/portal-support-create-page.ts"
+    )
+  })
 })
 
 describe("Portal own-attention creation", () => {

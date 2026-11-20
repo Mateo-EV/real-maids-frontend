@@ -13,14 +13,27 @@ import { Router, RouterLink } from "@angular/router"
 import { catchError, EMPTY, firstValueFrom, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideCircleAlert, lucideLifeBuoy } from "@ng-icons/lucide"
-import { HlmAlertImports } from "@spartan-ng/helm/alert"
-import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmCardImports } from "@spartan-ng/helm/card"
-import { HlmFieldImports } from "@spartan-ng/helm/field"
-import { HlmInputImports } from "@spartan-ng/helm/input"
-import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
-import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
-import { HlmTextareaImports } from "@spartan-ng/helm/textarea"
+import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
+import { HlmButton } from "@spartan-ng/helm/button"
+import {
+  HlmCard,
+  HlmCardContent,
+  HlmCardDescription,
+  HlmCardHeader,
+  HlmCardTitle
+} from "@spartan-ng/helm/card"
+import {
+  HlmField,
+  HlmFieldDescription,
+  HlmFieldError,
+  HlmFieldLabel,
+  HlmFieldLegend,
+  HlmFieldSet
+} from "@spartan-ng/helm/field"
+import { HlmInput } from "@spartan-ng/helm/input"
+import { HlmNativeSelect } from "@spartan-ng/helm/native-select"
+import { HlmSpinner } from "@spartan-ng/helm/spinner"
+import { HlmTextarea } from "@spartan-ng/helm/textarea"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CustomerSupportErrorCode } from "@/app/features/customer-support/domain/errors/customer-support.error"
 import { SupportRequestTypeView } from "@/app/features/customer-support/domain/models/support-views"
@@ -65,6 +78,13 @@ const orderLabel = (order: ServiceOrderSummary) =>
  * carries no usable id the customer returns to the list with the confirmed message instead of a
  * guessed destination. A session replacement or route destruction fences the answer so nothing from
  * a previous identity navigates, reports or clears another session's work.
+ *
+ * Dependencies are declared as the directive and component classes the template uses, imported
+ * directly. Angular hands a directly imported value to the metadata the dev server re-applies as a
+ * plain argument, while a spread of an imported `*Imports` constant has to be re-resolved through the
+ * dev server's `ɵɵnamespaces` array, where a revision skew between that array and the loaded chunk
+ * threw `Cannot read properties of undefined (reading 'HlmTextarea')` and left this form unrendered.
+ * Naming the classes of each Helm group keeps exactly the same directive set.
  */
 @Component({
   selector: "app-portal-support-create-page",
@@ -75,14 +95,25 @@ const orderLabel = (order: ServiceOrderSummary) =>
     FormRoot,
     NgIcon,
     CatalogCombobox,
-    ...HlmAlertImports,
-    ...HlmButtonImports,
-    ...HlmCardImports,
-    ...HlmFieldImports,
-    ...HlmInputImports,
-    ...HlmNativeSelectImports,
-    ...HlmSpinnerImports,
-    ...HlmTextareaImports
+    HlmAlert,
+    HlmAlertDescription,
+    HlmAlertTitle,
+    HlmButton,
+    HlmCard,
+    HlmCardContent,
+    HlmCardDescription,
+    HlmCardHeader,
+    HlmCardTitle,
+    HlmField,
+    HlmFieldDescription,
+    HlmFieldError,
+    HlmFieldLabel,
+    HlmFieldLegend,
+    HlmFieldSet,
+    HlmInput,
+    HlmNativeSelect,
+    HlmSpinner,
+    HlmTextarea
   ],
   providers: [provideIcons({ lucideCircleAlert, lucideLifeBuoy })],
   templateUrl: "./portal-support-create-page.html"

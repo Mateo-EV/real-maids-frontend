@@ -811,6 +811,20 @@ being a planned section and becomes a real destination, so the portal navigation
   missing, duplicated, negative, fractional, non-numeric or out of int32, and a size above the
   documented maximum of 100 never dispatched. The list never writes paging back, and the detail's
   return link restores the effective page the customer came from.
+- **Customer-scope redaction (live-acceptance fix)**: live acceptance with a real CLIENTE session
+  found the reused operations decoder rejecting a perfectly valid `200`. For the customer view the
+  backend nulls `programaciones[].registradoPor`, `historial[].usuario` and `asignados[].telefono`
+  while deliberately keeping `propiedad.instruccionesAcceso` and `codigoPuerta`, and the
+  status-history actor was being decoded with the non-nullable text rule. `OrderStatusHistorySummary`
+  now declares `userName: string | null`, decoded like its two already-nullable siblings
+  (`ScheduleSummary.registeredByName`, `AssignedStaffSummary.phone`): no fallback name, empty string
+  or extra field is invented, and no id, date, enum, count or money rule was loosened. The orders
+  list needed no change because it carries the same two redacted fields through the same
+  `restringir` and both were already nullable; `SolicitudResponse.registradoPor` stays required
+  because the backend always sends a name there, and support's `autor` was already honest. The staff
+  order detail takes the file's own «No registrado» copy for that cell, so no null renders as an
+  empty cell. The portal projection is untouched: it still hides the access fields and the staff
+  phone even though the customer payload still carries the first two.
 - **Tests first**: the two new specs cover id validation without any dispatch, the literal projection
   with staff name/role, the caller-scoped `404` as a distinct state that also drops a verified record,
   stale retention during refresh and transient failure with a GET-only retry, effective paging
@@ -819,10 +833,14 @@ being a planned section and becomes a real destination, so the portal navigation
   attributes), the absence of any write affordance, and no read on the server platform. The route spec
   pins the two new children and the second real navigation entry. RED was a compile failure for the
   missing `PortalServicesPage`/`PortalServiceDetailPage`; afterwards the five portal spec files pass
-  83/83.
+  83/83. The redaction fix added one behavioural case at each owning boundary — a customer-scoped
+  payload with those three nulls decodes successfully without changing the projected field set, and
+  the same payload renders the record on this surface while the access instructions, the door code
+  and the staff phone stay out of the rendered text and attributes.
 
 Pending acceptance: live backend/CORS with a real customer session (own order list and detail,
-cross-customer `404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of both new
+cross-customer `404`, and a re-run of the customer-scoped detail that failed before the redaction
+fix), rendered Chrome/Edge/Firefox keyboard and responsive checks of both new
 screens, an independent redaction check of the property access fields on this surface, and a manual
 pass over the list → detail → return round trip with a real page of results. Own support (T5) and the
 own-attention creation (T6) remained unimplemented at this checkpoint — the T5 section below
@@ -975,3 +993,63 @@ authority, the real accepted `201` payload and its error statuses, a cross-custo
 the backend rejects a foreign `idOrden`, rendered Chrome/Edge/Firefox keyboard and responsive checks
 of the form, and a manual pass over list → form → created detail. The `creada` confirmation has only
 been observed with deterministic tests, since the real transport refuses an id-less answer.
+
+### Portal dependency declaration (dev-server defect, fixed for T2–T6)
+
+The portal pages' `Component.imports` used to be written as spreads of the imported
+`HlmAlertImports`, `HlmBadgeImports`, `HlmButtonImports`, `HlmCardImports`, `HlmEmptyImports`,
+`HlmFieldImports`, `HlmInputImports`, `HlmNativeSelectImports`, `HlmSpinnerImports`,
+`HlmTableImports`, `HlmTextareaImports` and `HlmAvatarImports` constants. That shape is evaluated
+twice: once for the component definition, and again by the dev server whenever the page's template is
+rebuilt while the page is open, where
+`ɵɵreplaceMetadata` hands the rebuilt metadata function a `ɵɵnamespaces` array and the dependencies of
+a spread constant are re-resolved **by index**, e.g. `ɵɵnamespaces[7].HlmTextarea`. If the array and
+the chunk the browser loaded then differ by one entry — which the dev server can produce, because its
+`templateUpdates` map keeps a stored module across a code rebuild — the lookup reads a property of
+`undefined`, `Cannot read properties of undefined (reading 'HlmTextarea')` is thrown inside
+`PortalSupportCreatePage_UpdateMetadata`, and the form never renders. That was observed on
+`/portal/support/new`: the type select stayed absent for over 30 s, and the same exception appeared on
+a hot-reloaded server where the form still painted. Reproduced deterministically by serving a
+nine-namespace stored module (`ɵhmr8.HlmTextarea`) to a chunk that exposes eight.
+
+`/portal/support/new` now imports the twenty-odd directives and components it actually uses **by name**
+— the same directive set, one class per Helm export — so the rebuilt metadata receives them as plain
+arguments and dereferences no component symbol through `ɵɵnamespaces` at all (verified: the served
+update module references only the `@angular/core` namespace). The rest of the portal carried the same
+skew and logged the same exception in live acceptance: `HlmCaption` on `/portal/requests` and
+`/portal/support`, `HlmSpinner` on both detail pages. Every portal component now declares its
+dependencies the same way — `PortalRequestsPage`, `PortalRequestDetailPage`, `PortalServicesPage`,
+`PortalServiceDetailPage`, `PortalSupportPage`, `PortalSupportDetailPage` and the `PortalShell` that
+wraps them — naming exactly the Helm classes each template uses (`HlmAlert`/`HlmAlertTitle`/
+`HlmAlertDescription`, `HlmBadge`, `HlmButton`, `HlmEmpty` with header/title/description, `HlmSpinner`,
+`HlmTable`/`HlmTableContainer`/`HlmTHead`/`HlmTBody`/`HlmTr`/`HlmTh`/`HlmTd`,
+`HlmAvatar`/`HlmAvatarFallback`). Each page keeps its previous directive set — no template used
+`HlmAlertAction`, `HlmEmptyContent`, `HlmEmptyMedia`, `HlmCaption` or `HlmTFoot` — so the rendered
+result and behaviour are byte-identical. No `forwardRef`, no dynamic import and no change to a
+template, a payload, a guard, a store or a test expectation.
+
+- **Guard**: `src/app/experiences/portal/presentation/portal-component-imports.testing.ts` reads each
+  component's source from disk — a fixture-based render test builds the metadata and the component
+  definition from one revision, so it cannot see this class of breakage — and asserts every
+  `imports: [...]` entry is a plain identifier, with no spread and no `*Imports` constant.
+  `portal-component-imports.spec.ts` runs it over an explicit census of the eight portal component
+  sources, so a new page has to be registered there and a reintroduced constant fails without a browser.
+  `portal-support-create-page.spec.ts` keeps its original case, now through that shared helper.
+- **Live measurement** (real backend, CLIENTE session, `http://localhost:4200`): zero console errors on
+  `/portal/requests`, `/portal/requests/43`, `/portal/services`, `/portal/services/25`,
+  `/portal/support`, `/portal/support/10` and `/portal/support/new`, at 1440 px and again at 390 px,
+  with no horizontal document overflow at either width. The own-support form was rendered and never
+  submitted, so no attention was created, and no credential is stored in any artifact.
+- **Why the first post-fix run still threw**: the running dev server keeps one stored update module per
+  component in its `templateUpdates` map, written when that component's template was last rebuilt, and
+  serves it for the rest of the process lifetime. It still held the pre-fix modules for the pages
+  visited before the fix, so those pages kept throwing
+  `Cannot read properties of undefined (reading 'HlmAlert')` — the first entry of the stale
+  `HlmAlertImports` chain — even though the component chunk already carried the fix; `/portal/services`
+  and `/portal/services/:id`, never visited before, were clean on that same run. A template edit
+  replaces the stored module, after which every page measured zero without restarting the server. That
+  is the skew documented above, observed at runtime, and the declaration fix is what removes the
+  index-based re-resolution the skew depends on.
+
+Pending acceptance: rendered Chrome/Edge/Firefox keyboard and responsive passes, an independent review
+of this change, and the live CORS/authorization/redaction runs already listed for T2–T6.

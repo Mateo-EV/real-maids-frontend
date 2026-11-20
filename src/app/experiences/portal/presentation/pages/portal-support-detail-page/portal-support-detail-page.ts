@@ -2,11 +2,16 @@ import { Component, computed, DestroyRef, inject, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { distinctUntilChanged, EMPTY, map, Subject, switchMap, takeUntil } from "rxjs"
-import { HlmAlertImports } from "@spartan-ng/helm/alert"
-import { HlmBadgeImports } from "@spartan-ng/helm/badge"
-import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmEmptyImports } from "@spartan-ng/helm/empty"
-import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
+import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
+import { HlmBadge } from "@spartan-ng/helm/badge"
+import { HlmButton } from "@spartan-ng/helm/button"
+import {
+  HlmEmpty,
+  HlmEmptyDescription,
+  HlmEmptyHeader,
+  HlmEmptyTitle
+} from "@spartan-ng/helm/empty"
+import { HlmSpinner } from "@spartan-ng/helm/spinner"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { SupportFollowUpView } from "@/app/features/customer-support/domain/models/support-views"
 import { SupportRequestsStore } from "@/app/features/customer-support/presentation/state/support-requests.store"
@@ -43,6 +48,11 @@ export const redactedAuthorLabel = "Autor no mostrado"
  * Freshness (30000 ms, success-only), shared ref-counted reads, same-id stale data and session
  * fencing stay in the existing root `SupportRequestsStore`; this page owns only its route identity,
  * its state feedback and its GET-only retry.
+ *
+ * Helm dependencies are declared by name, never as a spread of an imported `*Imports` constant: the
+ * dev server re-applies this metadata through `ɵɵnamespaces` and resolves those entries by index,
+ * which threw `Cannot read properties of undefined (reading 'HlmSpinner')` here and left the page's
+ * metadata broken whenever that array and the loaded chunk disagreed.
  */
 @Component({
   selector: "app-portal-support-detail-page",
@@ -50,11 +60,16 @@ export const redactedAuthorLabel = "Autor no mostrado"
     RouterLink,
     CatalogFrame,
     BadgeTone,
-    HlmAlertImports,
-    HlmBadgeImports,
-    HlmButtonImports,
-    HlmEmptyImports,
-    HlmSpinnerImports
+    HlmAlert,
+    HlmAlertDescription,
+    HlmAlertTitle,
+    HlmBadge,
+    HlmButton,
+    HlmEmpty,
+    HlmEmptyDescription,
+    HlmEmptyHeader,
+    HlmEmptyTitle,
+    HlmSpinner
   ],
   templateUrl: "./portal-support-detail-page.html"
 })

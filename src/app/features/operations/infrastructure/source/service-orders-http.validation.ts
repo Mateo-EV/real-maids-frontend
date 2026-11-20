@@ -90,7 +90,8 @@ function history(v: unknown): OrderStatusHistorySummary {
   return {
     status: text(p["estado"]),
     statusName: text(p["estadoNombre"]),
-    userName: text(p["usuario"]),
+    // The backend redacts the actor for the customer view: absence stays absence.
+    userName: nullableText(p["usuario"]),
     observation: nullableText(p["observacion"]),
     occurredAt: instant(p["fecha"])
   }

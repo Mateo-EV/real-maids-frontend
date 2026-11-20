@@ -2,9 +2,9 @@ import { Component, inject } from "@angular/core"
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
 import { lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
-import { HlmAvatarImports } from "@spartan-ng/helm/avatar"
-import { HlmBadgeImports } from "@spartan-ng/helm/badge"
-import { HlmButtonImports } from "@spartan-ng/helm/button"
+import { HlmAvatar, HlmAvatarFallback } from "@spartan-ng/helm/avatar"
+import { HlmBadge } from "@spartan-ng/helm/badge"
+import { HlmButton } from "@spartan-ng/helm/button"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 
 interface PortalSection {
@@ -20,6 +20,10 @@ interface PortalSection {
  *
  * The navigation lists only sections that are actually implemented; a later slice adds its own
  * entry when its consumer exists, so the portal never shows a dead destination.
+ *
+ * Helm dependencies are declared by name, never as a spread of an imported `*Imports` constant: the
+ * dev server re-applies this metadata through `ɵɵnamespaces` and resolves those entries by index, so
+ * the shell shares the same defect and the same fix as every portal page it wraps.
  */ @Component({
   selector: "app-portal-shell",
   imports: [
@@ -27,9 +31,10 @@ interface PortalSection {
     RouterLink,
     RouterLinkActive,
     NgIcon,
-    HlmAvatarImports,
-    HlmBadgeImports,
-    HlmButtonImports
+    HlmAvatar,
+    HlmAvatarFallback,
+    HlmBadge,
+    HlmButton
   ],
   providers: [provideIcons({ lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles })],
   templateUrl: "./portal-shell.html",

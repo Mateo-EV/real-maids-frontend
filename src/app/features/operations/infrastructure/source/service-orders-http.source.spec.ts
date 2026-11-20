@@ -78,6 +78,25 @@ const detail = () => ({
   ],
   programaciones: [schedule()]
 })
+/**
+ * Measured against `GET /api/ordenes/{id}` with a real CLIENTE session: the backend keeps the
+ * property block untouched but nulls the schedule registrar, the status-history actor and the
+ * assigned staff phone (`OrdenMapper.restringir(..., Vista.CLIENTE)`).
+ */
+const customerScopedDetail = () => {
+  const body = detail()
+  return {
+    ...body,
+    orden: {
+      ...body.orden,
+      observacion: null,
+      programacion: { ...body.orden.programacion, registradoPor: null },
+      asignados: [{ ...body.orden.asignados[0], telefono: null }]
+    },
+    historial: [{ ...body.historial[0], usuario: null }],
+    programaciones: [{ ...body.programaciones[0], registradoPor: null }]
+  }
+}
 const page = (items = [order()], pagina = 0, tamanio = 2, total = items.length) => ({
   contenido: items,
   pagina,
@@ -266,6 +285,50 @@ describe("cold validated order reads through public DI/HTTP", () => {
         "statusName",
         "userName"
       ])
+    s.http.expectNone(() => true)
+  })
+
+  it("accepts the documented customer-scoped redaction without inventing an actor, registrar or phone", async () => {
+    const s = setup(),
+      pending = firstValueFrom(s.source.getOrder(17))
+    s.http.expectOne(url + "/17").flush(customerScopedDetail())
+    const result = await pending
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    const history = result.data.statusHistory[0],
+      scheduleEntry = result.data.schedules[0],
+      member = result.data.order.assignedStaff[0]
+    // Absence stays absence: no fallback text, no borrowed value and no new field.
+    expect(history.userName).toBeNull()
+    expect(scheduleEntry.registeredByName).toBeNull()
+    expect(result.data.order.schedule?.registeredByName).toBeNull()
+    expect(member.phone).toBeNull()
+    // The redaction nulls nothing else the projection carries.
+    expect(history.status).toBe("PROGRAMADA")
+    expect(history.statusName).toBe("Programada")
+    expect(scheduleEntry.id).toBe(51)
+    expect(scheduleEntry.date).toBe("2024-02-29")
+    expect(scheduleEntry.startTime).toBe("08:15:00.123456789")
+    expect(scheduleEntry.isCurrent).toBe(true)
+    expect(member).toMatchObject({ staffId: 21, name: "Stored staff", role: "RESPONSABLE" })
+    expect(result.data.order.observation).toBeNull()
+    expect(Object.keys(history).sort()).toEqual([
+      "observation",
+      "occurredAt",
+      "status",
+      "statusName",
+      "userName"
+    ])
+    expect(Object.keys(scheduleEntry).sort()).toEqual([
+      "date",
+      "endTime",
+      "id",
+      "isCurrent",
+      "reasonName",
+      "registeredAt",
+      "registeredByName",
+      "startTime"
+    ])
     s.http.expectNone(() => true)
   })
 

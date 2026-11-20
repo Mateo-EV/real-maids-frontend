@@ -2,12 +2,25 @@ import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angula
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, ParamMap, RouterLink } from "@angular/router"
 import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
-import { HlmAlertImports } from "@spartan-ng/helm/alert"
-import { HlmBadgeImports } from "@spartan-ng/helm/badge"
-import { HlmButtonImports } from "@spartan-ng/helm/button"
-import { HlmEmptyImports } from "@spartan-ng/helm/empty"
-import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
-import { HlmTableImports } from "@spartan-ng/helm/table"
+import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
+import { HlmBadge } from "@spartan-ng/helm/badge"
+import { HlmButton } from "@spartan-ng/helm/button"
+import {
+  HlmEmpty,
+  HlmEmptyDescription,
+  HlmEmptyHeader,
+  HlmEmptyTitle
+} from "@spartan-ng/helm/empty"
+import { HlmSpinner } from "@spartan-ng/helm/spinner"
+import {
+  HlmTable,
+  HlmTableContainer,
+  HlmTBody,
+  HlmTd,
+  HlmTh,
+  HlmTHead,
+  HlmTr
+} from "@spartan-ng/helm/table"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { OperationsError } from "@/app/features/operations/domain/errors/operations.error"
 import { ServiceRequestSummary } from "@/app/features/operations/domain/models/operations-read.models"
@@ -52,6 +65,11 @@ function entryQuery(params: ParamMap): Query {
  *
  * Rows open their own read-only detail with the effective page context in the URL. No write action,
  * no invented filter, total or KPI is rendered here.
+ *
+ * Helm dependencies are declared by name, never as a spread of an imported `*Imports` constant: the
+ * dev server re-applies this metadata through `ɵɵnamespaces` and resolves those entries by index,
+ * which threw `Cannot read properties of undefined (reading 'HlmCaption')` here and left the page's
+ * metadata broken whenever that array and the loaded chunk disagreed.
  */
 @Component({
   selector: "app-portal-requests-page",
@@ -60,12 +78,23 @@ function entryQuery(params: ParamMap): Query {
     CatalogFrame,
     TablePagination,
     BadgeTone,
-    HlmAlertImports,
-    HlmBadgeImports,
-    HlmButtonImports,
-    HlmEmptyImports,
-    HlmSpinnerImports,
-    HlmTableImports
+    HlmAlert,
+    HlmAlertDescription,
+    HlmAlertTitle,
+    HlmBadge,
+    HlmButton,
+    HlmEmpty,
+    HlmEmptyDescription,
+    HlmEmptyHeader,
+    HlmEmptyTitle,
+    HlmSpinner,
+    HlmTable,
+    HlmTableContainer,
+    HlmTBody,
+    HlmTd,
+    HlmTh,
+    HlmTHead,
+    HlmTr
   ],
   templateUrl: "./portal-requests-page.html"
 })

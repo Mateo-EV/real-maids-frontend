@@ -62,7 +62,8 @@ function dto(overrides: Record<string, unknown> = {}) {
 /** The detail wrapper carries the property block, including the access secrets. */
 function detailDto(
   overrides: Record<string, unknown> = {},
-  property: Record<string, unknown> = {}
+  property: Record<string, unknown> = {},
+  wrapper: Record<string, unknown> = {}
 ) {
   return {
     orden: dto(overrides),
@@ -85,8 +86,57 @@ function detailDto(
       ...property
     },
     historial: [],
-    programaciones: []
+    programaciones: [],
+    ...wrapper
   }
+}
+
+/**
+ * The real customer-scoped payload measured against the running backend: the property block keeps
+ * the access instructions and the door code, while the schedule registrar, the status-history actor
+ * and the assigned staff phone arrive as `null`.
+ */
+function customerScopedDetailDto() {
+  return detailDto(
+    {
+      observacion: null,
+      programacion: {
+        idProgramacion: 51,
+        fecha: "2026-03-12",
+        horaInicio: "08:30:00",
+        horaFin: "11:00:00",
+        vigente: true,
+        motivo: null,
+        registradoPor: null,
+        fechaRegistro: stamp
+      },
+      asignados: [{ idPersonal: 21, nombre: "Personal 21", telefono: null, rol: "RESPONSABLE" }]
+    },
+    {},
+    {
+      historial: [
+        {
+          estado: "PROGRAMADA",
+          estadoNombre: "Programada",
+          usuario: null,
+          observacion: null,
+          fecha: stamp
+        }
+      ],
+      programaciones: [
+        {
+          idProgramacion: 51,
+          fecha: "2026-03-12",
+          horaInicio: "08:30:00",
+          horaFin: "11:00:00",
+          vigente: true,
+          motivo: null,
+          registradoPor: null,
+          fechaRegistro: stamp
+        }
+      ]
+    }
+  )
 }
 
 async function setup(options: { url?: string; server?: boolean } = {}) {
@@ -225,6 +275,33 @@ describe("PortalServiceDetailPage", () => {
     expect(html).not.toContain("+56 9 1111 2222")
     expect(html).not.toMatch(/tel[eé]fono/i)
     s.http.expectNone(() => true)
+  })
+
+  it("renders the real customer-scoped payload whose registrar, actor and staff phone are redacted", async () => {
+    const s = await setup()
+    s.pending().flush(customerScopedDetailDto())
+    await s.settle()
+    // A valid customer-scoped response is not an invalid response: it must render.
+    expect(s.element().querySelector("[data-detail-error]")).toBeNull()
+    expect(s.text()).not.toMatch(/La respuesta del servicio no es válida/)
+    const record = s.element().querySelector("[data-detail-record]")
+    expect(record).not.toBeNull()
+    expect(record!.textContent).toContain("OS-2026-000017")
+    expect(record!.textContent).toContain("Casa centro")
+    expect(record!.textContent).toContain("Casa del centro")
+    expect(record!.textContent).toContain("2026-03-12")
+    expect(record!.textContent).toContain("08:30:00")
+    // Assigned staff still appear by name and role with the phone redacted.
+    expect(record!.textContent).toContain("Personal 21")
+    expect(record!.textContent).toContain("RESPONSABLE")
+    // Redaction does not widen the customer projection: the access secrets stay unrendered.
+    const html = s.element().outerHTML
+    expect(html).not.toContain("SYNTHETIC ACCESS")
+    expect(html).not.toContain("SYNTHETIC CODE")
+    expect(html).not.toMatch(/instrucciones de acceso|c[oó]digo de puerta/i)
+    expect(html).not.toMatch(/tel[eé]fono/i)
+    expect(s.buttons()).toHaveLength(0)
+    s.http.expectNone(candidate => candidate.method !== "GET")
   })
 
   it("treats the caller-scoped 404 as not available, never as a transient failure", async () => {
