@@ -44,6 +44,7 @@ import {
   UserStatusContext,
   UserStatusDialog
 } from "../../components/user-status-dialog/user-status-dialog"
+import type { UserSavedEvent } from "../../components/user-editor/user-write-feedback"
 
 const sessionChanges = new Subject<AuthSession | null>()
 const fixedDate = new Date("2026-09-01T00:00:00Z")
@@ -1026,6 +1027,26 @@ describe("UsersPage", () => {
       expect(element.querySelector(`#${id}`)).not.toBeNull()
     }
     expect(element.querySelector("main h1#users-title")).not.toBeNull()
+  })
+
+  it("reports the created customer reference only for a CLIENTE account creation", async () => {
+    const { page } = await setup()
+    const success = vi.spyOn(TestBed.inject(HotToastService), "success")
+    const open = vi
+      .spyOn(TestBed.inject(HlmDialogService), "open")
+      .mockReturnValue(undefined as never)
+    page.editUser()
+    const saved = open.mock.calls.at(-1)![1]!.context as {
+      onSaved: (saved?: UserSavedEvent) => void
+    }
+    saved.onSaved({ created: true, customerCreated: true, customerId: 12 })
+    expect(success).toHaveBeenCalledExactlyOnceWith("Usuario y cliente creados · Cliente #12")
+    saved.onSaved({ created: true, customerCreated: true, customerId: null })
+    expect(success).toHaveBeenLastCalledWith("Usuario y cliente creados")
+    saved.onSaved({ created: true, customerCreated: false, customerId: null })
+    expect(success).toHaveBeenLastCalledWith("Usuario guardado")
+    saved.onSaved({ created: false, customerCreated: false, customerId: 12 })
+    expect(success).toHaveBeenLastCalledWith("Usuario guardado")
   })
 
   it("ignores dialog callbacks after the owning page is destroyed", async () => {

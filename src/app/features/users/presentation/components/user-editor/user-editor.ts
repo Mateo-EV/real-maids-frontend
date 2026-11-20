@@ -30,12 +30,20 @@ import { HlmNativeSelectImports } from "@spartan-ng/helm/native-select"
 import { HlmSpinnerImports } from "@spartan-ng/helm/spinner"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { Lang, User } from "../../../domain/entities/user.entity"
+import { UserErrorCode } from "../../../domain/errors/user.error"
+import {
+  CUSTOMER_ROLE_NAME,
+  CreateUserParams,
+  CustomerType,
+  isCustomerType
+} from "../../../domain/params/create-user.params"
 import { RolesStore } from "../../state/roles.store"
 import { UserStore } from "../../state/user.store"
+import { UserSavedEvent, userFieldError, userWriteError } from "./user-write-feedback"
 
 export interface UserEditorContext {
   user: User | null
-  onSaved: () => void
+  onSaved: (saved?: UserSavedEvent) => void
 }
 
 @Component({
@@ -62,16 +70,30 @@ export class UserEditor {
   private readonly users = inject(UserStore)
   readonly roles = inject(RolesStore)
   readonly error = signal("")
+  /** Documented 409 marker rendered on the email input instead of the general alert. */
+  readonly emailError = signal("")
   readonly model = signal({
     name: this.context.user?.name ?? "",
     email: this.context.user?.email ?? "",
     password: "",
     lang: this.context.user?.lang ?? Lang.ES,
     isActive: this.context.user?.isActive ?? true,
-    roleId: this.context.user ? String(this.context.user.roleId) : ""
+    roleId: this.context.user ? String(this.context.user.roleId) : "",
+    customerType: "" as CustomerType | "",
+    phone: ""
   })
   readonly availableRoles = computed(() =>
     this.roles.roles().filter(role => role.isActive || role.id === this.context.user?.roleId)
+  )
+  readonly selectedRole = computed(() =>
+    this.availableRoles().find(role => String(role.id) === this.model().roleId)
+  )
+  /**
+   * Only a new CLIENTE account creates the customer row; editing sends the profile `PUT`, which
+   * has no `tipo`/`telefono` and never creates a customer.
+   */
+  readonly customerAccountRequired = computed(
+    () => !this.context.user && this.selectedRole()?.name === CUSTOMER_ROLE_NAME
   )
   readonly userForm = form(this.model, path => {
     // required(path.name, { message: "Ingresa el nombre." })
@@ -107,6 +129,20 @@ export class UserEditor {
         ? undefined
         : { kind: "role", message: "Selecciona un rol disponible." }
     )
+    // The customer row created with a CLIENTE account requires its type; the other roles never
+    // request a customer, so these fields stay valid and unused for them.
+    validate(path.customerType, ({ value }) =>
+      this.customerAccountRequired() && !isCustomerType(value())
+        ? { kind: "customerType", message: "Selecciona el tipo de cliente." }
+        : undefined
+    )
+    validate(path.phone, ({ value }) => {
+      if (!this.customerAccountRequired()) return undefined
+      const phone = value().trim()
+      return phone && !/^\+?[0-9 ()-]{7,30}$/.test(phone)
+        ? { kind: "phone", message: "Ingresa un teléfono válido de 7 a 30 caracteres." }
+        : undefined
+    })
     validate(path.lang, ({ value }) =>
       value() === Lang.ES || value() === Lang.EN
         ? undefined
@@ -121,14 +157,20 @@ export class UserEditor {
   save(): Promise<boolean> {
     if (this.destroyRef.destroyed || this.userForm().submitting()) return Promise.resolve(false)
     this.error.set("")
+    this.emailError.set("")
     return submit(this.userForm, async () => {
       const value = this.model()
-      const params = {
-        ...value,
+      const customerCreated = this.customerAccountRequired()
+      // Defense in depth: the form already requires the type, and nothing leaves without it.
+      if (customerCreated && !isCustomerType(value.customerType)) return undefined
+      const params: CreateUserParams = {
         name: value.name.trim(),
         email: value.email.trim(),
         password: value.password,
-        roleId: Number(value.roleId)
+        lang: value.lang,
+        isActive: value.isActive,
+        roleId: Number(value.roleId),
+        ...this.customerParams()
       }
       try {
         const request = this.context.user
@@ -142,31 +184,62 @@ export class UserEditor {
         })
         if (this.destroyRef.destroyed || !result) return undefined
         if (result.success) {
-          this.context.onSaved()
+          this.context.onSaved({
+            created: !this.context.user,
+            customerCreated,
+            customerId: result.data.customerId
+          })
           this.dialog.close()
         } else {
-          this.error.set(
-            result.error.code === "USER_NOT_FOUND"
-              ? "El usuario ya no existe. Cierra y vuelve al catálogo."
-              : result.error.code === "PARTIAL_UPDATE"
-                ? "El perfil se actualizó, pero no se completó el estado o la contraseña. Revisa el catálogo antes de reintentar."
-                : result.error.code === "FORBIDDEN"
-                  ? "No tienes permiso para guardar estos cambios."
-                  : result.error.code === "EMAIL_ALREADY_EXISTS"
-                    ? "El correo ya está registrado."
-                    : "No pudimos guardar el usuario. Inténtalo de nuevo."
-          )
+          this.reportFailure(result.error.code, customerCreated)
         }
       } catch {
         if (this.destroyRef.destroyed) return undefined
-        this.error.set("No pudimos guardar el usuario. Inténtalo de nuevo.")
+        this.reportFailure("UNEXPECTED", customerCreated)
       }
       return undefined
     })
   }
 
+  /** The email is shared between accounts and customers, so its conflict stays on that input. */
+  private reportFailure(code: UserErrorCode, customerCreated: boolean): void {
+    const field = userFieldError(code)
+    if (field) {
+      this.error.set("")
+      this.emailError.set(field.message)
+      return
+    }
+    this.emailError.set("")
+    this.error.set(userWriteError(code, { customerCreated }))
+  }
+
+  clearEmailError(): void {
+    this.emailError.set("")
+  }
+
+  /** Leaving CLIENTE drops the account-only fields and their validation state. */
+  roleChanged(): void {
+    this.error.set("")
+    this.emailError.set("")
+    if (this.customerAccountRequired()) return
+    this.model.update(value => ({ ...value, customerType: "", phone: "" }))
+    this.userForm.customerType().reset()
+    this.userForm.phone().reset()
+  }
+
   cancel(): void {
     if (!this.destroyRef.destroyed && !this.userForm().submitting() && this.dialog.open)
       this.dialog.close()
+  }
+
+  /** Account-only data travels only with a CLIENTE alta; the other roles never see these keys. */
+  private customerParams(): Pick<CreateUserParams, "customerType" | "phone"> {
+    if (!this.customerAccountRequired()) return {}
+    const phone = this.model().phone.trim()
+    const customerType = this.model().customerType
+    return {
+      ...(customerType ? { customerType } : {}),
+      ...(phone ? { phone } : {})
+    }
   }
 }

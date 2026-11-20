@@ -62,7 +62,7 @@ The caller-relative `actual` field identifies the current session; no token/stor
 
 Root store lifetimes, stateless use cases and the distinct useExisting repository/source boundary remain (RNF09/RNF10). SSR does not dispatch session HTTP requests or transfer-cache them. The old registry is unwired test/demo data, never a fallback. UTC display does not select an operational timezone. Live authenticated backend/CORS and Chrome/Edge/Firefox visual, keyboard and responsive acceptance remain pending (RNF06/RNF08/RNF12).
 
-The editor follows documented password validation: creation requires 8–64 characters with uppercase, lowercase and a digit, while a blank edit preserves the existing password. Password bytes are never trimmed or stored in user identity. Create sends the documented profile/password fields; editing sends profile `PUT`, desired status `PATCH` only when changed, then optional `PUT /api/usuarios/{id}/password` with `passwordNueva`. This sequence is not atomic: later failure returns `PARTIAL_UPDATE`, refreshes server profile state and does not show success. Cancellation after dispatch cannot guarantee rollback; no writes are replayed automatically. Transport/DTO failures return safe typed errors, including forbidden, duplicate email and not found, without raw backend details. Browser/CORS/authenticated backend acceptance and visual/responsive/keyboard checks in Chrome, Edge and Firefox remain pending; simulated HTTP tests and a build do not certify live behavior.
+The editor follows documented password validation: creation requires 8–64 characters with uppercase, lowercase and a digit, while a blank edit preserves the existing password. Password bytes are never trimmed or stored in user identity. Create sends the documented profile/password fields; editing sends profile `PUT`, desired status `PATCH` only when changed, then optional `PUT /api/usuarios/{id}/password` with `passwordNueva`. Since WP10 T15 (section below), selecting the catalog's CLIENTE role in a **new** alta warns that a customer will be created, requires its `tipo`, accepts an optional `telefono` and sends those two account-only fields only for that role; every other role keeps the previous payload and a `403` on that alta names the missing `CLIENTE_CREAR` permission. This sequence is not atomic: later failure returns `PARTIAL_UPDATE`, refreshes server profile state and does not show success. Cancellation after dispatch cannot guarantee rollback; no writes are replayed automatically. Transport/DTO failures return safe typed errors, including forbidden, duplicate email and not found, without raw backend details. Browser/CORS/authenticated backend acceptance and visual/responsive/keyboard checks in Chrome, Edge and Firefox remain pending; simulated HTTP tests and a build do not certify live behavior.
 
 M03/RF03/HU03 and RF12/HU12 now have a [real HTTP/application boundary](../src/app/features/customers/README.md) for customer profiles/state/accounts, properties, acquisition, contacts/preferences and permission-aware history, requiring paged customer backend contract `f7988fb` or newer. Customer reads use server active-only pages with shared offset/limit domain contracts, actual returned totals/effective metadata and stable name/ID ordering. Backend commit `a6f7141` adds `busqueda` (trimmed, case-insensitive literal substring on name/email; blank omitted; `%`, `_` and backslash are literal) and exact `tipo` (`residencial`/`comercial`, invalid values return 400), applied before pagination. They never slice a downloaded full catalog or infer page totals from mutations. Stateless named use cases delegate through explicitly bound root repositories to validated HTTP sources. The demo is unwired, never a fallback. Customer removal is deactivation, not physical deletion; conversion uses current lead data (the unchanged Spanish prospect API contract) and returns the same linked customer on repeats, without account creation, email merging or inferred stage changes. Angular uses Lead/LeadOrigin/LeadFollowUp and leadId internally, including Quote/WebForm linkage; Spanish wire fields/routes and Java names stay unchanged. The root store preserves its lifetime and clears/fences session-old work. The approved customer presentation cache policy uses 120000ms for customer pages/details, properties, contacts/preferences and acquisition catalogs, and 30000ms for leads/details, follow-ups and customer history. Root capability stores reuse the shared read-resource/session-scope pattern with caller-owned subscriptions, same-key stale feedback and confirmed-write invalidation. WP1–WP2 now connect a protected lazy read-only P04 list at `/admin/customers`, through the existing **CRM** sidebar entry, without changing the official shell/theme, IAM or default users redirect. The page shows name/type/email/phone as a desktop table/mobile cards and starts with offset 0/limit 20. Shared pagination uses actual total/effective offset/limit, without client-side slicing or invented counters. Debounced name/email search and immediate exact customer-type filtering are applied by the backend before paging; either control resets the offset, and the detail return URL retains only offset/limit. No status/tag filters are offered. Query-specific computed projections and component-owned observation subscriptions preserve root store TTL, invalidation, cancellation and session fencing. Loading, verified empty, retryable initial error, same-key stale rows during refresh/failure and unrelated-query isolation remain distinct. A successful positive-total empty out-of-range page permits one corrective query using the returned limit per navigation/retry; the transport/store never rewrites metadata, and a second empty result cannot loop. WP3 now connects local Signal Forms create/edit for name/type/email/phone (plus the optional portal-account intent superseded by the WP10 T14 section below) and contextual desired-false deactivation on desktop/mobile, with nullable replacements, pending dismissal/duplicate guards, safe actionable inline errors preserving drafts and confirmed-write success toasts fenced by owner/session lifetime. Captured loaded customer identity is independent of refreshed rows. Active store observers refresh confirmed writes once, without optimistic membership/totals or another page reload. Page/dialog destruction and session replacement cancel owned writes and fence late feedback; cancellation cannot roll back dispatched server effects. No direct Users-feature import, root feedback consumer, role inference, inactive discovery/reactivation or physical deletion is added. The bounded read-only WP4 slice below now adds detail/property consumers. The user reported manual WP2 acceptance; it is not agent-observed exhaustive Chrome/Edge/Firefox keyboard/responsive or live CORS testing. Corrected WP3 visual/manual/live/backend/browser acceptance is user-reported, not exhaustive agent-observed proof. Real MySQL locking/rollback evidence, full WP4 and subsequent gates remain pending. All other screens and the customer portal remain planned. IAM users/role catalog HTTP adapters are the T3 candidate; sessions and audit have T5–T6 HTTP adapters; enforced frontend role navigation, E2E and CI/CD remain absent; T4 connects permission catalog/assignment HTTP operations; auth persistence/transport is the T2 candidate, not a completed IAM capability; production deployment is unverified. Existing unit tests are not a claim of a newly verified pass or fixed test count.
 
@@ -509,6 +509,46 @@ now states the exact rule.
 Pending acceptance: manual/live runs (create with and without an account, first account for an
 existing customer, recreated deactivated account, retired active account after confirming), the
 real backend 400/409 payloads and CORS, the actual password policy, `debeCambiarPassword` in the
-portal (T16), the users-module counterpart (T15, untouched here) and Chrome/Edge/Firefox
-keyboard/responsive checks. See the
+portal (T16), the users-module counterpart (T15, connected in the section below) and
+Chrome/Edge/Firefox keyboard/responsive checks. See the
 [customer account boundary](../src/app/features/customers/README.md#connected-customer-portal-account-request-wp10-t14).
+
+## WP10 T15 — CLIENTE account creation from the users form
+
+M02/RF02/HU02/P03 with S9/S13/S17 (and S11 for the shared email). The users alta now reflects the
+live backend contract: `POST /api/usuarios` with the CLIENTE role creates the customer row in the
+same transaction, so a single form can decide both, and the user no longer has to visit two
+modules. See the [users boundary](../src/app/features/users/README.md#wp10-t15--cliente-account-creation-from-the-users-editor).
+
+- **Identity, not ACL**: the backend matches its CLIENTE role by exact name
+  (`CuentaClienteService.ROL_CLIENTE`), so the form compares the selected catalog role against that
+  name. No permission, navigation or CRUD column is inferred from it.
+- **Create only**: the notice, the required `tipo` (`residencial`/`comercial`) and the optional
+  `telefono` appear only in a new alta with CLIENTE selected. `PUT /api/usuarios/{id}` has no such
+  fields and never creates a customer, so the edit dialog keeps its previous form and payload; moving
+  an existing account to CLIENTE is not presented as customer creation.
+- **Explicit, non-dismissible warning** that a new customer will be created with the same name, email
+  and phone, that it is administered in CRM, that the account must change its password on first
+  login and that the alta also needs the customer-creation permission. Changing the role away from
+  CLIENTE empties both fields and their validation state before anything is dispatched.
+- **Exact payload per role**: other roles keep `nombre`, `correo`, `password`, `idRol`, `idioma`,
+  `activo`; CLIENTE adds `tipo` and, when supplied, `telefono`. The phone is trimmed and omitted when
+  blank, and `tipo`/`telefono` never travel without asking for the customer row. Password bytes are
+  never trimmed.
+- **Failures**: a `403` on a CLIENTE alta states that creating the customer needs `CLIENTE_CREAR`
+  and that nothing was created, instead of the generic permission copy and never raw backend text.
+  The documented `409`/`EMAIL_RESERVED` binds to the email input with the shared-address explanation
+  because the email is unique across accounts and customers, including inactive ones.
+- **Success**: only a confirmed result emits feedback and closes; the toast names the created
+  customer as `Usuario y cliente creados · Cliente #<idCliente>` (or without the reference when the
+  response omits it). `idCliente` is parsed as a nullable positive int32 into `User.customerId`; the
+  reference is plain text with no new route or navigation. `debeCambiarPassword` is not consumed yet
+  because the forced first-login change belongs to T16.
+- **Unchanged**: the same dialog lifecycle, pending duplicate-submit and Cancel/Escape/outside
+  guards, drafts preserved on failure, owner/session/destruction fencing and the existing `UserStore`
+  invalidation without an extra reload, optimistic row or write replay.
+
+Pending acceptance: manual/live creation of a CLIENTE account (with and without `CLIENTE_CREAR`, with
+and without phone), the real `409` payload and CORS, the created customer appearing in CRM, the
+first-login forced password change (T16), the inactive/role-catalog edge cases and
+Chrome/Edge/Firefox keyboard/responsive checks. Deterministic unit tests are not live evidence.

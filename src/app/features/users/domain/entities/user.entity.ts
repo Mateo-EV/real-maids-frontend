@@ -13,7 +13,10 @@ export class User {
     public createdAt: Date,
     public updatedAt: Date,
     public roleId: number,
-    public lastAccess: Date | null
+    public lastAccess: Date | null,
+    // Customer row created together with a CLIENTE account (wire `idCliente`); null when unlinked.
+    // Absent in responses that predate the shared customer/account contract, never fabricated.
+    public customerId: number | null = null
   ) {}
 
   static create(
@@ -25,8 +28,20 @@ export class User {
     createdAt: Date,
     updatedAt: Date,
     roleId: number,
-    lastAccess: Date | null = null
+    lastAccess: Date | null = null,
+    customerId: number | null = null
   ): User {
-    return new User(id, name, email, lang, isActive, createdAt, updatedAt, roleId, lastAccess)
+    return new User(
+      id,
+      name,
+      email,
+      lang,
+      isActive,
+      createdAt,
+      updatedAt,
+      roleId,
+      lastAccess,
+      customerId
+    )
   }
 }

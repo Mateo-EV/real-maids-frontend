@@ -41,6 +41,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { defer, finalize, Subject, switchMap } from "rxjs"
 import { demoDecoration, initials } from "../../demo/users-demo.fixture"
 import { UserEditor, UserEditorContext } from "../../components/user-editor/user-editor"
+import { userSavedMessage } from "../../components/user-editor/user-write-feedback"
 import {
   DeleteUserContext,
   DeleteUserDialog
@@ -325,8 +326,8 @@ export class UsersPage implements OnInit {
     this.dialogs.open<void, UserEditorContext>(UserEditor, {
       context: {
         user,
-        onSaved: () => {
-          if (!this.destroyRef.destroyed) this.toast.success("Usuario guardado")
+        onSaved: saved => {
+          if (!this.destroyRef.destroyed) this.toast.success(userSavedMessage(saved))
         }
       },
       showCloseButton: false,

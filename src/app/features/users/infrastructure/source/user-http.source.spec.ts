@@ -309,6 +309,71 @@ describe("wired users backend contract", () => {
     expect(result.data.createdAt.toISOString()).toBe("2026-01-01T00:00:00.000Z")
     expect(result.data.updatedAt.toISOString()).toBe("2026-01-02T01:02:03.000Z")
   })
+  it("sends the customer-only fields only when the creation asks for a customer account", async () => {
+    const pending = firstValueFrom(
+      repository.createUser({ ...input, customerType: "residencial", phone: "  999 111 222  " })
+    )
+    const request = http.expectOne(endpoint)
+    expect(request.request.method).toBe("POST")
+    const body = request.request.body
+    request.flush({ ...dto, idCliente: 12, debeCambiarPassword: true })
+    expect(await pending).toMatchObject({ success: true, data: { customerId: 12 } })
+    expect(body).toEqual({
+      nombre: input.name,
+      correo: input.email,
+      password: input.password,
+      idRol: 19,
+      idioma: "es",
+      activo: true,
+      tipo: "residencial",
+      telefono: "999 111 222"
+    })
+  })
+  it("omits a blank customer phone and maps an account without customer linkage", async () => {
+    const pending = firstValueFrom(
+      repository.createUser({ ...input, customerType: "comercial", phone: "   " })
+    )
+    const request = http.expectOne(endpoint)
+    const body = request.request.body
+    request.flush({ ...dto, idCliente: null })
+    expect(await pending).toMatchObject({ success: true, data: { customerId: null } })
+    expect(body).toEqual({
+      nombre: input.name,
+      correo: input.email,
+      password: input.password,
+      idRol: 19,
+      idioma: "es",
+      activo: true,
+      tipo: "comercial"
+    })
+    expect(body).not.toHaveProperty("telefono")
+  })
+  it("rejects an undocumented customer type and an orphan phone before dispatch", async () => {
+    const rejected = await firstValueFrom(
+      repository.createUser({ ...input, customerType: "otro" as never, phone: "999111222" })
+    )
+    expect(rejected).toMatchObject({ success: false, error: { code: "VALIDATION" } })
+    const orphan = firstValueFrom(repository.createUser({ ...input, phone: "999111222" }))
+    const request = http.expectOne(endpoint)
+    const body = request.request.body
+    request.flush(dto)
+    expect((await orphan).success).toBe(true)
+    expect(body).toEqual({
+      nombre: input.name,
+      correo: input.email,
+      password: input.password,
+      idRol: 19,
+      idioma: "es",
+      activo: true
+    })
+    expect(body).not.toHaveProperty("telefono")
+    http.expectNone(endpoint)
+  })
+  it.each([0, -1, "12", 12.5])("rejects malformed customer linkage %j", async idCliente => {
+    const pending = firstValueFrom(repository.createUser(input))
+    http.expectOne(endpoint).flush({ ...dto, idCliente })
+    expect(await pending).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+  })
   it("reads detail and maps explicit last access without fabricating omitted metadata", async () => {
     const pending = firstValueFrom(repository.getUserById(41))
     http.expectOne(`${endpoint}/41`).flush({ ...dto, ultimoAcceso: "2026-02-01T10:00:00Z" })
