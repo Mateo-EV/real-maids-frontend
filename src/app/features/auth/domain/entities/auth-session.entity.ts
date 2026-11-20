@@ -9,7 +9,12 @@ export class AuthSession {
     public readonly id: number | null = null,
     public readonly roleId: number | null = null,
     public readonly language: "es" | "en" | null = null,
-    public readonly permissions: readonly string[] | null = null
+    public readonly permissions: readonly string[] | null = null,
+    /**
+     * The backend persisted a provisional password (admin-created or reactivated account) that must
+     * be replaced before the session is allowed to reach any other authenticated screen.
+     */
+    public readonly mustChangePassword: boolean = false
   ) {}
 
   static create(
@@ -20,7 +25,8 @@ export class AuthSession {
     id: number | null = null,
     roleId: number | null = null,
     language: "es" | "en" | null = null,
-    permissions: readonly string[] | null = null
+    permissions: readonly string[] | null = null,
+    mustChangePassword: boolean = false
   ): AuthSession {
     return new AuthSession(
       name,
@@ -30,7 +36,8 @@ export class AuthSession {
       id,
       roleId,
       language,
-      permissions === null ? null : Object.freeze([...permissions])
+      permissions === null ? null : Object.freeze([...permissions]),
+      mustChangePassword === true
     )
   }
 }

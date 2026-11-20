@@ -15,6 +15,7 @@ describe("LoginUseCase", () => {
     repository = {
       login: vi.fn(),
       me: vi.fn(),
+      changePassword: vi.fn(),
       logout: vi.fn(),
       invalidate: vi.fn(),
       sessionChanges: vi.fn()

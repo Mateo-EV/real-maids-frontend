@@ -11,6 +11,8 @@ export type AuthErrorCode =
   | "STORAGE"
   | "COORDINATION"
   | "FORBIDDEN"
+  /** The backend rejected the own password change (wrong current password or a business rule). */
+  | "INVALID_PASSWORD_CHANGE"
 
 export class AuthError extends Error {
   constructor(public readonly code: AuthErrorCode) {

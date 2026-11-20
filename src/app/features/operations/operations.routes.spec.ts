@@ -104,6 +104,7 @@ async function setup(authenticated: boolean) {
         idRol: 9,
         rol: "Backend role",
         idioma: "es",
+        debeCambiarPassword: false,
         permisos: []
       }
     })

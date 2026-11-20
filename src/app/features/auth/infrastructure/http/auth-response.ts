@@ -33,6 +33,10 @@ export function profile(value: unknown, expiresAt: number): AuthSession {
   ) {
     throw new AuthError("INVALID_PROFILE")
   }
+  // An absent/null flag cannot prove the provisional password was already replaced, so it fails
+  // closed and forces the change step; only an explicit `false` lets the session through.
+  const mustChangePassword = p["debeCambiarPassword"] ?? true
+  if (typeof mustChangePassword !== "boolean") throw new AuthError("INVALID_PROFILE")
   // ultimoAcceso is unused: no invented null/date default or authorization inference.
   return AuthSession.create(
     p["nombre"],
@@ -42,7 +46,8 @@ export function profile(value: unknown, expiresAt: number): AuthSession {
     p["idUsuario"],
     p["idRol"],
     p["idioma"],
-    p["permisos"]
+    p["permisos"],
+    mustChangePassword
   )
 }
 

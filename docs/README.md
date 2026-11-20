@@ -552,3 +552,40 @@ Pending acceptance: manual/live creation of a CLIENTE account (with and without 
 and without phone), the real `409` payload and CORS, the created customer appearing in CRM, the
 first-login forced password change (T16), the inactive/role-catalog edge cases and
 Chrome/Edge/Firefox keyboard/responsive checks. Deterministic unit tests are not live evidence.
+
+## WP10 T16 — Forced password change on first sign-in
+
+M01/RF01/HU01/P01 with S10. An administrator (or whoever creates the account) may define a
+provisional password; the backend persists `debeCambiarPassword`, returns it in
+`POST /api/auth/login` and `GET /api/auth/me`, and `PUT /api/auth/me/password` clears it, closes the
+other sessions and keeps the current one. The frontend turns that flag into a required step instead
+of a suggestion. See the [auth boundary](../src/app/features/auth/README.md#forced-password-change-on-first-sign-in-wp10-t16--s10).
+
+- **The flag is carried, not inferred**: it is validated with the rest of the profile and lives in
+  `AuthSession.mustChangePassword`. A response that omits it (or sends `null`) fails closed as
+  `true`, because it cannot prove the provisional password was already replaced; only an explicit
+  `false` lets the session through, and a non-boolean value is an invalid profile.
+- **One redirect matrix**: `authGuard` sends a provisional session to
+  `/change-password?returnUrl=<requested URL>`, `guestGuard` sends it there from `/login`,
+  `passwordChangeGuard` keeps it on the screen and moves a settled session to the captured
+  destination, and an anonymous visit to the screen goes to
+  `/login?returnUrl=<captured destination>`. The login page takes the same decision after
+  authentication, so the original destination survives the forced step. A destination can only be an
+  internal URL and never `/login` or `/change-password`, so it cannot loop.
+- **The screen** is Helm/Signal Forms: current password, new password and confirmation, the
+  documented policy (8–64 characters with uppercase, lowercase and digit) and the "must differ from
+  the current one" rule checked before dispatch, labelled fields with help and inline errors, a
+  pending state that blocks duplicate submits, drafts preserved on failure, and a `Cerrar sesión`
+  escape hatch. There is no way to skip the change while keeping the session.
+- **No optimism**: `PUT /api/auth/me/password` is followed by one forced `GET /api/auth/me`, and the
+  destination is only reached when that profile already reports the flag cleared. If the read fails
+  the outcome is reported as unconfirmed with a GET-only retry; the password write is never replayed.
+  A rejected change keeps the session, the flag and the draft. Raw backend text is never shown.
+- **Unchanged**: login, refresh, logout, the interceptor, both guards' session semantics, credential
+  storage and its keys. SSR reads no storage and dispatches no auth request.
+
+Pending acceptance: a live backend/CORS run of the full first-login round trip (provisional password
+→ forced screen → cleared flag → destination), the "other sessions closed" side effect, the real
+`400` payloads from the policy and the current-password check, and Chrome/Edge/Firefox
+keyboard/responsive checks. Deterministic unit tests are technical evidence, not native/live
+approval.

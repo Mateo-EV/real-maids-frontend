@@ -149,7 +149,8 @@ describe("auth guards", () => {
           idRol: 3,
           rol: "Operaciones",
           idioma: "es",
-          permisos: []
+          permisos: [],
+          debeCambiarPassword: false
         }
       })
       expect((await login).success).toBe(true)

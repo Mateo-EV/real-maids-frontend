@@ -97,6 +97,7 @@ describe("USERS_ROUTES", () => {
           idRol: 3,
           rol: "Operaciones",
           idioma: "es",
+          debeCambiarPassword: false,
           permisos: []
         }
       })
