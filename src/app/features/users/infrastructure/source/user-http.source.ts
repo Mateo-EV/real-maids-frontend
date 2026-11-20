@@ -208,7 +208,11 @@ export class UserHttpSource {
     // never on their own, so another role's payload cannot carry them by accident.
     if (params.customerType !== undefined && !isCustomerType(params.customerType))
       return of(Result.failure(new UserError("VALIDATION")))
-    const phone = params.customerType === undefined ? "" : (params.phone ?? "").trim()
+    const requestedPhone = (params.phone ?? "").trim()
+    // A phone without the documented customer type would be dropped after the call reported success.
+    if (params.customerType === undefined && requestedPhone)
+      return of(Result.failure(new UserError("VALIDATION")))
+    const phone = params.customerType === undefined ? "" : requestedPhone
     const body = {
       nombre: params.name,
       correo: params.email,

@@ -88,6 +88,7 @@ describe("Customer real HTTP boundary", () => {
           isActive: c.activo,
           userId: c.idUsuario,
           accountActive: c.usuarioActivo,
+          accountStateUnknown: false,
           leadId: c.idProspecto,
           taxIdentification: c.identificacionFiscal,
           systemOrigin: c.sistemaOrigen,
@@ -214,7 +215,6 @@ describe("Customer real HTTP boundary", () => {
       { ...wirePage([customerDto]), totalPaginas: 2 },
       { ...wirePage([customerDto]), totalElementos: 2 },
       wirePage([{ ...customerDto, idProspecto: undefined }]),
-      wirePage([{ ...customerDto, usuarioActivo: undefined }]),
       wirePage([{ ...customerDto, usuarioActivo: null }]),
       wirePage([{ ...customerDto, usuarioActivo: "true" }]),
       wirePage([{ ...customerDto, idUsuario: null }])
@@ -225,6 +225,22 @@ describe("Customer real HTTP boundary", () => {
     const result = await pending
     expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
     expect(result).not.toHaveProperty("data")
+  })
+
+  it("keeps a legacy payload readable when it predates usuarioActivo and flags the state as unknown", async () => {
+    const legacy: Record<string, unknown> = { ...customerDto, idUsuario: 11 }
+    delete legacy["usuarioActivo"]
+    const pending = firstValueFrom(repository.findPage())
+    http
+      .expectOne("http://localhost:8080/api/clientes?pagina=0&tamanio=20")
+      .flush(wirePage([legacy]))
+    const result = await pending
+    expect(result.success).toBe(true)
+    expect(result.success && result.data.items[0]).toMatchObject({
+      userId: 11,
+      accountActive: null,
+      accountStateUnknown: true
+    })
   })
 
   it.each([
@@ -246,18 +262,28 @@ describe("Customer real HTTP boundary", () => {
     }
   )
 
-  it("requires the account state whenever the response names an account", async () => {
+  it("keeps a response readable when it predates the account state, and marks that state unknown", async () => {
     const legacy: Record<string, unknown> = { ...customerDto, idUsuario: null }
     delete legacy["usuarioActivo"]
     const pending = firstValueFrom(repository.findById(7))
     http.expectOne("http://localhost:8080/api/clientes/7").flush(legacy)
     expect(await pending).toMatchObject({
       success: true,
-      data: { userId: null, accountActive: null }
+      data: { userId: null, accountActive: null, accountStateUnknown: false }
     })
-    const missing = firstValueFrom(repository.findById(7))
+    // A named account without the field is a legacy payload: readable, but never mutated by the editor.
+    const withoutState = firstValueFrom(repository.findById(7))
     http.expectOne("http://localhost:8080/api/clientes/7").flush({ ...legacy, idUsuario: 11 })
-    expect(await missing).toMatchObject({
+    expect(await withoutState).toMatchObject({
+      success: true,
+      data: { userId: 11, accountActive: null, accountStateUnknown: true }
+    })
+    // An explicit null next to an id stays contradictory.
+    const contradictory = firstValueFrom(repository.findById(7))
+    http
+      .expectOne("http://localhost:8080/api/clientes/7")
+      .flush({ ...legacy, idUsuario: 11, usuarioActivo: null })
+    expect(await contradictory).toMatchObject({
       success: false,
       error: { code: "INVALID_RESPONSE" }
     })

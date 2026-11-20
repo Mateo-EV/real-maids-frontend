@@ -55,9 +55,12 @@ export function customerDto(v: unknown): Customer {
   const rawAccountActive = p["usuarioActivo"]
   const userId = nullableId(p["idUsuario"])
   const accountActive = accountFlag(rawAccountActive)
-  // Both come from the same account row: no state without an id, and a named account must carry a boolean state.
-  // `usuarioActivo: null` with an id is contradictory: it would read as "sin cuenta" and invite a create.
-  if (userId === null ? accountActive !== null : typeof rawAccountActive !== "boolean") invalid()
+  // If the response names an account, the state must be a boolean. Two edge cases are separated here:
+  // a payload that predates `usuarioActivo` (absent) stays readable but is flagged unknown, so reads keep
+  // working and the editor refuses to mutate that account; an explicit `null` next to an id is
+  // contradictory and would read as "sin cuenta", inviting a create, so it stays invalid.
+  const accountStateUnknown = userId !== null && rawAccountActive === undefined
+  if (userId === null ? accountActive !== null : rawAccountActive === null) invalid()
   return Customer.create(
     readId(p["idCliente"]),
     text(p["nombre"], 150),
@@ -73,7 +76,8 @@ export function customerDto(v: unknown): Customer {
     nullableDate(p["fechaActualizacion"]),
     nullableId(p["usuarioRegistro"]),
     nullableId(p["idProspecto"]),
-    accountActive
+    accountActive,
+    accountStateUnknown
   )
 }
 /**

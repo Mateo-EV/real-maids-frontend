@@ -23,7 +23,12 @@ export class Customer {
      * Portal account state tied to `userId`: `null` means no account, `true` an active account and
      * `false` a deactivated one. The row survives a deactivation, so this is not derived from ids.
      */
-    public readonly accountActive: boolean | null = null
+    public readonly accountActive: boolean | null = null,
+    /**
+     * A response that names an account but predates `usuarioActivo`. Reads stay available, and the
+     * editor refuses to mutate that account because its real state is unknown to this client.
+     */
+    public readonly accountStateUnknown: boolean = false
   ) {}
 
   static create(
@@ -41,7 +46,8 @@ export class Customer {
     updatedAt: Date | null,
     registeredByUserId: number | null,
     leadId: number | null,
-    accountActive: boolean | null = null
+    accountActive: boolean | null = null,
+    accountStateUnknown: boolean = false
   ): Customer {
     return new Customer(
       id,
@@ -58,7 +64,8 @@ export class Customer {
       updatedAt,
       registeredByUserId,
       leadId,
-      accountActive
+      accountActive,
+      accountStateUnknown
     )
   }
 }

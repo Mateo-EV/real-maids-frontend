@@ -186,6 +186,7 @@ describe("Customer supported HTTP operations", () => {
     name: "Customer",
     userId: null,
     accountActive: null,
+    accountStateUnknown: false,
     type: CustomerType.COMMERCIAL,
     email: "fake@example.test",
     phone: "1234567",

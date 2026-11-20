@@ -353,20 +353,9 @@ describe("wired users backend contract", () => {
       repository.createUser({ ...input, customerType: "otro" as never, phone: "999111222" })
     )
     expect(rejected).toMatchObject({ success: false, error: { code: "VALIDATION" } })
-    const orphan = firstValueFrom(repository.createUser({ ...input, phone: "999111222" }))
-    const request = http.expectOne(endpoint)
-    const body = request.request.body
-    request.flush(dto)
-    expect((await orphan).success).toBe(true)
-    expect(body).toEqual({
-      nombre: input.name,
-      correo: input.email,
-      password: input.password,
-      idRol: 19,
-      idioma: "es",
-      activo: true
-    })
-    expect(body).not.toHaveProperty("telefono")
+    // A phone without the documented customer type would be lost after reporting success.
+    const orphan = await firstValueFrom(repository.createUser({ ...input, phone: "999111222" }))
+    expect(orphan).toMatchObject({ success: false, error: { code: "VALIDATION" } })
     http.expectNone(endpoint)
   })
   it.each([0, -1, "12", 12.5])("rejects malformed customer linkage %j", async idCliente => {

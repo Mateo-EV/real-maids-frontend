@@ -33,7 +33,7 @@ export interface CustomerEditorContext {
 }
 
 /** Portal account state of the captured record; `none` also covers a legacy payload without a state. */
-type AccountState = "none" | "active" | "inactive"
+type AccountState = "none" | "active" | "inactive" | "unknown"
 
 @Component({
   selector: "app-customer-editor",
@@ -61,7 +61,10 @@ export class CustomerEditor {
   readonly fieldError = signal<{ field: "email" | "password"; message: string } | null>(null)
   readonly account = computed<AccountState>(() => {
     const customer = this.context.customer
-    if (!customer || customer.userId === null || customer.accountActive === null) return "none"
+    if (!customer) return "none"
+    // A payload that predates `usuarioActivo` stays readable, but its account must not be mutated.
+    if (customer.accountStateUnknown) return "unknown"
+    if (customer.userId === null || customer.accountActive === null) return "none"
     return customer.accountActive ? "active" : "inactive"
   })
   readonly model = signal({
@@ -89,6 +92,8 @@ export class CustomerEditor {
         return "activa"
       case "inactive":
         return "desactivada"
+      case "unknown":
+        return "desconocida (respuesta sin el campo de estado)"
       default:
         return "sin cuenta"
     }
@@ -155,6 +160,8 @@ export class CustomerEditor {
    * trimmed and only travel with `true`.
    */
   private accountParams(): { createAccount?: boolean; password?: string } {
+    // Unknown state: the account is never touched from a record this client cannot describe.
+    if (this.account() === "unknown") return {}
     if (this.account() === "active") {
       if (this.model().createAccount) return {}
       return this.retireConfirmed() ? { createAccount: false } : {}

@@ -102,25 +102,32 @@
   </fieldset>
   <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
     <legend hlmFieldLegend>Cuenta del portal</legend>
-    <div hlmField orientation="horizontal">
-      <input
-        id="customer-create-account"
-        type="checkbox"
-        class="size-4 accent-primary"
-        aria-describedby="customer-account-state customer-account-help"
-        [formField]="profile.createAccount"
-        (change)="accountToggled()"
-      />
-      <label hlmFieldLabel for="customer-create-account">{{ accountToggleLabel() }}</label>
-    </div>
     <p hlmFieldDescription id="customer-account-state">
       Estado actual de la cuenta: {{ accountStateLabel() }}.
     </p>
-    <p hlmFieldDescription id="customer-account-help">
-      Sin marcar, la cuenta no se modifica y el correo queda opcional. Marcada, se crea o se
-      reactiva con la contraseña inicial indicada, y el correo del cliente es obligatorio. La
-      persona deberá cambiar su contraseña en el primer ingreso.
-    </p>
+    @if (account() === "unknown") {
+      <p hlmFieldDescription id="customer-account-unknown">
+        El servidor no informó el estado de esta cuenta, así que no se modifica desde acá. Guardá el
+        resto de los datos sin tocar la cuenta.
+      </p>
+    } @else {
+      <div hlmField orientation="horizontal">
+        <input
+          id="customer-create-account"
+          type="checkbox"
+          class="size-4 accent-primary"
+          aria-describedby="customer-account-state customer-account-help"
+          [formField]="profile.createAccount"
+          (change)="accountToggled()"
+        />
+        <label hlmFieldLabel for="customer-create-account">{{ accountToggleLabel() }}</label>
+      </div>
+      <p hlmFieldDescription id="customer-account-help">
+        Sin marcar, la cuenta no se modifica y el correo queda opcional. Marcada, se crea o se
+        reactiva con la contraseña inicial indicada, y el correo del cliente es obligatorio. La
+        persona deberá cambiar su contraseña en el primer ingreso.
+      </p>
+    }
     @if (retireRequested()) {
       <div hlmAlert variant="destructive" role="group" aria-live="polite">
         <p hlmAlertTitle>Baja de la cuenta del portal</p>
