@@ -55,8 +55,9 @@ export function customerDto(v: unknown): Customer {
   const rawAccountActive = p["usuarioActivo"]
   const userId = nullableId(p["idUsuario"])
   const accountActive = accountFlag(rawAccountActive)
-  // Both come from the same account row: no state without an id, and no named account without its state.
-  if (userId === null ? accountActive !== null : rawAccountActive === undefined) invalid()
+  // Both come from the same account row: no state without an id, and a named account must carry a boolean state.
+  // `usuarioActivo: null` with an id is contradictory: it would read as "sin cuenta" and invite a create.
+  if (userId === null ? accountActive !== null : typeof rawAccountActive !== "boolean") invalid()
   return Customer.create(
     readId(p["idCliente"]),
     text(p["nombre"], 150),

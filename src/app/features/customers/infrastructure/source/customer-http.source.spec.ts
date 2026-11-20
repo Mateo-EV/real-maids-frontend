@@ -215,6 +215,7 @@ describe("Customer real HTTP boundary", () => {
       { ...wirePage([customerDto]), totalElementos: 2 },
       wirePage([{ ...customerDto, idProspecto: undefined }]),
       wirePage([{ ...customerDto, usuarioActivo: undefined }]),
+      wirePage([{ ...customerDto, usuarioActivo: null }]),
       wirePage([{ ...customerDto, usuarioActivo: "true" }]),
       wirePage([{ ...customerDto, idUsuario: null }])
     ].map(dto => ({ dto }))
