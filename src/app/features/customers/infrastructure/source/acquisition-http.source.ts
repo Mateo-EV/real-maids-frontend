@@ -21,6 +21,7 @@ import {
 } from "../../domain/params/acquisition.params"
 import { customerTransport } from "./customer-http.transport"
 import { customerDto } from "./customer-http.source"
+import { accountFieldMarker } from "./customer-account-marker"
 import {
   record,
   readId,
@@ -135,6 +136,26 @@ function leadBody(p: CreateLeadParams) {
     telefono: p.phone,
     direccionReferencia: p.referenceAddress,
     observacion: p.observation
+  }
+}
+/**
+ * Conversion body. The account keys keep the same wire tri-state as the customer writes: `crearCuenta`
+ * is omitted when the caller does not ask for an account (conversion alone never creates one),
+ * `true` travels with the initial `password` and `false` means no account. The account email is not a
+ * body field: the server copies it from the prospect. A requested account without a password or a
+ * password without that flag is refused before HTTP.
+ */
+function conversionBody(p: ConvertLeadParams) {
+  const createAccount = p.createAccount,
+    password = p.password ?? null
+  input(createAccount === undefined || typeof createAccount === "boolean")
+  input(password === null || (typeof password === "string" && password.length > 0))
+  if (createAccount === true) input(password !== null)
+  else input(password === null)
+  return {
+    tipo: p.type,
+    ...(createAccount === undefined ? {} : { crearCuenta: createAccount }),
+    ...(createAccount === true ? { password } : {})
   }
 }
 @Injectable({ providedIn: "root" })
@@ -322,13 +343,14 @@ export class AcquisitionHttpSource {
     return this.t.request(
       () => {
         input(id(p.leadId) && Object.values(CustomerType).includes(p.type))
+        // `409` keeps its reserved-email marker; the documented `400` account markers are opt-in
+        // bodies too, so the same allow-list decoding applies instead of a generic INVALID_INPUT.
         return this.http
-          .post<unknown>(
-            `${this.leads}/${p.leadId}/conversion`,
-            { tipo: p.type },
-            { transferCache: false, context: apiConflictContext() }
-          )
-          .pipe(reservedCustomerEmail())
+          .post<unknown>(`${this.leads}/${p.leadId}/conversion`, conversionBody(p), {
+            transferCache: false,
+            context: apiConflictContext()
+          })
+          .pipe(accountFieldMarker(), reservedCustomerEmail())
       },
       v => {
         const c = customerDto(v)

@@ -218,9 +218,13 @@ export class LeadDetailPage {
         owner: this.destroyRef,
         ownerChanged$: this.ownerChanged$,
         current,
-        onConfirmed: (customerId: number) => {
+        onConfirmed: (customerId: number, accountCreated: boolean) => {
           if (!current()) return
-          this.toast.success("Conversión confirmada.")
+          this.toast.success(
+            accountCreated
+              ? "Conversión confirmada. La cuenta del portal se creó para el cliente."
+              : "Conversión confirmada."
+          )
           if (current()) this.convertedCustomerId.set(customerId)
           // Root observers own invalidation/refetches. No copied profile or optimistic flag.
         }
