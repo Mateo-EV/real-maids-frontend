@@ -18,6 +18,7 @@ export const customerDto = {
   telefono: null,
   activo: true,
   idUsuario: 11,
+  usuarioActivo: true,
   fechaCreacion: "2026-01-01T12:00:00-05:00",
   fechaActualizacion: null,
   idProspecto: 3,
@@ -66,6 +67,7 @@ describe("Customer real HTTP boundary", () => {
       nombre: "Second",
       idProspecto: null,
       idUsuario: null,
+      usuarioActivo: null,
       correo: "second@example.test",
       telefono: "+1 555 010 1001"
     }
@@ -85,6 +87,7 @@ describe("Customer real HTTP boundary", () => {
           phone: c.telefono,
           isActive: c.activo,
           userId: c.idUsuario,
+          accountActive: c.usuarioActivo,
           leadId: c.idProspecto,
           taxIdentification: c.identificacionFiscal,
           systemOrigin: c.sistemaOrigen,
@@ -210,7 +213,10 @@ describe("Customer real HTTP boundary", () => {
       { ...wirePage([customerDto]), totalElementos: Number.MAX_SAFE_INTEGER + 1 },
       { ...wirePage([customerDto]), totalPaginas: 2 },
       { ...wirePage([customerDto]), totalElementos: 2 },
-      wirePage([{ ...customerDto, idProspecto: undefined }])
+      wirePage([{ ...customerDto, idProspecto: undefined }]),
+      wirePage([{ ...customerDto, usuarioActivo: undefined }]),
+      wirePage([{ ...customerDto, usuarioActivo: "true" }]),
+      wirePage([{ ...customerDto, idUsuario: null }])
     ].map(dto => ({ dto }))
   )("rejects old arrays and malformed pages without exposing data: %j", async ({ dto }) => {
     const pending = firstValueFrom(repository.findPage())
@@ -218,6 +224,169 @@ describe("Customer real HTTP boundary", () => {
     const result = await pending
     expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
     expect(result).not.toHaveProperty("data")
+  })
+
+  it.each([
+    [null, null],
+    [true, 11],
+    [false, 11]
+  ] as const)(
+    "distinguishes no account, an active account and a deactivated account from usuarioActivo (%s)",
+    async (usuarioActivo, idUsuario) => {
+      const pending = firstValueFrom(repository.findById(7))
+      http
+        .expectOne("http://localhost:8080/api/clientes/7")
+        .flush({ ...customerDto, idUsuario, usuarioActivo })
+      const result = await pending
+      expect(result.success && result.data).toMatchObject({
+        userId: idUsuario,
+        accountActive: usuarioActivo
+      })
+    }
+  )
+
+  it("requires the account state whenever the response names an account", async () => {
+    const legacy: Record<string, unknown> = { ...customerDto, idUsuario: null }
+    delete legacy["usuarioActivo"]
+    const pending = firstValueFrom(repository.findById(7))
+    http.expectOne("http://localhost:8080/api/clientes/7").flush(legacy)
+    expect(await pending).toMatchObject({
+      success: true,
+      data: { userId: null, accountActive: null }
+    })
+    const missing = firstValueFrom(repository.findById(7))
+    http.expectOne("http://localhost:8080/api/clientes/7").flush({ ...legacy, idUsuario: 11 })
+    expect(await missing).toMatchObject({
+      success: false,
+      error: { code: "INVALID_RESPONSE" }
+    })
+  })
+
+  it("keeps the account tri-state in the write body instead of collapsing absent and false", async () => {
+    const profile = {
+      name: "Ana",
+      type: CustomerType.RESIDENTIAL,
+      email: "ana@example.test",
+      phone: null
+    }
+    const absent = firstValueFrom(repository.create(profile))
+    let request = http.expectOne("http://localhost:8080/api/clientes")
+    expect(request.request.method).toBe("POST")
+    expect(request.request.body).toEqual({
+      nombre: "Ana",
+      tipo: "residencial",
+      correo: "ana@example.test",
+      telefono: null
+    })
+    expect(Object.keys(request.request.body)).not.toContain("crearCuenta")
+    expect(Object.keys(request.request.body)).not.toContain("password")
+    request.flush(customerDto)
+    expect((await absent).success).toBe(true)
+
+    const requested = firstValueFrom(
+      repository.create({ ...profile, createAccount: true, password: "Clave1234" })
+    )
+    request = http.expectOne("http://localhost:8080/api/clientes")
+    expect(request.request.body).toEqual({
+      nombre: "Ana",
+      tipo: "residencial",
+      correo: "ana@example.test",
+      telefono: null,
+      crearCuenta: true,
+      password: "Clave1234"
+    })
+    request.flush(customerDto)
+    expect((await requested).success).toBe(true)
+
+    const retired = firstValueFrom(repository.update({ id: 7, ...profile, createAccount: false }))
+    request = http.expectOne("http://localhost:8080/api/clientes/7")
+    expect(request.request.method).toBe("PUT")
+    expect(request.request.body).toEqual({
+      nombre: "Ana",
+      tipo: "residencial",
+      correo: "ana@example.test",
+      telefono: null,
+      crearCuenta: false
+    })
+    expect(Object.keys(request.request.body)).not.toContain("password")
+    request.flush({ ...customerDto, usuarioActivo: null, idUsuario: null })
+    expect((await retired).success).toBe(true)
+
+    // The same flag recreates a deactivated row on edit, so the password travels with `true` there too.
+    const recreated = firstValueFrom(
+      repository.update({ id: 7, ...profile, createAccount: true, password: "Nueva1234" })
+    )
+    request = http.expectOne("http://localhost:8080/api/clientes/7")
+    expect(request.request.body).toEqual({
+      nombre: "Ana",
+      tipo: "residencial",
+      correo: "ana@example.test",
+      telefono: null,
+      crearCuenta: true,
+      password: "Nueva1234"
+    })
+    request.flush(customerDto)
+    expect((await recreated).success).toBe(true)
+  })
+
+  it.each([
+    { createAccount: true },
+    { createAccount: true, password: "" },
+    { createAccount: true, password: "Clave1234", email: null },
+    { password: "Clave1234" },
+    { createAccount: false, password: "Clave1234" }
+  ])("rejects an inconsistent account request before HTTP: %j", async account => {
+    const result = await firstValueFrom(
+      repository.create({
+        name: "Ana",
+        type: CustomerType.RESIDENTIAL,
+        email: "ana@example.test",
+        phone: null,
+        ...account
+      })
+    )
+    expect(result).toMatchObject({ success: false, error: { code: "INVALID_INPUT" } })
+    http.expectNone(() => true)
+  })
+
+  it("decodes only the three documented conditional account markers from a validation body", async () => {
+    const profile = {
+      name: "Ana",
+      type: CustomerType.RESIDENTIAL,
+      email: "ana@example.test",
+      phone: null,
+      createAccount: true,
+      password: "Clave1234"
+    }
+    for (const [marker, code] of [
+      ["correoParaCuenta", "ACCOUNT_EMAIL_REQUIRED"],
+      ["passwordParaCuenta", "ACCOUNT_PASSWORD_REQUIRED"],
+      ["passwordSoloConCuenta", "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT"]
+    ] as const) {
+      const pending = firstValueFrom(repository.create(profile))
+      http
+        .expectOne("http://localhost:8080/api/clientes")
+        .flush(
+          { codigo: 400, mensaje: "Private text must not reach UI", errores: { [marker]: "x" } },
+          { status: 400, statusText: "Bad Request" }
+        )
+      const result = await pending
+      expect(!result.success && result.error.code).toBe(code)
+    }
+    // Any other validation body keeps the generic mapping; no invented field attribution.
+    for (const body of [
+      { errores: { password: "x" } },
+      { errores: { correoParaCuenta2: "x" } },
+      { errores: "correoParaCuenta" },
+      { mensaje: "correoParaCuenta" }
+    ]) {
+      const pending = firstValueFrom(repository.update({ id: 7, ...profile }))
+      http
+        .expectOne("http://localhost:8080/api/clientes/7")
+        .flush(body, { status: 400, statusText: "Bad Request" })
+      const result = await pending
+      expect(!result.success && result.error.code).toBe("INVALID_INPUT")
+    }
   })
 
   it("reads the server customer statistics aggregate from its own documented endpoint", async () => {

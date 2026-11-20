@@ -128,6 +128,7 @@ describe("RF12 actual history projection", () => {
           phone: null,
           isActive: true,
           userId: null,
+          accountActive: null,
           createdAt: date,
           updatedAt: null,
           leadId: null,

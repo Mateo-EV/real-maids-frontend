@@ -27,10 +27,12 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
         catchError((error: unknown) => {
           // No replay, including writes. A stale 401 cannot clear newer credentials.
           if (error instanceof HttpErrorResponse && error.status === 401) source.invalidate(token)
+          // The opt-in belongs to adapters that validate their own documented body: a 409 conflict
+          // or a 400 validation. Nothing else is preserved, and a 401 is always fenced above.
           if (
             error instanceof HttpErrorResponse &&
-            error.status === 409 &&
-            request.context.get(PRESERVE_API_CONFLICT)
+            request.context.get(PRESERVE_API_CONFLICT) &&
+            (error.status === 409 || error.status === 400)
           )
             return throwError(() => error)
           return throwError(

@@ -29,8 +29,10 @@ import {
   email,
   optional,
   invalid,
-  integer
+  integer,
+  accountFlag
 } from "./customer-http.validation"
+import { accountFieldMarker } from "./customer-account-marker"
 
 /** Server counts are nonnegative safe integers; no cross-count arithmetic is asserted here. */
 function count(v: unknown): number {
@@ -50,10 +52,15 @@ export function customerDto(v: unknown): Customer {
   const p = record(v)
   const type = p["tipo"]
   if (type !== CustomerType.RESIDENTIAL && type !== CustomerType.COMMERCIAL) return invalid()
+  const rawAccountActive = p["usuarioActivo"]
+  const userId = nullableId(p["idUsuario"])
+  const accountActive = accountFlag(rawAccountActive)
+  // Both come from the same account row: no state without an id, and no named account without its state.
+  if (userId === null ? accountActive !== null : rawAccountActive === undefined) invalid()
   return Customer.create(
     readId(p["idCliente"]),
     text(p["nombre"], 150),
-    nullableId(p["idUsuario"]),
+    userId,
     type,
     nullableText(p["correo"], 120),
     nullableText(p["telefono"], 30),
@@ -64,9 +71,15 @@ export function customerDto(v: unknown): Customer {
     date(p["fechaCreacion"]),
     nullableDate(p["fechaActualizacion"]),
     nullableId(p["usuarioRegistro"]),
-    nullableId(p["idProspecto"])
+    nullableId(p["idProspecto"]),
+    accountActive
   )
 }
+/**
+ * Documented ClienteRequest body. The account keys keep the wire tri-state: `crearCuenta` is omitted
+ * when the caller does not ask for a change, `password` only travels with `crearCuenta: true`, and a
+ * password without that flag or a requested account without email/password is refused before HTTP.
+ */
 function body(p: CreateCustomerParams) {
   input(
     required(p.name, 150) &&
@@ -75,7 +88,20 @@ function body(p: CreateCustomerParams) {
       optional(p.phone, 30) &&
       (p.phone === null || /^\+?[0-9 ()-]{7,30}$/.test(p.phone))
   )
-  return { nombre: p.name, tipo: p.type, correo: p.email, telefono: p.phone }
+  const createAccount = p.createAccount,
+    password = p.password ?? null
+  input(createAccount === undefined || typeof createAccount === "boolean")
+  input(password === null || (typeof password === "string" && password.length > 0))
+  if (createAccount === true) input(password !== null && required(p.email, 120))
+  else input(password === null)
+  return {
+    nombre: p.name,
+    tipo: p.type,
+    correo: p.email,
+    telefono: p.phone,
+    ...(createAccount === undefined ? {} : { crearCuenta: createAccount }),
+    ...(createAccount === true ? { password } : {})
+  }
 }
 @Injectable({ providedIn: "root" })
 export class CustomerHttpSource {
@@ -127,7 +153,7 @@ export class CustomerHttpSource {
       () =>
         this.http
           .post<unknown>(this.url, body(p), { transferCache: false, context: apiConflictContext() })
-          .pipe(reservedCustomerEmail()),
+          .pipe(accountFieldMarker(), reservedCustomerEmail()),
       customerDto,
       "CUSTOMER_NOT_FOUND"
     )
@@ -142,7 +168,7 @@ export class CustomerHttpSource {
             transferCache: false,
             context: apiConflictContext()
           })
-          .pipe(reservedCustomerEmail())
+          .pipe(accountFieldMarker(), reservedCustomerEmail())
       },
       v => sameId(customerDto(v), p.id),
       "CUSTOMER_NOT_FOUND"

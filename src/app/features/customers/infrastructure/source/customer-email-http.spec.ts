@@ -107,4 +107,32 @@ describe("CRM reserved customer email contract", () => {
     expect(!result.success && result.error.code).toBe("CONFLICT")
     s.http.verify()
   })
+
+  it("delivers the conditional account markers to the customer adapter through its opted-in request", async () => {
+    const s = setup()
+    const profile = {
+      name: "Ana",
+      type: CustomerType.RESIDENTIAL,
+      email: "ana@example.test",
+      phone: null,
+      createAccount: true,
+      password: "Clave1234"
+    }
+    for (const [marker, code] of [
+      ["correoParaCuenta", "ACCOUNT_EMAIL_REQUIRED"],
+      ["passwordParaCuenta", "ACCOUNT_PASSWORD_REQUIRED"],
+      ["passwordSoloConCuenta", "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT"]
+    ] as const) {
+      const pending = firstValueFrom(s.customers.create(profile))
+      s.http
+        .expectOne("https://api.example.test/api/clientes")
+        .flush(
+          { codigo: 400, mensaje: "Private text must not reach UI", errores: { [marker]: "x" } },
+          { status: 400, statusText: "Bad Request" }
+        )
+      const result = await pending
+      expect(!result.success && result.error.code).toBe(code)
+    }
+    s.http.verify()
+  })
 })

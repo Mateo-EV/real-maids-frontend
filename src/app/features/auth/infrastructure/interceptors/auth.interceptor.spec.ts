@@ -127,6 +127,65 @@ describe("origin-scoped auth interceptor", () => {
     expect((await firstValueFrom(source.me())).success).toBe(true)
   })
 
+  it("delivers an opted-in validation body once, keeping the session and replaying nothing", async () => {
+    const pending = firstValueFrom(
+      client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toMatchObject({
+      status: 400,
+      error: { errores: { correoParaCuenta: "marker" } }
+    })
+    const request = http.expectOne(`${origin}/api/clientes`)
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-first")
+    request.flush(
+      { errores: { correoParaCuenta: "marker" } },
+      { status: 400, statusText: "Bad Request" }
+    )
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.expectNone(`${origin}/api/clientes`)
+    http.expectNone(`${origin}/api/auth/refresh`)
+  })
+
+  it("keeps the generic error for a validation response without opt-in", async () => {
+    const pending = firstValueFrom(client.post(`${origin}/api/usuarios`, {}))
+    const assertion = expect(pending).rejects.toMatchObject({ code: "UNEXPECTED" })
+    http
+      .expectOne(`${origin}/api/usuarios`)
+      .flush(
+        { errores: { correoParaCuenta: "marker" } },
+        { status: 400, statusText: "Bad Request" }
+      )
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+  })
+
+  it.each([
+    [403, "Forbidden", "FORBIDDEN"],
+    [500, "Server Error", "UNEXPECTED"]
+  ] as const)("does not widen the opt-in to a %s response", async (status, statusText, code) => {
+    const pending = firstValueFrom(
+      client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toMatchObject({ code })
+    http
+      .expectOne(`${origin}/api/clientes`)
+      .flush({ errores: { correoParaCuenta: "marker" } }, { status, statusText })
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.expectNone(`${origin}/api/auth/refresh`)
+  })
+
+  it("keeps a network failure out of the opt-in", async () => {
+    const pending = firstValueFrom(
+      client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toMatchObject({ code: "NETWORK" })
+    http.expectOne(`${origin}/api/clientes`).error(new ProgressEvent("error"))
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+  })
+
   it("still invalidates an opted-in request on 401 without replay", async () => {
     const pending = firstValueFrom(
       client.post(`${origin}/api/clientes`, {}, { context: apiConflictContext() })
