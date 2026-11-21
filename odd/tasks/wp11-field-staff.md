@@ -71,3 +71,10 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   `protectedExperience` y su primera sección es «Mis servicios» sobre el `ServiceOrdersStore` root, sin
   store nuevo ni `idPersonal` enviado por el cliente. Verificación del padre: 46/46 en 5 archivos; la query
   de la página solo lleva `offset`/`limit`.
+- **L7 (T2, verificación independiente):** veredicto PARTIAL sin defectos de comportamiento. Aprobado por
+  evidencia: simetría de la matriz, cero regresión para `/admin` y `/portal` comparada contra el commit
+  padre, guard en la raíz del árbol, y query de la página sin identificador de personal ni filtrado local.
+  Gaps de test cerrados en `1602b82`: roles nulo/vacío/desconocido/padded en las seis URLs con simetría, y
+  el camino `/staff` desnudo para visitante anónimo y para sesión de backoffice. Sigue sin ejecutarse por
+  nadie el mapeo caller-relative del adapter HTTP ni el 404 fuera de alcance de punta a punta, y el fencing
+  de sesión de la página descansa en el contrato compartido (`session-read-scope`), no en un test propio.
