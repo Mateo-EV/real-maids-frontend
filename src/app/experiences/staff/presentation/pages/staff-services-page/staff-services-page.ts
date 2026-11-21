@@ -1,5 +1,6 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
+import { ActivatedRoute, RouterLink } from "@angular/router"
 import { catchError, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
 import { HlmBadge } from "@spartan-ng/helm/badge"
@@ -20,12 +21,10 @@ import { TablePagination } from "@/app/shared/components/table-pagination/table-
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
+import { staffServicesPageContext, staffServicesPagingParams } from "./staff-services-paging"
 
 type Query = Required<PaginationParams>
 type Page = PaginationResponse<ServiceOrderSummary>
-
-/** Documented first page of the staff list; also the fallback when a read is restarted. */
-const FIRST_PAGE: Readonly<Query> = Object.freeze({ offset: 0, limit: 20 })
 
 /**
  * WP11 T2 / S4 — `/staff/services`, «Mis servicios»: the service orders the backend already scoped
@@ -38,6 +37,11 @@ const FIRST_PAGE: Readonly<Query> = Object.freeze({ offset: 0, limit: 20 })
  * session fencing stay in that store; this page owns only its query, its state feedback, its
  * cancellation and one bounded out-of-range recovery per user action.
  *
+ * Its initial offset/limit are read once, on entry, through the staff paging contract
+ * (`staff-services-paging`), so returning from a detail lands on the page the staff member came
+ * from; later navigation stays page state and is not written back to the URL. Every row link carries
+ * the effective page it has verified, never the requested size and never a bare id.
+ *
  * The records are cards, not a table, because this surface is used on a phone in the field. Status
  * text and schedule date/clock text are printed exactly as the server supplied them: no transition
  * table, no status catalog, no timezone shift and no KPI, filter or total is derived here.
@@ -45,6 +49,7 @@ const FIRST_PAGE: Readonly<Query> = Object.freeze({ offset: 0, limit: 20 })
 @Component({
   selector: "app-staff-services-page",
   imports: [
+    RouterLink,
     CatalogFrame,
     TablePagination,
     BadgeTone,
@@ -64,7 +69,10 @@ const FIRST_PAGE: Readonly<Query> = Object.freeze({ offset: 0, limit: 20 })
 export class StaffServicesPage implements OnInit {
   private readonly store = inject(ServiceOrdersStore)
   private readonly destroyRef = inject(DestroyRef)
-  private readonly requested = signal<Query>({ ...FIRST_PAGE })
+  private readonly route = inject(ActivatedRoute)
+  /** Captured once, through the staff paging contract: entry only, never a live binding. */
+  private readonly entry = staffServicesPageContext(this.route.snapshot.queryParamMap)
+  private readonly requested = signal<Query>(this.entry)
   private readonly admissionError = signal<OperationsError | undefined>(undefined)
   private readonly queries = new Subject<{ query: Query; force: boolean } | null>()
   private revision = 0
@@ -73,13 +81,13 @@ export class StaffServicesPage implements OnInit {
     this.revision++
     this.queries.next(null)
     this.admissionError.set(undefined)
-    this.requested.set({ ...FIRST_PAGE })
+    this.requested.set(this.entry)
     const generation = this.scope.generation()
     // A session replacement runs inside a transition; wait before admitting the new read.
     queueMicrotask(() => {
       if (!this.current(generation)) return
       this.recoveryUsed = false
-      this.load({ ...FIRST_PAGE })
+      this.load(this.entry)
     })
   })
 
@@ -92,6 +100,8 @@ export class StaffServicesPage implements OnInit {
     return page ? { offset: page.offset, limit: page.limit } : this.requested()
   })
   readonly currentPage = computed(() => Math.floor(this.query().offset / this.query().limit) + 1)
+  /** URL page/size pair for the row links, derived from the effective returned metadata. */
+  readonly paging = computed(() => staffServicesPagingParams(this.query()))
   readonly pageCount = computed(() =>
     Math.max(1, Math.ceil((this.result()?.total ?? 0) / this.query().limit))
   )
@@ -162,7 +172,7 @@ export class StaffServicesPage implements OnInit {
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe()
-    if (this.scope.check()) this.load({ ...FIRST_PAGE })
+    if (this.scope.check()) this.load(this.entry)
   }
 
   retry(): void {

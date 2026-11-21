@@ -77,7 +77,7 @@ function page(pagina = 0, tamanio = 20, totalElementos = 12, first = dto()) {
   }
 }
 
-async function setup(options: { server?: boolean } = {}) {
+async function setup(options: { server?: boolean; url?: string } = {}) {
   TestBed.resetTestingModule()
   const session = signal(fieldStaff())
   TestBed.configureTestingModule({
@@ -92,7 +92,7 @@ async function setup(options: { server?: boolean } = {}) {
       { provide: PLATFORM_ID, useValue: options.server ? "server" : "browser" }
     ]
   })
-  const harness = await RouterTestingHarness.create("/staff/services")
+  const harness = await RouterTestingHarness.create(options.url ?? "/staff/services")
   const fixture = harness.fixture
   const settle = async () => {
     harness.detectChanges()
@@ -249,6 +249,28 @@ describe("StaffServicesPage", () => {
     expect(s.element.textContent).toContain("Propiedad 1001")
     expect(s.element.textContent).toContain("1–5 de 5")
     s.http.expectNone(() => true)
+  })
+
+  it("reads the entry page from page/size and lets each row link carry that effective page", async () => {
+    const s = await setup({ url: "/staff/services?page=2&size=5" })
+    s.request(2, 5).flush(page(2, 5, 12))
+    await s.settle()
+    expect(s.element.textContent).toContain("11–12 de 12")
+    // The row link publishes the effective page, not the requested one and not a bare id.
+    const row = Array.from(s.element.querySelectorAll<HTMLAnchorElement>("a")).find(
+      item => item.textContent?.trim() === "OS-2026-000017"
+    )
+    expect(row?.getAttribute("href")).toBe("/staff/services/17?page=2&size=5")
+    s.http.expectNone(() => true)
+  })
+
+  it("falls back to the whole first page for a malformed or oversized pair", async () => {
+    // A size above the documented maximum is refused, never silently clamped to it.
+    const oversized = await setup({ url: "/staff/services?page=1&size=101" })
+    oversized.request(0, 20).flush(page(0, 20, 12))
+    await oversized.settle()
+    expect(oversized.element.textContent).toContain("1–12 de 12")
+    oversized.http.expectNone(() => true)
   })
 
   it("dispatches no read on the server platform", async () => {

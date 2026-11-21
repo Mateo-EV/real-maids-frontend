@@ -30,6 +30,14 @@ export const STAFF_ROUTES: Routes = [
           import("./presentation/pages/staff-services-page/staff-services-page").then(
             component => component.StaffServicesPage
           )
+      },
+      {
+        path: "services/:id",
+        title: "Detalle del servicio | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/staff-service-detail-page/staff-service-detail-page").then(
+            component => component.StaffServiceDetailPage
+          )
       }
     ]
   }

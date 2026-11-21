@@ -44,7 +44,14 @@
           @for (service of rows(); track service.id) {
             <li class="flex min-w-0 flex-col rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-3">
-                <h2 class="min-w-0 flex-1 text-sm font-semibold break-words">{{ service.code }}</h2>
+                <h2 class="min-w-0 flex-1 text-sm font-semibold break-words">
+                  <a
+                    class="underline-offset-4 hover:underline focus-visible:underline"
+                    [routerLink]="['/staff/services', service.id]"
+                    [queryParams]="paging()"
+                    >{{ service.code }}</a
+                  >
+                </h2>
                 <span
                   hlmBadge
                   variant="outline"

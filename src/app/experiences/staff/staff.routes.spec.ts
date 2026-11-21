@@ -126,14 +126,71 @@ describe("staff routes", () => {
     expect(staff.canActivate).toEqual([staffGuard])
     expect(staff.loadComponent).toBeTypeOf("function")
     const children = staff.children!
-    // No dead entries: `/staff` opens the only implemented section.
-    expect(children.map(route => route.path)).toEqual(["", "services"])
+    // No dead entries: `/staff` opens the only implemented section, and its detail follows the list.
+    expect(children.map(route => route.path)).toEqual(["", "services", "services/:id"])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("services")
     expect(children[1].title).toBe("Mis servicios | The Real Maids")
     expect(children[1].loadComponent).toBeTypeOf("function")
     expect(children[1].canActivate).toBeUndefined()
     expect(children[1].providers).toBeUndefined()
+    expect(children[2].title).toBe("Detalle del servicio | The Real Maids")
+    expect(children[2].loadComponent).toBeTypeOf("function")
+    // The detail inherits the tree's guard: it never repeats or invents its own.
+    expect(children[2].canActivate).toBeUndefined()
+    expect(children[2].providers).toBeUndefined()
+  })
+
+  it("opens one assigned service detail inside the same guarded shell", async () => {
+    const auth = setup(fieldStaff())
+    const harness = await RouterTestingHarness.create("/staff/services/17")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    expect(TestBed.inject(Router).url).toBe("/staff/services/17")
+    const element = harness.routeNativeElement!
+    expect(element.tagName.toLowerCase()).toBe("app-staff-shell")
+    // Same shell, same single section: the detail is not a second destination.
+    expect(element.querySelector("app-staff-service-detail-page")).not.toBeNull()
+    expect(element.querySelector("app-staff-services-page")).toBeNull()
+    expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
+    const nav = element.querySelector('nav[aria-label="Navegación del personal"]')!
+    expect(Array.from(nav.querySelectorAll("a")).map(link => link.getAttribute("href"))).toEqual([
+      "/staff/services"
+    ])
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      "http://localhost:8080/api/ordenes/17"
+    )
+    // Reachability is caller-relative: no staff id, no filter and no query parameter travels.
+    expect(request.request.params.keys()).toEqual([])
+    request.flush({
+      orden: order(),
+      propiedad: {
+        idPropiedad: 31,
+        idCliente: 88,
+        alias: "Casa centro",
+        direccion: "Av. Siempre Viva 742",
+        ciudad: "Santiago",
+        estadoRegion: "Metropolitana",
+        codigoPostal: "8320000",
+        areaM2: 120.5,
+        numeroAmbientes: 4,
+        numeroBanos: 2,
+        instruccionesAcceso: null,
+        codigoPuerta: null,
+        tieneMascotas: true,
+        activo: true,
+        fechaCreacion: stamp
+      },
+      historial: [],
+      programaciones: [order().programacion]
+    })
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    expect(element.textContent).toContain("OS-2026-000017")
+    expect(element.textContent).toContain("Cliente Asignado")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
+    expect(auth.session()?.role).toBe("PERSONAL_CAMPO")
   })
 
   it("protects the staff experience for anonymous visitors without any read or shell", async () => {
@@ -216,6 +273,24 @@ describe("staff routes", () => {
     await harness.fixture.whenStable()
     expect(TestBed.inject(Router).url).toBe("/portal")
     expect(harness.routeNativeElement?.textContent).toContain("Portal destination")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
+  })
+
+  it("sends a customer session from the staff detail to the portal", async () => {
+    setup(customer())
+    const harness = await RouterTestingHarness.create("/staff/services/17")
+    await harness.fixture.whenStable()
+    expect(TestBed.inject(Router).url).toBe("/portal")
+    expect(harness.routeNativeElement?.textContent).toContain("Portal destination")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
+  })
+
+  it("sends a backoffice session out of the staff detail", async () => {
+    setup(administrator())
+    const harness = await RouterTestingHarness.create("/staff/services/17")
+    await harness.fixture.whenStable()
+    expect(TestBed.inject(Router).url).toBe("/admin")
+    expect(harness.routeNativeElement?.textContent).toContain("Admin destination")
     TestBed.inject(HttpTestingController).expectNone(() => true)
   })
 
