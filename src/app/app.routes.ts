@@ -36,6 +36,14 @@ export const routes: Routes = [
       import("./experiences/portal/portal.routes").then(routes => routes.PORTAL_ROUTES)
   },
   {
+    // WP11 T2/S3: the field staff experience. Its own lazy group and shell, guarded by the same
+    // audience decision, so a `PERSONAL_CAMPO` session stays here and every other role is sent to
+    // the experience it owns.
+    path: "",
+    loadChildren: () =>
+      import("./experiences/staff/staff.routes").then(routes => routes.STAFF_ROUTES)
+  },
+  {
     path: "**",
     redirectTo: "login"
   }

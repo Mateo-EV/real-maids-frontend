@@ -17,11 +17,25 @@ import {
 } from "@angular/router"
 import { EMPTY, firstValueFrom, isObservable, Observable, of, Subject, throwError } from "rxjs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { authGuard, guestGuard } from "./auth.guard"
+import { authGuard, guestGuard, portalGuard, staffGuard } from "./auth.guard"
 
 describe("auth guards", () => {
   const authPersistenceKeyPrefix = "real-maids.auth.v1:"
   const session = AuthSession.create("Demo", "demo@example.com")
+  /** WP11 S3: the field staff label the backend returns in `PerfilResponse.rol`. */
+  const fieldStaffSession = () =>
+    AuthSession.create(
+      "Personal Campo",
+      "campo@example.test",
+      "PERSONAL_CAMPO",
+      null,
+      11,
+      3,
+      "es",
+      []
+    )
+  const customerSession = () =>
+    AuthSession.create("Cliente", "cliente@example.test", "CLIENTE", null, 12, 4, "es", [])
   let currentUser: Subject<Result<AuthSession, AuthError>>
   const me = vi.fn()
 
@@ -207,6 +221,51 @@ describe("auth guards", () => {
     ;(check(guestGuard) as Observable<boolean | UrlTree>).subscribe(next)
     currentUser.next(Result.failure(new AuthError("UNEXPECTED")))
     expect(next).toHaveBeenCalledWith(true)
+  })
+
+  // WP11 T2/S3: the shared decision, not a second guard, owns `/staff` too.
+  it("guards /staff with the same shared decision", () => {
+    expect(portalGuard).toBe(authGuard)
+    expect(staffGuard).toBe(authGuard)
+  })
+
+  it("sends a field-staff session out of the backoffice to its own experience", async () => {
+    me.mockReturnValue(of(Result.success(fieldStaffSession())))
+    const decision = await firstValueFrom(
+      check(staffGuard, "/admin/operations/requests") as Observable<boolean | UrlTree>
+    )
+    expect(decision).toBeInstanceOf(UrlTree)
+    expect(TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe("/staff")
+  })
+
+  it("allows a field-staff session to open /staff", async () => {
+    me.mockReturnValue(of(Result.success(fieldStaffSession())))
+    const decision = await firstValueFrom(
+      check(staffGuard, "/staff/services") as Observable<boolean | UrlTree>
+    )
+    expect(decision).toBe(true)
+  })
+
+  it("keeps a customer out of /staff", async () => {
+    me.mockReturnValue(of(Result.success(customerSession())))
+    const decision = await firstValueFrom(
+      check(staffGuard, "/staff/services") as Observable<boolean | UrlTree>
+    )
+    expect(TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe("/portal")
+  })
+
+  it("keeps the backoffice audience out of /staff", async () => {
+    me.mockReturnValue(of(Result.success(session)))
+    const decision = await firstValueFrom(
+      check(staffGuard, "/staff/services") as Observable<boolean | UrlTree>
+    )
+    expect(TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe("/admin")
+  })
+
+  it("sends a field-staff guest to /staff instead of the backoffice", async () => {
+    me.mockReturnValue(of(Result.success(fieldStaffSession())))
+    const decision = await firstValueFrom(check(guestGuard) as Observable<boolean | UrlTree>)
+    expect(TestBed.inject(Router).serializeUrl(decision as UrlTree)).toBe("/staff")
   })
 
   it.each([authGuard, guestGuard])("fails closed on observable errors: %s", guard => {

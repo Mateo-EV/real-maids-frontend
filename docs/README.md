@@ -1312,3 +1312,76 @@ The last instance was the prospecto (lead) detail and, by declaration, `PROPERTY
 
 Pending acceptance: live backend/CORS run with a real `404` on the prospecto detail (cross-tenant or
 soft-deleted record) and Chrome/Edge/Firefox keyboard/responsive checks of the new absence state.
+
+## WP11 — Field staff assigned services (T1–T4)
+
+M05/RF10/HU10/P09 with M06/RF07/HU07/P07 context (RNF09/RNF10/RNF12). The field staff audience now
+has its own experience at `/staff`: the services the backend already assigned to the authenticated
+collaborator, one of them in detail, and — under correction, see the last bullet — the two execution
+moves that role carries (`98a6b68`, `d94ed9b` with `1602b82`, `854e4cc`, `6b0a94d`).
+
+- **Audience, not permissions**: `/staff` is the third guarded lazy family, composed exactly like
+  `/admin` and `/portal`: one shell with its own navigation, its own `Salir`, and the same audience
+  decision in front of it. The decision is the role label the backend returned in the profile
+  (`AuthSession.role`) — the customer audience is the backend's `CLIENTE`, the field staff audience is
+  its `PERSONAL_CAMPO` label, the seeded role behind `PERSONAL_LEER_PROPIO`, `ORDEN_LEER_ASIGNADA` and
+  `ORDEN_ESTADO_ASIGNADA` — and everybody else belongs to `/admin`. No permission, role id or inferred
+  user type is consulted, and every redirect target is the home derived from that same label, so the
+  three experiences cannot bounce a session between them.
+- **Caller scope, not a permission claim**: the backend scopes every assigned-order read through the
+  staff record of the session, so the client sends no staff id, claims no assignment and filters
+  nothing locally. Only `page`/`size` travel on the list. «Mis servicios» reuses the existing root
+  `ServiceOrdersStore` — no second store, no copied result array, no local slicing and no invented
+  total — and keeps its documented 30000 ms success-only freshness, shared ref-counted reads, same-key
+  stale data, pinned registry and session/SSR fencing. The pages own only their route identity, their
+  state feedback and their cancellation.
+- **List projection**: supplied code, supplied status text in a badge whose text carries the value,
+  supplied property, service type and schedule date with the start/end clock text printed literally.
+  Records are a real table above 64rem of available container width and cards below it, both labelled
+  `Mis servicios de limpieza`; each row links to its own detail carrying the effective page. Loading,
+  `Actualizando servicios…` over verified rows, verified empty, a distinct out-of-range empty state, a
+  retryable error that keeps the verified data with a GET-only `Reintentar`, and one fenced
+  out-of-range recovery per user action. No filter, KPI or administrative affordance is added.
+- **Detail and its two absences**: `/staff/services/:id` prints what the server supplied — id, code,
+  customer, property, service type, estimated duration and amount as text, register/update instants as
+  the supplied UTC values, the schedule date and clock text, the assigned staff by name and role, and
+  the observation as plain text — with `No registrado` for nullable values. The supplied property
+  block is filtered by field: access instructions and door codes are dropped from the projection and
+  reach neither the template, an accessible name nor an attribute. A `404` for someone else's order
+  arrives as the adapter's real `NOT_FOUND` (`requestError` maps `404`), so the page renders a
+  definitive absence that replaces any verified record, states the two honest causes and offers no
+  retry, because repeating the same GET cannot change the answer; transient failures keep the
+  retryable alert. A malformed route id dispatches no read.
+- **Paging**: the staff URL publishes `page`/`size`, never `offset`/`limit`, and
+  `staff-services-paging.ts` is the only place that translates. Missing, duplicated, malformed,
+  fractional, negative, out-of-int32 or above-the-documented-maximum-100 input becomes the first page
+  0/20 as a whole pair — nothing is clamped, half-corrected or invented — and a size above the maximum
+  is never dispatched. Row and return links serialize the effective returned metadata and refuse
+  exactly what the reader refuses, so a link the experience emits is a link it accepts back.
+- **The server owns the transitions**: `changeOrderStatus` is wired through
+  `PATCH /api/ordenes/{id}/estado` with the closed six-code status and the optional observation
+  (maximum 250, trimmed, blank becomes `null`), and the response is decoded as the same order-detail
+  shape the detail `GET` already uses — not a flat DTO and not a `204`. That leaves 18 unsupported
+  methods in the operations repository. No transition table, role ACL or business clock is encoded in
+  Angular: the desired code travels untouched and a refusal is shown inline with project-owned copy.
+- **Execution moves (T4, under correction)**: only `Iniciar servicio` (`PROGRAMADA → EN_PROCESO`) and
+  `Completar servicio` (`EN_PROCESO → COMPLETADA`) are offered, because the seeded role carries only
+  `ORDEN_ESTADO_ASIGNADA`; programar, pagar and cancelar need permissions it lacks and are not
+  rendered. The confirmation captures the verified record, takes the optional observation, blocks a
+  duplicate submit and every dismissal while pending, keeps a safe inline refusal that preserves the
+  confirmation for an explicit retry, and — only on confirmed success of the current generation —
+  emits one generic message and forces exactly one fresh read. No optimistic patch, no automatic
+  retry and no undo promise. **Accepted rule for a write-side `404`, which the committed candidate
+  does not yet implement**: a `NOT_FOUND` from the `PATCH` is an ordinary refusal — the verified
+  record stays on screen, the page explains that the service is no longer available for this staff
+  member and forces exactly one read — and only when that read itself answers `NOT_FOUND` does the
+  definitive absence render, without retry. An independent review rejected the earlier treatment, so
+  T4 is documented as pending that fix, not as delivered behaviour.
+
+Pending acceptance: no live backend/CORS run for these slices; no Chrome/Edge/Firefox keyboard or
+responsive check of the shell, the list, the detail or the confirmation; no production SSR build
+recorded for them; redaction and cross-staff permission are argued from source and adapter codes, not
+proven end to end against the real API; and the advisory/refuter native review (RDD) was not executed
+for these candidates. The weekly projection was not built because the assigned-order query does not
+support it. WP11 is delivered as implementation, not as an accepted package, and no role-aware API
+authorization is claimed: the backend remains authoritative on scope, transitions and permissions.

@@ -688,7 +688,7 @@ describe("Operations request read public composition", () => {
     }
   )
 
-  it("keeps the remaining19 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
+  it("keeps the remaining18 capabilities explicitly UNSUPPORTED with zero HTTP", async () => {
     const quote = { leadId: null, customerId: 8, propertyId: 31, validUntil: null }
     const line = {
       serviceTypeId: 4,
@@ -712,7 +712,6 @@ describe("Operations request read public composition", () => {
     const reason = { name: "Motivo", description: null, isActive: true }
     const operations: Observable<Result<unknown, OperationsError>>[] = [
       repository.updateOrder(5, { estimatedAmount: null, observation: null }),
-      repository.changeOrderStatus(5, { status: "PROGRAMADA", observation: null }),
       repository.getQuotes({}),
       repository.getQuote(5),
       repository.createQuote({ ...quote, lines: [line] }),

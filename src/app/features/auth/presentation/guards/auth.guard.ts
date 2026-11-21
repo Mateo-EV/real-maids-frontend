@@ -18,13 +18,14 @@ const passwordChangeTree = (router: Router, returnUrl: string) =>
   router.createUrlTree([PASSWORD_CHANGE_PATH], { queryParams: { returnUrl } })
 
 /**
- * One decision for both protected experiences (WP10 T2 / S4). Authentication comes first, then the
- * forced password change (WP10 T16) and only then the audience rule, so a provisional session is
- * never bounced between experiences before it replaces its password.
+ * One decision for all three protected experiences (WP10 T2 / S4, WP11 T2 / S3). Authentication
+ * comes first, then the forced password change (WP10 T16) and only then the audience rule, so a
+ * provisional session is never bounced between experiences before it replaces its password.
  *
- * The rule is symmetric — a customer belongs to `/portal` and every other role to `/admin` — so the
- * same guard protects both trees and a wrong-audience redirect always lands on the home of the
- * audience that owns the session, which that audience's guard allows.
+ * The rule is symmetric — a customer belongs to `/portal`, a field staff session to `/staff` and
+ * every other role to `/admin` — so the same guard protects the three trees and a wrong-audience
+ * redirect always lands on the home of the audience that owns the session, which that audience's
+ * guard allows.
  */
 const protectedExperience: CanActivateFn = (_route, state) => {
   const authStore = inject(AuthStore)
@@ -47,6 +48,9 @@ export const authGuard: CanActivateFn = protectedExperience
 
 /** Protects the customer portal (`/portal`) with the same decision. */
 export const portalGuard: CanActivateFn = protectedExperience
+
+/** Protects the field staff experience (`/staff`) with the same decision. */
+export const staffGuard: CanActivateFn = protectedExperience
 
 export const guestGuard: CanActivateFn = () => {
   const authStore = inject(AuthStore)

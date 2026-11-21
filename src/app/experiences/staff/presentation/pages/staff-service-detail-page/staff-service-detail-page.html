@@ -1,0 +1,172 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <app-catalog-frame
+    titleId="staff-service-detail-title"
+    title="Detalle del servicio"
+    description="Información registrada del servicio que tienes asignado"
+    [busy]="!!detail()?.loading || !!detail()?.refreshing"
+  >
+    <div catalogControls class="flex flex-wrap gap-2">
+      @if (action(); as current) {
+        <button
+          hlmBtn
+          type="button"
+          [disabled]="!!detail()?.loading || !!detail()?.refreshing"
+          (click)="startOrComplete()"
+        >
+          {{ current.label }}
+        </button>
+      }
+      <a hlmBtn variant="outline" routerLink="/staff/services" [queryParams]="backContext()"
+        >Volver a mis servicios</a
+      >
+    </div>
+    @if (invalid()) {
+      <div class="p-5" data-detail-invalid>
+        <div hlmAlert role="alert">
+          <h2 hlmAlertTitle>Servicio no disponible</h2>
+          <p hlmAlertDescription>
+            El enlace no corresponde a un servicio válido. Vuelve a Mis servicios y abre uno de tu
+            lista.
+          </p>
+        </div>
+      </div>
+    } @else if (notFound()) {
+      <div class="p-5" data-detail-unavailable>
+        <div hlmAlert role="alert">
+          <h2 hlmAlertTitle>Servicio no disponible</h2>
+          <p hlmAlertDescription>
+            Este servicio no está disponible en tus asignaciones. Puede que ya no exista o que
+            pertenezca a otro miembro del personal; volver a consultarlo no cambiará el resultado.
+          </p>
+        </div>
+      </div>
+    } @else {
+      @if (detail()?.loading) {
+        <div
+          role="status"
+          data-detail-loading
+          class="flex min-h-64 items-center justify-center gap-3"
+        >
+          <hlm-spinner />Cargando servicio…
+        </div>
+      }
+      @if (detail()?.refreshing) {
+        <p role="status" class="px-5 py-2 text-sm text-muted-foreground">Actualizando servicio…</p>
+      }
+      @if (error()) {
+        <div class="p-5" data-detail-error>
+          <div hlmAlert variant="destructive" role="alert">
+            <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+            <div hlmAlertDescription>
+              @if (record()) {
+                <p>Los datos pueden estar desactualizados.</p>
+              }
+            </div>
+          </div>
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            class="mt-4"
+            [disabled]="detail()?.loading || detail()?.refreshing"
+            (click)="retry()"
+          >
+            Reintentar
+          </button>
+        </div>
+      }
+      @if (refusalMessage(); as message) {
+        <div class="px-5 pt-4" data-detail-refusal>
+          <div hlmAlert variant="destructive" role="alert">
+            <h2 hlmAlertTitle>El servicio ya no está disponible para tu usuario</h2>
+            <p hlmAlertDescription>{{ message }}</p>
+          </div>
+        </div>
+      }
+      @if (confirmation(); as message) {
+        <div class="px-5 pt-4" data-detail-confirmation>
+          <div hlmAlert role="status">
+            <p hlmAlertDescription>{{ message }}</p>
+          </div>
+        </div>
+      }
+      @if (record(); as service) {
+        <div class="flex min-w-0 flex-col gap-6 p-5 sm:p-6" data-detail-record>
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="min-w-0 flex-1 text-base font-semibold break-words">
+              {{ service.order.code }}
+            </h2>
+            <span
+              hlmBadge
+              variant="outline"
+              [appBadgeTone]="service.order.status"
+              badgeToneKind="order-status"
+              >{{ service.order.statusName }}</span
+            >
+          </div>
+          <dl class="grid min-w-0 gap-x-8 gap-y-5 sm:grid-cols-2">
+            @for (field of profile(); track field[0]) {
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ field[0] }}</dt>
+                <dd class="mt-1 text-sm break-words">{{ field[1] ?? "No registrado" }}</dd>
+              </div>
+            }
+          </dl>
+          <section aria-labelledby="staff-service-schedule-title" class="min-w-0">
+            <h2 id="staff-service-schedule-title" class="text-sm font-semibold">Programación</h2>
+            @if (schedule(); as planned) {
+              <dl class="mt-3 grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-3">
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">Fecha</dt>
+                  <dd class="mt-1 text-sm break-words">{{ planned.date }}</dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">Hora de inicio</dt>
+                  <dd class="mt-1 text-sm">{{ planned.startTime }}</dd>
+                </div>
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">Hora de fin</dt>
+                  <dd class="mt-1 text-sm">{{ planned.endTime ?? "No registrado" }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="mt-2 text-sm text-muted-foreground">Sin programación</p>
+            }
+          </section>
+          <section aria-labelledby="staff-service-property-title" class="min-w-0">
+            <h2 id="staff-service-property-title" class="text-sm font-semibold">Propiedad</h2>
+            <dl class="mt-3 grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2">
+              @for (field of propertyFields(); track field[0]) {
+                <div class="min-w-0">
+                  <dt class="text-xs text-muted-foreground">{{ field[0] }}</dt>
+                  <dd class="mt-1 text-sm break-words">{{ field[1] ?? "No registrado" }}</dd>
+                </div>
+              }
+            </dl>
+          </section>
+          <section aria-labelledby="staff-service-team-title" class="min-w-0">
+            <h2 id="staff-service-team-title" class="text-sm font-semibold">Equipo asignado</h2>
+            @if (staff().length) {
+              <ul class="mt-3 flex flex-col gap-2">
+                @for (member of staff(); track $index) {
+                  <li class="flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm">
+                    <span class="font-medium break-words">{{ member[0] }}</span>
+                    <span class="text-xs text-muted-foreground">{{ member[1] }}</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="mt-2 text-sm text-muted-foreground">Sin personal asignado</p>
+            }
+          </section>
+          <section aria-labelledby="staff-service-observation-title" class="min-w-0">
+            <h2 id="staff-service-observation-title" class="text-sm font-semibold">Observación</h2>
+            <p class="mt-2 max-w-prose text-sm leading-relaxed break-words whitespace-pre-wrap">
+              {{ observation() ?? "No registrado" }}
+            </p>
+          </section>
+        </div>
+      }
+    }
+  </app-catalog-frame>
+</main>
