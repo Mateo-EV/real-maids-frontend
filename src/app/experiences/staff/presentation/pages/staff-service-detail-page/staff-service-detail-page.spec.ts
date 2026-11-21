@@ -361,3 +361,205 @@ describe("StaffServiceDetailPage", () => {
     s.http.expectNone(() => true)
   })
 })
+
+/** The supplied detail with one other state, to render the actions the server supplies. */
+function detailInState(status: string, statusName: string) {
+  const base = detail()
+  return { ...base, orden: { ...base.orden, estado: status, estadoNombre: statusName } }
+}
+
+type DetailHarness = Awaited<ReturnType<typeof setup>>
+
+/**
+ * WP11 T4/S1–S2 — the assigned staff member's own execution moves on the detail page.
+ *
+ * Only the two documented moves of an assigned collaborator exist, each one offered by the state
+ * the server supplied: `PROGRAMADA` → `EN_PROCESO` and `EN_PROCESO` → `COMPLETADA`. The client never
+ * decides whether a transition is legal and never invents a permission: the desired code travels to
+ * `PATCH /api/ordenes/{id}/estado` and every refusal comes back from the server.
+ */
+describe("StaffServiceDetailPage status actions", () => {
+  const statusPatch = (s: DetailHarness, id = 17) =>
+    s.http.expectOne({ url: `${api}/${id}/estado`, method: "PATCH" })
+  const dialogHost = () => document.querySelector<HTMLElement>("app-staff-service-status-dialog")
+  const dialogText = () => dialogHost()?.textContent ?? ""
+  const dialogButton = (label: string) =>
+    Array.from(dialogHost()?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+      item => item.textContent?.trim() === label
+    )
+  const settleDialog = async (s: DetailHarness) => {
+    // The overlay lives outside the routed fixture, so its own tick is awaited explicitly.
+    await new Promise(resolve => setTimeout(resolve))
+    await s.settle()
+  }
+  const openDialog = async (s: DetailHarness, label: string) => {
+    await s.click(s.button(label), label)
+    await settleDialog(s)
+  }
+  const fillObservation = async (s: DetailHarness, value: string) => {
+    const field = dialogHost()!.querySelector<HTMLTextAreaElement>("#staff-status-observation")!
+    field.value = value
+    field.dispatchEvent(new Event("input"))
+    await settleDialog(s)
+  }
+  const submitDialog = async (s: DetailHarness) => {
+    const confirm = dialogHost()!.querySelector<HTMLButtonElement>("button[type=submit]")
+    expect(confirm).not.toBeNull()
+    confirm!.click()
+    await settleDialog(s)
+  }
+  const loaded = async (status = "PROGRAMADA", statusName = "Programada") => {
+    const s = await setup()
+    s.detailRequest().flush(detailInState(status, statusName))
+    await s.settle()
+    return s
+  }
+
+  it.each([
+    ["PROGRAMADA", "Programada", "Iniciar servicio", "Completar servicio"],
+    ["EN_PROCESO", "En proceso", "Completar servicio", "Iniciar servicio"],
+    ["PENDIENTE", "Pendiente", undefined, "Iniciar servicio"],
+    ["COMPLETADA", "Completada", undefined, "Iniciar servicio"],
+    ["PAGADO", "Pagado", undefined, "Iniciar servicio"],
+    ["CANCELADA", "Cancelada", undefined, "Iniciar servicio"]
+  ])(
+    "offers only the execution move of the supplied %s state",
+    async (status, statusName, offered, absent) => {
+      const s = await loaded(status, statusName)
+      expect(s.element().textContent).toContain(statusName)
+      if (offered) expect(s.button(offered)).toBeDefined()
+      else {
+        expect(s.button("Iniciar servicio")).toBeUndefined()
+        expect(s.button("Completar servicio")).toBeUndefined()
+      }
+      // Never the other move, and never a free status picker or an invented transition.
+      expect(s.button(absent)).toBeUndefined()
+      expect(s.element().querySelectorAll("select").length).toBe(0)
+      expect(s.element().textContent).not.toMatch(/Cambiar estado|Marcar pagad|Cancelar servicio/)
+      s.http.expectNone(() => true)
+    }
+  )
+
+  it("confirms the named service and the current→desired state, then refreshes it exactly once", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    const text = dialogText()
+    expect(text).toContain("OS-2026-000017")
+    expect(text).toContain("Casa centro")
+    expect(text).toContain("Programada")
+    expect(text).toContain("En proceso")
+    // The confirmation never carries operational access data, on any audience.
+    expect(text).not.toContain(accessInstructions)
+    expect(text).not.toContain(doorCode)
+    expect(text).not.toContain(staffPhone)
+    // Nothing is written before the explicit confirmation.
+    s.http.expectNone(r => r.method === "PATCH")
+
+    await fillObservation(s, "  Llegué al domicilio  ")
+    await submitDialog(s)
+    const patch = statusPatch(s)
+    expect(patch.request.body).toEqual({
+      estado: "EN_PROCESO",
+      observacion: "Llegué al domicilio"
+    })
+    expect(patch.request.transferCache).toBe(false)
+    // No optimistic state and no feedback before the server confirms.
+    expect(s.element().textContent).toContain("Programada")
+    expect(s.element().querySelector("[data-detail-confirmation]")).toBeNull()
+
+    patch.flush(detailInState("EN_PROCESO", "En proceso"))
+    await settleDialog(s)
+    // One confirmation and exactly one fresh read of that order.
+    expect(s.element().querySelector("[data-detail-confirmation]")?.textContent).toContain(
+      "Servicio iniciado"
+    )
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+    expect(s.element().textContent).toContain("En proceso")
+    expect(dialogHost()).toBeNull()
+    // The refreshed state now offers only the next documented move.
+    expect(s.button("Completar servicio")).toBeDefined()
+    expect(s.button("Iniciar servicio")).toBeUndefined()
+    s.http.expectNone(() => true)
+  })
+
+  it("blocks a second submit while the first one is pending", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    const first = statusPatch(s)
+    // Pending: the dialog is still open and a repeated click cannot dispatch again.
+    const pendingSubmit = dialogHost()!.querySelector<HTMLButtonElement>("button[type=submit]")!
+    expect(pendingSubmit.disabled).toBe(true)
+    // Pending state also owns the dismissal guard: Cancel cannot abandon a dispatched write.
+    expect(dialogButton("Cancelar")!.disabled).toBe(true)
+    await submitDialog(s)
+    s.http.expectNone(() => true)
+    expect(dialogHost()).not.toBeNull()
+    first.flush(detailInState("EN_PROCESO", "En proceso"))
+    await settleDialog(s)
+    s.http.expectNone(r => r.method === "PATCH")
+    // The single confirmed change leaves the dialog and forces exactly one fresh read.
+    expect(dialogHost()).toBeNull()
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+    s.http.expectNone(() => true)
+  })
+
+  it("never dispatches an observation over 250 characters", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await fillObservation(s, "a".repeat(251))
+    await submitDialog(s)
+    s.http.expectNone(r => r.method === "PATCH")
+    expect(dialogHost()).not.toBeNull()
+    expect(dialogText()).toMatch(/250/)
+    // The same dialog still works with a bounded observation.
+    await fillObservation(s, "a".repeat(250))
+    await submitDialog(s)
+    expect(statusPatch(s).request.body.estado).toBe("EN_PROCESO")
+  })
+
+  it("keeps the dialog and the record usable when the server refuses the change", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush(
+      { mensaje: "RAW BACKEND RULE TEXT" },
+      { status: 400, statusText: "Bad Request" }
+    )
+    await settleDialog(s)
+    const text = dialogText()
+    expect(text).toMatch(/no se confirmó/i)
+    // Safe copy only, never the raw backend text.
+    expect(text).not.toContain("RAW BACKEND RULE TEXT")
+    expect(dialogHost()).not.toBeNull()
+    // No read was forced by the refusal and the verified record is untouched.
+    s.http.expectNone(() => true)
+    expect(s.element().textContent).toContain("OS-2026-000017")
+    expect(s.element().querySelector("[data-detail-confirmation]")).toBeNull()
+    // The failure stays actionable: the same confirmation can be retried explicitly.
+    await submitDialog(s)
+    expect(statusPatch(s).request.body.estado).toBe("EN_PROCESO")
+  })
+
+  it("falls back to the definitive absence state when the order is not found", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush(
+      { mensaje: "RAW INTERNAL DETAIL" },
+      { status: 404, statusText: "Not Found" }
+    )
+    await settleDialog(s)
+    expect(dialogHost()).toBeNull()
+    const text = s.element().textContent!
+    expect(text).toMatch(/volver a consultarlo no cambiará el resultado/i)
+    expect(text).not.toContain("RAW INTERNAL DETAIL")
+    expect(s.element().querySelector("[data-detail-unavailable]")).not.toBeNull()
+    // A 404 is never retried and never forces another read of a record that is gone.
+    expect(s.button("Reintentar")).toBeUndefined()
+    expect(s.button("Iniciar servicio")).toBeUndefined()
+    s.http.expectNone(() => true)
+  })
+})

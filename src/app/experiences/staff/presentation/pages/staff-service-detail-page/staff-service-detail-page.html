@@ -6,6 +6,16 @@
     [busy]="!!detail()?.loading || !!detail()?.refreshing"
   >
     <div catalogControls class="flex flex-wrap gap-2">
+      @if (action(); as current) {
+        <button
+          hlmBtn
+          type="button"
+          [disabled]="!!detail()?.loading || !!detail()?.refreshing"
+          (click)="startOrComplete()"
+        >
+          {{ current.label }}
+        </button>
+      }
       <a hlmBtn variant="outline" routerLink="/staff/services" [queryParams]="backContext()"
         >Volver a mis servicios</a
       >
@@ -63,6 +73,13 @@
           >
             Reintentar
           </button>
+        </div>
+      }
+      @if (confirmation(); as message) {
+        <div class="px-5 pt-4" data-detail-confirmation>
+          <div hlmAlert role="status">
+            <p hlmAlertDescription>{{ message }}</p>
+          </div>
         </div>
       }
       @if (record(); as service) {

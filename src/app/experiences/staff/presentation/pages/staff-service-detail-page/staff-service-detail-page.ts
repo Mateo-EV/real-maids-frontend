@@ -1,6 +1,9 @@
 import { Component, computed, DestroyRef, inject, signal } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, RouterLink } from "@angular/router"
+import { Dialog, DialogConfig, DEFAULT_DIALOG_CONFIG } from "@angular/cdk/dialog"
+import { BrnDialogRef, BrnDialogService } from "@spartan-ng/brain/dialog"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { distinctUntilChanged, EMPTY, map, Subject, switchMap, takeUntil } from "rxjs"
 import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
 import { HlmBadge } from "@spartan-ng/helm/badge"
@@ -15,8 +18,19 @@ import {
 } from "../staff-services-page/staff-services-paging"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
+import {
+  StaffServiceStatusDialog,
+  StaffServiceStatusDialogContext,
+  StaffServiceStatusTarget
+} from "./staff-service-status-dialog/staff-service-status-dialog"
 
 type DetailField = readonly [label: string, value: string | number | null]
+
+/** One of the two documented execution moves, named from the state the server supplied. */
+interface StatusAction {
+  readonly target: StaffServiceStatusTarget
+  readonly label: string
+}
 
 /**
  * WP11 T3 / S4–S5 — `/staff/services/:id`, one of the field staff member's own assigned services,
@@ -40,11 +54,33 @@ type DetailField = readonly [label: string, value: string | number | null]
  * state feedback and its GET-only retry. A route-id change replaces the read; a query-only change
  * only refreshes the return context.
  *
+ * WP11 T4 / S1–S2 adds the caller's own execution moves: `PROGRAMADA` offers «Iniciar servicio»
+ * (`EN_PROCESO`) and `EN_PROCESO` offers «Completar servicio» (`COMPLETADA`). Those are the two
+ * documented moves of an assigned collaborator, offered by the supplied state — not an inferred ACL
+ * and not a client transition table. The PATCH goes through the existing stateless
+ * `ChangeOrderStatusUseCase`; no URL is built here, nothing is retried automatically, and nothing is
+ * patched optimistically. A refusal stays visible and actionable. Only a confirmed success emits one
+ * confirmation and forces exactly one fresh read of that order.
+ *
  * Helm dependencies are declared by name, never as a spread of an imported `*Imports` constant: the
  * dev server re-applies this metadata through `ɵɵnamespaces` and resolves those entries by index.
  */
 @Component({
   selector: "app-staff-service-detail-page",
+  providers: [
+    HlmDialogService,
+    BrnDialogService,
+    Dialog,
+    {
+      // Route-local: an explicit owner/away/session guard owns dismissal, never the router.
+      provide: DEFAULT_DIALOG_CONFIG,
+      useFactory: () => ({
+        ...new DialogConfig(),
+        ...inject(DEFAULT_DIALOG_CONFIG, { optional: true, skipSelf: true }),
+        closeOnNavigation: false
+      })
+    }
+  ],
   imports: [
     RouterLink,
     CatalogFrame,
@@ -62,12 +98,22 @@ export class StaffServiceDetailPage {
   private readonly route = inject(ActivatedRoute)
   private readonly destroyRef = inject(DestroyRef)
   private readonly orders = inject(ServiceOrdersStore)
+  private readonly dialogs = inject(HlmDialogService)
+  private dialog: BrnDialogRef | undefined
+  private dialogIdentity: object | undefined
+  private readonly ownerChanged = new Subject<void>()
   /** `null` cancels the current observation without issuing a replacement read. */
   private readonly loads = new Subject<{ id: number; force: boolean } | null>()
   private readonly params = signal(this.route.snapshot.queryParamMap)
+  /** Id the backend answered 404 for: absence is definitive within this visit. */
+  private readonly absent = signal<number | null>(null)
   readonly id = signal<number | null>(null)
+  readonly confirmation = signal("")
   private readonly scope = createSessionReadScope(() => {
-    // A replaced session must not inherit the previous identity's read or its verified record.
+    // A replaced session must not inherit the previous identity's read, dialog or verified record.
+    this.stopDialog()
+    this.confirmation.set("")
+    this.absent.set(null)
     this.loads.next(null)
     const generation = this.scope.generation()
     queueMicrotask(() => {
@@ -80,8 +126,12 @@ export class StaffServiceDetailPage {
     const id = this.id()
     return id === null ? undefined : this.orders.selectOrder(id)
   })
-  /** Authoritative absence: the backend answered 404 for this caller. */
-  readonly notFound = computed(() => this.detail()?.error?.code === "NOT_FOUND")
+  /** Authoritative absence: the backend answered 404 for this caller or for this change. */
+  readonly notFound = computed(() => {
+    const absent = this.absent()
+    const id = this.id()
+    return (absent !== null && absent === id) || this.detail()?.error?.code === "NOT_FOUND"
+  })
   readonly invalid = computed(() => this.id() === null)
   readonly unavailable = computed(() => this.invalid() || this.notFound())
   readonly record = computed(() => {
@@ -135,6 +185,20 @@ export class StaffServiceDetailPage {
         ]
       : []
   })
+  /**
+   * Exactly the two execution moves of an assigned collaborator, offered by the supplied state.
+   * Any other state (including the ones this seed cannot set) renders no action at all.
+   */
+  readonly action = computed<StatusAction | null>(() => {
+    switch (this.record()?.order.status) {
+      case "PROGRAMADA":
+        return { target: "EN_PROCESO", label: "Iniciar servicio" }
+      case "EN_PROCESO":
+        return { target: "COMPLETADA", label: "Completar servicio" }
+      default:
+        return null
+    }
+  })
   readonly schedule = computed(() => this.record()?.order.schedule ?? null)
   /** Name and role only: the supplied phone number never enters this projection. */
   readonly staff = computed<readonly DetailField[]>(() =>
@@ -160,6 +224,10 @@ export class StaffServiceDetailPage {
   })
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.stopDialog()
+      this.ownerChanged.complete()
+    })
     this.loads
       .pipe(
         switchMap(load =>
@@ -178,6 +246,10 @@ export class StaffServiceDetailPage {
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(id => {
+        // A new route identity owns no dialog and no previous absence of its own.
+        this.stopDialog()
+        this.confirmation.set("")
+        this.absent.set(null)
         this.id.set(id)
         if (id === null) this.loads.next(null)
         else this.load(id, false)
@@ -194,6 +266,68 @@ export class StaffServiceDetailPage {
     const detail = this.detail()
     if (this.destroyRef.destroyed || id === null || detail?.loading || detail?.refreshing) return
     this.load(id, true)
+  }
+
+  /**
+   * Opens the confirmation for the move the server-supplied state allows. The captured context is
+   * the code, the property and both state names: no access instructions, no door code, no staff id.
+   */
+  startOrComplete(): void {
+    const action = this.action()
+    const id = this.id()
+    const order = this.record()?.order
+    if (!action || !order || id === null || order.id !== id) return
+    const generation = this.scope.generation()
+    if (this.dialog?.open || !this.current(generation)) return
+    const identity = {}
+    this.dialogIdentity = identity
+    const current = () =>
+      !this.destroyRef.destroyed &&
+      this.dialogIdentity === identity &&
+      this.current(generation) &&
+      id === this.id() &&
+      !!this.dialog?.open
+    const context: StaffServiceStatusDialogContext = {
+      order: {
+        id: order.id,
+        code: order.code,
+        propertyName: order.propertyName,
+        status: order.status,
+        statusName: order.statusName
+      },
+      target: action.target,
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged.asObservable(),
+      current,
+      onChanged: () => {
+        if (!current()) return
+        this.confirmation.set(
+          action.target === "EN_PROCESO" ? "Servicio iniciado." : "Servicio completado."
+        )
+        // Confirmed success alone: exactly one forced read of that order, no page reload.
+        this.load(id, true)
+      },
+      onMissing: () => {
+        if (!current()) return
+        this.confirmation.set("")
+        this.absent.set(id)
+      }
+    }
+    this.dialog = this.dialogs.open(StaffServiceStatusDialog, {
+      context,
+      disableClose: true,
+      showCloseButton: false,
+      contentClass: "sm:max-w-lg max-h-[90dvh] overflow-y-auto"
+    })
+  }
+
+  private stopDialog(): void {
+    const dialog = this.dialog
+    this.dialog = undefined
+    this.dialogIdentity = undefined
+    this.ownerChanged.next()
+    if (this.destroyRef.destroyed) dialog?.forceClose()
+    else dialog?.close()
   }
 
   private current(generation: number): boolean {
