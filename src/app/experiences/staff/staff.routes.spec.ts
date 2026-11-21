@@ -186,6 +186,21 @@ describe("staff routes", () => {
     expect(auth.session()?.role).toBe("PERSONAL_CAMPO")
   })
 
+  it("protects the bare staff path for anonymous visitors", async () => {
+    setup(null)
+    await RouterTestingHarness.create("/staff")
+    // The empty child redirect resolves first, so the captured destination is the effective section.
+    expect(TestBed.inject(Router).url).toBe("/login?returnUrl=%2Fstaff%2Fservices")
+    expect(TestBed.inject(HttpTestingController).expectNone(() => true)).toBeUndefined()
+  })
+
+  it("sends a backoffice session from the bare staff path to the backoffice", async () => {
+    setup(administrator())
+    await RouterTestingHarness.create("/staff")
+    expect(TestBed.inject(Router).url).toBe("/admin")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
+  })
+
   it("sends a backoffice session out of the staff experience", async () => {
     setup(administrator())
     const harness = await RouterTestingHarness.create("/staff/services")

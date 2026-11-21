@@ -148,6 +148,36 @@ describe("portal audience navigation", () => {
     }
   })
 
+  it("keeps unknown, empty and padded role labels in the backoffice audience", () => {
+    const labels: Array<string | null | undefined> = [
+      null,
+      undefined,
+      "",
+      "   ",
+      "  PERSONAL_CAMPO  ",
+      "PERSONAL_CAMPO_EXTRA",
+      "ADMINISTRATIVO"
+    ]
+    for (const label of labels) {
+      // Only the exact backend label, padding aside, owns the staff experience.
+      const home = label?.trim() === "PERSONAL_CAMPO" ? STAFF_HOME : ADMIN_HOME
+      expect(homeForRole(label), String(label)).toBe(home)
+      for (const url of [
+        "/admin",
+        "/admin/users",
+        "/portal",
+        "/portal/requests",
+        "/staff",
+        "/staff/services"
+      ]) {
+        const expected = audienceOf(url) === home.slice(1) ? null : home
+        const redirect = audienceRedirect(url, label)
+        expect(redirect, `${label} at ${url}`).toBe(expected)
+        expect(audienceRedirect(redirect ?? url, label), `${label} at ${redirect}`).toBeNull()
+      }
+    }
+  })
+
   it("cannot loop: the destination of a wrong-audience redirect is allowed for that role", () => {
     for (const role of [customer, fieldStaff, staff, null]) {
       for (const url of [
