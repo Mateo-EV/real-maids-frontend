@@ -44,7 +44,7 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | -------------------------------------------------------------------- |
 | T1  | `changeOrderStatus` deja de ser UNSUPPORTED: validador del body y de `OrdenDetalleResponse`, source `PATCH`, wire del repositorio y `ChangeOrderStatusUseCase` stateless, con tests                                | S1, S2 | frontend | **hecho** — `98a6b68`, 77/77 en los dos specs, `tsc` app y spec en 0 |
 | T2  | Audiencia `PERSONAL_CAMPO`: `audience-navigation` aprende la tercera audiencia, `/staff` queda protegida por el guard compartido y la lista «Mis servicios» reutiliza el `ServiceOrdersStore` root sin store nuevo | S3, S4 | frontend | in_progress                                                          |
-| T3  | Detalle propio de «Mis servicios»: `observeOrder` reutilizado, `404` fuera de alcance como ausencia definitiva y retorno a la página efectiva                                                                      | S4, S5 | frontend | pendiente                                                            |
+| T3  | Detalle propio de «Mis servicios»: `observeOrder` reutilizado, `404` fuera de alcance como ausencia definitiva y retorno a la página efectiva                                                                      | S4, S5 | frontend | **hecho** — `854e4cc`, 70/70 staff; verificado por el padre          |
 | T4  | Acciones de estado en el detalle reutilizando `ChangeOrderStatusUseCase`, con confirmación, guard de pendiente e invalidación del store tras éxito confirmado                                                      | S1, S2 | frontend | pendiente                                                            |
 
 ## Log
@@ -78,3 +78,9 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   el camino `/staff` desnudo para visitante anónimo y para sesión de backoffice. Sigue sin ejecutarse por
   nadie el mapeo caller-relative del adapter HTTP ni el 404 fuera de alcance de punta a punta, y el fencing
   de sesión de la página descansa en el contrato compartido (`session-read-scope`), no en un test propio.
+- **L8 (T3, verificado por el padre):** `854e4cc` agrega `/staff/services/:id`. El estado definitivo se
+  enciende con el código real del adapter: `requestError` mapea `404 → NOT_FOUND` y el detalle usa
+  `apiConflictContext()`, que preserva el 404 en lugar de dejarlo genérico; no es un código inventado. El
+  texto nombra las dos causas honestas del 404 y no ofrece reintento; las fallas transitorias sí. El contrato
+  de paging del staff usa `page`/`size` con fallback de par completo, sin recortar tamaños fuera de rango, y
+  los links llevan la metadata efectiva. Verificación del padre: 70/70 en 4 archivos y formato limpio.
