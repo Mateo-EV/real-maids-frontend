@@ -93,6 +93,11 @@ export class StaffDetailPage {
   })
   readonly busy = computed(() => !!this.detail()?.loading || !!this.detail()?.refreshing)
   readonly error = computed(() => this.admissionError() ?? this.detail()?.error)
+  /**
+   * An authoritative absence, not a failure: repeating the same `GET` cannot produce the record, so
+   * this state never offers a retry and never claims the data is merely stale.
+   */
+  readonly notFound = computed(() => this.error()?.code === "NOT_FOUND")
   readonly backContext = computed(() => staffPagingParams(staffPageContext(this.params())))
   readonly backState = computed(() => {
     if (!this.browser || !this.live()) return undefined

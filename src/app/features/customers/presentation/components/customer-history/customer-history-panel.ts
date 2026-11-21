@@ -44,6 +44,13 @@ export class CustomerHistoryPanel implements OnInit {
   private generation = 0
   private readonly scope = createSessionReadScope(() => this.stop())
   readonly history = computed(() => this.store.selectHistory(this.customerId(), 20))
+  /**
+   * An authoritative absence, not a failure. A `403` or a malformed module still fails the whole
+   * result with one safe retryable error; a missing customer cannot be fixed by repeating the GET.
+   */
+  readonly notFound = computed(() => this.history().error?.code === "CUSTOMER_NOT_FOUND")
+  /** A definitive absence suppresses sections: rendering records for an absent customer would lie. */
+  readonly sections = computed(() => (this.notFound() ? null : this.history().data))
 
   ngOnInit(): void {
     this.owner = this.customerId()

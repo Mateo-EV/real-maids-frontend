@@ -34,6 +34,8 @@ import { CustomerHistoryStore } from "../../state/customer-history.store"
 import { CustomerDetailPage } from "./customer-detail-page"
 
 const stamp = new Date("2026-01-01T00:00:00Z")
+const buttons = (root: ParentNode) =>
+  [...root.querySelectorAll("button")].map(b => b.textContent?.trim() ?? "")
 const property = Property.create(
   3,
   7,
@@ -311,6 +313,18 @@ describe("WP5 lazy official history", () => {
     expect(support.textContent).toContain("0–0 de 0")
     expect(support.textContent).toContain("No se devolvieron registros")
     expect(support.textContent).not.toMatch(/restringid|sin permiso|no existe historial/i)
+  })
+  it("renders the documented customer absence as a definitive state, not a retryable failure", async () => {
+    const s = await setup()
+    s.read.mockReturnValueOnce(of(Result.failure(new CustomerError("CUSTOMER_NOT_FOUND"))))
+    await s.toggle(true)
+    expect(s.panel().querySelectorAll('[role="alert"]')).toHaveLength(1)
+    expect(s.panel().querySelector("[data-history-unavailable]")).not.toBeNull()
+    expect(s.panel().textContent).toContain("ya no está disponible")
+    // A 403 or a malformed module stays retryable; an authoritative absence never is.
+    expect(buttons(s.panel())).not.toContain("Reintentar historial")
+    expect(s.panel().textContent).not.toContain("No se devolvieron registros")
+    expect(s.read).toHaveBeenCalledOnce()
   })
   it.each(["FORBIDDEN", "INVALID_RESPONSE"] as const)(
     "shows one safe overall %s failure, never three false empties; retry forces read and keeps same-key stale data",

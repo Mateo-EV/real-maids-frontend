@@ -6,24 +6,39 @@
     </p>
   }
   @if (read.error) {
-    <div hlmAlert variant="destructive" role="alert">
-      <h3 hlmAlertTitle>No se pudo consultar el historial.</h3>
-      <p hlmAlertDescription>Puede no estar disponible para tu sesión. Reintenta la consulta.</p>
-      @if (read.loaded) {
-        <p hlmAlertDescription>Los datos pueden estar desactualizados.</p>
+    <div
+      hlmAlert
+      variant="destructive"
+      role="alert"
+      [attr.data-history-unavailable]="notFound() ? '' : null"
+    >
+      @if (notFound()) {
+        <h3 hlmAlertTitle>El historial ya no está disponible.</h3>
+        <p hlmAlertDescription>
+          El cliente no existe o no está disponible para esta sesión. Volver a consultarlo no
+          cambiará el resultado.
+        </p>
+      } @else {
+        <h3 hlmAlertTitle>No se pudo consultar el historial.</h3>
+        <p hlmAlertDescription>Puede no estar disponible para tu sesión. Reintenta la consulta.</p>
+        @if (read.loaded) {
+          <p hlmAlertDescription>Los datos pueden estar desactualizados.</p>
+        }
       }
     </div>
-    <button
-      hlmBtn
-      variant="outline"
-      size="sm"
-      [disabled]="!!read.pendingReads"
-      (click)="load(true)"
-    >
-      Reintentar historial
-    </button>
+    @if (!notFound()) {
+      <button
+        hlmBtn
+        variant="outline"
+        size="sm"
+        [disabled]="!!read.pendingReads"
+        (click)="load(true)"
+      >
+        Reintentar historial
+      </button>
+    }
   }
-  @if (read.loaded && read.data; as data) {
+  @if (read.loaded && sections(); as data) {
     <p class="text-sm text-muted-foreground">
       Muestra reciente devuelta por el servidor, hasta 20 registros por sección. Los totales son
       independientes; esta vista no permite recorrer el historial completo.

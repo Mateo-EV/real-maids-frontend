@@ -3,6 +3,7 @@ import { HttpClient } from "@angular/common/http"
 import { inject, Injectable, Injector, PLATFORM_ID } from "@angular/core"
 import { catchError, defaultIfEmpty, defer, map, Observable, of, switchMap, take } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { Result } from "@/app/shared/utils/result"
@@ -45,8 +46,13 @@ export class FieldStaffHttpSource {
   getStaffById(id: number) {
     return this.request(() => {
       if (!positiveId(id)) throw failure("INVALID_DATA")
+      // The detail read documents a `404` for a missing record, so the adapter — not the
+      // interceptor — classifies it as its typed `NOT_FOUND`.
       return this.http
-        .get<unknown>(`${this.url}/${id}`, { transferCache: false })
+        .get<unknown>(`${this.url}/${id}`, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
         .pipe(map(value => staffDto(value, id)))
     })
   }
@@ -59,8 +65,13 @@ export class FieldStaffHttpSource {
           take(1),
           defaultIfEmpty(null),
           switchMap(session =>
+            // The own-profile read documents a `404` for "no staff profile linked"; it keeps its
+            // typed `NOT_FOUND` and never falls back to a guessed staff ID.
             this.http
-              .get<unknown>(`${this.url}/me`, { transferCache: false })
+              .get<unknown>(`${this.url}/me`, {
+                transferCache: false,
+                context: apiConflictContext()
+              })
               .pipe(map(value => staffDto(value, undefined, session?.id)))
           )
         )

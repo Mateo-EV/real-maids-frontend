@@ -44,6 +44,8 @@ const property = Property.create(
 )
 type CustomerResult = Result<Customer, CustomerError>
 type PropertyResult = Result<readonly Property[], CustomerError>
+const buttonLabels = (root: HTMLElement) =>
+  Array.from(root.querySelectorAll("button")).map(b => b.textContent?.trim() ?? "")
 async function setup(url = "/admin/customers/7", server = false) {
   const customers: Subject<CustomerResult>[] = [],
     properties: Subject<PropertyResult>[] = []
@@ -157,12 +159,26 @@ describe("Customer read-only detail", () => {
       expect(s.backLink()?.getAttribute("href")).toBe("/admin/customers?offset=0&limit=20")
     }
   )
-  it("separates customer failure/retry from properties and never claims empty before success", async () => {
+  it("renders the documented customer absence as a definitive state with no retry action", async () => {
     const s = await setup()
     expect(s.element().textContent).toContain("Cargando cliente")
     expect(s.listProperties).not.toHaveBeenCalled()
     await s.respondCustomer(Result.failure(new CustomerError("CUSTOMER_NOT_FOUND")))
-    expect(s.element().textContent).toContain("Puede no existir")
+    expect(s.element().textContent).toContain("ya no está disponible")
+    expect(s.element().querySelector("[data-customer-unavailable]")).not.toBeNull()
+    // An authoritative absence cannot be fixed by repeating the same GET.
+    expect(buttonLabels(s.element())).not.toContain("Reintentar cliente")
+    expect(s.listProperties).not.toHaveBeenCalled()
+    expect(s.get).toHaveBeenCalledOnce()
+  })
+  it("separates customer failure/retry from properties and never claims empty before success", async () => {
+    const s = await setup()
+    expect(s.element().textContent).toContain("Cargando cliente")
+    expect(s.listProperties).not.toHaveBeenCalled()
+    await s.respondCustomer(Result.failure(new CustomerError("NETWORK")))
+    expect(s.element().textContent).toContain("No se pudo consultar el cliente")
+    expect(s.element().querySelector("[data-customer-unavailable]")).toBeNull()
+    expect(buttonLabels(s.element())).toContain("Reintentar cliente")
     expect(s.listProperties).not.toHaveBeenCalled()
     await s.click("Reintentar cliente")
     await s.respondCustomer()

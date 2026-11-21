@@ -1193,7 +1193,9 @@ staff/customer detail that maps `CUSTOMER_NOT_FOUND`/`NOT_FOUND`.
   introduced): customer detail `GET /api/clientes/{id}` and own profile `GET /api/clientes/me`
   (`CUSTOMER_NOT_FOUND`), operations request `GET /api/solicitudes/{id}` and order
   `GET /api/ordenes/{id}` (`NOT_FOUND`), customer-support attention `GET /api/atenciones/{id}`
-  (`NOT_FOUND`). Their list endpoints do not opt in.
+  (`NOT_FOUND`), staff detail `GET /api/personal/{id}` and own staff profile `GET /api/personal/me`
+  (`NOT_FOUND`), and customer history `GET /api/clientes/{id}/historial` (`CUSTOMER_NOT_FOUND`).
+  Their list endpoints (`GET /api/personal` included) do not opt in.
 - **Consumers unchanged**: the pages already projected the authoritative absence as its own
   non-retryable state (`data-detail-unavailable`, `data-profile-missing`) and excluded it from the
   retryable error, so the fix required no page rewrite — only proof that the state is now reachable
@@ -1207,6 +1209,36 @@ staff/customer detail that maps `CUSTOMER_NOT_FOUND`/`NOT_FOUND`.
   and the retryable error does not. Observed RED: only the new opted-in/seam cases failed, while the
   pre-existing cases kept passing.
 
-Pending acceptance: live backend/CORS runs with a real cross-customer `404`, the staff
-(`/api/personal/{id}`, `/api/personal/me`) and customer-history readers whose sources sit outside this
-change and therefore still keep the generic mapping, and browser keyboard/responsive checks.
+### Same defect class: remaining readers and the missing UI state
+
+The first pass left three surfaces outside it: the two field-operations staff reads, the customer
+history read and the staff customer detail presentation. All three are now closed.
+
+- **Staff reads** `GET /api/personal/{id}` and `GET /api/personal/me` now opt in and deliver the typed
+  `NOT_FOUND` the adapter already had through the real interceptor; `GET /api/personal` (directory)
+  stays generic. [StaffDetailPage](../src/app/features/field-operations/presentation/pages/staff-detail-page/staff-detail-page.ts)
+  splits its single error alert: `NOT_FOUND` renders the definitive `data-staff-unavailable` state
+  ("no está disponible … volver a consultarlo no cambiará el resultado") with **no** `Reintentar`
+  button, while every other code keeps today's retryable alert and its retry. No page structure,
+  read, TTL, session or owner-fence changed.
+- **Customer history** `GET /api/clientes/{id}/historial` now opts in and delivers `CUSTOMER_NOT_FOUND`.
+  [CustomerHistoryPanel](../src/app/features/customers/presentation/components/customer-history/customer-history-panel.ts)
+  renders that code as the definitive `data-history-unavailable` state with no `Reintentar historial`,
+  and suppresses the module sections because rendering records for a customer the server says does not
+  exist would contradict it. The panel's existing rule is untouched: a `403` or a malformed module
+  still fails the whole result with one safe retryable error that keeps verified same-owner stale data.
+- **Staff customer detail** already received `CUSTOMER_NOT_FOUND` from its adapter, but rendered one
+  combined "no se pudo consultar el cliente. Puede no existir…" alert with a retry. It is now split:
+  `CUSTOMER_NOT_FOUND` renders the definitive `data-customer-unavailable` state without a retry
+  action, and a transient failure keeps the retryable "No se pudo consultar el cliente." alert with
+  its `Reintentar cliente`. Properties are still only requested after a verified customer.
+- **Tests**: new `field-staff-not-found-http.spec.ts` and `customer-history-not-found-http.spec.ts` run
+  the real interceptor and prove the typed code for both staff reads and for history while the staff
+  directory `404` stays generic and opted-in `403`/`5xx`/`0` keep their mapping;
+  `staff-detail-page.lifecycle.spec.ts`, `customer-detail-page.spec.ts` and `customer-history.spec.ts`
+  prove the rendered absence (attribute present, retry absent) next to a transient failure that still
+  offers the retry. Observed RED: exactly the new opt-in/page cases failed before the change; every
+  pre-existing `401`/`403`/`5xx`/network and list/write "still generic" assertion kept passing.
+
+Pending acceptance: live backend/CORS runs with a real cross-customer `404` and browser
+keyboard/responsive checks for the three states above.

@@ -1,4 +1,5 @@
 import { Injectable } from "@angular/core"
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import {
   CustomerHistory,
   CustomerRequestHistory,
@@ -133,7 +134,11 @@ export class CustomerHistoryHttpSource {
         input(id(customerId) && integer(limit) && limit > 0 && limit <= 2147483647)
         return this.t.http.get<unknown>(`${this.t.origin}/api/clientes/${customerId}/historial`, {
           params: { tamanio: limit },
-          transferCache: false
+          transferCache: false,
+          // A missing customer is documented as `404`; the adapter keeps `CUSTOMER_NOT_FOUND`
+          // instead of the interceptor's generic mapping. A `403` stays `FORBIDDEN` and any
+          // malformed module still fails the whole result.
+          context: apiConflictContext()
         })
       },
       v => {
