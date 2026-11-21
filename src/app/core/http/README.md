@@ -31,9 +31,10 @@ validation) and produce typed safe errors; they never render the server message,
 identity or contact data. Every other `400` and `409` remains generic.
 
 Opted-in detail readers today, all mapping `404` to their own typed absence instead of a generic
-failure: `GET /api/clientes/{id}`, `GET /api/clientes/me`, `GET /api/solicitudes/{id}`,
-`GET /api/ordenes/{id}` and `GET /api/atenciones/{id}`. The three collection endpoints behind those
-last reads stay un-opted-in.
+failure: `GET /api/clientes/{id}`, `GET /api/clientes/me`, `GET /api/clientes/{id}/historial`,
+`GET /api/solicitudes/{id}`, `GET /api/ordenes/{id}`, `GET /api/atenciones/{id}`,
+`GET /api/personal/{id}` and `GET /api/personal/me`. Every collection endpoint behind those reads and
+both staff directories stay un-opted-in, so an absence there is still generic.
 
 Any new call site that opts in inherits this passthrough, so it must decode only documented markers
 or documented absences instead of trusting arbitrary body fields.
@@ -41,6 +42,7 @@ or documented absences instead of trusting arbitrary body fields.
 Tests: `auth.interceptor.spec.ts` pins opted-in/default `400`, `404` and `409`, opted-in/default
 `401`, `403`, `5xx` and network behavior, and the no-replay rule; `customer-email-http.spec.ts`
 exercises the feature operations and the account markers with the real interceptor;
-`customer-not-found-http.spec.ts`, `operations-not-found-http.spec.ts` and
-`customer-support-not-found-http.spec.ts` prove the detail readers receive the `404` through the real
+`customer-not-found-http.spec.ts`, `operations-not-found-http.spec.ts`,
+`customer-support-not-found-http.spec.ts`, `field-staff-not-found-http.spec.ts` and
+`customer-history-not-found-http.spec.ts` prove each detail reader receives the `404` through the real
 interceptor while a list or write without the opt-in keeps the generic mapping.
