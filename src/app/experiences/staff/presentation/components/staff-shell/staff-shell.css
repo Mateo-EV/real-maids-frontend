@@ -1,0 +1,57 @@
+/* The field staff experience reuses the theme tokens; nothing here is shared with other shells. */
+:host {
+  display: block;
+  min-height: 100dvh;
+}
+
+.shell-body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-xl);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid color-mix(in oklch, var(--gold) 40%, transparent);
+  box-shadow: 0 2px 4px color-mix(in oklch, var(--navy-deep) 15%, transparent);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.brand-accent {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent);
+  font-size: 0.625rem;
+}
+
+.session-avatar {
+  background: var(--coral);
+  color: var(--navy-deep);
+}
+
+/* The active section is not signalled by colour alone: it also carries `aria-current="page"`. */
+.staff-section-active {
+  color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
+  box-shadow: inset 0 -2px 0 0 var(--coral);
+}
+
+.staff-section:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (width < 40rem) {
+  .session-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

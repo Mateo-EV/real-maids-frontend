@@ -4,6 +4,7 @@ import { routes } from "./app.routes"
 import { AUTH_ROUTES } from "./features/auth/auth.routes"
 import { ADMIN_ROUTES } from "./experiences/admin/admin.routes"
 import { PORTAL_ROUTES } from "./experiences/portal/portal.routes"
+import { STAFF_ROUTES } from "./experiences/staff/staff.routes"
 import { authGuard, guestGuard } from "./features/auth/presentation/guards/auth.guard"
 import { LoginPage } from "./features/auth/presentation/pages/login-page/login-page"
 import { AdminShell } from "./experiences/admin/presentation/components/admin-shell/admin-shell"
@@ -25,19 +26,22 @@ describe("Application route composition", () => {
     expect(AUTH_ROUTES.map(route => route.path)).toEqual(["login"])
   })
 
-  it("composes separate lazy auth, admin and portal route sets without local providers", async () => {
+  it("composes separate lazy auth, admin, portal and staff route sets without local providers", async () => {
     const lazyRoutes = routes.filter(route => route.loadChildren)
     const routeSets = await loadRouteSets()
 
-    expect(lazyRoutes.map(route => route.path)).toEqual(["", "", ""])
+    expect(lazyRoutes.map(route => route.path)).toEqual(["", "", "", ""])
     expect(lazyRoutes.every(route => route.providers === undefined)).toBe(true)
     expect(routeSets[0]).toBe(AUTH_ROUTES)
     expect(routeSets[1]).toBe(ADMIN_ROUTES)
     expect(routeSets[2]).toBe(PORTAL_ROUTES)
+    // WP11 T2/S3: the field staff experience is a fourth, independently loaded family.
+    expect(routeSets[3]).toBe(STAFF_ROUTES)
     expect(routeSets.map(set => set.map(route => route.path))).toEqual([
       ["login"],
       ["admin"],
-      ["portal"]
+      ["portal"],
+      ["staff"]
     ])
   })
 
@@ -58,5 +62,20 @@ describe("Application route composition", () => {
     expect(admin.canActivate).toEqual([authGuard])
     expect(await admin.loadComponent!()).toBe(AdminShell)
     expect(composed.every(route => route.providers === undefined)).toBe(true)
+  })
+
+  // WP11 T2/S3: the third protected experience is guarded by the same shared decision.
+  it("protects the staff experience with the shared audience guard", async () => {
+    const staff = (await loadRouteSets()).flat().find(route => route.path === "staff")!
+    expect(staff.canActivate).toEqual([authGuard])
+    expect(staff.loadComponent).toBeTypeOf("function")
+    expect(staff.children?.[0].path).toBe("")
+    expect(staff.children?.[0].pathMatch).toBe("full")
+    expect(staff.children?.[0].redirectTo).toBe("services")
+    expect(staff.children?.[1].path).toBe("services")
+    expect(staff.children?.[1].title).toBe("Mis servicios | The Real Maids")
+    expect(staff.children?.[1].loadComponent).toBeTypeOf("function")
+    expect(staff.children?.[1].canActivate).toBeUndefined()
+    expect(staff.children?.[1].providers).toBeUndefined()
   })
 })
