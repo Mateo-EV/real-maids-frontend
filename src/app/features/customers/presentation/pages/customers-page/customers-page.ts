@@ -8,7 +8,7 @@ import {
   signal
 } from "@angular/core"
 import { ActivatedRoute, RouterLink } from "@angular/router"
-import { customerPageContext } from "./customer-page-context"
+import { crmCatalogPageContext } from "../../navigation/crm-catalog-page-context"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { of, Subject, switchMap, timer } from "rxjs"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
@@ -71,7 +71,7 @@ export class CustomersPage implements OnInit {
   })
 
   private readonly requestedQuery = signal<CustomerListQuery>(
-    customerPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
+    crmCatalogPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
   readonly search = signal("")
   readonly type = signal<CustomerType | "">("")

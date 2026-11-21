@@ -29,7 +29,10 @@
                 "input": "public"
               }
             ],
-            "styles": ["@ngxpert/hot-toast/styles.css", "src/styles.css"],
+            "styles": [
+              "@ngxpert/hot-toast/styles.css",
+              "src/styles.css"
+            ],
             "server": "src/main.server.ts",
             "outputMode": "server",
             "security": {
@@ -79,12 +82,18 @@
               "buildTarget": "real-maids-frontend:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "hmr": false,
+            "liveReload": true
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
-            "setupFiles": ["src/test-setup.ts"]
+            "setupFiles": [
+              "src/test-setup.ts"
+            ]
           }
         }
       }

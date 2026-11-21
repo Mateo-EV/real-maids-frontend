@@ -20,7 +20,7 @@ import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
 import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-frame"
 import { CustomerAcquisitionStore } from "../../state/customer-acquisition.store"
-import { leadPageContext } from "../leads-page/lead-page-context"
+import { crmCatalogPageContext } from "../../navigation/crm-catalog-page-context"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
@@ -75,7 +75,7 @@ export class LeadDetailPage {
   readonly writing = this.acquisition.writing
   readonly id = signal<number | null>(null)
   private readonly params = signal(this.route.snapshot.queryParamMap)
-  readonly backContext = computed(() => leadPageContext(this.params()))
+  readonly backContext = computed(() => crmCatalogPageContext(this.params()))
   private readonly selection = computed(() =>
     this.id() === null ? undefined : this.acquisition.selectLead(this.id()!)
   )

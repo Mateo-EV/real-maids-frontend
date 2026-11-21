@@ -1102,9 +1102,8 @@ in the other.
 | `navigation/service-order-page-context.ts` | operations | `service-orders-page`, `service-order-detail-page`, its spec | **Same concept**, duplicated inside operations; left untouched |
 | `navigation/staff-page-context.ts` (`staffPageContext`, `staffPagingParams`, `staffRouteId`, `staffReturnState`, `staffReturnFilters`) | field-operations | `staff-page`, staff profile pages, its spec | Same page/size→offset core **plus** an owner/session return-filter contract the portal has no use for |
 | `pages/support-page-context.ts` (`offset`/`limit`) | customer-support | `support-requests-page`, its spec | Same idea with the other URL vocabulary (`offset`/`limit`) and both-sides max-100 enforcement, plus filter/state serialization and `supportRouteId`; genuinely different URL contract |
-| `pages/customers-page/customer-page-context.ts` | customers | `customers-page` | **Look-alike**: reads `offset`/`limit` directly (no page/size), int32-aligned, no max-100 cap (the transport decides) |
-| `pages/leads-page/lead-page-context.ts` | customers | `leads-page` | Body identical to the customer one, separate module and owner — a **real duplicate inside customers**, candidate for a second slice |
-| `shared/pagination/normalize-pagination.ts` (`normalizePagination`, limit 1–100 → `Result`) | shared | **none in production** (its own spec only) | Not a URL context: it is the read-query validator, and it currently has no caller — reported, not changed |
+| `navigation/crm-catalog-page-context.ts` (`crmCatalogPageContext`, `offset`/`limit`) | customers | `customers-page`, `customer-detail-page`, `leads-page`, `lead-detail-page` | Reads `offset`/`limit` directly (no page/size), int32-aligned, no max-100 cap (the transport decides). **Consolidated** from the former `customer-page-context.ts` + `lead-page-context.ts` pair, whose bodies were identical |
+| `shared/pagination/normalize-pagination.ts` (`normalizePagination`, limit 1–100 → `Result`) | shared | **none** | Not a URL context: it was the read-query validator, and it had no caller — **deleted** with its spec |
 | `shared/pagination/pagination.params.ts` / `.response.ts` | shared | everything above | Shared vocabulary (`PaginationParams`, `NormalizedPagination`, `PaginationResponse`), not a helper |
 | `shared/components/table-pagination/table-pagination.ts` | shared | portal lists, users, customers, leads, staff, support, operations | Presentational 1-based control; emits a page number and computes no offset — same *UI* concept, not the same contract |
 | `pagina`/`tamanio` mapping in `*/infrastructure/source/*-http.validation.ts` | operations, customer-support, field-operations, customers | the HTTP sources | Same arithmetic at the adapter boundary, where it must also validate the returned metadata; moving it would couple transport validation to a navigation helper |
@@ -1172,6 +1171,40 @@ template, a payload, a guard, a store or a test expectation.
 
 Pending acceptance: rendered Chrome/Edge/Firefox keyboard and responsive passes, an independent review
 of this change, and the live CORS/authorization/redaction runs already listed for T2–T6.
+
+## Dev-server configuration: component HMR disabled
+
+The dev server is the same defect class, so the project now configures it explicitly: the `serve`
+target in [angular.json](../angular.json) sets `hmr: false` with `liveReload` left on, while the
+defaults stay `development`.
+
+- **What the setting does**: the dev server still rebuilds and the browser still refreshes the page on
+  save; only component hot *replacement* is off. Nothing about the build, the budgets, the tests or the
+  production output changes, because the option lives on `serve` alone.
+- **Why**: with component HMR on, the dev server re-applies stored component metadata in the browser and
+  re-resolves an `imports` entry **by index** into a `ɵɵnamespaces` array, exactly as described above.
+  Whenever a component declares its Helm dependencies through an `*Imports` constant (`...HlmButtonImports`
+  and friends, still the shape in the auth, admin-shell and customer-support components), a stored module
+  and the chunk it is handed can differ by one entry, and the lookup throws
+  `TypeError: Cannot read properties of undefined (reading 'HlmX')` and leaves the component without its
+  directives — the form or card simply does not render. Disabling component HMR removes that path for
+  every component in the app, not only for the portal sources already rewritten to name their
+  dependencies individually.
+- **What is lost**: component hot replacement and style hot replacement. An edit now costs a full page
+  reload instead of swapping a template or a stylesheet in place, which is the accepted trade for a dev
+  server that does not corrupt component metadata.
+- **Narrower alternative**: anyone who wants HMR back can keep the `hmr` flag and run the server with
+  `NG_HMR_TEMPLATES=0`, which disables only component *template* hot replacement while leaving the rest
+  enabled. That is a per-run environment choice, so it is deliberately not committed to `angular.json`.
+- **Still guarded**: the portal's census spec
+  ([portal-component-imports.spec.ts](../src/app/experiences/portal/presentation/portal-component-imports.spec.ts))
+  keeps failing on a reintroduced `*Imports` spread in those sources, because naming dependencies
+  directly remains the correct declaration regardless of the global switch. It covers the portal only;
+  the `serve` setting covers every other component.
+
+Pending acceptance: this is a configuration change, so it carries no rendered evidence. The served
+behaviour was not re-measured in a browser, and the remaining `*Imports` constants outside the portal
+stay a live-browser risk if HMR is re-enabled without `NG_HMR_TEMPLATES=0`.
 
 ## Documented `404` delivery to detail adapters
 

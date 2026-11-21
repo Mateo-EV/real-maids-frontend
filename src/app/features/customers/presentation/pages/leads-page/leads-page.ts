@@ -14,7 +14,7 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { LeadEditor } from "../../components/lead-editor/lead-editor"
 import { ActivatedRoute, RouterLink } from "@angular/router"
-import { leadPageContext } from "./lead-page-context"
+import { crmCatalogPageContext } from "../../navigation/crm-catalog-page-context"
 import { HlmButtonImports } from "@spartan-ng/helm/button"
 import { HlmTableImports } from "@spartan-ng/helm/table"
 import { BadgeTone } from "@/app/shared/ui/badge-tone.directive"
@@ -68,7 +68,7 @@ export class LeadsPage implements OnInit {
   readonly origins = computed(() => this.acquisition.origins())
   readonly stages = computed(() => this.acquisition.stages())
   private readonly requestedQuery = signal<LeadListQuery>(
-    leadPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
+    crmCatalogPageContext(inject(ActivatedRoute).snapshot.queryParamMap)
   )
   readonly search = signal("")
   readonly originId = signal<number | "">("")

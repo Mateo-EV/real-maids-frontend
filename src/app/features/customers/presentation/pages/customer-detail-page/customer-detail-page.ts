@@ -31,7 +31,7 @@ import { CatalogFrame } from "@/app/shared/components/catalog-frame/catalog-fram
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
 import { CustomersStore } from "../../state/customers.store"
 import { CustomerPropertiesStore } from "../../state/customer-properties.store"
-import { customerPageContext } from "../customers-page/customer-page-context"
+import { crmCatalogPageContext } from "../../navigation/crm-catalog-page-context"
 import { Property } from "../../../domain/entities/property.entity"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
 import { BrnDialogRef } from "@spartan-ng/brain/dialog"
@@ -78,7 +78,7 @@ export class CustomerDetailPage {
     this.dialog?.close()
   })
   readonly id = signal<number | null>(null)
-  readonly backContext = computed(() => customerPageContext(this.queryParams()))
+  readonly backContext = computed(() => crmCatalogPageContext(this.queryParams()))
   private readonly queryParams = signal(this.route.snapshot.queryParamMap)
   readonly detail = computed(() =>
     this.id() === null ? undefined : this.customers.selectCustomer(this.id()!)

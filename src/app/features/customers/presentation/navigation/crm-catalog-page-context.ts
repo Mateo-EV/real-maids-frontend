@@ -1,8 +1,12 @@
 import { ParamMap } from "@angular/router"
 import { NormalizedPagination } from "@/app/shared/pagination/pagination.params"
 
-/** Untrusted URL context follows the customer transport's aligned int32 page/size contract. */
-export function customerPageContext(params: ParamMap): NormalizedPagination {
+/**
+ * Untrusted CRM catalog URL context for the customer and lead lists: one aligned `offset`/`limit`
+ * pair, otherwise the 0/20 default. Both lists share this contract, and the transport decides the
+ * effective size it sends back.
+ */
+export function crmCatalogPageContext(params: ParamMap): NormalizedPagination {
   const offsetText = params.get("offset"),
     limitText = params.get("limit")
   const offset = Number(offsetText),
