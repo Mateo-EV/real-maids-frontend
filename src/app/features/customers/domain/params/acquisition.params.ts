@@ -1,4 +1,5 @@
 import { CustomerType } from "../entities/customer.entity"
+import { CustomerAccountRequest } from "./customer.params"
 
 /** Confirmed acquisition writes; identities and registration metadata are server-owned. */
 export interface CreateLeadOriginParams {
@@ -44,8 +45,13 @@ export interface UpdateLeadParams {
   /** Motivo del retroceso de etapa; obligatorio para el servidor cuando la etapa nueva es anterior. */
   readonly comentarioSeguimiento: string | null
 }
-/** Server copies the lead's current profile; repeat returns the linked customer. */
-export interface ConvertLeadParams {
+/**
+ * Server copies the lead's current profile and returns the linked customer on repeats. The account
+ * keys keep the same wire tri-state as the customer writes: absent never touches the account, `true`
+ * creates it with `password` and the email the server copies from the prospect, `false` means no
+ * account. Conversion alone never creates one.
+ */
+export interface ConvertLeadParams extends CustomerAccountRequest {
   readonly leadId: number
   readonly type: CustomerType
 }

@@ -19,7 +19,8 @@ const profile = {
   idRol: 3,
   rol: "Operaciones",
   idioma: "es",
-  permisos: ["USUARIO_LEER"]
+  permisos: ["USUARIO_LEER"],
+  debeCambiarPassword: false
 }
 const response = {
   token: "fake-access",

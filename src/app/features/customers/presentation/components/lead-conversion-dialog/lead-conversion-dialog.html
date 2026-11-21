@@ -5,8 +5,8 @@
 <form class="mt-4 flex flex-col gap-4" [formRoot]="profile" (submit)="save()">
   <p class="text-sm leading-relaxed" id="conversion-help">
     El servidor usa los datos actuales guardados del prospecto. Si ya fue convertido, devuelve el
-    cliente vinculado; elegir otro tipo no cambia el tipo de ese cliente. No se crea una cuenta ni
-    se fusionan correos. Cancelar no revierte una solicitud ya enviada.
+    cliente vinculado; elegir otro tipo no cambia el tipo de ese cliente. No se fusionan correos.
+    Cancelar no revierte una solicitud ya enviada.
   </p>
   @if (error()) {
     <div hlmAlert variant="destructive" role="alert">
@@ -37,6 +37,67 @@
         }
       </div>
     </div>
+  </fieldset>
+  <fieldset hlmFieldSet class="min-w-0 gap-3" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend>Cuenta del portal</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <div class="flex items-center gap-2">
+        <input
+          id="conversion-create-account"
+          type="checkbox"
+          class="size-4 accent-primary"
+          aria-describedby="conversion-account-help"
+          [formField]="profile.createAccount"
+          (change)="accountToggled()"
+        />
+        <label hlmFieldLabel for="conversion-create-account"
+          >Crear cuenta del portal para este cliente (opcional)</label
+        >
+      </div>
+      <p hlmFieldDescription id="conversion-account-help">
+        Sin marcar, la conversión no crea ni modifica ninguna cuenta. Marcada, la cuenta se crea con
+        la contraseña inicial indicada y con el correo del prospecto. La persona deberá cambiar su
+        contraseña en el primer ingreso.
+      </p>
+      @if (fieldError()?.field === "email") {
+        <hlm-field-error forceShow id="conversion-account-error">
+          {{ fieldError()!.message }}
+        </hlm-field-error>
+      }
+    </div>
+    @if (createAccount()) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel for="conversion-account-password">
+          Contraseña inicial (obligatoria)
+        </label>
+        <input
+          hlmInput
+          id="conversion-account-password"
+          type="password"
+          autocomplete="new-password"
+          aria-describedby="conversion-account-password-help conversion-account-password-errors"
+          [formField]="profile.password"
+          [attr.aria-invalid]="fieldError()?.field === 'password' ? 'true' : null"
+          (input)="clearFieldError()"
+        />
+        <p hlmFieldDescription id="conversion-account-password-help">
+          El correo de la cuenta se toma del prospecto; no se escribe acá. No se muestran ni se
+          registran los valores de la contraseña.
+        </p>
+        <div id="conversion-account-password-errors">
+          @if (profile.password().touched()) {
+            @for (error of profile.password().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+          @if (fieldError()?.field === "password") {
+            <hlm-field-error forceShow id="conversion-account-password-error">
+              {{ fieldError()!.message }}
+            </hlm-field-error>
+          }
+        </div>
+      </div>
+    }
   </fieldset>
   <hlm-dialog-footer class="border-t pt-3">
     <button

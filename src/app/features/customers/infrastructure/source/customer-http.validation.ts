@@ -21,6 +21,14 @@ export function readId(v: unknown): number {
 export function nullableId(v: unknown): number | null {
   return v === null ? null : readId(v)
 }
+/**
+ * Portal account state of a customer: `null` = no account, `true` = active, `false` = deactivated.
+ * A verified response names `usuarioActivo` whenever it names an account; `customerDto` enforces that
+ * pairing, so an absent state can only describe a customer the response already shows without one.
+ */
+export function accountFlag(v: unknown): boolean | null {
+  return v === undefined || v === null ? null : flag(v)
+}
 export function text(v: unknown, max = Infinity): string {
   return typeof v === "string" && v.trim().length > 0 && v.length <= max ? v : invalid()
 }

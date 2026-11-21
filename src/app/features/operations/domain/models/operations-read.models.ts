@@ -33,7 +33,8 @@ export interface ScheduleSummary {
 export interface OrderStatusHistorySummary {
   status: string
   statusName: string
-  userName: string
+  // Null when the backend redacts the actor for the customer view; never a fallback name.
+  userName: string | null
   observation: string | null
   occurredAt: Date
 }

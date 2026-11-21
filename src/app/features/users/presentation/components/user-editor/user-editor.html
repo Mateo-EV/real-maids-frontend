@@ -28,11 +28,21 @@
         type="email"
         autocomplete="off"
         [formField]="userForm.email"
+        (input)="clearEmailError()"
       />
+      <p hlmFieldDescription id="user-email-help">
+        El correo es único entre cuentas y clientes: si ya pertenece a una cuenta del portal o a un
+        cliente, el alta se rechaza.
+      </p>
       @if (userForm.email().touched()) {
         @for (error of userForm.email().errors(); track error.kind) {
           <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
         }
+      }
+      @if (emailError()) {
+        <hlm-field-error forceShow id="user-email-account-error">
+          {{ emailError() }}
+        </hlm-field-error>
       }
     </div>
     <div hlmField>
@@ -66,7 +76,12 @@
     </div>
     <div hlmField>
       <label hlmFieldLabel for="user-role">Rol asignado (obligatorio)</label>
-      <hlm-native-select selectId="user-role" [formField]="userForm.roleId" class="w-full">
+      <hlm-native-select
+        selectId="user-role"
+        [formField]="userForm.roleId"
+        class="w-full"
+        (change)="roleChanged()"
+      >
         <option value="">Seleccionar rol</option>
         @for (role of availableRoles(); track role.id) {
           <option [value]="role.id">
@@ -81,6 +96,52 @@
         }
       }
     </div>
+    @if (customerAccountRequired()) {
+      <div hlmAlert id="user-customer-warning" aria-live="polite">
+        <p hlmAlertTitle>Se creará un cliente nuevo</p>
+        <p hlmAlertDescription>
+          El rol CLIENTE también crea su ficha de cliente con el mismo nombre, correo y teléfono. La
+          ficha sólo se administra desde CRM y la cuenta deberá cambiar su contraseña en el primer
+          ingreso. Este alta necesita además el permiso de creación de clientes (CLIENTE_CREAR).
+        </p>
+      </div>
+      <div hlmField>
+        <label hlmFieldLabel for="user-customer-type">Tipo de cliente (obligatorio)</label>
+        <hlm-native-select
+          selectId="user-customer-type"
+          [formField]="userForm.customerType"
+          class="w-full"
+        >
+          <option value="">Seleccionar tipo</option>
+          <option value="residencial">Residencial</option>
+          <option value="comercial">Comercial</option>
+        </hlm-native-select>
+        <p hlmFieldDescription>Se guarda en la ficha del cliente que se crea con la cuenta.</p>
+        @if (userForm.customerType().touched()) {
+          @for (error of userForm.customerType().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+      <div hlmField>
+        <label hlmFieldLabel for="user-customer-phone">Teléfono (opcional)</label>
+        <input
+          hlmInput
+          id="user-customer-phone"
+          type="tel"
+          autocomplete="off"
+          [formField]="userForm.phone"
+        />
+        <p hlmFieldDescription>
+          De 7 a 30 caracteres: dígitos, espacios, paréntesis, guiones y el signo +.
+        </p>
+        @if (userForm.phone().touched()) {
+          @for (error of userForm.phone().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    }
     <div hlmField>
       <label hlmFieldLabel for="user-lang">Idioma</label>
       <hlm-native-select selectId="user-lang" [formField]="userForm.lang" class="w-full">

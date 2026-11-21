@@ -84,6 +84,11 @@ export class CustomerDetailPage {
     this.id() === null ? undefined : this.customers.selectCustomer(this.id()!)
   )
   readonly customer = computed(() => this.detail()?.result)
+  /**
+   * The adapter's typed absence, distinct from a transient failure: repeating the same `GET` cannot
+   * produce the record, so this state is definitive and offers no retry.
+   */
+  readonly notFound = computed(() => this.detail()?.error?.code === "CUSTOMER_NOT_FOUND")
   readonly propertyRead = computed(() =>
     this.customer()?.id === this.id() ? this.properties.selectProperties(this.id()!) : undefined
   )

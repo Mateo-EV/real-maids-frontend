@@ -40,7 +40,11 @@ export function customerWriteError(code: CustomerErrorCode): string {
     case "FORBIDDEN":
       return "No tienes permiso para realizar esta operación."
     case "EMAIL_RESERVED":
-      return "El correo ya pertenece a un cliente, incluso si está inactivo. Usa otro correo; no se creó ni fusionó otro cliente."
+      return customerFieldError("EMAIL_RESERVED")!.message
+    case "ACCOUNT_EMAIL_REQUIRED":
+    case "ACCOUNT_PASSWORD_REQUIRED":
+    case "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT":
+      return customerFieldError(code)!.message
     case "CONFLICT":
       return "Los datos entran en conflicto. Revisa el cliente antes de reintentar."
     case "UNAUTHENTICATED":
@@ -53,5 +57,44 @@ export function customerWriteError(code: CustomerErrorCode): string {
       return "No se pudo conectar. Puedes reintentar."
     default:
       return "No se pudo confirmar la operación. Revisa el catálogo antes de reintentar."
+  }
+}
+
+/** A failure the user can only fix in one specific input of the customer form. */
+export interface CustomerFieldError {
+  readonly field: "email" | "password"
+  readonly message: string
+}
+
+/**
+ * Field-specific failures already carry a documented marker, so the editor renders them next to the
+ * input they belong to instead of in the general alert. `password` markers only make sense while the
+ * password input is visible; the caller decides that, this mapping stays declarative.
+ */
+export function customerFieldError(code: CustomerErrorCode): CustomerFieldError | null {
+  switch (code) {
+    case "EMAIL_RESERVED":
+      return {
+        field: "email",
+        message:
+          "El correo ya pertenece a una cuenta del portal, incluso si está inactiva. Usa otro correo; no se creó ni fusionó otro cliente."
+      }
+    case "ACCOUNT_EMAIL_REQUIRED":
+      return {
+        field: "email",
+        message: "La cuenta del portal necesita el correo del cliente."
+      }
+    case "ACCOUNT_PASSWORD_REQUIRED":
+      return {
+        field: "password",
+        message: "La cuenta del portal necesita una contraseña inicial."
+      }
+    case "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT":
+      return {
+        field: "password",
+        message: "Solo se envía una contraseña cuando se solicita la cuenta del portal."
+      }
+    default:
+      return null
   }
 }

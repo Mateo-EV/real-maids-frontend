@@ -137,6 +137,19 @@ async function setup(server = false, converted = false) {
     select.dispatchEvent(new Event("blur"))
     await settle()
   }
+  const accountBox = () => dialog().querySelector<HTMLInputElement>("#conversion-create-account")!
+  const passwordBox = () => dialog().querySelector<HTMLInputElement>("#conversion-account-password")
+  const toggleAccount = async () => {
+    accountBox().click()
+    await settle()
+  }
+  const fillPassword = async (value: string) => {
+    const input = passwordBox()!
+    input.value = value
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("blur"))
+    await settle()
+  }
   const submit = async () => {
     dialog()
       .querySelector("form")!
@@ -163,6 +176,10 @@ async function setup(server = false, converted = false) {
     respond,
     open,
     choose,
+    accountBox,
+    passwordBox,
+    toggleAccount,
+    fillPassword,
     submit,
     request,
     link,
@@ -468,5 +485,186 @@ describe("T5 confirmed lead conversion S1–S2", () => {
     expect(s.link()).toBeNull()
     expect(s.success).not.toHaveBeenCalled()
     s.http.expectNone(() => true)
+  })
+})
+
+describe("T17 conversion with an optional portal account (S12/S13)", () => {
+  it("keeps conversion account-free by default and sends no account key at all", async () => {
+    const s = await setup()
+    await s.open()
+    expect(s.accountBox().checked).toBe(false)
+    expect(s.passwordBox()).toBeNull()
+    expect(s.dialog().textContent).toContain("Sin marcar, la conversión no crea ni modifica")
+    await s.choose()
+    await s.submit()
+    const request = s.request()
+    expect(request.request.body).toEqual({ tipo: CustomerType.RESIDENTIAL })
+    expect(Object.keys(request.request.body)).not.toContain("crearCuenta")
+    expect(Object.keys(request.request.body)).not.toContain("password")
+    request.flush(dto())
+    await s.settle()
+    expect(s.success).toHaveBeenCalledExactlyOnceWith("Conversión confirmada.")
+    expect(s.link()?.getAttribute("href")).toBe("/admin/customers/91")
+  })
+
+  it("requires the initial password when the account is requested and sends crearCuenta true", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.toggleAccount()
+    expect(s.passwordBox()).not.toBeNull()
+    // The customer email comes from the prospect, so the dialog never asks for it.
+    expect(s.dialog().querySelector("#conversion-account-email")).toBeNull()
+    expect(s.dialog().textContent).toContain("El correo de la cuenta se toma del prospecto")
+    await s.submit()
+    s.http.expectNone(req => req.method === "POST")
+    expect(s.dialog().textContent).toContain("necesita una contraseña inicial")
+    await s.fillPassword(" Clave 1234 ")
+    await s.submit()
+    const request = s.request()
+    expect(request.request.body).toEqual({
+      tipo: CustomerType.RESIDENTIAL,
+      crearCuenta: true,
+      password: " Clave 1234 "
+    })
+    request.flush(dto())
+    await s.settle()
+    expect(s.success).toHaveBeenCalledExactlyOnceWith(
+      "Conversión confirmada. La cuenta del portal se creó para el cliente."
+    )
+    expect(s.link()?.getAttribute("href")).toBe("/admin/customers/91")
+  })
+
+  it("drops the account keys again when the choice is unticked before submitting", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.toggleAccount()
+    await s.toggleAccount()
+    expect(s.accountBox().checked).toBe(false)
+    expect(s.passwordBox()).toBeNull()
+    await s.submit()
+    expect(s.request().request.body).toEqual({ tipo: CustomerType.RESIDENTIAL })
+  })
+
+  it.each([
+    ["correoParaCuenta", "#conversion-account-error", "necesita el correo del prospecto"],
+    ["passwordParaCuenta", "#conversion-account-password-error", "necesita una contraseña inicial"],
+    ["passwordSoloConCuenta", "#conversion-account-password-error", "Solo se envía una contraseña"]
+  ])(
+    "binds the %s marker to its own field without a general alert",
+    async (marker, selector, copy) => {
+      const s = await setup()
+      await s.open()
+      await s.choose()
+      await s.toggleAccount()
+      await s.fillPassword("Clave1234")
+      await s.submit()
+      s.request().flush(
+        { codigo: 400, mensaje: "PRIVATE", errores: { [marker]: "x" } },
+        { status: 400, statusText: "Bad Request" }
+      )
+      await s.settle()
+      expect(s.dialog().querySelector(selector)!.textContent).toContain(copy)
+      expect(s.dialog().querySelector("div[role='alert']")).toBeNull()
+      expect(s.dialog().textContent).not.toContain("PRIVATE")
+      expect(s.passwordBox()!.value).toBe("Clave1234")
+      expect(s.success).not.toHaveBeenCalled()
+      s.http.expectNone(() => true)
+      await s.submit()
+      expect(s.request().request.body).toEqual({
+        tipo: CustomerType.RESIDENTIAL,
+        crearCuenta: true,
+        password: "Clave1234"
+      })
+    }
+  )
+
+  it("binds EMAIL_RESERVED to the reason that the prospect address is already used", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.toggleAccount()
+    await s.fillPassword("Clave1234")
+    await s.submit()
+    s.request().flush(
+      { codigo: 409, mensaje: "PRIVATE", errores: { correo: "EMAIL_RESERVED" } },
+      { status: 409, statusText: "Conflict" }
+    )
+    await s.settle()
+    expect(s.dialog().querySelector("#conversion-account-error")!.textContent).toContain(
+      "ya está reservado"
+    )
+    expect(s.dialog().querySelector("div[role='alert']")).toBeNull()
+    expect(s.dialog().textContent).not.toContain("PRIVATE")
+  })
+
+  it("explains the missing permissions on a 403 without echoing server copy", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.submit()
+    s.request().flush({ mensaje: "PRIVATE" }, { status: 403, statusText: "Forbidden" })
+    await s.settle()
+    const alert = s.dialog().querySelector("div[role='alert']")
+    expect(alert!.textContent).toContain("permisos")
+    expect(alert!.textContent).toContain("crear y actualizar clientes")
+    expect(s.dialog().textContent).not.toContain("PRIVATE")
+    expect(s.success).not.toHaveBeenCalled()
+    s.http.expectNone(() => true)
+    await s.submit()
+    expect(s.request().request.body).toEqual({ tipo: CustomerType.RESIDENTIAL })
+  })
+
+  it("keeps the account choice and password after an unrelated conflict and re-sends them only on retry", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.toggleAccount()
+    await s.fillPassword("Clave1234")
+    await s.submit()
+    s.request().flush(
+      { codigo: 409, mensaje: "PRIVATE", errores: { correo: "OTRO_MARCADOR" } },
+      { status: 409, statusText: "Conflict" }
+    )
+    await s.settle()
+    expect(s.dialog().querySelector("div[role='alert']")!.textContent).not.toContain("PRIVATE")
+    expect(s.dialog().querySelector("#conversion-account-error")).toBeNull()
+    expect(s.accountBox().checked).toBe(true)
+    expect(s.passwordBox()!.value).toBe("Clave1234")
+    expect(s.success).not.toHaveBeenCalled()
+    s.http.expectNone(() => true)
+    await s.submit()
+    expect(s.request().request.body).toEqual({
+      tipo: CustomerType.RESIDENTIAL,
+      crearCuenta: true,
+      password: "Clave1234"
+    })
+  })
+
+  it("keeps the pending guard while the account is requested and retries only explicitly", async () => {
+    const s = await setup()
+    await s.open()
+    await s.choose()
+    await s.toggleAccount()
+    await s.fillPassword("Clave1234")
+    await s.submit()
+    const request = s.request()
+    await s.submit()
+    expect(s.dialog()).not.toBeNull()
+    const cancel = [...s.dialog().querySelectorAll<HTMLButtonElement>("button")].find(
+      b => b.textContent?.trim() === "Cancelar"
+    )!
+    expect(cancel.disabled).toBe(true)
+    expect(s.accountBox().checked).toBe(true)
+    expect(s.passwordBox()!.value).toBe("Clave1234")
+    s.dialog().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await s.settle()
+    expect(s.dialog()).not.toBeNull()
+    s.http.expectNone(() => true)
+    request.flush(dto())
+    await s.settle()
+    expect(s.success).toHaveBeenCalledTimes(1)
+    expect(s.link()).not.toBeNull()
   })
 })

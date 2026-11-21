@@ -54,7 +54,9 @@ describe("Customer domain contracts", () => {
       findById: vi.fn(() => response),
       findStatistics: vi.fn(() => of(Result.success({ total: 0, activos: 0, inactivos: 0 }))),
       create: vi.fn(() => response),
-      update: vi.fn(() => response)
+      update: vi.fn(() => response),
+      findOwnProfile: vi.fn(() => response),
+      updateOwnProfile: vi.fn(() => response)
     }
     TestBed.configureTestingModule({
       providers: [{ provide: CUSTOMER_REPOSITORY, useValue: repository }]
@@ -71,6 +73,14 @@ describe("Customer domain contracts", () => {
     expect(await firstValueFrom(injected.findPage({}))).toEqual(
       Result.success({ items: [customer], total: 1, offset: 0, limit: 20 })
     )
+    // The own-profile contract is the caller's record: no id and no query travel.
+    expect(await firstValueFrom(injected.findOwnProfile())).toEqual(Result.success(customer))
+    expect(repository.findOwnProfile).toHaveBeenCalledExactlyOnceWith()
+    const ownProfile = { name: "Nullable", phone: null }
+    expect(await firstValueFrom(injected.updateOwnProfile(ownProfile))).toEqual(
+      Result.success(customer)
+    )
+    expect(repository.updateOwnProfile).toHaveBeenCalledExactlyOnceWith(ownProfile)
   })
 
   it("keeps confirmed account/status operations separate from the wired CRUD contract", async () => {

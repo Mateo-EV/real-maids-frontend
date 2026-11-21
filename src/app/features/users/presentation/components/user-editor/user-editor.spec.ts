@@ -48,9 +48,13 @@ describe("UserEditor Signal Forms", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     const now = new Date("2026-09-01T00:00:00Z")
-    roleData = Array.from({ length: 5 }, (_, index) =>
-      Role.create(index + 1, `Role ${index + 1}`, "", true, now)
-    )
+    roleData = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        Role.create(index + 1, `Role ${index + 1}`, "", true, now)
+      ),
+      // El backend crea la ficha del cliente sólo para su rol CLIENTE, identificado por nombre exacto.
+      Role.create(6, "CLIENTE", "Cuenta del portal", true, now)
+    ]
     data = Array.from({ length: 48 }, (_, index) =>
       User.create(
         index + 1,
@@ -192,6 +196,34 @@ describe("UserEditor Signal Forms", () => {
   async function records() {
     return data
   }
+  function clientRole(roles: { roles(): Role[] }): Role {
+    return roles.roles().find(role => role.name === "CLIENTE")!
+  }
+
+  function customerAccountUser(customerId: number | null): User {
+    const now = new Date("2026-09-01T00:00:00Z")
+    return User.create(
+      99,
+      "Cliente Nuevo",
+      "cliente@example.test",
+      Lang.ES,
+      true,
+      now,
+      now,
+      6,
+      null,
+      customerId
+    )
+  }
+
+  async function selectRole(element: HTMLElement, roleId: number): Promise<void> {
+    const select = element.querySelector<HTMLSelectElement>("#user-role")!
+    select.value = String(roleId)
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+    await vi.runAllTimersAsync()
+    TestBed.tick()
+  }
+
   async function setup(user: User | null = null) {
     await loadCatalogs()
     const fixture = TestBed.createComponent(TestHost)
@@ -265,7 +297,9 @@ describe("UserEditor Signal Forms", () => {
         password: "FakePassword1",
         lang: Lang.ES,
         isActive: true,
-        roleId: String(roles.roles()[0].id)
+        roleId: String(roles.roles()[0].id),
+        customerType: "",
+        phone: ""
       })
       const pending = editor.save()
       await Promise.resolve()
@@ -295,7 +329,9 @@ describe("UserEditor Signal Forms", () => {
       password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
-      roleId: String(roles.roles()[0].id)
+      roleId: String(roles.roles()[0].id),
+      customerType: "",
+      phone: ""
     })
     const pending = editor.save()
     await Promise.resolve()
@@ -338,7 +374,9 @@ describe("UserEditor Signal Forms", () => {
       password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
-      roleId: String(roles.roles()[0].id)
+      roleId: String(roles.roles()[0].id),
+      customerType: "",
+      phone: ""
     })
     await editor.save()
     expect(editor.error()).toBe("")
@@ -385,7 +423,9 @@ describe("UserEditor Signal Forms", () => {
       password: "",
       roleId: "",
       lang: Lang.ES,
-      isActive: true
+      isActive: true,
+      customerType: "",
+      phone: ""
     })
     expect(editor.userForm().valid()).toBe(false)
     expect(editor.userForm.email().errors()).not.toHaveLength(0)
@@ -417,7 +457,9 @@ describe("UserEditor Signal Forms", () => {
       password: "",
       roleId: String(roles.roles()[0].id),
       lang: Lang.EN,
-      isActive: true
+      isActive: true,
+      customerType: "",
+      phone: ""
     })
     await flush(editor.save())
     expect(create).not.toHaveBeenCalled()
@@ -500,7 +542,9 @@ describe("UserEditor Signal Forms", () => {
       password: "FakePassword1",
       lang: Lang.ES,
       isActive: true,
-      roleId: String(roles.roles()[0].id)
+      roleId: String(roles.roles()[0].id),
+      customerType: "",
+      phone: ""
     })
     const pending = editor.save()
     await Promise.resolve()
@@ -538,5 +582,213 @@ describe("UserEditor Signal Forms", () => {
     )
     await vi.runAllTimersAsync()
     expect(ref.state()).toBe("closed")
+  })
+
+  it("warns that a CLIENTE account creates a customer and hides those fields otherwise", async () => {
+    const { editor, element, roles, ref } = await setup()
+    const client = clientRole(roles)
+    expect(element.querySelector("#user-customer-warning")).toBeNull()
+    expect(element.querySelector("#user-customer-type")).toBeNull()
+    expect(element.querySelector("#user-customer-phone")).toBeNull()
+    await selectRole(element, client.id)
+    expect(editor.model().roleId).toBe(String(client.id))
+    const warning = element.querySelector("#user-customer-warning")!
+    expect(warning.textContent).toContain("Se creará un cliente")
+    expect(warning.textContent).toContain("CLIENTE")
+    expect(warning.querySelector("button")).toBeNull()
+    expect(element.querySelector("#user-customer-type")).not.toBeNull()
+    expect(element.querySelector("#user-customer-phone")).not.toBeNull()
+    await selectRole(element, roles.roles()[0].id)
+    expect(element.querySelector("#user-customer-warning")).toBeNull()
+    expect(element.querySelector("#user-customer-type")).toBeNull()
+    expect(element.querySelector("#user-customer-phone")).toBeNull()
+    ref.forceClose()
+  })
+
+  it("sends the customer-only fields for CLIENTE and never for another role", async () => {
+    const { editor, users, roles, ref } = await setup()
+    const client = clientRole(roles)
+    const create = vi
+      .spyOn(users, "createUser")
+      .mockReturnValue(of(Result.failure(new UserError("UNEXPECTED"))))
+    editor.model.set({
+      name: "Cliente Nuevo",
+      email: "cliente@example.test",
+      password: "FakePassword1",
+      lang: Lang.ES,
+      isActive: true,
+      roleId: String(client.id),
+      customerType: "",
+      phone: "  999 111 222  "
+    })
+    await flush(editor.save())
+    expect(create).not.toHaveBeenCalled()
+    editor.model.update(model => ({ ...model, customerType: "comercial" }))
+    await flush(editor.save())
+    expect(create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        roleId: client.id,
+        customerType: "comercial",
+        phone: "999 111 222"
+      })
+    )
+    const other = roles.roles()[0]
+    editor.model.update(model => ({ ...model, phone: "   " }))
+    await flush(editor.save())
+    const blankPhone = create.mock.calls.at(-1)![0] as unknown as Record<string, unknown>
+    expect(blankPhone).toHaveProperty("customerType", "comercial")
+    expect(blankPhone).not.toHaveProperty("phone")
+    editor.model.update(model => ({
+      ...model,
+      roleId: String(other.id),
+      email: "other@example.test",
+      customerType: "residencial",
+      phone: "999 111 222"
+    }))
+    await flush(editor.save())
+    const params = create.mock.calls.at(-1)![0] as unknown as Record<string, unknown>
+    expect(params).not.toHaveProperty("customerType")
+    expect(params).not.toHaveProperty("phone")
+    ref.forceClose()
+  })
+
+  it("requires tipo for CLIENTE and clears the customer fields and their validation on role change", async () => {
+    const { editor, users, element, roles, ref } = await setup()
+    const client = clientRole(roles),
+      other = roles.roles()[0]
+    const create = vi.spyOn(users, "createUser")
+    await selectRole(element, client.id)
+    editor.model.update(model => ({
+      ...model,
+      name: "Cliente Nuevo",
+      email: "cliente@example.test",
+      password: "FakePassword1",
+      phone: "999 111 222",
+      customerType: ""
+    }))
+    await flush(editor.save())
+    TestBed.tick()
+    expect(create).not.toHaveBeenCalled()
+    expect(editor.userForm.customerType().touched()).toBe(true)
+    expect(element.textContent).toContain("Selecciona el tipo de cliente")
+    editor.model.update(model => ({ ...model, customerType: "residencial", phone: "abc" }))
+    await flush(editor.save())
+    TestBed.tick()
+    expect(create).not.toHaveBeenCalled()
+    expect(element.textContent).toContain("Ingresa un teléfono válido")
+    await selectRole(element, other.id)
+    expect(editor.model().customerType).toBe("")
+    expect(editor.model().phone).toBe("")
+    expect(editor.userForm.customerType().touched()).toBe(false)
+    expect(editor.userForm.phone().touched()).toBe(false)
+    expect(editor.userForm().valid()).toBe(true)
+    expect(element.textContent).not.toContain("Selecciona el tipo de cliente")
+    ref.forceClose()
+  })
+
+  it("explains the missing customer-creation permission when a CLIENTE account is forbidden", async () => {
+    const { editor, users, roles, saved, ref } = await setup()
+    vi.spyOn(users, "createUser").mockReturnValue(of(Result.failure(new UserError("FORBIDDEN"))))
+    editor.model.set({
+      name: "Cliente Nuevo",
+      email: "cliente@example.test",
+      password: "FakePassword1",
+      lang: Lang.ES,
+      isActive: true,
+      roleId: String(clientRole(roles).id),
+      customerType: "residencial",
+      phone: ""
+    })
+    await flush(editor.save())
+    expect(editor.error()).toContain("CLIENTE_CREAR")
+    expect(editor.error()).toContain("permiso")
+    expect(editor.error()).not.toContain("No tienes permiso para guardar estos cambios")
+    expect(saved).not.toHaveBeenCalled()
+    expect(ref.state()).toBe("open")
+    expect(editor.model().customerType).toBe("residencial")
+  })
+
+  it("keeps the generic forbidden message for the other roles", async () => {
+    const { editor, users, roles } = await setup()
+    vi.spyOn(users, "createUser").mockReturnValue(of(Result.failure(new UserError("FORBIDDEN"))))
+    editor.model.set({
+      name: "Nueva Persona",
+      email: "persona@example.test",
+      password: "FakePassword1",
+      lang: Lang.ES,
+      isActive: true,
+      roleId: String(roles.roles()[0].id),
+      customerType: "",
+      phone: ""
+    })
+    await flush(editor.save())
+    expect(editor.error()).toBe("No tienes permiso para guardar estos cambios.")
+  })
+
+  it("binds a reserved email to the email field with the shared-address explanation", async () => {
+    const { editor, users, roles, element, ref } = await setup()
+    vi.spyOn(users, "createUser").mockReturnValue(
+      of(Result.failure(new UserError("EMAIL_ALREADY_EXISTS")))
+    )
+    editor.model.set({
+      name: "Nueva Persona",
+      email: "persona@example.test",
+      password: "FakePassword1",
+      lang: Lang.ES,
+      isActive: true,
+      roleId: String(roles.roles()[0].id),
+      customerType: "",
+      phone: ""
+    })
+    await flush(editor.save())
+    TestBed.tick()
+    expect(editor.error()).toBe("")
+    const fieldError = element.querySelector("#user-email-account-error")
+    expect(fieldError?.textContent).toContain("ya pertenece a una cuenta del portal o a un cliente")
+    expect(fieldError?.getAttribute("role")).toBe("alert")
+    element
+      .querySelector<HTMLInputElement>("#user-email")!
+      .dispatchEvent(new Event("input", { bubbles: true }))
+    TestBed.tick()
+    expect(element.querySelector("#user-email-account-error")).toBeNull()
+    ref.forceClose()
+  })
+
+  it("reports the created customer reference on confirmed success", async () => {
+    const { editor, users, roles, saved, ref } = await setup()
+    vi.spyOn(users, "createUser").mockReturnValue(of(Result.success(customerAccountUser(12))))
+    editor.model.set({
+      name: "Cliente Nuevo",
+      email: "cliente@example.test",
+      password: "FakePassword1",
+      lang: Lang.ES,
+      isActive: true,
+      roleId: String(clientRole(roles).id),
+      customerType: "residencial",
+      phone: "999 111 222"
+    })
+    await flush(editor.save())
+    expect(saved).toHaveBeenCalledExactlyOnceWith({
+      created: true,
+      customerCreated: true,
+      customerId: 12
+    })
+    expect(ref.state()).toBe("closed")
+  })
+
+  it("keeps the customer-only fields out of the edit form and payload", async () => {
+    const { editor, users, element, ref } = await setup(customerAccountUser(12))
+    expect(element.querySelector("#user-customer-warning")).toBeNull()
+    expect(element.querySelector("#user-customer-type")).toBeNull()
+    expect(element.querySelector("#user-customer-phone")).toBeNull()
+    const update = vi
+      .spyOn(users, "updateUserById")
+      .mockReturnValue(of(Result.success(customerAccountUser(12))))
+    editor.model.update(model => ({ ...model, name: "Editado" }))
+    await flush(editor.save())
+    expect(update).toHaveBeenCalledOnce()
+    expect(update.mock.calls[0][1]).not.toHaveProperty("customerType")
+    expect(update.mock.calls[0][1]).not.toHaveProperty("phone")
+    ref.forceClose()
   })
 })

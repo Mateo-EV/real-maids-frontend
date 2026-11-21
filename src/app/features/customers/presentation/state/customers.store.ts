@@ -23,11 +23,14 @@ import { GetCustomerByIdUseCase } from "../../application/use-cases/get-customer
 import { ListCustomersUseCase } from "../../application/use-cases/list-customers.use-case"
 import { UpdateCustomerUseCase } from "../../application/use-cases/update-customer.use-case"
 import { LinkCustomerAccountUseCase } from "../../application/use-cases/link-customer-account.use-case"
+import { GetOwnCustomerProfileUseCase } from "../../application/use-cases/get-own-customer-profile.use-case"
+import { UpdateOwnCustomerProfileUseCase } from "../../application/use-cases/update-own-customer-profile.use-case"
 import { Customer } from "../../domain/entities/customer.entity"
 import { CustomerError } from "../../domain/errors/customer.error"
 import {
   CreateCustomerParams,
   UpdateCustomerParams,
+  UpdateOwnProfileParams,
   SetCustomerStatusParams,
   LinkCustomerAccountParams
 } from "../../domain/params/customer.params"
@@ -41,7 +44,10 @@ type DetailResult = Result<Customer, CustomerError>
 type StatisticsResult = Result<ClienteEstadisticas, CustomerError>
 type KeyedDetail = KeyedEntry<number, Customer, CustomerError>
 type KeyedStatistics = KeyedEntry<null, ClienteEstadisticas, CustomerError>
+type KeyedOwnProfile = KeyedEntry<"own", Customer, CustomerError>
 const statisticsKey = "statistics"
+/** The own profile is a single caller-scoped record: one key, no id and no query. */
+const ownProfileKey = "own"
 export interface CustomerReadEntry<T> {
   readonly result: T | undefined
   readonly loading: boolean
@@ -127,6 +133,29 @@ const toStatisticsEntry = (entry: CustomerReadEntry<ClienteEstadisticas>): Keyed
   error: entry.error,
   expires: entry.expires
 })
+/** The own profile is a single key; only the registry's `query: "own"` slot differs. */
+const toOwnProfileEntry = (entry: CustomerReadEntry<Customer>): KeyedOwnProfile => ({
+  query: ownProfileKey,
+  result: entry.result,
+  loading: entry.loading,
+  refreshing: entry.refreshing,
+  error: entry.error,
+  expires: entry.expires
+})
+const fromOwnProfileEntry = (
+  entries: Readonly<Record<string, KeyedOwnProfile>>
+): CustomerReadEntry<Customer> => {
+  const entry = entries[ownProfileKey]
+  return entry
+    ? {
+        result: entry.result,
+        loading: entry.loading,
+        refreshing: entry.refreshing,
+        error: entry.error,
+        expires: entry.expires
+      }
+    : emptyEntry<Customer>()
+}
 const fromStatisticsEntry = (
   entries: Readonly<Record<string, KeyedStatistics>>
 ): CustomerReadEntry<ClienteEstadisticas> => {
@@ -145,6 +174,7 @@ interface CustomersState {
   readonly entries: Readonly<Record<string, CustomerPageEntry>>
   readonly details: Readonly<Record<number, CustomerReadEntry<Customer>>>
   readonly statistics: CustomerReadEntry<ClienteEstadisticas>
+  readonly ownProfile: CustomerReadEntry<Customer>
   readonly currentPageKey: string | null
   readonly selectedId: number | null
   readonly writePending: number
@@ -155,6 +185,7 @@ const initialState: CustomersState = {
   entries: {},
   details: {},
   statistics: emptyEntry<ClienteEstadisticas>(),
+  ownProfile: emptyEntry<Customer>(),
   currentPageKey: null,
   selectedId: null,
   writePending: 0,
@@ -201,6 +232,7 @@ export const CustomersStore = signalStore(
       pages.reset()
       details.reset()
       statisticsReads.reset()
+      ownProfileReads.reset()
       patchState(store, initialState)
     })
     const pages = createKeyedReads<CustomerListQuery, Page, CustomerError>({
@@ -263,6 +295,27 @@ export const CustomersStore = signalStore(
       ),
       scope,
       // Same freshness group as the customer reads: the KPI block checks on reads, no polling.
+      ttl: 120000,
+      expireOnError: true,
+      noSession: "failure",
+      noSessionObserve: "empty",
+      noSessionError: () => new CustomerError("UNAUTHENTICATED"),
+      normalizeError: toCustomerError,
+      overflow: () => new CustomerError("UNEXPECTED")
+    })
+    const ownProfileReads = createKeyedReads<"own", Customer, CustomerError>({
+      key: () => ownProfileKey,
+      request: () =>
+        injector
+          .get(GetOwnCustomerProfileUseCase)
+          .execute()
+          .pipe(take(1), defaultIfEmpty(Result.failure(new CustomerError("INVALID_RESPONSE")))),
+      state: keyedState<"own", Customer, CustomerError>(
+        () => ({ [ownProfileKey]: toOwnProfileEntry(store.ownProfile()) }),
+        next => patchState(store, { ownProfile: fromOwnProfileEntry(next) })
+      ),
+      scope,
+      // Customer profile freshness (120000ms): checked on reads and revisits, never polled.
       ttl: 120000,
       expireOnError: true,
       noSession: "failure",
@@ -368,6 +421,45 @@ export const CustomersStore = signalStore(
       selectStatistics(): CustomerReadEntry<ClienteEstadisticas> {
         return store.statistics()
       },
+      /** The own profile of the signed-in customer (WP10 T7); a `404` is a stable state. */
+      selectOwnProfile(): CustomerReadEntry<Customer> {
+        return store.ownProfile()
+      },
+      loadOwnProfile(force = false): Observable<DetailResult> {
+        return ownProfileReads.read(ownProfileKey, force)
+      },
+      observeOwnProfile(force = false): Observable<DetailResult> {
+        return defer(() => {
+          if (!scope.check()) return EMPTY
+          return ownProfileReads.observe(ownProfileKey, { force })
+        })
+      },
+      /**
+       * Own-profile update. The shared write gate serializes it with every other customer write, a
+       * confirmed success alone expires the cached profile — an active observer re-reads it once —
+       * and feedback stays with the caller: the portal speaks its own copy, never the CRM's.
+       */
+      updateOwnProfile: (params: UpdateOwnProfileParams): Observable<DetailResult> =>
+        defer(() => {
+          if (!scope.check()) return of(Result.failure(new CustomerError("UNAUTHENTICATED")))
+          const generation = scope.generation()
+          patchState(store, { writePending: store.writePending() + 1 })
+          return defer(() => injector.get(UpdateOwnCustomerProfileUseCase).execute(params)).pipe(
+            take(1),
+            defaultIfEmpty(Result.failure(new CustomerError("INVALID_RESPONSE"))),
+            catchError(error => of(Result.failure(toCustomerError(error)))),
+            takeUntil(scope.cancelled$),
+            tap(result => {
+              if (!scope.check() || generation !== scope.generation()) return
+              // Only a confirmed write invalidates; a failure leaves verified data and its freshness.
+              if (result.success) ownProfileReads.markMutated()
+            }),
+            finalize(() => {
+              if (generation === scope.generation())
+                patchState(store, { writePending: store.writePending() - 1 })
+            })
+          )
+        }),
       observeQuery(query: CustomerListQuery = {}, force = false): Observable<PageResult> {
         return defer(() => {
           if (!scope.check()) return EMPTY

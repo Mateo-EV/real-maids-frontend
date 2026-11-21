@@ -22,6 +22,7 @@ import { LoginParams } from "../../domain/params/login.params"
 import { AuthPersistentSession } from "../session/auth-persistent-session"
 import { authContext } from "../http/auth-http-policy"
 import { loginResponse, profile } from "../http/auth-response"
+import { ChangePasswordParams } from "../../domain/params/change-password.params"
 
 @Injectable({ providedIn: "root" })
 export class AuthHttpSource {
@@ -84,6 +85,9 @@ export class AuthHttpSource {
       if (error.status === 401) return new AuthError("INVALID_CREDENTIALS")
       if (error.status === 403) return new AuthError("FORBIDDEN")
       if (error.status === 0) return new AuthError("NETWORK")
+      // The only documented 400 on this boundary is the rejected own password change. Raw backend
+      // text never leaves the adapter.
+      if (error.status === 400) return new AuthError("INVALID_PASSWORD_CHANGE")
     }
     return new AuthError("UNEXPECTED")
   }
@@ -125,7 +129,7 @@ export class AuthHttpSource {
     })
   }
 
-  me(): Observable<Result<AuthSession, AuthError>> {
+  me(force = false): Observable<Result<AuthSession, AuthError>> {
     return defer(() => {
       const credentials = this.storage.read()
       if (!credentials) {
@@ -133,6 +137,7 @@ export class AuthHttpSource {
         return of(Result.failure(new AuthError("INVALID_CREDENTIALS")))
       }
       if (
+        !force &&
         this.loaded &&
         this.loadedRaw === this.storage.raw() &&
         credentials.accessExpiresAt > Date.now()
@@ -263,6 +268,49 @@ export class AuthHttpSource {
         cancel.complete()
         if (sent && !committed && this.storage.raw() === expected) this.storage.clear(expected)
       }
+    })
+  }
+
+  /**
+   * Own password change. The interceptor is bypassed like `me()`, so the bearer is attached here and
+   * a 401 cannot replay or renew credentials. A rejected change keeps the stored session: the flag
+   * stays set and the person can retry or sign out.
+   */
+  changePassword(params: ChangePasswordParams): Observable<Result<void, AuthError>> {
+    return defer(() => {
+      if (!this.storage.browser || !this.storage.origin)
+        return of(Result.failure(new AuthError("UNCONFIGURED")))
+      if (!this.storage.read()) return of(Result.failure(new AuthError("INVALID_CREDENTIALS")))
+      const revision = this.revision
+      const expected = this.storage.raw()
+      return this.accessToken().pipe(
+        switchMap(token =>
+          this.http
+            .put<unknown>(
+              `${this.storage.origin}/api/auth/me/password`,
+              {
+                passwordActual: params.currentPassword,
+                passwordNueva: params.newPassword
+              },
+              {
+                context: authContext(),
+                headers: new HttpHeaders({ Authorization: `Bearer ${token}` }),
+                transferCache: false
+              }
+            )
+            .pipe(
+              timeout(10000),
+              map(() => {
+                if (revision !== this.revision || expected !== this.storage.raw())
+                  throw new AuthError("CANCELLED")
+                return Result.success<void>(undefined)
+              })
+            )
+        ),
+        takeUntil(this.invalidated),
+        defaultIfEmpty(Result.failure(new AuthError("CANCELLED"))),
+        catchError(error => of(Result.failure(this.failure(error))))
+      )
     })
   }
 

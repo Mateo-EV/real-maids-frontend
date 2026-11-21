@@ -210,7 +210,9 @@
                       </div>
                       <div>
                         <dt class="text-xs text-muted-foreground">Usuario suministrado</dt>
-                        <dd class="mt-1 text-sm break-words">{{ entry.userName }}</dd>
+                        <dd class="mt-1 text-sm break-words">
+                          {{ entry.userName ?? "No registrado" }}
+                        </dd>
                       </div>
                       <div>
                         <dt class="text-xs text-muted-foreground">Fecha (UTC)</dt>

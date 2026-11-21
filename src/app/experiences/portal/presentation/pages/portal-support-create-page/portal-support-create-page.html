@@ -1,0 +1,217 @@
+<main
+  class="bg-background text-foreground mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6"
+>
+  <section hlmCard aria-labelledby="portal-support-create-title">
+    <div hlmCardHeader class="gap-2">
+      <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Soporte</p>
+      <h1 hlmCardTitle id="portal-support-create-title" class="text-2xl tracking-tight">
+        Nueva atención
+      </h1>
+      <p hlmCardDescription class="max-w-prose leading-6">
+        Registramos la atención a tu nombre. Podrás seguir su estado en «Soporte»; el estado lo
+        actualiza el equipo de soporte.
+      </p>
+    </div>
+
+    <div hlmCardContent>
+      <form class="flex flex-col gap-5" [formRoot]="profile" (submit)="save()">
+        @if (error()) {
+          <div hlmAlert variant="destructive" role="alert" aria-live="assertive">
+            <ng-icon name="lucideCircleAlert" aria-hidden="true" />
+            <p hlmAlertTitle>
+              {{ ambiguous() ? "No pudimos confirmar el registro" : "No se registró la atención" }}
+            </p>
+            <p hlmAlertDescription>{{ error() }}</p>
+            @if (ambiguous()) {
+              <a hlmBtn variant="outline" size="sm" class="mt-2 w-fit" routerLink="/portal/support"
+                >Ver mis atenciones</a
+              >
+            }
+          </div>
+        }
+
+        @if (leaveBlocked() && pending()) {
+          <p role="status" class="text-xs text-muted-foreground">
+            Espera a que termine el registro para salir de esta página.
+          </p>
+        }
+
+        <fieldset hlmFieldSet class="grid min-w-0 gap-4" [disabled]="pending()">
+          <legend hlmFieldLegend class="sr-only">Datos de la atención</legend>
+
+          <div hlmField class="min-w-0 gap-1.5">
+            <label hlmFieldLabel for="portal-support-create-typeId"
+              >Tipo de atención (obligatorio)</label
+            >
+            <hlm-native-select
+              selectId="portal-support-create-typeId"
+              [formField]="profile.requestTypeId"
+              aria-describedby="portal-support-create-typeId-status portal-support-create-typeId-errors"
+              class="w-full"
+            >
+              <option value="">Selecciona tipo de atención</option>
+              @for (type of typeOptions(); track type.value) {
+                <option [value]="type.value">{{ type.label }}</option>
+              }
+            </hlm-native-select>
+            <div id="portal-support-create-typeId-status">
+              @if (typeEntry().loading) {
+                <p role="status" class="text-xs text-muted-foreground">Cargando tipos…</p>
+              }
+              @if (typeFailed()) {
+                <div class="flex flex-wrap items-center gap-2">
+                  <p role="alert" class="text-xs text-destructive">
+                    No se pudieron cargar los tipos de atención.
+                  </p>
+                  <button
+                    hlmBtn
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    [disabled]="typeBusy() || pending()"
+                    (click)="loadTypes(true)"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              } @else if (typeEntry().result && !typeOptions().length) {
+                <p role="status" class="text-xs text-muted-foreground">
+                  No hay tipos de atención en el catálogo recibido.
+                </p>
+              }
+            </div>
+            <div id="portal-support-create-typeId-errors">
+              @if (profile.requestTypeId().touched()) {
+                @for (error of profile.requestTypeId().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+                }
+              }
+            </div>
+          </div>
+
+          <div hlmField class="min-w-0 gap-1.5">
+            <label hlmFieldLabel for="portal-support-create-orderId">
+              Servicio relacionado (opcional)
+            </label>
+            <app-catalog-combobox
+              [id]="'portal-support-create-orderId'"
+              [label]="'Servicio relacionado (opcional)'"
+              [placeholder]="'Sin servicio asociado'"
+              [emptyLabel]="'No hay servicios en esta página.'"
+              [searchable]="false"
+              [selectedLabel]="orderLabel()"
+              [options]="orderOptions()"
+              [loading]="orderBusy()"
+              [errorLabel]="orderFailed() ? 'No se pudieron cargar tus servicios.' : ''"
+              [page]="currentOrderPage()"
+              [pageCount]="orderPageCount()"
+              (selectChange)="orderChanged($event)"
+              (reload)="loadOrders(true)"
+              (pageChange)="goToOrderPage($event)"
+            />
+            <div class="flex flex-wrap items-center gap-2">
+              @if (model().orderId) {
+                <button
+                  hlmBtn
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  [disabled]="pending()"
+                  (click)="clearOrder()"
+                >
+                  Quitar servicio asociado
+                </button>
+              }
+              <p hlmFieldDescription id="portal-support-create-orderId-help">
+                Solo se listan tus servicios. Si no necesitas asociar ninguno, deja esta opción
+                vacía.
+              </p>
+            </div>
+            <div id="portal-support-create-orderId-status">
+              @if (orderEntry().result && !orderOptions().length && !orderFailed()) {
+                <p role="status" class="text-xs text-muted-foreground">
+                  No hay servicios registrados para asociar.
+                </p>
+              }
+            </div>
+            <div id="portal-support-create-orderId-errors">
+              @if (profile.orderId().touched()) {
+                @for (error of profile.orderId().errors(); track error.kind) {
+                  <p role="alert" class="text-xs text-destructive">{{ error.message }}</p>
+                }
+              }
+            </div>
+          </div>
+
+          <div hlmField class="min-w-0 gap-1.5">
+            <label hlmFieldLabel for="portal-support-create-subject">Asunto (obligatorio)</label>
+            <input
+              hlmInput
+              id="portal-support-create-subject"
+              type="text"
+              autocomplete="off"
+              aria-required="true"
+              [aria-describedby]="'portal-support-create-subject-help portal-support-create-subject-errors'"
+              [formField]="profile.subject"
+              (input)="clearFailure()"
+            />
+            <p hlmFieldDescription id="portal-support-create-subject-help">
+              Hasta {{ subjectLimit }} caracteres. Se omiten espacios al inicio y al final.
+            </p>
+            <div id="portal-support-create-subject-errors">
+              @if (profile.subject().touched()) {
+                @for (error of profile.subject().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+                }
+              }
+            </div>
+          </div>
+
+          <div hlmField class="min-w-0 gap-1.5">
+            <label hlmFieldLabel for="portal-support-create-description"
+              >Descripción (obligatoria)</label
+            >
+            <textarea
+              hlmTextarea
+              id="portal-support-create-description"
+              rows="6"
+              aria-required="true"
+              [aria-describedby]="'portal-support-create-description-help portal-support-create-description-errors'"
+              [formField]="profile.description"
+              (input)="clearFailure()"
+            ></textarea>
+            <p hlmFieldDescription id="portal-support-create-description-help">
+              Hasta {{ descriptionLimit }} caracteres. Se omiten espacios al inicio y al final.
+            </p>
+            <div id="portal-support-create-description-errors">
+              @if (profile.description().touched()) {
+                @for (error of profile.description().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+                }
+              }
+            </div>
+          </div>
+        </fieldset>
+
+        <div
+          class="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end sm:gap-3"
+          role="group"
+          aria-label="Acciones de la atención"
+        >
+          <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+            Cancelar
+          </button>
+          <button hlmBtn type="submit" [disabled]="pending()" [attr.aria-busy]="pending()">
+            @if (pending()) {
+              <hlm-spinner aria-label="Registrando la atención" />
+              Registrando…
+            } @else {
+              <ng-icon name="lucideLifeBuoy" aria-hidden="true" />
+              Registrar atención
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>

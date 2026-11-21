@@ -78,6 +78,8 @@ async function setup(url = "/admin/staff/7", server = false) {
   await settle()
   const element = () => harness.routeNativeElement!
   const text = () => element().textContent ?? ""
+  const buttons = () =>
+    Array.from(element().querySelectorAll("button")).map(item => item.textContent?.trim() ?? "")
   const click = async (label: string) => {
     const button = Array.from(element().querySelectorAll<HTMLButtonElement>("button")).find(
       item => item.textContent?.trim() === label
@@ -86,7 +88,7 @@ async function setup(url = "/admin/staff/7", server = false) {
     button!.click()
     await settle()
   }
-  return { http, router, harness, session, observe, settle, element, text, click }
+  return { http, router, harness, session, observe, settle, element, text, buttons, click }
 }
 
 afterEach(() => {
@@ -95,20 +97,35 @@ afterEach(() => {
 })
 
 describe("WP7 T4 S1/S3 profile read ownership and safe failures", () => {
-  it("treats own 404 as a safe failure, never a fallback to /{auth.id} or the directory", async () => {
+  it("renders the own 404 as a definitive no-disponible state with no retry, never a fallback", async () => {
     const app = await setup("/admin/staff/me")
     app.http
       .expectOne(`${api}/me`)
       .flush({ mensaje: "private backend detail" }, { status: 404, statusText: "Not Found" })
     await app.settle()
     expect(app.text()).toContain("No se encontró el perfil")
+    expect(app.text()).toContain("no está disponible")
     expect(app.text()).not.toContain("private backend detail")
+    expect(app.element().querySelector("[data-staff-unavailable]")).not.toBeNull()
+    // Repeating the same GET cannot turn an authoritative absence into a record.
+    expect(app.buttons()).not.toContain("Reintentar")
     app.http.expectNone(() => true)
+  })
+
+  it("keeps the retryable alert and its retry for a transient profile failure", async () => {
+    const app = await setup()
+    app.http
+      .expectOne(`${api}/7`)
+      .flush({ mensaje: "private backend detail" }, { status: 500, statusText: "Failure" })
+    await app.settle()
+    expect(app.text()).toContain("No se pudo cargar el perfil")
+    expect(app.element().querySelector("[data-staff-unavailable]")).toBeNull()
+    expect(app.buttons()).toContain("Reintentar")
     await app.click("Reintentar")
-    app.http.expectOne(`${api}/me`).flush(dto())
+    app.http.expectOne(`${api}/7`).flush(dto())
     await app.settle()
     expect(app.text()).toContain("Personal 7")
-    app.http.expectNone(() => true)
+    expect(app.buttons()).not.toContain("Reintentar")
   })
 
   it("does not infer /me from truthy route metadata", async () => {

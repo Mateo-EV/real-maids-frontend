@@ -6,6 +6,8 @@ import { beforeEach, afterEach, describe, it, expect } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { AcquisitionRepositoryImpl } from "../repositories/acquisition.repository-impl"
 import { LeadListQuery } from "../../domain/models/lead-list-query"
+import { CustomerType } from "../../domain/entities/customer.entity"
+import { ConvertLeadParams } from "../../domain/params/acquisition.params"
 
 const leadWire = {
   idProspecto: 7,
@@ -259,5 +261,145 @@ describe("Acquisition prospect statistics HTTP boundary", () => {
       .expectOne(statisticsUrl)
       .error(new ProgressEvent("error"), { status: 0, statusText: "Unknown Error" })
     expect(await offline).toMatchObject({ success: false, error: { code: "NETWORK" } })
+  })
+})
+
+describe("Acquisition conversion account HTTP boundary", () => {
+  let repository: AcquisitionRepositoryImpl, http: HttpTestingController
+  const conversionUrl = "http://localhost:8080/api/prospectos/7/conversion"
+  const converted = (patch: object = {}) => ({
+    idCliente: 91,
+    nombre: "Cliente convertido",
+    tipo: CustomerType.RESIDENTIAL,
+    correo: "prospecto@example.test",
+    telefono: null,
+    activo: true,
+    idUsuario: null,
+    fechaCreacion: "2026-01-01T00:00:00Z",
+    fechaActualizacion: null,
+    idProspecto: 7,
+    identificacionFiscal: null,
+    sistemaOrigen: null,
+    idExterno: null,
+    usuarioRegistro: null,
+    ...patch
+  })
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_URL, useValue: "http://localhost:8080" }
+      ]
+    })
+    repository = TestBed.inject(AcquisitionRepositoryImpl)
+    http = TestBed.inject(HttpTestingController)
+  })
+  afterEach(() => http.verify())
+
+  it("omits every account key when the conversion does not request an account", async () => {
+    const pending = firstValueFrom(
+      repository.convertLead({ leadId: 7, type: CustomerType.RESIDENTIAL })
+    )
+    const request = http.expectOne(conversionUrl)
+    expect(request.request.method).toBe("POST")
+    expect(request.request.body).toEqual({ tipo: CustomerType.RESIDENTIAL })
+    expect(Object.keys(request.request.body)).not.toContain("crearCuenta")
+    expect(Object.keys(request.request.body)).not.toContain("password")
+    request.flush(converted())
+    expect(await pending).toMatchObject({ success: true, data: { id: 91, leadId: 7 } })
+  })
+
+  it("sends an explicit crearCuenta true with the untrimmed password only when asked", async () => {
+    const pending = firstValueFrom(
+      repository.convertLead({
+        leadId: 7,
+        type: CustomerType.COMMERCIAL,
+        createAccount: true,
+        password: " Clave 1234 "
+      })
+    )
+    const request = http.expectOne(conversionUrl)
+    expect(request.request.body).toEqual({
+      tipo: CustomerType.COMMERCIAL,
+      crearCuenta: true,
+      password: " Clave 1234 "
+    })
+    request.flush(converted({ tipo: CustomerType.COMMERCIAL }))
+    expect(await pending).toMatchObject({ success: true, data: { id: 91 } })
+  })
+
+  it("keeps the documented false state without a password when the caller declines the account", async () => {
+    const pending = firstValueFrom(
+      repository.convertLead({ leadId: 7, type: CustomerType.RESIDENTIAL, createAccount: false })
+    )
+    const request = http.expectOne(conversionUrl)
+    expect(request.request.body).toEqual({
+      tipo: CustomerType.RESIDENTIAL,
+      crearCuenta: false
+    })
+    request.flush(converted())
+    expect(await pending).toMatchObject({ success: true })
+  })
+
+  it.each([
+    ["a requested account without a password", { createAccount: true }],
+    ["a password without the account request", { password: "Clave1234" }]
+  ])("refuses %s before any HTTP", async (_label, account) => {
+    const result = await firstValueFrom(
+      repository.convertLead({
+        leadId: 7,
+        type: CustomerType.RESIDENTIAL,
+        ...account
+      } as ConvertLeadParams)
+    )
+    expect(!result.success && result.error.code).toBe("INVALID_INPUT")
+    http.expectNone(() => true)
+  })
+
+  it.each([
+    ["correoParaCuenta", "ACCOUNT_EMAIL_REQUIRED"],
+    ["passwordParaCuenta", "ACCOUNT_PASSWORD_REQUIRED"],
+    ["passwordSoloConCuenta", "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT"]
+  ])("decodes the documented %s marker into its own typed code", async (marker, code) => {
+    const pending = firstValueFrom(
+      repository.convertLead({
+        leadId: 7,
+        type: CustomerType.RESIDENTIAL,
+        createAccount: true,
+        password: "Clave1234"
+      })
+    )
+    http.expectOne(conversionUrl).flush(
+      {
+        codigo: 400,
+        mensaje: "Private text must not reach UI",
+        errores: { [marker]: "x" }
+      },
+      { status: 400, statusText: "Bad Request" }
+    )
+    const result = await pending
+    expect(!result.success && result.error.code).toBe(code)
+    expect(result.success ? "" : result.error.message).not.toContain("Private")
+  })
+
+  it("keeps an undocumented 400 generic and does not widen the marker allow-list", async () => {
+    const pending = firstValueFrom(
+      repository.convertLead({
+        leadId: 7,
+        type: CustomerType.RESIDENTIAL,
+        createAccount: true,
+        password: "Clave1234"
+      })
+    )
+    http
+      .expectOne(conversionUrl)
+      .flush(
+        { codigo: 400, mensaje: "Private text must not reach UI", errores: { otroCampo: "x" } },
+        { status: 400, statusText: "Bad Request" }
+      )
+    const result = await pending
+    expect(!result.success && result.error.code).toBe("INVALID_INPUT")
+    expect(result.success ? "" : result.error.message).not.toContain("Private")
   })
 })

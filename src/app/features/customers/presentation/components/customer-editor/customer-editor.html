@@ -46,7 +46,10 @@
       }
     </div>
     <div hlmField class="min-w-0 gap-1.5">
-      <label hlmFieldLabel for="customer-email">Correo electrónico (opcional)</label>
+      <label hlmFieldLabel for="customer-email">
+        Correo electrónico
+        {{ accountRequested() ? "(obligatorio para la cuenta)" : "(opcional)" }}
+      </label>
       <input
         hlmInput
         id="customer-email"
@@ -54,15 +57,23 @@
         autocomplete="off"
         aria-describedby="email-help email-errors"
         [formField]="profile.email"
+        [attr.aria-invalid]="fieldError()?.field === 'email' ? 'true' : null"
+        (input)="clearFieldError()"
       />
       <p hlmFieldDescription id="email-help">
-        Hasta 120 caracteres. Vacío guarda el dato sin registrar, también al editar.
+        Hasta 120 caracteres. Vacío guarda el dato sin registrar, también al editar; con cuenta del
+        portal el correo es obligatorio.
       </p>
       <div id="email-errors">
         @if (profile.email().touched()) {
           @for (error of profile.email().errors(); track error.kind) {
             <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
           }
+        }
+        @if (fieldError()?.field === "email") {
+          <hlm-field-error forceShow id="customer-email-account-error">
+            {{ fieldError()!.message }}
+          </hlm-field-error>
         }
       </div>
     </div>
@@ -89,6 +100,93 @@
       </div>
     </div>
   </fieldset>
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend>Cuenta del portal</legend>
+    <p hlmFieldDescription id="customer-account-state">
+      Estado actual de la cuenta: {{ accountStateLabel() }}.
+    </p>
+    @if (account() === "unknown") {
+      <p hlmFieldDescription id="customer-account-unknown">
+        El servidor no informó el estado de esta cuenta, así que no se modifica desde acá. Guardá el
+        resto de los datos sin tocar la cuenta.
+      </p>
+    } @else {
+      <div hlmField orientation="horizontal">
+        <input
+          id="customer-create-account"
+          type="checkbox"
+          class="size-4 accent-primary"
+          aria-describedby="customer-account-state customer-account-help"
+          [formField]="profile.createAccount"
+          (change)="accountToggled()"
+        />
+        <label hlmFieldLabel for="customer-create-account">{{ accountToggleLabel() }}</label>
+      </div>
+      <p hlmFieldDescription id="customer-account-help">
+        Sin marcar, la cuenta no se modifica y el correo queda opcional. Marcada, se crea o se
+        reactiva con la contraseña inicial indicada, y el correo del cliente es obligatorio. La
+        persona deberá cambiar su contraseña en el primer ingreso.
+      </p>
+    }
+    @if (retireRequested()) {
+      <div hlmAlert variant="destructive" role="group" aria-live="polite">
+        <p hlmAlertTitle>Baja de la cuenta del portal</p>
+        <p hlmAlertDescription>
+          Al guardar se retirará el acceso al portal de este cliente de inmediato: la cuenta dejará
+          de poder iniciar sesión.
+        </p>
+        @if (retireConfirmed()) {
+          <p hlmAlertDescription>Baja confirmada; se aplicará al guardar.</p>
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="keepAccount()">
+              Mantener la cuenta
+            </button>
+          </div>
+        } @else {
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" variant="destructive" size="sm" (click)="confirmRetire()">
+              Confirmar baja de la cuenta
+            </button>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="keepAccount()">
+              Mantener la cuenta
+            </button>
+          </div>
+        }
+      </div>
+    }
+    @if (accountRequested()) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel for="customer-account-password">
+          Contraseña inicial (obligatoria)
+        </label>
+        <input
+          hlmInput
+          id="customer-account-password"
+          type="password"
+          autocomplete="new-password"
+          aria-describedby="customer-account-password-help customer-account-password-errors"
+          [formField]="profile.password"
+          [attr.aria-invalid]="fieldError()?.field === 'password' ? 'true' : null"
+          (input)="clearFieldError()"
+        />
+        <p hlmFieldDescription id="customer-account-password-help">
+          La define quien crea la cuenta. No se muestran ni se registran sus valores.
+        </p>
+        <div id="customer-account-password-errors">
+          @if (profile.password().touched()) {
+            @for (error of profile.password().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+          @if (fieldError()?.field === "password") {
+            <hlm-field-error forceShow id="customer-account-password-error">
+              {{ fieldError()!.message }}
+            </hlm-field-error>
+          }
+        </div>
+      </div>
+    }
+  </fieldset>
   <hlm-dialog-footer class="border-t pt-3">
     <button
       hlmBtn
@@ -102,7 +200,7 @@
     <button
       hlmBtn
       type="submit"
-      [disabled]="profile().submitting()"
+      [disabled]="profile().submitting() || retireBlocked()"
       [attr.aria-busy]="profile().submitting()"
     >
       @if (profile().submitting()) {

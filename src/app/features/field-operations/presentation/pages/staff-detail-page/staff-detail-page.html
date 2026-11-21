@@ -41,24 +41,35 @@
       }
       @if (error()) {
         <div class="p-5">
-          <div hlmAlert variant="destructive">
+          <div
+            hlmAlert
+            variant="destructive"
+            [attr.data-staff-unavailable]="notFound() ? '' : null"
+          >
             <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
             <div hlmAlertDescription>
-              @if (staff()) {
+              @if (notFound()) {
+                <p>
+                  El perfil no está disponible para esta sesión o ya no existe. Volver a consultarlo
+                  no cambiará el resultado.
+                </p>
+              } @else if (staff()) {
                 <p>Los datos pueden estar desactualizados.</p>
               }
             </div>
           </div>
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="mt-4"
-            [disabled]="busy()"
-            (click)="retry()"
-          >
-            Reintentar
-          </button>
+          @if (!notFound()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="mt-4"
+              [disabled]="busy()"
+              (click)="retry()"
+            >
+              Reintentar
+            </button>
+          }
         </div>
       }
       @if (staff(); as person) {

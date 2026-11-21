@@ -21,6 +21,8 @@ import { ListCustomersUseCase } from "./list-customers.use-case"
 import { GetCustomerByIdUseCase } from "./get-customer-by-id.use-case"
 import { CreateCustomerUseCase } from "./create-customer.use-case"
 import { UpdateCustomerUseCase } from "./update-customer.use-case"
+import { GetOwnCustomerProfileUseCase } from "./get-own-customer-profile.use-case"
+import { UpdateOwnCustomerProfileUseCase } from "./update-own-customer-profile.use-case"
 
 const origin = { name: "Origin", description: null, isActive: true }
 const stage = { name: "Stage", order: 1, isFinal: false }
@@ -58,6 +60,8 @@ const property = {
   hasPets: false
 }
 const profile = { name: "Customer", type: CustomerType.COMMERCIAL, email: null, phone: null }
+/** Own-profile payload of the customer portal: the two fields `/api/clientes/me` accepts. */
+const ownProfile = { name: "Customer", phone: "+56 9 1234 5678" }
 interface Action {
   token: InjectionToken<unknown>
   method: string
@@ -88,6 +92,18 @@ const actions: Action[] = [
     method: "update",
     args: [{ id: 7, ...profile }],
     invoke: () => TestBed.inject(UpdateCustomerUseCase).execute({ id: 7, ...profile })
+  },
+  {
+    token: CUSTOMER_REPOSITORY,
+    method: "findOwnProfile",
+    args: [],
+    invoke: () => TestBed.inject(GetOwnCustomerProfileUseCase).execute()
+  },
+  {
+    token: CUSTOMER_REPOSITORY,
+    method: "updateOwnProfile",
+    args: [ownProfile],
+    invoke: () => TestBed.inject(UpdateOwnCustomerProfileUseCase).execute(ownProfile)
   },
   {
     token: ACQUISITION_REPOSITORY,

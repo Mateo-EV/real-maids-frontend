@@ -9,7 +9,7 @@ import { Result } from "@/app/shared/utils/result"
 import { dtoDate, dtoId, dtoRecord, dtoText } from "@/app/shared/infrastructure/http/dto-validation"
 import { Lang, User } from "../../domain/entities/user.entity"
 import { UserError, UserErrorCode } from "../../domain/errors/user.error"
-import { CreateUserParams } from "../../domain/params/create-user.params"
+import { CreateUserParams, isCustomerType } from "../../domain/params/create-user.params"
 import { UpdateUserParams } from "../../domain/params/update-user.params"
 import { UserListQuery } from "../../domain/models/user-list-query"
 import { UserStatistics } from "../../domain/models/user-statistics"
@@ -42,8 +42,20 @@ function userDto(value: unknown): User {
     date(p["fechaCreacion"]),
     date(p["fechaActualizacion"]),
     p["idRol"],
-    p["ultimoAcceso"] === null ? null : date(p["ultimoAcceso"])
+    p["ultimoAcceso"] === null ? null : date(p["ultimoAcceso"]),
+    customerIdOf(p)
   )
+}
+/**
+ * `idCliente` links the account to the customer row created with a CLIENTE alta. Responses that
+ * predate that contract omit it; a present value must still be a usable positive int32.
+ */
+function customerIdOf(p: Record<string, unknown>): number | null {
+  if (!("idCliente" in p) || p["idCliente"] === null) return null
+  const value = p["idCliente"]
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 2147483647)
+    return invalid()
+  return value
 }
 function userForId(value: unknown, id: number): User {
   const user = userDto(value)
@@ -191,14 +203,25 @@ export class UserHttpSource {
       value => userForId(value, id)
     )
   }
-  createUser(params: CreateUserParams) {
+  createUser(params: CreateUserParams): Observable<Result<User, UserError>> {
+    // Account-only fields belong to the customer row: they travel only with a documented type and
+    // never on their own, so another role's payload cannot carry them by accident.
+    if (params.customerType !== undefined && !isCustomerType(params.customerType))
+      return of(Result.failure(new UserError("VALIDATION")))
+    const requestedPhone = (params.phone ?? "").trim()
+    // A phone without the documented customer type would be dropped after the call reported success.
+    if (params.customerType === undefined && requestedPhone)
+      return of(Result.failure(new UserError("VALIDATION")))
+    const phone = params.customerType === undefined ? "" : requestedPhone
     const body = {
       nombre: params.name,
       correo: params.email,
       password: params.password,
       idRol: params.roleId,
       idioma: params.lang,
-      activo: params.isActive
+      activo: params.isActive,
+      ...(params.customerType === undefined ? {} : { tipo: params.customerType }),
+      ...(phone ? { telefono: phone } : {})
     }
     return this.request(
       () => this.http.post<unknown>(`${this.origin}/api/usuarios`, body, { transferCache: false }),

@@ -3,6 +3,7 @@ import { HttpClient } from "@angular/common/http"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { catchError, defer, map, Observable, of } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
@@ -160,7 +161,10 @@ export class ServiceRequestsHttpSource {
     return this.request(() => {
       if (!positiveId(id)) throw failure("INVALID_DATA")
       return this.http
-        .get<unknown>(`${this.url}/${id}`, { transferCache: false })
+        .get<unknown>(`${this.url}/${id}`, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
         .pipe(map(value => requestDto(value, id)))
     })
   }

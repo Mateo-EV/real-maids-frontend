@@ -62,9 +62,9 @@ The caller-relative `actual` field identifies the current session; no token/stor
 
 Root store lifetimes, stateless use cases and the distinct useExisting repository/source boundary remain (RNF09/RNF10). SSR does not dispatch session HTTP requests or transfer-cache them. The old registry is unwired test/demo data, never a fallback. UTC display does not select an operational timezone. Live authenticated backend/CORS and Chrome/Edge/Firefox visual, keyboard and responsive acceptance remain pending (RNF06/RNF08/RNF12).
 
-The editor follows documented password validation: creation requires 8–64 characters with uppercase, lowercase and a digit, while a blank edit preserves the existing password. Password bytes are never trimmed or stored in user identity. Create sends the documented profile/password fields; editing sends profile `PUT`, desired status `PATCH` only when changed, then optional `PUT /api/usuarios/{id}/password` with `passwordNueva`. This sequence is not atomic: later failure returns `PARTIAL_UPDATE`, refreshes server profile state and does not show success. Cancellation after dispatch cannot guarantee rollback; no writes are replayed automatically. Transport/DTO failures return safe typed errors, including forbidden, duplicate email and not found, without raw backend details. Browser/CORS/authenticated backend acceptance and visual/responsive/keyboard checks in Chrome, Edge and Firefox remain pending; simulated HTTP tests and a build do not certify live behavior.
+The editor follows documented password validation: creation requires 8–64 characters with uppercase, lowercase and a digit, while a blank edit preserves the existing password. Password bytes are never trimmed or stored in user identity. Create sends the documented profile/password fields; editing sends profile `PUT`, desired status `PATCH` only when changed, then optional `PUT /api/usuarios/{id}/password` with `passwordNueva`. Since WP10 T15 (section below), selecting the catalog's CLIENTE role in a **new** alta warns that a customer will be created, requires its `tipo`, accepts an optional `telefono` and sends those two account-only fields only for that role; every other role keeps the previous payload and a `403` on that alta names the missing `CLIENTE_CREAR` permission. This sequence is not atomic: later failure returns `PARTIAL_UPDATE`, refreshes server profile state and does not show success. Cancellation after dispatch cannot guarantee rollback; no writes are replayed automatically. Transport/DTO failures return safe typed errors, including forbidden, duplicate email and not found, without raw backend details. Browser/CORS/authenticated backend acceptance and visual/responsive/keyboard checks in Chrome, Edge and Firefox remain pending; simulated HTTP tests and a build do not certify live behavior.
 
-M03/RF03/HU03 and RF12/HU12 now have a [real HTTP/application boundary](../src/app/features/customers/README.md) for customer profiles/state/accounts, properties, acquisition, contacts/preferences and permission-aware history, requiring paged customer backend contract `f7988fb` or newer. Customer reads use server active-only pages with shared offset/limit domain contracts, actual returned totals/effective metadata and stable name/ID ordering. Backend commit `a6f7141` adds `busqueda` (trimmed, case-insensitive literal substring on name/email; blank omitted; `%`, `_` and backslash are literal) and exact `tipo` (`residencial`/`comercial`, invalid values return 400), applied before pagination. They never slice a downloaded full catalog or infer page totals from mutations. Stateless named use cases delegate through explicitly bound root repositories to validated HTTP sources. The demo is unwired, never a fallback. Customer removal is deactivation, not physical deletion; conversion uses current lead data (the unchanged Spanish prospect API contract) and returns the same linked customer on repeats, without account creation, email merging or inferred stage changes. Angular uses Lead/LeadOrigin/LeadFollowUp and leadId internally, including Quote/WebForm linkage; Spanish wire fields/routes and Java names stay unchanged. The root store preserves its lifetime and clears/fences session-old work. The approved customer presentation cache policy uses 120000ms for customer pages/details, properties, contacts/preferences and acquisition catalogs, and 30000ms for leads/details, follow-ups and customer history. Root capability stores reuse the shared read-resource/session-scope pattern with caller-owned subscriptions, same-key stale feedback and confirmed-write invalidation. WP1–WP2 now connect a protected lazy read-only P04 list at `/admin/customers`, through the existing **CRM** sidebar entry, without changing the official shell/theme, IAM or default users redirect. The page shows name/type/email/phone as a desktop table/mobile cards and starts with offset 0/limit 20. Shared pagination uses actual total/effective offset/limit, without client-side slicing or invented counters. Debounced name/email search and immediate exact customer-type filtering are applied by the backend before paging; either control resets the offset, and the detail return URL retains only offset/limit. No status/tag filters are offered. Query-specific computed projections and component-owned observation subscriptions preserve root store TTL, invalidation, cancellation and session fencing. Loading, verified empty, retryable initial error, same-key stale rows during refresh/failure and unrelated-query isolation remain distinct. A successful positive-total empty out-of-range page permits one corrective query using the returned limit per navigation/retry; the transport/store never rewrites metadata, and a second empty result cannot loop. WP3 now connects local Signal Forms create/edit for name/type/email/phone only and contextual desired-false deactivation on desktop/mobile, with nullable replacements, pending dismissal/duplicate guards, safe actionable inline errors preserving drafts and confirmed-write success toasts fenced by owner/session lifetime. Captured loaded customer identity is independent of refreshed rows. Active store observers refresh confirmed writes once, without optimistic membership/totals or another page reload. Page/dialog destruction and session replacement cancel owned writes and fence late feedback; cancellation cannot roll back dispatched server effects. No direct Users-feature import, root feedback consumer, role inference, inactive discovery/reactivation or physical deletion is added. The bounded read-only WP4 slice below now adds detail/property consumers. The user reported manual WP2 acceptance; it is not agent-observed exhaustive Chrome/Edge/Firefox keyboard/responsive or live CORS testing. Corrected WP3 visual/manual/live/backend/browser acceptance is user-reported, not exhaustive agent-observed proof. Real MySQL locking/rollback evidence, full WP4 and subsequent gates remain pending. All other screens and the customer portal remain planned. IAM users/role catalog HTTP adapters are the T3 candidate; sessions and audit have T5–T6 HTTP adapters; enforced frontend role navigation, E2E and CI/CD remain absent; T4 connects permission catalog/assignment HTTP operations; auth persistence/transport is the T2 candidate, not a completed IAM capability; production deployment is unverified. Existing unit tests are not a claim of a newly verified pass or fixed test count.
+M03/RF03/HU03 and RF12/HU12 now have a [real HTTP/application boundary](../src/app/features/customers/README.md) for customer profiles/state/accounts, properties, acquisition, contacts/preferences and permission-aware history, requiring paged customer backend contract `f7988fb` or newer. Customer reads use server active-only pages with shared offset/limit domain contracts, actual returned totals/effective metadata and stable name/ID ordering. Backend commit `a6f7141` adds `busqueda` (trimmed, case-insensitive literal substring on name/email; blank omitted; `%`, `_` and backslash are literal) and exact `tipo` (`residencial`/`comercial`, invalid values return 400), applied before pagination. They never slice a downloaded full catalog or infer page totals from mutations. Stateless named use cases delegate through explicitly bound root repositories to validated HTTP sources. The demo is unwired, never a fallback. Customer removal is deactivation, not physical deletion; conversion uses current lead data (the unchanged Spanish prospect API contract) and returns the same linked customer on repeats, without email merging or inferred stage changes, and its optional portal account is described under WP10 T17. Angular uses Lead/LeadOrigin/LeadFollowUp and leadId internally, including Quote/WebForm linkage; Spanish wire fields/routes and Java names stay unchanged. The root store preserves its lifetime and clears/fences session-old work. The approved customer presentation cache policy uses 120000ms for customer pages/details, properties, contacts/preferences and acquisition catalogs, and 30000ms for leads/details, follow-ups and customer history. Root capability stores reuse the shared read-resource/session-scope pattern with caller-owned subscriptions, same-key stale feedback and confirmed-write invalidation. WP1–WP2 now connect a protected lazy read-only P04 list at `/admin/customers`, through the existing **CRM** sidebar entry, without changing the official shell/theme, IAM or default users redirect. The page shows name/type/email/phone as a desktop table/mobile cards and starts with offset 0/limit 20. Shared pagination uses actual total/effective offset/limit, without client-side slicing or invented counters. Debounced name/email search and immediate exact customer-type filtering are applied by the backend before paging; either control resets the offset, and the detail return URL retains only offset/limit. No status/tag filters are offered. Query-specific computed projections and component-owned observation subscriptions preserve root store TTL, invalidation, cancellation and session fencing. Loading, verified empty, retryable initial error, same-key stale rows during refresh/failure and unrelated-query isolation remain distinct. A successful positive-total empty out-of-range page permits one corrective query using the returned limit per navigation/retry; the transport/store never rewrites metadata, and a second empty result cannot loop. WP3 now connects local Signal Forms create/edit for name/type/email/phone (plus the optional portal-account intent superseded by the WP10 T14 section below) and contextual desired-false deactivation on desktop/mobile, with nullable replacements, pending dismissal/duplicate guards, safe actionable inline errors preserving drafts and confirmed-write success toasts fenced by owner/session lifetime. Captured loaded customer identity is independent of refreshed rows. Active store observers refresh confirmed writes once, without optimistic membership/totals or another page reload. Page/dialog destruction and session replacement cancel owned writes and fence late feedback; cancellation cannot roll back dispatched server effects. No direct Users-feature import, root feedback consumer, role inference, inactive discovery/reactivation or physical deletion is added. The bounded read-only WP4 slice below now adds detail/property consumers. The user reported manual WP2 acceptance; it is not agent-observed exhaustive Chrome/Edge/Firefox keyboard/responsive or live CORS testing. Corrected WP3 visual/manual/live/backend/browser acceptance is user-reported, not exhaustive agent-observed proof. Real MySQL locking/rollback evidence, full WP4 and subsequent gates remain pending. All other screens and the customer portal remain planned. IAM users/role catalog HTTP adapters are the T3 candidate; sessions and audit have T5–T6 HTTP adapters; enforced frontend role navigation, E2E and CI/CD remain absent; T4 connects permission catalog/assignment HTTP operations; auth persistence/transport is the T2 candidate, not a completed IAM capability; production deployment is unverified. Existing unit tests are not a claim of a newly verified pass or fixed test count.
 
 ### Bounded read-only customer detail and properties — WP4
 
@@ -182,7 +182,7 @@ Already-converted records still dispatch explicit backend requests. Repeated con
 
 Pending blocks duplicate confirmation and Cancel/Escape/outside dismissal. Safe inline failures retain selected type/target for explicit retry; an unknown network outcome is not proof of no effect. Unchanged dialog lifecycle plus synchronous ownerChanged$/revision/session/DestroyRef/current-overlay checks fence replacement/destruction/closing-animation feedback. Same-session renewal preserves work and SSR dispatches none; cancellation cannot roll back dispatched writes.
 
-M03/RF03/HU03 remains context and dedicated acquisition RF/HU remains missing (RNF09/RNF10/RNF12). Pending acceptance: CRM → Prospectos → verified detail → Convertir a cliente → select type/confirm → inspect actual customer link → repeat/deny/fail while preserving context. Technical tests/build do not replace unavailable independent/native review or live backend/CORS/authorization/repeated-conversion and Chrome/Edge/Firefox keyboard/responsive proof. Full WP6 and independent WP4/WP5 acceptance stay pending. This supersedes conversion-as-planned only; catalog administration/public quote/pricing/SMTP remains outside scope.
+M03/RF03/HU03 remains context and dedicated acquisition RF/HU remains missing (RNF09/RNF10/RNF12). Pending acceptance: CRM → Prospectos → verified detail → Convertir a cliente → select type/confirm → inspect actual customer link → repeat/deny/fail while preserving context. Technical tests/build do not replace unavailable independent/native review or live backend/CORS/authorization/repeated-conversion and Chrome/Edge/Firefox keyboard/responsive proof. Full WP6 and independent WP4/WP5 acceptance stay pending. This supersedes conversion-as-planned only; catalog administration/public quote/pricing/SMTP remains outside scope. The optional portal account added by WP10 T17 (section below) supersedes only the “no account creation” part of this checkpoint; the rest of the conversion contract still holds.
 
 ### Dynamic backend role permissions — T4
 
@@ -340,7 +340,7 @@ Open assigned services (P09), inspect the client, date/time and current state, t
 
 ### Customer portal
 
-Open “My requests and services” (P11), inspect details and follow progress, then access customer support (P10) when needed. Direct creation of a service request by a customer is unresolved and must not be assumed from the portal's name.
+Open “My requests and services” (P11), inspect details and follow progress, then access customer support (P10) when needed. Direct creation of a *service request* by a customer is unresolved and must not be assumed from the portal's name. Registering an own *support attention* is implemented (WP10 T6, below) and is the only write the portal offers.
 
 ### Supervision and integrations
 
@@ -404,8 +404,9 @@ consumes it as its own capability, not as an order or request editor.
 
 Connected under `/admin/support` (inbox) and `/admin/support/:id` (detail), both guarded and lazy inside the
 protected admin shell, with the `Soporte` entry in the General group after `Operaciones`. The staff audience is
-connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal
-and is not implemented.
+connected; the customer-own audience (`ATENCION_LEER_PROPIA` / `ATENCION_CREAR_PROPIA`) belongs to the portal:
+the read side of it is connected by the WP10 T5 section below, and creating an own attention is
+T6, still unimplemented.
 
 - **Reads**: server-paged inbox with `estado`, `idTipo`, `idCliente` and business-local `desde`/`hasta`
   filters, effective returned metadata and one bounded out-of-range recovery; detail with the server-ordered
@@ -473,3 +474,771 @@ above a responsive grid of period metrics and charts. The date fields stay in *A
 changing the range reloads the data. The dashboard displays the range returned by the server and preserves
 chart labels and values without adding a chart dependency. See the
 [dashboard boundary](../src/app/features/dashboard/README.md).
+
+## WP10 T14 — Customer portal account in the customer form
+
+M03/RF03/HU03 with S9/S12/S13/S15. The customer create/edit dialog now decides whether the person
+gets a portal account, rather than linking an existing user from a second module. The backend
+contract is live: `POST /api/clientes` and `PUT /api/clientes/{id}` accept the optional `crearCuenta`
+tri-state plus `password`, and every customer response carries `usuarioActivo`.
+
+- **Tri-state kept intact**: absent `crearCuenta` never touches the account, `true` creates it or
+  reactivates a deactivated row (both need `password` and a customer email), `false` retires an
+  existing active account and sends no password. The wire body omits the key instead of guessing
+  `false`, so ordinary profile edits cannot destroy an account.
+- **Owned by the form**: a «Crear cuenta del portal» checkbox, off by default, reveals a required
+  initial password and makes the email required; the dialog prints the captured state as `sin
+  cuenta`, `activa` or `desactivada`; a deactivated account is recreated with a new password, and
+  unchecking an **active** account asks for explicit confirmation because the access is cut
+  immediately. Withdrawing that confirmation restores the checked state.
+- **Field-level feedback**: `errores.correoParaCuenta`, `errores.passwordParaCuenta` and
+  `errores.passwordSoloConCuenta` become their own typed errors, and with `errores.correo =
+  EMAIL_RESERVED` they render next to the email or password input instead of the general alert.
+- **Unchanged**: the same dialog lifecycle, pending guards (duplicate submit, Cancel/Escape/outside
+  dismissal), safe inline failures that keep the draft, one generic toast and close only on
+  confirmed success, and the existing post-write invalidation without an extra reload.
+
+The opt-in that used to deliver only `409` conflict bodies now also delivers a documented **`400`**
+validation body for the requests that ask for it: `POST/PUT /api/clientes` already opt in, so the
+conditional account markers reach the adapter and render on their own inputs. The passthrough stays
+narrow and unchanged elsewhere — `401` (with its credential invalidation and refresh-once path),
+`403`, `5xx`, network failures and every request without the opt-in keep the generic mapping, and no
+response is ever replayed. Token names were kept (`PRESERVE_API_CONFLICT` / `apiConflictContext()`)
+because renaming would also require the token's own README, which stays out of this change; its JSDoc
+now states the exact rule.
+
+Pending acceptance: manual/live runs (create with and without an account, first account for an
+existing customer, recreated deactivated account, retired active account after confirming), the
+real backend 400/409 payloads and CORS, the actual password policy, `debeCambiarPassword` in the
+portal (T16), the users-module counterpart (T15, connected in the section below) and
+Chrome/Edge/Firefox keyboard/responsive checks. See the
+[customer account boundary](../src/app/features/customers/README.md#connected-customer-portal-account-request-wp10-t14).
+
+## WP10 T15 — CLIENTE account creation from the users form
+
+M02/RF02/HU02/P03 with S9/S13/S17 (and S11 for the shared email). The users alta now reflects the
+live backend contract: `POST /api/usuarios` with the CLIENTE role creates the customer row in the
+same transaction, so a single form can decide both, and the user no longer has to visit two
+modules. See the [users boundary](../src/app/features/users/README.md#wp10-t15--cliente-account-creation-from-the-users-editor).
+
+- **Identity, not ACL**: the backend matches its CLIENTE role by exact name
+  (`CuentaClienteService.ROL_CLIENTE`), so the form compares the selected catalog role against that
+  name. No permission, navigation or CRUD column is inferred from it.
+- **Create only**: the notice, the required `tipo` (`residencial`/`comercial`) and the optional
+  `telefono` appear only in a new alta with CLIENTE selected. `PUT /api/usuarios/{id}` has no such
+  fields and never creates a customer, so the edit dialog keeps its previous form and payload; moving
+  an existing account to CLIENTE is not presented as customer creation.
+- **Explicit, non-dismissible warning** that a new customer will be created with the same name, email
+  and phone, that it is administered in CRM, that the account must change its password on first
+  login and that the alta also needs the customer-creation permission. Changing the role away from
+  CLIENTE empties both fields and their validation state before anything is dispatched.
+- **Exact payload per role**: other roles keep `nombre`, `correo`, `password`, `idRol`, `idioma`,
+  `activo`; CLIENTE adds `tipo` and, when supplied, `telefono`. The phone is trimmed and omitted when
+  blank, and `tipo`/`telefono` never travel without asking for the customer row. Password bytes are
+  never trimmed.
+- **Failures**: a `403` on a CLIENTE alta states that creating the customer needs `CLIENTE_CREAR`
+  and that nothing was created, instead of the generic permission copy and never raw backend text.
+  The documented `409`/`EMAIL_RESERVED` binds to the email input with the shared-address explanation
+  because the email is unique across accounts and customers, including inactive ones.
+- **Success**: only a confirmed result emits feedback and closes; the toast names the created
+  customer as `Usuario y cliente creados · Cliente #<idCliente>` (or without the reference when the
+  response omits it). `idCliente` is parsed as a nullable positive int32 into `User.customerId`; the
+  reference is plain text with no new route or navigation. `debeCambiarPassword` is not consumed yet
+  because the forced first-login change belongs to T16.
+- **Unchanged**: the same dialog lifecycle, pending duplicate-submit and Cancel/Escape/outside
+  guards, drafts preserved on failure, owner/session/destruction fencing and the existing `UserStore`
+  invalidation without an extra reload, optimistic row or write replay.
+
+Pending acceptance: manual/live creation of a CLIENTE account (with and without `CLIENTE_CREAR`, with
+and without phone), the real `409` payload and CORS, the created customer appearing in CRM, the
+first-login forced password change (T16), the inactive/role-catalog edge cases and
+Chrome/Edge/Firefox keyboard/responsive checks. Deterministic unit tests are not live evidence.
+
+## WP10 T16 — Forced password change on first sign-in
+
+M01/RF01/HU01/P01 with S10. An administrator (or whoever creates the account) may define a
+provisional password; the backend persists `debeCambiarPassword`, returns it in
+`POST /api/auth/login` and `GET /api/auth/me`, and `PUT /api/auth/me/password` clears it, closes the
+other sessions and keeps the current one. The frontend turns that flag into a required step instead
+of a suggestion. See the [auth boundary](../src/app/features/auth/README.md#forced-password-change-on-first-sign-in-wp10-t16--s10).
+
+- **The flag is carried, not inferred**: it is validated with the rest of the profile and lives in
+  `AuthSession.mustChangePassword`. A response that omits it (or sends `null`) fails closed as
+  `true`, because it cannot prove the provisional password was already replaced; only an explicit
+  `false` lets the session through, and a non-boolean value is an invalid profile.
+- **One redirect matrix**: `authGuard` sends a provisional session to
+  `/change-password?returnUrl=<requested URL>`, `guestGuard` sends it there from `/login`,
+  `passwordChangeGuard` keeps it on the screen and moves a settled session to the captured
+  destination, and an anonymous visit to the screen goes to
+  `/login?returnUrl=<captured destination>`. The login page takes the same decision after
+  authentication, so the original destination survives the forced step. A destination can only be an
+  internal URL and never `/login` or `/change-password`, so it cannot loop.
+- **The screen** is Helm/Signal Forms: current password, new password and confirmation, the
+  documented policy (8–64 characters with uppercase, lowercase and digit) and the "must differ from
+  the current one" rule checked before dispatch, labelled fields with help and inline errors, a
+  pending state that blocks duplicate submits, drafts preserved on failure, and a `Cerrar sesión`
+  escape hatch. There is no way to skip the change while keeping the session.
+- **No optimism**: `PUT /api/auth/me/password` is followed by one forced `GET /api/auth/me`, and the
+  destination is only reached when that profile already reports the flag cleared. If the read fails
+  the outcome is reported as unconfirmed with a GET-only retry; the password write is never replayed.
+  A rejected change keeps the session, the flag and the draft. Raw backend text is never shown.
+- **Unchanged**: login, refresh, logout, the interceptor, both guards' session semantics, credential
+  storage and its keys. SSR reads no storage and dispatches no auth request.
+
+Pending acceptance: a live backend/CORS run of the full first-login round trip (provisional password
+→ forced screen → cleared flag → destination), the "other sessions closed" side effect, the real
+`400` payloads from the policy and the current-password check, and Chrome/Edge/Firefox
+keyboard/responsive checks. Deterministic unit tests are technical evidence, not native/live
+approval.
+
+## WP10 T17 — Converting a prospect with an optional portal account
+
+M03/RF03/HU03 with S12/S13. The conversion dialog now decides whether the new customer gets a
+portal account, in the same form that converts the prospect, instead of a second trip to the users
+module. The live contract is `POST /api/prospectos/{id}/conversion` with
+`{ tipo, crearCuenta?, password? }` returning the created/converted `ClienteResponse`. See the
+[customers conversion boundary](../src/app/features/customers/README.md#conversion-with-an-optional-portal-account-wp10-t17).
+
+- **Same tri-state, explicit choice**: absent `crearCuenta` leaves the account untouched, so an
+  untouched conversion still creates no account; ticking «Crear cuenta del portal para este
+  cliente» sends `crearCuenta: true` plus the initial `password`; `crearCuenta: false` means no
+  account. The dialog only ever emits absent or `true` — unticking the box removes the key again —
+  and a requested account without a password or a password without the request is refused before
+  any HTTP.
+- **The email is copied, not typed**: the account needs a customer email, and the backend copies it
+  from the prospect, so the dialog shows that provenance instead of asking for it again; the
+  documented `errores.correoParaCuenta` then explains that the prospect has no usable address.
+- **Markers decoded, not widened**: conversion already opted into the interceptor's documented
+  `400`/`409` passthrough and now reuses the existing allow-list decoder, so
+  `errores.correoParaCuenta`, `errores.passwordParaCuenta` and `errores.passwordSoloConCuenta`
+  become `ACCOUNT_EMAIL_REQUIRED`, `ACCOUNT_PASSWORD_REQUIRED` and
+  `ACCOUNT_PASSWORD_WITHOUT_ACCOUNT`, and `errores.correo = EMAIL_RESERVED` stays `EMAIL_RESERVED`.
+  Nothing else is admitted: an undocumented marker keeps the generic `INVALID_INPUT`.
+- **Field-level failure, actionable denial**: the account markers render next to the account choice
+  (email reasons) or next to the password input, never in the general alert, and `EMAIL_RESERVED`
+  states that the prospect's address is already used. A `403` is authoritative and reads as the
+  missing permissions (conversion requires both customer create and update), never as server copy.
+- **Confirmation**: only a validated Result success confirms, links the actual returned customer ID
+  and closes; when an account was requested the message also states that the account was created for
+  that customer. Pending blocks duplicate confirmations and Cancel/Escape/outside dismissal, a
+  failure keeps the dialog, the choice and the password for an explicit retry, and a successful
+  conversion is never repeated automatically.
+- **No navigation added**: no new route, no automatic redirect and no `libs/ui`, theme or budget
+  change; the existing dialog lifecycle, root invalidation and session/SSR fencing are unchanged.
+
+Payloads actually sent: unticked → `{ tipo }`; ticked → `{ tipo, crearCuenta: true, password }`.
+Password bytes are never trimmed, logged or echoed.
+
+Pending acceptance: live backend/CORS conversion with and without an account, the real `400`/`409`
+payloads, a converted prospect whose email is already taken, a `403` from an account without the
+create/update permissions, and Chrome/Edge/Firefox keyboard/responsive checks. The deterministic
+unit coverage (payloads, required password, the three markers, `EMAIL_RESERVED`, `403` copy, pending
+and retry behavior) is technical evidence, not native or live approval.
+
+## WP10 T2 — Portal shell, audience routing and own requests
+
+M01/RF01/HU01/P01 with S4 and S7, plus the read side of M04/RF04/HU04/P05 and the customer entry
+view P11 (RNF08/RNF09/RNF10/RNF12). The customer experience now exists as its own lazy route group
+at `/portal`, composed exactly like `/admin`: one guarded shell with `router-outlet`, its own
+navigation and its own children. It is not part of the admin shell and does not reuse its sidebar.
+
+- **Route**: `src/app/experiences/portal/portal.routes.ts` declares the guarded `portal` group;
+  `/portal` opens `/portal/requests`, the first implemented section. Later sections (own order detail,
+  own support) add their route and navigation entry in the slice that connects their consumer, so no
+  dead destination exists. (The T4 section below adds `services` as the second real section; the shell
+  structure, the audience rule and the list behavior described here are unchanged.) The shell owns
+  brand, session identity, `Salir` and the real section links; it has no sidebar, no KPIs, no
+  environment/security banner and no administrative action.
+- **Audience, not permissions**: the audience comes from the role label the backend returned in the
+  profile (`AuthSession.role`). Exactly one role name is the customer audience — the backend's own
+  `CLIENTE` (`CuentaClienteService.ROL_CLIENTE`, the same identity the users form uses) — and every
+  other role, including an unusual or absent one, belongs to `/admin`. No permission, role ID or
+  inferred user type is consulted, and neither role name grants or denies an API call.
+- **One symmetric guard**: `authGuard` and `portalGuard` are the same decision. Authentication comes
+  first (anonymous visits keep their captured `returnUrl`), then the forced first-sign-in password
+  change of T16, and only then the audience rule. A customer opening any `/admin` URL is sent to
+  `/portal`; a staff session opening any `/portal` URL is sent to `/admin`. Both targets are the home
+  of the other audience, so re-evaluating the decision on the destination allows it and the two
+  guards cannot bounce a session forever.
+- **Honest destinations**: after login, the captured `returnUrl` is kept only when the session's role
+  may open it; otherwise the person goes to their own experience. `guestGuard` sends an authenticated
+  visit to its own home, and a settled session leaving the change screen goes through the same
+  audience-aware destination. A pending password change still takes precedence over the audience
+  redirect, so the forced step is never skipped by a cross-experience bounce.
+- **Mi solicitudes**: `/portal/requests` reads the existing root `ServiceRequestsStore`. Its entry
+  paging comes from the URL (`page`/`size`, added by T3 below) and defaults to offset 0 / limit 20, and
+  it shows exactly what the server returned: the backend
+  already scopes `GET /api/solicitudes` to the caller, so no customer ID travels, no row is filtered
+  or sliced locally and no total is invented. The returned effective `offset`/`limit` are adopted for
+  paging, with one fenced out-of-range recovery per user action. The documented 30000 ms success-only
+  freshness, shared ref-counted reads, same-key stale data on failure and session/SSR fencing stay
+  root-owned; the page owns only its query, its state feedback and its cancellation.
+- **States and accessibility**: loading, `Actualizando solicitudes…` while a verified page
+  revalidates, verified empty (`Aún no tienes solicitudes`), a distinct out-of-range empty state and a
+  retryable error that keeps the last verified rows and offers GET-only retry. Records are a real
+  table above 64rem of available container width and cards below it, both labelled
+  `Mis solicitudes de servicio`; the status is a badge whose text carries the value, so colour is
+  never the only signal; supplied UTC instants are printed literally. Copy is Spanish. Rows stay plain
+  data apart from their own read-only detail link (T3 below): no create/edit/cancel action, no filter,
+  KPI or total.
+- **Tests first**: the redirect matrix (customer, staff, anonymous, pending password change), the
+  guard matrix, the loop-freedom property, the login destination per role, the lazy composition and
+  the list's loading/empty/error/stale states, effective-metadata adoption and bounded recovery were
+  written before the implementation. The RED run failed to compile against the missing
+  `audience-navigation`, `portalGuard`, `PORTAL_ROUTES` and `PortalRequestsPage`; afterwards the
+  focused portal files pass 11/11 and auth + portal + app composition pass 275/275 across 23 files.
+  `npx tsc -p tsconfig.app.json --noEmit` exits 0 and Prettier reports the touched files clean.
+- **One pin awaiting authorization**: `src/app/app.routes.spec.ts` enumerates the app-level lazy
+  groups (`["", ""]`, auth then admin) and now sees the third portal group, so the full suite reports
+  3894/3895 with that single failure. That spec file was not part of this task's edit surface, so it
+  was not modified; the assertion needs the authorized one-line update to `["", "", ""]` plus the
+  `PORTAL_ROUTES` identity. Nothing else in the suite fails.
+
+Pending acceptance: live backend/CORS with a real customer session (own list only, cross-customer
+403/404), manual cross-audience checks in a browser (customer deep link into `/admin`, staff deep link
+into `/portal`, anonymous deep link into both, customer first login with a provisional password), and
+Chrome/Edge/Firefox keyboard and responsive checks of the portal shell and its records. The customer
+own-request detail now exists (section below); own orders and own support remain unimplemented, and
+no role-aware API authorization is claimed: the backend remains authoritative.
+
+## WP10 T3 — Own request detail in the portal
+
+S7 with the read side of M04/RF04/HU04/P05 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer can open one of their own service requests from the portal list
+at `/portal/requests/:id`, read-only, inside the existing guarded portal shell. Nothing writes: no
+cancel, no edit, no status action, no order creation and no staff destination.
+
+- **Route and identity**: `requests/:id` is a lazy child of the same `portal` group, declared after the
+  static `requests` path so the section always wins, and it inherits the shell's `portalGuard`
+  audience decision without repeating it or adding a local provider. The id must be a positive decimal
+  int32; a malformed, zero, negative, fractional, non-numeric or out-of-range value dispatches no read
+  and renders a safe «no disponible» state instead of guessing an identity.
+- **Caller scope, not a permission claim**: no customer id, ownership claim or permission is sent or
+  displayed beyond the payload. A request that is not the caller's answers `404`, which is rendered as
+  «no disponible» — never as a permission hint, never as a retryable transient failure, and it drops an
+  already verified record because the answer is authoritative. A `404` on a refresh of a verified
+  record replaces it with the same unavailable state instead of keeping stale data.
+- **Projection**: only supplied fields are printed — request id, property, service type, desired
+  calendar date, the supplied UTC register/update instants, the supplied status code as a text badge and
+  the submitted description as plain text. Nullable values use the project's existing «No registrado»
+  copy, dates are printed as the supplied calendar string and instants as the supplied UTC value, so no
+  browser timezone shifts them. Staff-only payload data (for example the registering operator) is not
+  projected, and no status, owner, total or amount is invented.
+- **Reads and states**: the existing root `ServiceRequestsStore` keeps the documented 30000 ms
+  success-only freshness, ref-counted reads, same-id stale data and session/SSR fencing; the page owns
+  only its route identity, its state feedback and its cancellation. Route identity is
+  `distinctUntilChanged`, the observation is `switchMap`ped and destroyed with the route
+  (`takeUntilDestroyed`/`DestroyRef`), and a replaced session cancels the previous read before the new
+  identity gets its own read; same-session renewal preserves the work. States are loading, an
+  `Actualizando solicitud…` refresh over verified data, the verified record, a retryable transient error
+  that keeps the verified record and offers a GET-only `Reintentar`, and the two distinct
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all.
+- **Return context**: the back link to `Mis solicitudes` keeps the list's effective paging when the URL
+  carries a valid `page`/`size` pair, and the portal list now adopts that pair on entry as its initial
+  root-store read, so list → detail → return lands on the page the customer came from. The contract is
+  the one the operations lists already use: `page` is a zero-based index and `size` the page length,
+  both digits-only, with `page × size` a safe integer and `size` at most the documented backend maximum
+  of 100. Missing, duplicated, negative, fractional, non-numeric, out-of-int32 or over-maximum values
+  fall back to `page=0&size=20` as a pair — never a clamped size, never an invented offset — and the
+  request still carries only `pagina`/`tamanio`. The list itself never writes paging back to the URL,
+  so its own navigation keeps its in-memory behavior, and URL paging causes no read on the server
+  platform.
+- **Tests first**: the detail spec covers id validation without any dispatch, the literal projection and
+  the absence of write/staff affordances, the caller-scoped `404` as a distinct state, the `404`
+  overriding a verified record, stale retention during refresh and transient failure with a GET-only
+  retry, the return link with and without valid paging, session-replacement and route-destruction
+  cancellation, and no read on the server platform. The list spec adds the entry contract: a valid
+  pair adopted as the initial request, the malformed/duplicated/over-maximum matrix falling back to
+  `page=0&size=20` with only `pagina`/`tamanio` on the wire, no out-of-contract size, and the
+  list → detail → return round trip landing on the same effective page. RED was a compile failure for
+  the missing `PortalRequestDetailPage` and, for the entry contract, the list still dispatching
+  `pagina=0&tamanio=20` for every URL pair (4 cases); afterwards the three focused portal files pass
+  43/43 and a deliberate mutation of the `NOT_FOUND` treatment fails exactly the three `404`-dependent
+  cases.
+
+Pending acceptance: live backend/CORS with a real customer session (own request detail, cross-customer
+`404`), rendered Chrome/Edge/Firefox keyboard and responsive checks of the new detail, and a manual
+pass over the list → detail → return round trip with a real page of results. Own support remains
+unimplemented; own service orders are delivered by the T4 section below, and the backend remains the
+authority on scope: the frontend validates shape and contract, never permissions.
+
+## WP10 T4 — Own services (orders) in the portal
+
+S7 with the read side of M05/RF05/HU05/P06 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer now reads their own service orders at `/portal/services` and
+`/portal/services/:id`, read-only, inside the existing guarded portal shell. «Mis servicios» stops
+being a planned section and becomes a real destination, so the portal navigation has no dead entry.
+
+- **Routes**: `services` and `services/:id` are lazy children of the same `portal` group, with the
+  static list declared before its own `:id` child, and they inherit the shell's `portalGuard`
+  audience decision without repeating it or adding a local provider. `/portal` still opens
+  `requests`, the shell keeps only brand/session/`Salir` and the two section links, and no KPI, no
+  sidebar and no administrative affordance is added.
+- **Caller scope, not a permission claim**: the backend already scopes `GET /api/ordenes` and
+  `GET /api/ordenes/{id}` to the caller, so no customer id, ownership claim or permission is sent or
+  displayed. Only `pagina`/`tamanio` travel on the list; the detail sends no parameter at all. An
+  order that is not the caller's answers `404`, rendered as «no disponible» — never a permission
+  hint, never a retryable transient failure, and it replaces an already verified record because the
+  answer is authoritative. No row is filtered or sliced locally and no total is invented.
+- **Privacy on this surface**: this is the customer-facing view, so it prints strictly less than the
+  staff screens. The order detail wrapper carries the property block with `instruccionesAcceso` and
+  `codigoPuerta`, and those two fields are dropped from the projection — they never reach the
+  template, an accessible name, a `title` or any attribute. Assigned staff appear by **name and role
+  only**; the supplied `telefono` is never projected. The list also omits the customer column, the
+  estimated amount and the assigned staff entirely.
+- **List projection**: the supplied order code, the supplied status text (`estadoNombre`) in a badge
+  whose text carries the value, the supplied property and service type, and the supplied schedule
+  date plus start/end clock text printed literally (no timezone shifting, no reformatting). Records
+  are a real table above 64rem of available container width and cards below it, both labelled
+  `Mis servicios de limpieza`; rows link to their own detail carrying the effective `page`/`size`.
+- **Detail projection**: supplied fields only — id, code, origin request id, service type, estimated
+  duration and amount as supplied, register/update instants as the supplied UTC value, the safe
+  property fields (alias, address, city, region, postal code, area, rooms, bathrooms, pets), the
+  schedule date and clock text, the assigned staff name and role, and the observation as plain text.
+  Nullable values use the existing «No registrado» copy. Nothing writes: no schedule, no team change,
+  no cancellation, no status change and no administrative destination — the only link is the way
+  back.
+- **Reads and states**: the existing root `ServiceOrdersStore` keeps the documented 30000 ms
+  success-only freshness, shared ref-counted reads, same-key stale data, the 20-entry pinned registry
+  and session/SSR fencing; the pages own only their query/route identity, their state feedback and
+  their cancellation. Matrix: loading, `Actualizando servicios…`/`Actualizando servicio…` over verified
+  data, verified rows or record, verified empty (`Aún no tienes servicios`), a distinct out-of-range
+  empty state, a retryable transient error that keeps the verified data and offers a GET-only
+  `Reintentar`, one fenced out-of-range recovery per user action on the list, and the two
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all.
+- **Entry paging**: the list adopts the same `page`/`size` contract T3 established — read once from
+  the route snapshot, `offset = page × size`, whole-pair fallback to `page=0&size=20` for anything
+  missing, duplicated, negative, fractional, non-numeric or out of int32, and a size above the
+  documented maximum of 100 never dispatched. The list never writes paging back, and the detail's
+  return link restores the effective page the customer came from.
+- **Customer-scope redaction (live-acceptance fix)**: live acceptance with a real CLIENTE session
+  found the reused operations decoder rejecting a perfectly valid `200`. For the customer view the
+  backend nulls `programaciones[].registradoPor`, `historial[].usuario` and `asignados[].telefono`
+  while deliberately keeping `propiedad.instruccionesAcceso` and `codigoPuerta`, and the
+  status-history actor was being decoded with the non-nullable text rule. `OrderStatusHistorySummary`
+  now declares `userName: string | null`, decoded like its two already-nullable siblings
+  (`ScheduleSummary.registeredByName`, `AssignedStaffSummary.phone`): no fallback name, empty string
+  or extra field is invented, and no id, date, enum, count or money rule was loosened. The orders
+  list needed no change because it carries the same two redacted fields through the same
+  `restringir` and both were already nullable; `SolicitudResponse.registradoPor` stays required
+  because the backend always sends a name there, and support's `autor` was already honest. The staff
+  order detail takes the file's own «No registrado» copy for that cell, so no null renders as an
+  empty cell. The portal projection is untouched: it still hides the access fields and the staff
+  phone even though the customer payload still carries the first two.
+- **Tests first**: the two new specs cover id validation without any dispatch, the literal projection
+  with staff name/role, the caller-scoped `404` as a distinct state that also drops a verified record,
+  stale retention during refresh and transient failure with a GET-only retry, effective paging
+  adoption plus the list → detail → return round trip, the entry-paging fallback matrix, the privacy
+  rule (no access instruction, no door code, no staff phone anywhere in the rendered text or
+  attributes), the absence of any write affordance, and no read on the server platform. The route spec
+  pins the two new children and the second real navigation entry. RED was a compile failure for the
+  missing `PortalServicesPage`/`PortalServiceDetailPage`; afterwards the five portal spec files pass
+  83/83. The redaction fix added one behavioural case at each owning boundary — a customer-scoped
+  payload with those three nulls decodes successfully without changing the projected field set, and
+  the same payload renders the record on this surface while the access instructions, the door code
+  and the staff phone stay out of the rendered text and attributes.
+
+Pending acceptance: live backend/CORS with a real customer session (own order list and detail,
+cross-customer `404`, and a re-run of the customer-scoped detail that failed before the redaction
+fix), rendered Chrome/Edge/Firefox keyboard and responsive checks of both new
+screens, an independent redaction check of the property access fields on this surface, and a manual
+pass over the list → detail → return round trip with a real page of results. Own support (T5) and the
+own-attention creation (T6) remained unimplemented at this checkpoint — the T5 section below
+supersedes the own-support part with a read-only list and detail, while own-attention creation is
+still T6 and still unimplemented — and no role-aware API authorization is claimed: the backend stays
+authoritative on scope.
+
+## WP10 T5 — Own support in the portal
+
+S7 with the read side of M09/RF11/HU11/P10 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). A customer now reads their own support attentions at `/portal/support`
+and `/portal/support/:id`, read-only, inside the existing guarded portal shell. «Soporte» stops being
+a planned section and becomes a real destination, so the portal navigation has no dead entry.
+**Creating an own attention is T6 and is not part of this slice**: no create form, no reply, no state
+change, no close and no staff action exists on either screen.
+
+- **Routes and navigation**: `support` and `support/:id` are lazy children of the same guarded
+  `portal` group, with the static list declared before its own `:id` child, and they inherit the
+  shell's `portalGuard` audience decision without repeating it or adding a local provider. The shell
+  gains exactly one section link (`Soporte`); no KPI, no sidebar, no admin affordance and no dead
+  destination is added, and the rest of the shell is unchanged.
+- **Caller scope, not a permission claim**: the backend already scopes `GET /api/atenciones` and
+  `GET /api/atenciones/{id}` to the caller, so no customer id, ownership claim or permission is sent
+  or displayed. Only `pagina`/`tamanio` travel on the list and the detail sends no parameter at all.
+  No row is filtered or sliced locally and no total is invented.
+- **States, supplied and literal**: the vocabulary is the backend's closed
+  `RECIBIDA`/`EN_REVISION`/`RESUELTA`/`CERRADA` set with its supplied `estadoNombre`. The portal
+  prints that supplied text as received and never derives, translates or invents a state, and it
+  encodes no transition — which target state is legal stays the staff screen's and the backend's
+  authority. There is no status catalog endpoint and none is invented here.
+- **List projection**: the supplied subject, type name, state text and registration instant, plus the
+  attention id, printed literally. Records are a real table above 64rem of available container width
+  and cards below it, both labelled `Mis atenciones de soporte`; rows link to their own detail
+  carrying the effective `page`/`size`. No filters, KPIs, totals, customer column or internal contact
+  data are added.
+- **Detail projection**: supplied fields only — subject as a heading, the supplied state text as a
+  badge whose text carries the value, attention id, type name, register and close instants as the
+  supplied UTC value, the description as plain text, and the follow-up list in server order. Nullable
+  values use the existing «No registrado» copy. The only link is the way back.
+- **Redaction on this surface**: a follow-up whose author is null renders an explicit redacted case
+  (`Autor no mostrado`, marked in the DOM), never a substituted name, id, role or other field, and
+  never a generic "staff" label that pretends someone is identified. A supplied author is printed as
+  it arrived, and the supplied orientation (`Del cliente`/`Del personal`) is never combined into an
+  identity claim. The frontend does not certify backend redaction.
+- **Reads and states**: the existing root `SupportRequestsStore` keeps the documented 30000 ms
+  success-only freshness, shared ref-counted reads, same-key stale data, the pinned registry and
+  session/SSR fencing; the pages own only their query/route identity, their state feedback and their
+  cancellation. Matrix: loading, `Actualizando atenciones…`/`Actualizando atención…` over verified
+  data, verified rows or record, verified empty (`Aún no tienes atenciones`), a distinct
+  out-of-range empty state, a retryable transient error that keeps the verified data and offers a
+  GET-only `Reintentar`, one fenced out-of-range recovery per user action on the list, and the two
+  «no disponible» variants (invalid link and caller-scoped `404`) with no retry at all. A `404` on a
+  refresh replaces a verified record because the answer is authoritative.
+- **Entry paging**: the list adopts the same `page`/`size` contract the portal lists already use —
+  read once from the route snapshot, `offset = page × size`, whole-pair fallback to `page=0&size=20`
+  for anything missing, duplicated, negative, fractional, non-numeric or out of int32, and a size
+  above the documented maximum of 100 never dispatched. The list never writes paging back, and the
+  detail's return link restores the effective page. This module additionally refuses an answer whose
+  effective size differs from the requested one, because those rows would not start at the asked
+  offset; the portal list therefore navigates with the effective returned metadata and surfaces that
+  refusal as its retryable error instead of adopting a different size.
+- **Tests first**: the two new specs cover id validation without any dispatch, the literal projection
+  (including a supplied state text no lookup would produce), the null-author redaction with the
+  absence of a substituted identity and the preserved server order, the caller-scoped `404` as a
+  distinct state that also drops a verified record, stale retention during refresh and transient
+  failure with a GET-only retry, navigation with the effective metadata plus the size-mismatch
+  refusal, the entry-paging fallback matrix, the list → detail → return round trip, the absence of any
+  create/reply/transition control, and no read on the server platform. The route spec pins the two new
+  children and the third real navigation entry. RED was a compile failure for the missing
+  `PortalSupportPage`/`PortalSupportDetailPage`; afterwards the seven portal spec files pass 126/126.
+  A deliberate mutation (printing the state code instead of the supplied name) failed exactly the two
+  literal-state cases, and making the `404` a transient failure failed exactly the three
+  `404`-dependent cases.
+
+Pending acceptance: live backend/CORS with a real customer session (own attention list and detail,
+cross-customer `404`, the `ATENCION_LEER_PROPIA` authority), an independent redaction check with a
+real null-author follow-up, rendered Chrome/Edge/Firefox keyboard and responsive checks of both
+screens, and a manual pass over the list → detail → return round trip with a real page of results.
+Surveys, attachments/photos and message templates remain unimplemented, and no role-aware API
+authorization is claimed: the backend stays authoritative on scope. Creating an own attention is the
+next slice (T6, below) and is no longer planned.
+
+## WP10 T6 — Registering an own support attention
+
+S7 with the customer-write side of M09/RF11/HU11/P10 and the customer entry view P11
+(RNF08/RNF09/RNF10/RNF12). `/portal/support/new` is the **only write in the customer portal**: the
+customer registers one support attention in their own name. Everything else in the portal still
+reads and never mutates — no own-service-request creation, no reschedule, no cancellation, no
+survey, no attachment and no state change.
+
+- **Route**: `support/new` is a lazy child of the same guarded `portal` group, declared **before**
+  `support/:id` so the static path is never taken for an id, and it inherits the shell's
+  `portalGuard` audience decision without repeating it or adding a local provider. The «Soporte» list
+  gains exactly one control, `Nueva atención`, which opens it; nothing else on the list changed.
+  `canDeactivate` carries the pending-write decision: a POST in flight refuses the navigation and the
+  page reports that it must finish first, so the request is never abandoned mid-flight. A confirmed
+  creation allows the navigation it triggers itself.
+- **Own audience, not an identity claim**: the payload is `idCliente: null`. The backend resolves the
+  customer from the session, so this form has **no customer picker**, never sends, infers or displays
+  a customer id, and shows no staff, administrative or role affordance. The copy states that the
+  attention is registered in the customer's name and that the support team updates its state; it
+  promises no response time, no resolution and no state transition the backend does not guarantee.
+- **Payload**: exactly `idTipo`, `asunto` and `descripcion` — plus `idOrden` only when the customer
+  chose one of their own services. Asunto is required and trimmed to at most 150 characters,
+  descripción is required and trimmed to at most 4000, both matching the documented wire limits that
+  the existing transport already validates; over-limit text is refused, never truncated. No actor,
+  status, availability, browser-today or generated id is sent.
+- **Optional own service**: `idOrden` is optional and can only reference one of the customer's own
+  orders. The picker is populated from the existing caller-scoped `GET /api/ordenes` read
+  (`ServiceOrdersStore`, one page at a time with its paging inside the panel and an explicit reload),
+  never from a global catalog, and it never accepts a typed id. Because the picker is a choice rather
+  than a text field, the page keeps the receipt of the ids its own reads actually returned and
+  re-verifies the chosen id at dispatch; a choice whose verified read is gone is blocked with a
+  visible message instead of being trusted. Labels show the supplied code, service type and property;
+  the customer's own name is not printed, and no access instruction or door code is ever exposed.
+- **Type catalog**: `idTipo` comes from the existing finite `GET /api/catalogos/tipos-atencion` read
+  with its own loading, verified-empty, failure and explicit retry states. Only a verified, unexpired
+  option is dispatchable; a supplied name is printed as received and no status catalog is invented.
+- **Write discipline**: one POST through the existing root `SupportRequestsStore.createRequest` — no
+  second HTTP path and no widened feature boundary. `pending` is the form's submitting state plus the
+  store's writing gate, so a duplicate submission is refused rather than dispatched. The page keeps
+  all three writes of that store serialized by its own shared gate. Inline errors preserve the draft,
+  the page never resends the POST by itself, and an outcome the client cannot prove (network failure,
+  unexpected status, invalid answer) is reported as *unconfirmed* with the advice to check «Soporte»
+  before retrying. Feedback follows a confirmed success only. A session replacement fences the answer
+  — the write is unsubscribed, the draft/choices/receipts of the previous identity are dropped and no
+  completion navigates or reports — and route destruction completes the wait instead of leaving the
+  form stuck. Cancelling cannot undo a dispatched write.
+- **Destination**: a confirmed success opens the created attention at `/portal/support/{id}`. When the
+  answer carries no usable id, the page returns to `/portal/support?creada=1` instead of guessing a
+  destination, and the list prints the confirmed message there; that flag is presentation only and
+  never travels as a read filter, so the list still asks for `pagina`/`tamanio` alone.
+- **Tests first**: the new page spec covers the entry reads (supplied type catalog plus the
+  caller-scoped own-orders page with no `idCliente`), the required type/subject/description
+  validation with the accessible help/error association and the optional service left without error,
+  the exact payload `{ idCliente: null, idTipo, asunto, descripcion }` with no `idOrden` key and
+  trimmed text, the associable own service sending only its id, clearing that association, one
+  pending write with a duplicate submit refused, Cancel disabled and the navigation refused, an
+  inline `400` error that keeps the draft, an unconfirmed `503` reported as unconfirmed, an
+  authoritative `403` reported as such, no replay of the POST in any of them, the session-replacement
+  fence (write unsubscribed, draft dropped, no navigation), the destination without an id returning to
+  the list, and no read or write on the server platform. The route spec pins the new child between
+  `support` and `support/:id` with its `canDeactivate` and opens it as a real route; the list spec
+  pins the single creation action and the confirmation. RED was a compile failure for the missing
+  `PortalSupportCreatePage` and leave guard; afterwards the eight portal spec files pass 140/140. A
+  deliberate mutation (`customerId: null` → a customer id) failed exactly the four payload cases.
+
+Pending acceptance: live backend/CORS with a real customer session and the `ATENCION_CREAR_PROPIA`
+authority, the real accepted `201` payload and its error statuses, a cross-customer attempt proving
+the backend rejects a foreign `idOrden`, rendered Chrome/Edge/Firefox keyboard and responsive checks
+of the form, and a manual pass over list → form → created detail. The `creada` confirmation has only
+been observed with deterministic tests, since the real transport refuses an id-less answer.
+
+## WP10 T7 — «Mi perfil» of the customer
+
+S2 with M03/RF03/HU03 context for the customer's own record (RNF08/RNF09/RNF10/RNF12). `/portal/profile`
+is the customer's own profile inside the existing guarded portal shell, and «Mi perfil» becomes the
+fourth real navigation entry, so the portal still shows no dead destination.
+
+- **Route**: `profile` is a lazy child of the same guarded `portal` group — a static leaf, with no id
+  child, no local guard and no local provider, inheriting the shell's `portalGuard` audience decision.
+- **Contract**: `GET /api/clientes/me` (`CLIENTE_LEER_PROPIO`) returns the caller's own
+  `ClienteResponse`, the same fifteen-key shape as the staff detail, and answers `404` when the
+  authenticated account is not linked to a customer record. The frontend sends no id and no query: the
+  backend resolves the customer from the session. `PUT /api/clientes/me` (`CLIENTE_ACTUALIZAR_PROPIO`)
+  accepts **only** `nombre` and `telefono`; `tipo`, `activo`, `correo`, `crearCuenta` and `password` are
+  rejected with `400` naming the offending field, and the client never builds them.
+- **The email is read-only by product decision**: it is the sign-in identity and it is shared with the
+  account row, so only the office changes it. The screen prints it in a read-only input with that
+  single explanation; it is not editable, not re-sent, and no "request a change" workaround is offered.
+- **What the screen shows**: the supplied `nombre`, `correo`, `telefono` and `tipo` only. No id, no
+  account state, no timestamp, no fiscal/origin/external field and no invented label: a null phone
+  prints as «No registrado».
+- **Edit**: Signal Forms over `nombre` and `telefono` only, prefilled from the verified record when
+  editing starts and never rewritten by a later read. The payload is exactly `{ nombre, telefono }` —
+  name trimmed (required, up to 150) and phone trimmed with the documented staff rule (7–30 characters,
+  `+`, digits, spaces, parentheses and hyphens), blank turned into `null`. The form carries no email,
+  type, active flag or account field at all.
+- **Write discipline**: one PUT through a new root `CustomersStore.updateOwnProfile` action and the
+  existing stateless use case/repository/source chain. Pending blocks a duplicate submit and refuses
+  to dismiss the form (Cancel and the overlay-free form stay until the answer settles); a documented
+  `errores.nombre`/`errores.telefono` marker is bound to its own input while any other `400` keeps a
+  general inline message, and server copy is never rendered. Safe failures keep the draft and never
+  replay the write; feedback appears only after a confirmed success, and that success alone expires
+  the cached profile so the mounted observer re-reads it exactly once.
+- **Read states**: loading, verified record, transient failure with an explicit GET-only retry that
+  keeps verified data (and a visible stale warning), and the stable «sin perfil vinculado» state for the
+  documented `404`, which offers no retry because repeating the same GET cannot change the answer. The
+  read reuses the approved 120000 ms success-only freshness for customer profile data, ref-counted
+  flights and the root store's session fencing; nothing dispatches on the server platform, and a
+  session replacement or route destruction cancels the read (renewal within the same session preserves
+  it).
+- **Tests first**: the transport spec covers the own-profile GET without query, the `404` failure code,
+  malformed payloads, the exact two-key PUT body (including a caller carrying extra fields), the
+  validation refusals before HTTP, both field markers, the unknown-body fallback and the status
+  mapping; the action table pins both use cases to the repository; and the new page spec covers the
+  read states, the 404 state, the read-only email, the absence of ids/account state/timestamps, the
+  payload with trimmed name and null blank phone, validation before dispatch, the pending duplicate and
+  dismissal guards, the inline `400` with the draft preserved, confirmed-only feedback with exactly one
+  post-write read, session replacement, route destruction and the server platform. The route spec pins
+  the new child and the fourth navigation entry; the portal dependency census includes the new page.
+  RED was a compile failure for the missing repository methods and the missing component.
+
+Pending manual/live acceptance: the real `GET`/`PUT /api/clientes/me` with a customer session and the
+`CLIENTE_LEER_PROPIO`/`CLIENTE_ACTUALIZAR_PROPIO` authorities, the real `404` of an unlinked account,
+the accepted validation `400` bodies and their field markers, live CORS, and rendered
+Chrome/Edge/Firefox keyboard/responsive checks of the read view and the form.
+
+## WP10 — One portal paging contract (and the paging inventory)
+
+RF15/HU15/P11 (RNF09/RNF10/RNF12). The portal's `page`/`size` vocabulary used to exist twice: the two
+request/order lists and their details imported the helpers of the operations feature, while support
+did the same work in a portal-local module. Both were byte-for-byte copies of the same reader, the
+same serializer and the same route-id parser, so a rule fixed in one place could silently stay broken
+in the other.
+
+- **One module owns it**: `src/app/experiences/portal/presentation/navigation/portal-paging.ts`.
+  `portalPageContext` reads the pair once from a route snapshot and returns the read context
+  (`offset = page × size`, `limit = size`); `portalPagingParams` serializes the effective page a row
+  link or a return link carries; `portalRouteId` accepts a record id; `portalMaxPageSize` (100) and
+  `portalFirstPage` (0/20) are the only copies of those two numbers in the portal.
+- **Whole-pair fallback, never a clamp**: missing, incomplete, duplicated, malformed, fractional,
+  negative, out-of-int32 or above-maximum input becomes `0/20` as a pair. The maximum belongs to the
+  reader, so an out-of-contract size is structurally impossible to dispatch — a page can no longer
+  forget the guard, because it no longer has one. The serializer refuses exactly what the reader
+  refuses (unaligned offsets, invalid numbers, size above 100), so a link the portal emits is always a
+  link the portal accepts back; both sides also insist on a `page × size` safe integer.
+- **Consumers**: the three lists (`/portal/requests`, `/portal/services`, `/portal/support`) read
+  their entry context there and serialize row links from the effective returned metadata; the three
+  details (`/:id`) parse their id and build their return link there; the own-support form takes the
+  documented first page from the module for its local own-orders picker (which is not URL paging). No
+  portal page keeps a private copy of the reader, the arithmetic or the maximum.
+- **Removed**: `navigation/portal-support-page-context.ts` (the support-specific duplicate). The
+  operations helpers are untouched — `service-requests-page.ts`, `service-request-detail-page.ts`,
+  `service-orders-page.ts` and `service-order-detail-page.ts` still consume them, and they are that
+  feature's own contract; the portal simply stopped importing them.
+- **Tests first**: `navigation/portal-paging.spec.ts` is the contract suite and the single home of the
+  fallback matrix — zero-based index and offset derivation, leading zeros, the accepted maximum of 100,
+  the missing/incomplete/duplicate family, the malformed/fractional/nonpositive family, the
+  out-of-int32 family, the over-maximum family that must not be clamped, fresh-object fallbacks, the
+  serializer's defaults and refusals, the read→link→read round trip (including a hand-edited pair both
+  sides refuse identically) and the route-id matrix. Each list spec keeps its integration proof: valid
+  pairs adopted, one representative malformed case per family, no dispatch above the maximum, and the
+  list → detail → return landing on the same effective page. The duplicated malformed rows were
+  removed from the three list specs (nine rows each: incomplete `size` only, fractional page,
+  non-numeric page and size, zero size, int32-overflow size, duplicated `size`, blank page, blank size)
+  because that suite now asserts the same cases once. RED was a compile failure for the missing module;
+  afterwards the ten portal spec files pass 192/192.
+- **Not refactored here**: nothing outside the portal. The inventory of the rest of `src/app` (below)
+  decides what, if anything, deserves a second slice; the portal's own 1-based navigation arithmetic
+  (`currentPage`, `pageCount`, `goToPage`, out-of-range recovery) also stays per page, because it is a
+  paging *control* over an already-decided query, not the URL/read contract this module owns.
+
+### Paging and page-size inventory outside the portal
+
+| Helper / place | Owner | Consumers | Verdict |
+| --- | --- | --- | --- |
+| `navigation/service-request-page-context.ts` (`page`/`size`) | operations | `service-requests-page`, `service-request-detail-page`, its spec | **Same concept** as the portal module (zero-based page → offset, whole-pair fallback, routes id), different feature contract; left untouched |
+| `navigation/service-order-page-context.ts` | operations | `service-orders-page`, `service-order-detail-page`, its spec | **Same concept**, duplicated inside operations; left untouched |
+| `navigation/staff-page-context.ts` (`staffPageContext`, `staffPagingParams`, `staffRouteId`, `staffReturnState`, `staffReturnFilters`) | field-operations | `staff-page`, staff profile pages, its spec | Same page/size→offset core **plus** an owner/session return-filter contract the portal has no use for |
+| `pages/support-page-context.ts` (`offset`/`limit`) | customer-support | `support-requests-page`, its spec | Same idea with the other URL vocabulary (`offset`/`limit`) and both-sides max-100 enforcement, plus filter/state serialization and `supportRouteId`; genuinely different URL contract |
+| `pages/customers-page/customer-page-context.ts` | customers | `customers-page` | **Look-alike**: reads `offset`/`limit` directly (no page/size), int32-aligned, no max-100 cap (the transport decides) |
+| `pages/leads-page/lead-page-context.ts` | customers | `leads-page` | Body identical to the customer one, separate module and owner — a **real duplicate inside customers**, candidate for a second slice |
+| `shared/pagination/normalize-pagination.ts` (`normalizePagination`, limit 1–100 → `Result`) | shared | **none in production** (its own spec only) | Not a URL context: it is the read-query validator, and it currently has no caller — reported, not changed |
+| `shared/pagination/pagination.params.ts` / `.response.ts` | shared | everything above | Shared vocabulary (`PaginationParams`, `NormalizedPagination`, `PaginationResponse`), not a helper |
+| `shared/components/table-pagination/table-pagination.ts` | shared | portal lists, users, customers, leads, staff, support, operations | Presentational 1-based control; emits a page number and computes no offset — same *UI* concept, not the same contract |
+| `pagina`/`tamanio` mapping in `*/infrastructure/source/*-http.validation.ts` | operations, customer-support, field-operations, customers | the HTTP sources | Same arithmetic at the adapter boundary, where it must also validate the returned metadata; moving it would couple transport validation to a navigation helper |
+| Inline 1-based paging in pages/dialogs (`currentPage`, `pageCount`, `goToPage`, `(page - 1) * limit`, `Math.floor((total - 1) / limit) * limit`) | portal lists and create page, support inbox/editor dialogs, customers, leads, staff, operations lists/editor, users page, audit viewer, user sessions, `CatalogCombobox` | their own templates | **Look-alike**: control arithmetic over an existing query, 12 sites; a shared "page control" helper would be a separate decision, not this contract |
+
+Pending acceptance: live backend/CORS and rendered browser passes for the portal remain the same as
+recorded for T2–T6; this change is deterministic-test and typecheck evidence only.
+
+### Portal dependency declaration (dev-server defect, fixed for T2–T6)
+
+The portal pages' `Component.imports` used to be written as spreads of the imported
+`HlmAlertImports`, `HlmBadgeImports`, `HlmButtonImports`, `HlmCardImports`, `HlmEmptyImports`,
+`HlmFieldImports`, `HlmInputImports`, `HlmNativeSelectImports`, `HlmSpinnerImports`,
+`HlmTableImports`, `HlmTextareaImports` and `HlmAvatarImports` constants. That shape is evaluated
+twice: once for the component definition, and again by the dev server whenever the page's template is
+rebuilt while the page is open, where
+`ɵɵreplaceMetadata` hands the rebuilt metadata function a `ɵɵnamespaces` array and the dependencies of
+a spread constant are re-resolved **by index**, e.g. `ɵɵnamespaces[7].HlmTextarea`. If the array and
+the chunk the browser loaded then differ by one entry — which the dev server can produce, because its
+`templateUpdates` map keeps a stored module across a code rebuild — the lookup reads a property of
+`undefined`, `Cannot read properties of undefined (reading 'HlmTextarea')` is thrown inside
+`PortalSupportCreatePage_UpdateMetadata`, and the form never renders. That was observed on
+`/portal/support/new`: the type select stayed absent for over 30 s, and the same exception appeared on
+a hot-reloaded server where the form still painted. Reproduced deterministically by serving a
+nine-namespace stored module (`ɵhmr8.HlmTextarea`) to a chunk that exposes eight.
+
+`/portal/support/new` now imports the twenty-odd directives and components it actually uses **by name**
+— the same directive set, one class per Helm export — so the rebuilt metadata receives them as plain
+arguments and dereferences no component symbol through `ɵɵnamespaces` at all (verified: the served
+update module references only the `@angular/core` namespace). The rest of the portal carried the same
+skew and logged the same exception in live acceptance: `HlmCaption` on `/portal/requests` and
+`/portal/support`, `HlmSpinner` on both detail pages. Every portal component now declares its
+dependencies the same way — `PortalRequestsPage`, `PortalRequestDetailPage`, `PortalServicesPage`,
+`PortalServiceDetailPage`, `PortalSupportPage`, `PortalSupportDetailPage` and the `PortalShell` that
+wraps them — naming exactly the Helm classes each template uses (`HlmAlert`/`HlmAlertTitle`/
+`HlmAlertDescription`, `HlmBadge`, `HlmButton`, `HlmEmpty` with header/title/description, `HlmSpinner`,
+`HlmTable`/`HlmTableContainer`/`HlmTHead`/`HlmTBody`/`HlmTr`/`HlmTh`/`HlmTd`,
+`HlmAvatar`/`HlmAvatarFallback`). Each page keeps its previous directive set — no template used
+`HlmAlertAction`, `HlmEmptyContent`, `HlmEmptyMedia`, `HlmCaption` or `HlmTFoot` — so the rendered
+result and behaviour are byte-identical. No `forwardRef`, no dynamic import and no change to a
+template, a payload, a guard, a store or a test expectation.
+
+- **Guard**: `src/app/experiences/portal/presentation/portal-component-imports.testing.ts` reads each
+  component's source from disk — a fixture-based render test builds the metadata and the component
+  definition from one revision, so it cannot see this class of breakage — and asserts every
+  `imports: [...]` entry is a plain identifier, with no spread and no `*Imports` constant.
+  `portal-component-imports.spec.ts` runs it over an explicit census of the eight portal component
+  sources, so a new page has to be registered there and a reintroduced constant fails without a browser.
+  `portal-support-create-page.spec.ts` keeps its original case, now through that shared helper.
+- **Live measurement** (real backend, CLIENTE session, `http://localhost:4200`): zero console errors on
+  `/portal/requests`, `/portal/requests/43`, `/portal/services`, `/portal/services/25`,
+  `/portal/support`, `/portal/support/10` and `/portal/support/new`, at 1440 px and again at 390 px,
+  with no horizontal document overflow at either width. The own-support form was rendered and never
+  submitted, so no attention was created, and no credential is stored in any artifact.
+- **Why the first post-fix run still threw**: the running dev server keeps one stored update module per
+  component in its `templateUpdates` map, written when that component's template was last rebuilt, and
+  serves it for the rest of the process lifetime. It still held the pre-fix modules for the pages
+  visited before the fix, so those pages kept throwing
+  `Cannot read properties of undefined (reading 'HlmAlert')` — the first entry of the stale
+  `HlmAlertImports` chain — even though the component chunk already carried the fix; `/portal/services`
+  and `/portal/services/:id`, never visited before, were clean on that same run. A template edit
+  replaces the stored module, after which every page measured zero without restarting the server. That
+  is the skew documented above, observed at runtime, and the declaration fix is what removes the
+  index-based re-resolution the skew depends on.
+
+Pending acceptance: rendered Chrome/Edge/Firefox keyboard and responsive passes, an independent review
+of this change, and the live CORS/authorization/redaction runs already listed for T2–T6.
+
+## Documented `404` delivery to detail adapters
+
+Cross-cutting fix for every detail screen that already documented an authoritative absence: the auth
+interceptor used to turn **every** protected-API `404` into a generic `UNEXPECTED` error, so no
+adapter could reach its typed not-found code and each page rendered the *retryable* error state
+instead of the «no disponible» one. The defect was measured live by opening a record the backend
+refuses with `404` (another customer's request), and it invalidated the documented `404` of the
+portal request/service/support details, the portal own profile ("sin perfil vinculado") and every
+staff/customer detail that maps `CUSTOMER_NOT_FOUND`/`NOT_FOUND`.
+
+- **The seam**: the existing opt-in context token (`PRESERVE_API_CONFLICT` / `apiConflictContext()`)
+  now also delivers a `404` to the adapters that ask for it, next to `409` and `400`. Nothing else
+  widened: `401` keeps its credential invalidation and no-replay rule, `403` stays `FORBIDDEN`, `5xx`
+  and status `0` keep their mapping, and a request without the opt-in keeps the generic mapping — so a
+  `404` on a list, a write or any unopted call behaves exactly as before. See
+  [the interceptor contract](../src/app/core/http/README.md).
+- **Opted-in readers** (each maps the status to the typed code it already had, so no new error code was
+  introduced): customer detail `GET /api/clientes/{id}` and own profile `GET /api/clientes/me`
+  (`CUSTOMER_NOT_FOUND`), operations request `GET /api/solicitudes/{id}` and order
+  `GET /api/ordenes/{id}` (`NOT_FOUND`), customer-support attention `GET /api/atenciones/{id}`
+  (`NOT_FOUND`), staff detail `GET /api/personal/{id}` and own staff profile `GET /api/personal/me`
+  (`NOT_FOUND`), and customer history `GET /api/clientes/{id}/historial` (`CUSTOMER_NOT_FOUND`).
+  Their list endpoints (`GET /api/personal` included) do not opt in.
+- **Consumers unchanged**: the pages already projected the authoritative absence as its own
+  non-retryable state (`data-detail-unavailable`, `data-profile-missing`) and excluded it from the
+  retryable error, so the fix required no page rewrite — only proof that the state is now reachable
+  through the real interceptor.
+- **Tests**: `auth.interceptor.spec.ts` pins opted-in `404` preservation (status, body, session kept,
+  nothing replayed) and the non-opted-in `404` staying generic next to the unchanged `401`/`403`/`5xx`
+  cases; `customer-not-found-http.spec.ts`, `operations-not-found-http.spec.ts` and
+  `customer-support-not-found-http.spec.ts` run the real interceptor end-to-end and prove each reader
+  produces its typed code while a list or write without the opt-in keeps today's mapping; the four
+  portal page specs gained an interceptor-mode case proving the distinct non-retryable state renders
+  and the retryable error does not. Observed RED: only the new opted-in/seam cases failed, while the
+  pre-existing cases kept passing.
+
+### Same defect class: remaining readers and the missing UI state
+
+The first pass left three surfaces outside it: the two field-operations staff reads, the customer
+history read and the staff customer detail presentation. All three are now closed.
+
+- **Staff reads** `GET /api/personal/{id}` and `GET /api/personal/me` now opt in and deliver the typed
+  `NOT_FOUND` the adapter already had through the real interceptor; `GET /api/personal` (directory)
+  stays generic. [StaffDetailPage](../src/app/features/field-operations/presentation/pages/staff-detail-page/staff-detail-page.ts)
+  splits its single error alert: `NOT_FOUND` renders the definitive `data-staff-unavailable` state
+  ("no está disponible … volver a consultarlo no cambiará el resultado") with **no** `Reintentar`
+  button, while every other code keeps today's retryable alert and its retry. No page structure,
+  read, TTL, session or owner-fence changed.
+- **Customer history** `GET /api/clientes/{id}/historial` now opts in and delivers `CUSTOMER_NOT_FOUND`.
+  [CustomerHistoryPanel](../src/app/features/customers/presentation/components/customer-history/customer-history-panel.ts)
+  renders that code as the definitive `data-history-unavailable` state with no `Reintentar historial`,
+  and suppresses the module sections because rendering records for a customer the server says does not
+  exist would contradict it. The panel's existing rule is untouched: a `403` or a malformed module
+  still fails the whole result with one safe retryable error that keeps verified same-owner stale data.
+- **Staff customer detail** already received `CUSTOMER_NOT_FOUND` from its adapter, but rendered one
+  combined "no se pudo consultar el cliente. Puede no existir…" alert with a retry. It is now split:
+  `CUSTOMER_NOT_FOUND` renders the definitive `data-customer-unavailable` state without a retry
+  action, and a transient failure keeps the retryable "No se pudo consultar el cliente." alert with
+  its `Reintentar cliente`. Properties are still only requested after a verified customer.
+- **Tests**: new `field-staff-not-found-http.spec.ts` and `customer-history-not-found-http.spec.ts` run
+  the real interceptor and prove the typed code for both staff reads and for history while the staff
+  directory `404` stays generic and opted-in `403`/`5xx`/`0` keep their mapping;
+  `staff-detail-page.lifecycle.spec.ts`, `customer-detail-page.spec.ts` and `customer-history.spec.ts`
+  prove the rendered absence (attribute present, retry absent) next to a transient failure that still
+  offers the retry. Observed RED: exactly the new opt-in/page cases failed before the change; every
+  pre-existing `401`/`403`/`5xx`/network and list/write "still generic" assertion kept passing.
+
+Pending acceptance: live backend/CORS runs with a real cross-customer `404` and browser
+keyboard/responsive checks for the three states above.

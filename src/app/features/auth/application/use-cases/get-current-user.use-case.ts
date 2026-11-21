@@ -9,7 +9,8 @@ import { AUTH_REPOSITORY } from "../../domain/repositories/auth.repository"
 export class GetCurrentUserUseCase {
   private readonly authRepository = inject(AUTH_REPOSITORY)
 
-  execute(): Observable<Result<AuthSession, AuthError>> {
-    return this.authRepository.me()
+  /** `force` re-reads the profile instead of the published snapshot, for confirmed writes. */
+  execute(force = false): Observable<Result<AuthSession, AuthError>> {
+    return force ? this.authRepository.me(true) : this.authRepository.me()
   }
 }

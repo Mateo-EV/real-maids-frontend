@@ -1,0 +1,194 @@
+<main class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6">
+  <app-catalog-frame
+    titleId="portal-support-title"
+    title="Soporte"
+    description="Atenciones de soporte que registramos a tu nombre"
+    [busy]="list().loading || list().refreshing"
+  >
+    <a
+      hlmBtn
+      catalogControls
+      size="sm"
+      class="catalog-action-with-plus"
+      routerLink="/portal/support/new"
+    >
+      <ng-icon name="lucidePlus" aria-hidden="true" />Nueva atención
+    </a>
+    @if (created) {
+      <div class="p-5 pb-0">
+        <div hlmAlert role="status">
+          <h2 hlmAlertTitle>Atención registrada</h2>
+          <p hlmAlertDescription>
+            El servidor no devolvió un identificador de la atención. Búscala en esta lista para
+            abrir su detalle.
+          </p>
+        </div>
+      </div>
+    }
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando atenciones…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando atenciones…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <div hlmTableContainer catalogDesktop>
+          <table hlmTable>
+            <caption class="sr-only">
+              Mis atenciones de soporte
+            </caption>
+            <thead hlmTHead class="bg-background">
+              <tr hlmTr>
+                <th hlmTh scope="col">Atención</th>
+                <th hlmTh scope="col">Asunto</th>
+                <th hlmTh scope="col">Tipo</th>
+                <th hlmTh scope="col">Estado</th>
+                <th hlmTh scope="col">Registrada (UTC)</th>
+                <th hlmTh scope="col">Detalle</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (attention of rows(); track attention.id) {
+                <tr hlmTr>
+                  <td hlmTd class="font-medium">#{{ attention.id }}</td>
+                  <td hlmTd class="whitespace-normal break-words">{{ attention.subject }}</td>
+                  <td hlmTd class="whitespace-normal break-words">
+                    {{ attention.requestTypeName }}
+                  </td>
+                  <td hlmTd>
+                    <!-- The supplied display text of the closed state, printed as received. -->
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      data-support-state
+                      [appBadgeTone]="attention.state"
+                      badgeToneKind="catalog-name"
+                      >{{ attention.stateName }}</span
+                    >
+                  </td>
+                  <td hlmTd>{{ attention.registeredAt.toISOString() }}</td>
+                  <td hlmTd>
+                    <a
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      [routerLink]="['/portal/support', attention.id]"
+                      [queryParams]="paging()"
+                      [attr.aria-label]="'Ver detalle de la atención ' + attention.id"
+                      >Ver detalle</a
+                    >
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul catalogMobile class="flex flex-col gap-4 p-4" aria-label="Mis atenciones de soporte">
+          @for (attention of rows(); track attention.id) {
+            <li class="min-w-0 rounded-xl border p-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 font-semibold break-words">
+                  {{ attention.subject }}
+                </h2>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  data-support-state
+                  [appBadgeTone]="attention.state"
+                  badgeToneKind="catalog-name"
+                  >{{ attention.stateName }}</span
+                >
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground">Atención #{{ attention.id }}</p>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Tipo</dt>
+                <dd class="break-words">{{ attention.requestTypeName }}</dd>
+                <dt class="text-muted-foreground">Registrada (UTC)</dt>
+                <dd class="break-words">{{ attention.registeredAt.toISOString() }}</dd>
+              </dl>
+              <a
+                hlmBtn
+                variant="outline"
+                size="sm"
+                class="mt-4"
+                [routerLink]="['/portal/support', attention.id]"
+                [queryParams]="paging()"
+                [attr.aria-label]="'Ver detalle de la atención ' + attention.id"
+                >Ver detalle</a
+              >
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{
+                page.total === 0 ? "Aún no tienes atenciones" : "Esta página ya no tiene registros"
+              }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "Cuando registremos una atención de soporte a tu nombre aparecerá aquí."
+                  : "La lista cambió. Vuelve a la primera página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      <p class="text-xs text-muted-foreground" role="status">
+        @if (result(); as page) {
+          {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+        } @else {
+          Resultados sin verificar
+        }
+      </p>
+      <app-table-pagination
+        label="Paginación de mis atenciones"
+        [currentPage]="currentPage()"
+        [pageCount]="pageCount()"
+        [disabled]="list().loading || !result()"
+        (pageSelected)="goToPage($event)"
+      />
+    </ng-container>
+  </app-catalog-frame>
+</main>

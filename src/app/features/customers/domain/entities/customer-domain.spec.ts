@@ -41,6 +41,8 @@ describe("Customer schema factories", () => {
       systemOrigin: null,
       externalId: null,
       isActive: true,
+      accountActive: null,
+      accountStateUnknown: false,
       createdAt: date,
       updatedAt: null,
       registeredByUserId: null,
@@ -61,7 +63,8 @@ describe("Customer schema factories", () => {
         date,
         date,
         4,
-        5
+        5,
+        false
       )
     ).toEqual({
       id: 2,
@@ -74,6 +77,8 @@ describe("Customer schema factories", () => {
       systemOrigin: "source",
       externalId: "external",
       isActive: false,
+      accountActive: false,
+      accountStateUnknown: false,
       createdAt: date,
       updatedAt: date,
       registeredByUserId: 4,
