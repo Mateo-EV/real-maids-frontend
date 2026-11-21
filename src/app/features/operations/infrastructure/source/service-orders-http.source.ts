@@ -14,6 +14,7 @@ import {
   ServiceOrderSummary
 } from "../../domain/models/operations-read.models"
 import {
+  ChangeOrderStatusParams,
   CreateServiceOrderParams,
   ReplaceServiceAssignmentsParams,
   ScheduleServiceOrderParams,
@@ -24,6 +25,7 @@ import { order, orderDetail, orderPage, orderPagination } from "./service-orders
 import { createOrderBody, createdOrderDetail } from "./service-orders-create.validation"
 import { activeReschedulingReasons, scheduleOrderBody } from "./service-orders-schedule.validation"
 import { assignmentsBody, captureAssignments } from "./service-orders-assignments.validation"
+import { changeOrderStatusBody, changedOrderDetail } from "./service-orders-status.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceOrdersHttpSource {
@@ -114,6 +116,39 @@ export class ServiceOrdersHttpSource {
           ? result
           : Result.failure(
               new OperationsError(result.error.code, "No se pudo programar la orden de servicio.")
+            )
+      )
+    )
+  }
+
+  changeOrderStatus(
+    id: number,
+    params: ChangeOrderStatusParams
+  ): Observable<Result<ServiceOrderDetail, OperationsError>> {
+    let snapshot: unknown = null
+    try {
+      if (params && typeof params === "object" && !Array.isArray(params))
+        snapshot = { status: params.status, observation: params.observation }
+    } catch {
+      snapshot = null
+    }
+    return this.read(() => {
+      if (!positiveId(id))
+        throw new OperationsError("INVALID_DATA", "Identificador de orden inválido.")
+      const body = changeOrderStatusBody(snapshot)
+      return this.http
+        .patch<unknown>(`${this.url}/${id}/estado`, body, {
+          transferCache: false,
+          // Same 404-aware context as the detail GET: an out-of-scope order stays NOT_FOUND.
+          context: apiConflictContext()
+        })
+        .pipe(map(value => changedOrderDetail(value, id)))
+    }).pipe(
+      map(result =>
+        result.success
+          ? result
+          : Result.failure(
+              new OperationsError(result.error.code, "No se pudo cambiar el estado de la orden.")
             )
       )
     )

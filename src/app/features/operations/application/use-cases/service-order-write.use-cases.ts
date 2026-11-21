@@ -1,5 +1,6 @@
 import { inject, Injectable } from "@angular/core"
 import {
+  ChangeOrderStatusParams,
   CreateServiceOrderParams,
   ScheduleServiceOrderParams
 } from "../../domain/params/operations.params"
@@ -10,6 +11,14 @@ export class CreateServiceOrderUseCase {
   private readonly repository = inject(OPERATIONS_REPOSITORY)
   execute(params: CreateServiceOrderParams) {
     return this.repository.createOrder(params)
+  }
+}
+
+@Injectable({ providedIn: "root" })
+export class ChangeOrderStatusUseCase {
+  private readonly repository = inject(OPERATIONS_REPOSITORY)
+  execute(id: number, params: ChangeOrderStatusParams) {
+    return this.repository.changeOrderStatus(id, params)
   }
 }
 

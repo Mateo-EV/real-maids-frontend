@@ -29,7 +29,8 @@ export class OperationsRepositoryImpl implements OperationsRepository {
   getOrder: OperationsRepository["getOrder"] = id => this.orders.getOrder(id)
   createOrder: OperationsRepository["createOrder"] = params => this.orders.createOrder(params)
   updateOrder: OperationsRepository["updateOrder"] = unsupported
-  changeOrderStatus: OperationsRepository["changeOrderStatus"] = unsupported
+  changeOrderStatus: OperationsRepository["changeOrderStatus"] = (id, params) =>
+    this.orders.changeOrderStatus(id, params)
   scheduleOrder: OperationsRepository["scheduleOrder"] = (id, params) =>
     this.orders.scheduleOrder(id, params)
   replaceAssignments: OperationsRepository["replaceAssignments"] = (id, params) =>
