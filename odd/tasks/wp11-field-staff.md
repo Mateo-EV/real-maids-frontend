@@ -43,9 +43,9 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
 | ID  | Tarea                                                                                                                                                                                                              | Specs  | Repo     | Estado                                                               |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | -------------------------------------------------------------------- |
 | T1  | `changeOrderStatus` deja de ser UNSUPPORTED: validador del body y de `OrdenDetalleResponse`, source `PATCH`, wire del repositorio y `ChangeOrderStatusUseCase` stateless, con tests                                | S1, S2 | frontend | **hecho** — `98a6b68`, 77/77 en los dos specs, `tsc` app y spec en 0 |
-| T2  | Audiencia `PERSONAL_CAMPO`: `audience-navigation` aprende la tercera audiencia, `/staff` queda protegida por el guard compartido y la lista «Mis servicios» reutiliza el `ServiceOrdersStore` root sin store nuevo | S3, S4 | frontend | in_progress                                                          |
+| T2  | Audiencia `PERSONAL_CAMPO`: `audience-navigation` aprende la tercera audiencia, `/staff` queda protegida por el guard compartido y la lista «Mis servicios» reutiliza el `ServiceOrdersStore` root sin store nuevo | S3, S4 | frontend | **hecho** — `d94ed9b` + `1602b82`; verificado por el padre           |
 | T3  | Detalle propio de «Mis servicios»: `observeOrder` reutilizado, `404` fuera de alcance como ausencia definitiva y retorno a la página efectiva                                                                      | S4, S5 | frontend | **hecho** — `854e4cc`, 70/70 staff; verificado por el padre          |
-| T4  | Acciones de estado en el detalle reutilizando `ChangeOrderStatusUseCase`, con confirmación, guard de pendiente e invalidación del store tras éxito confirmado                                                      | S1, S2 | frontend | pendiente                                                            |
+| T4  | Acciones de estado en el detalle reutilizando `ChangeOrderStatusUseCase`, con confirmación, guard de pendiente e invalidación del store tras éxito confirmado                                                      | S1, S2 | frontend | **hecho** — `6b0a94d` corregido por `b343fa2`; 91/91 staff           |
 
 ## Log
 
@@ -84,3 +84,33 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   texto nombra las dos causas honestas del 404 y no ofrece reintento; las fallas transitorias sí. El contrato
   de paging del staff usa `page`/`size` con fallback de par completo, sin recortar tamaños fuera de rango, y
   los links llevan la metadata efectiva. Verificación del padre: 70/70 en 4 archivos y formato limpio.
+
+- **L9 (T4, en corrección):** `6b0a94d` conecta las dos únicas acciones de ejecución del colaborador
+  asignado: `PROGRAMADA → EN_PROCESO` («Iniciar servicio») y `EN_PROCESO → COMPLETADA` («Completar
+  servicio»), ofrecidas por el estado que sirvió el servidor. No se renderizan programar, pagar ni
+  cancelar porque el seed solo otorga `ORDEN_ESTADO_ASIGNADA`; no se inventa tabla de transición ni ACL.
+  El diálogo captura el contexto verificado (ID, código, propiedad, estado/estadoNombre), toma la
+  observación opcional de máximo 250 con blanco → `null`, despacha solo `ChangeOrderStatusUseCase`,
+  bloquea el doble envío y todo descarte mientras está pendiente, conserva el rechazo inline seguro
+  para un reintento explícito y, solo ante éxito confirmado de la generación actual, emite un mensaje
+  genérico y fuerza exactamente una lectura de esa orden. Sin optimismo, sin reintento automático y
+  sin promesa de reversión.
+- **L10 (T4, defecto rechazado por la revisión independiente; corrección en vuelo):** el candidato
+  trataba el `NOT_FOUND` del `PATCH` como ausencia definitiva, y eso está rechazado: una respuesta de
+  escritura no es una lectura verificada de la orden. La regla aceptada es que un `NOT_FOUND` del
+  `PATCH` es un rechazo ordinario — el registro verificado sigue en pantalla, la página explica que el
+  servicio ya no está disponible para este colaborador y fuerza exactamente una lectura —, y solo
+  cuando esa segunda lectura (`GET`) devuelve `NOT_FOUND` se enciende la ausencia definitiva, sin
+  reintento alguno. Mientras la corrección no esté comprometida y verificada, T4 no se marca hecho.
+- **L11 (cierre del paquete, límites de evidencia):** WP11 queda **entregado como implementación, no
+  como paquete aceptado**. No hay corrida contra backend real/CORS, ni aceptación de teclado/responsivo
+  en Chrome/Edge/Firefox, ni build SSR de producción registrado para estas rebanadas; la prueba de
+  redacción y de permiso entre colaboradores no está verificada de punta a punta; y la revisión nativa
+  asesora/refutadora (RDD) no se ejecutó para estos candidatos. La proyección semanal no se construyó
+  porque la consulta de órdenes asignadas no la soporta.
+- **L12 (T4, revisión independiente y corrección):** la revisión rechazó `6b0a94d`: un `NOT_FOUND` del
+  `PATCH` cerraba la pantalla afirmando permanencia, algo que una respuesta de escritura no puede
+  establecer. `b343fa2` trata ese 404 como rechazo: conserva el registro, avisa que el servicio ya no está
+  disponible para ese usuario y que la asignación pudo cambiar, y fuerza una lectura; solo el `NOT_FOUND`
+  del `GET` enciende la ausencia definitiva sin reintento, y el `PATCH` nunca se reenvía. El test que
+  codificaba la interpretación equivocada se reemplazó. Verificación del padre: 91/91 staff.
