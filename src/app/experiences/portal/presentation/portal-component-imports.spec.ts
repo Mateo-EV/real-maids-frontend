@@ -12,6 +12,7 @@ import {
  */
 const portalComponents = [
   "presentation/components/portal-shell/portal-shell.ts",
+  "presentation/pages/portal-profile-page/portal-profile-page.ts",
   "presentation/pages/portal-request-detail-page/portal-request-detail-page.ts",
   "presentation/pages/portal-requests-page/portal-requests-page.ts",
   "presentation/pages/portal-service-detail-page/portal-service-detail-page.ts",

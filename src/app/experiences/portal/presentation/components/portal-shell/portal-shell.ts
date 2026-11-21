@@ -1,7 +1,13 @@
 import { Component, inject } from "@angular/core"
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
+import {
+  lucideFileText,
+  lucideLifeBuoy,
+  lucideLogOut,
+  lucideSparkles,
+  lucideUserRound
+} from "@ng-icons/lucide"
 import { HlmAvatar, HlmAvatarFallback } from "@spartan-ng/helm/avatar"
 import { HlmBadge } from "@spartan-ng/helm/badge"
 import { HlmButton } from "@spartan-ng/helm/button"
@@ -36,7 +42,9 @@ interface PortalSection {
     HlmBadge,
     HlmButton
   ],
-  providers: [provideIcons({ lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles })],
+  providers: [
+    provideIcons({ lucideFileText, lucideLifeBuoy, lucideLogOut, lucideSparkles, lucideUserRound })
+  ],
   templateUrl: "./portal-shell.html",
   styleUrl: "./portal-shell.css"
 })
@@ -47,7 +55,9 @@ export class PortalShell {
   readonly sections: readonly PortalSection[] = [
     { label: "Mis solicitudes", path: "/portal/requests", icon: "lucideFileText" },
     { label: "Mis servicios", path: "/portal/services", icon: "lucideSparkles" },
-    { label: "Soporte", path: "/portal/support", icon: "lucideLifeBuoy" }
+    { label: "Soporte", path: "/portal/support", icon: "lucideLifeBuoy" },
+    // WP10 T7: the own profile is a real destination, so the entry appears with its consumer.
+    { label: "Mi perfil", path: "/portal/profile", icon: "lucideUserRound" }
   ]
 
   sessionInitials(): string {

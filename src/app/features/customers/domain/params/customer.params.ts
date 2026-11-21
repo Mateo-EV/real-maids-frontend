@@ -33,6 +33,20 @@ export interface LinkCustomerAccountParams {
   readonly userId: number | null
 }
 
+/**
+ * WP10 T7 / S2 — own-profile update of the customer portal (`PUT /api/clientes/me`).
+ *
+ * The documented endpoint accepts **only** these two fields. The identity, the customer type, the
+ * active flag, the email and every account field (`crearCuenta`/`password`) are staff-only: the
+ * backend rejects them with `400` naming the field, and the sign-in email stays read-only because it
+ * is shared with the account row. This type is therefore the whole contract — nothing else may
+ * travel, and carrying an extra key is a transport error, not a silent drop.
+ */
+export interface UpdateOwnProfileParams {
+  readonly name: string
+  readonly phone: string | null
+}
+
 export interface SetCustomerStatusParams {
   readonly customerId: number
   readonly isActive: boolean

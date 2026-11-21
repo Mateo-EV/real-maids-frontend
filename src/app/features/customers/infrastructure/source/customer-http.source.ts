@@ -6,9 +6,11 @@ import { Customer, CustomerType } from "../../domain/entities/customer.entity"
 import {
   CreateCustomerParams,
   UpdateCustomerParams,
+  UpdateOwnProfileParams,
   SetCustomerStatusParams,
   LinkCustomerAccountParams
 } from "../../domain/params/customer.params"
+import { ownProfileFieldMarker } from "./customer-own-profile-marker"
 import { customerTransport } from "./customer-http.transport"
 import { ClienteEstadisticas } from "../../domain/params/cliente-estadisticas.params"
 import {
@@ -85,13 +87,15 @@ export function customerDto(v: unknown): Customer {
  * when the caller does not ask for a change, `password` only travels with `crearCuenta: true`, and a
  * password without that flag or a requested account without email/password is refused before HTTP.
  */
+/** Documented customer phone rule; the own-profile payload reuses it unchanged. */
+const phonePattern = /^\+?[0-9 ()-]{7,30}$/
 function body(p: CreateCustomerParams) {
   input(
     required(p.name, 150) &&
       Object.values(CustomerType).includes(p.type) &&
       email(p.email) &&
       optional(p.phone, 30) &&
-      (p.phone === null || /^\+?[0-9 ()-]{7,30}$/.test(p.phone))
+      (p.phone === null || phonePattern.test(p.phone))
   )
   const createAccount = p.createAccount,
     password = p.password ?? null
@@ -107,6 +111,19 @@ function body(p: CreateCustomerParams) {
     ...(createAccount === undefined ? {} : { crearCuenta: createAccount }),
     ...(createAccount === true ? { password } : {})
   }
+}
+/**
+ * Documented own-profile body (`PUT /api/clientes/me`): exactly `nombre` and `telefono`, validated
+ * with the staff profile rules. Every other field of the staff request is rejected by the backend, so
+ * this function cannot carry one: the returned object is the whole payload.
+ */
+function ownProfileBody(p: UpdateOwnProfileParams) {
+  input(
+    required(p.name, 150) &&
+      optional(p.phone, 30) &&
+      (p.phone === null || phonePattern.test(p.phone))
+  )
+  return { nombre: p.name, telefono: p.phone }
 }
 @Injectable({ providedIn: "root" })
 export class CustomerHttpSource {
@@ -176,6 +193,35 @@ export class CustomerHttpSource {
           .pipe(accountFieldMarker(), reservedCustomerEmail())
       },
       v => sameId(customerDto(v), p.id),
+      "CUSTOMER_NOT_FOUND"
+    )
+  }
+  /**
+   * WP10 T7 — the caller's own profile. No id and no query: the backend resolves the customer from
+   * the session. A `404` is the documented "account not linked yet" answer and keeps its own code, so
+   * a consumer can render it as a stable state instead of a retryable failure.
+   */
+  findOwnProfile() {
+    return this.transport.request(
+      () => this.http.get<unknown>(`${this.url}/me`, { transferCache: false }),
+      customerDto,
+      "CUSTOMER_NOT_FOUND"
+    )
+  }
+  /** Own-profile update: exactly `nombre` and `telefono`; no id, type, email or account field. */
+  updateOwnProfile(params: UpdateOwnProfileParams) {
+    const p = { ...params }
+    return this.transport.request(
+      () => {
+        const payload = ownProfileBody(p)
+        return this.http
+          .put<unknown>(`${this.url}/me`, payload, {
+            transferCache: false,
+            context: apiConflictContext()
+          })
+          .pipe(ownProfileFieldMarker())
+      },
+      customerDto,
       "CUSTOMER_NOT_FOUND"
     )
   }

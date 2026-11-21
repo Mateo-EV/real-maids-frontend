@@ -994,6 +994,61 @@ the backend rejects a foreign `idOrden`, rendered Chrome/Edge/Firefox keyboard a
 of the form, and a manual pass over list → form → created detail. The `creada` confirmation has only
 been observed with deterministic tests, since the real transport refuses an id-less answer.
 
+## WP10 T7 — «Mi perfil» of the customer
+
+S2 with M03/RF03/HU03 context for the customer's own record (RNF08/RNF09/RNF10/RNF12). `/portal/profile`
+is the customer's own profile inside the existing guarded portal shell, and «Mi perfil» becomes the
+fourth real navigation entry, so the portal still shows no dead destination.
+
+- **Route**: `profile` is a lazy child of the same guarded `portal` group — a static leaf, with no id
+  child, no local guard and no local provider, inheriting the shell's `portalGuard` audience decision.
+- **Contract**: `GET /api/clientes/me` (`CLIENTE_LEER_PROPIO`) returns the caller's own
+  `ClienteResponse`, the same fifteen-key shape as the staff detail, and answers `404` when the
+  authenticated account is not linked to a customer record. The frontend sends no id and no query: the
+  backend resolves the customer from the session. `PUT /api/clientes/me` (`CLIENTE_ACTUALIZAR_PROPIO`)
+  accepts **only** `nombre` and `telefono`; `tipo`, `activo`, `correo`, `crearCuenta` and `password` are
+  rejected with `400` naming the offending field, and the client never builds them.
+- **The email is read-only by product decision**: it is the sign-in identity and it is shared with the
+  account row, so only the office changes it. The screen prints it in a read-only input with that
+  single explanation; it is not editable, not re-sent, and no "request a change" workaround is offered.
+- **What the screen shows**: the supplied `nombre`, `correo`, `telefono` and `tipo` only. No id, no
+  account state, no timestamp, no fiscal/origin/external field and no invented label: a null phone
+  prints as «No registrado».
+- **Edit**: Signal Forms over `nombre` and `telefono` only, prefilled from the verified record when
+  editing starts and never rewritten by a later read. The payload is exactly `{ nombre, telefono }` —
+  name trimmed (required, up to 150) and phone trimmed with the documented staff rule (7–30 characters,
+  `+`, digits, spaces, parentheses and hyphens), blank turned into `null`. The form carries no email,
+  type, active flag or account field at all.
+- **Write discipline**: one PUT through a new root `CustomersStore.updateOwnProfile` action and the
+  existing stateless use case/repository/source chain. Pending blocks a duplicate submit and refuses
+  to dismiss the form (Cancel and the overlay-free form stay until the answer settles); a documented
+  `errores.nombre`/`errores.telefono` marker is bound to its own input while any other `400` keeps a
+  general inline message, and server copy is never rendered. Safe failures keep the draft and never
+  replay the write; feedback appears only after a confirmed success, and that success alone expires
+  the cached profile so the mounted observer re-reads it exactly once.
+- **Read states**: loading, verified record, transient failure with an explicit GET-only retry that
+  keeps verified data (and a visible stale warning), and the stable «sin perfil vinculado» state for the
+  documented `404`, which offers no retry because repeating the same GET cannot change the answer. The
+  read reuses the approved 120000 ms success-only freshness for customer profile data, ref-counted
+  flights and the root store's session fencing; nothing dispatches on the server platform, and a
+  session replacement or route destruction cancels the read (renewal within the same session preserves
+  it).
+- **Tests first**: the transport spec covers the own-profile GET without query, the `404` failure code,
+  malformed payloads, the exact two-key PUT body (including a caller carrying extra fields), the
+  validation refusals before HTTP, both field markers, the unknown-body fallback and the status
+  mapping; the action table pins both use cases to the repository; and the new page spec covers the
+  read states, the 404 state, the read-only email, the absence of ids/account state/timestamps, the
+  payload with trimmed name and null blank phone, validation before dispatch, the pending duplicate and
+  dismissal guards, the inline `400` with the draft preserved, confirmed-only feedback with exactly one
+  post-write read, session replacement, route destruction and the server platform. The route spec pins
+  the new child and the fourth navigation entry; the portal dependency census includes the new page.
+  RED was a compile failure for the missing repository methods and the missing component.
+
+Pending manual/live acceptance: the real `GET`/`PUT /api/clientes/me` with a customer session and the
+`CLIENTE_LEER_PROPIO`/`CLIENTE_ACTUALIZAR_PROPIO` authorities, the real `404` of an unlinked account,
+the accepted validation `400` bodies and their field markers, live CORS, and rendered
+Chrome/Edge/Firefox keyboard/responsive checks of the read view and the form.
+
 ## WP10 — One portal paging contract (and the paging inventory)
 
 RF15/HU15/P11 (RNF09/RNF10/RNF12). The portal's `page`/`size` vocabulary used to exist twice: the two

@@ -1,6 +1,10 @@
 import { inject, Injectable } from "@angular/core"
 import { CustomerListQuery } from "../../domain/models/customer-list-query"
-import { CreateCustomerParams, UpdateCustomerParams } from "../../domain/params/customer.params"
+import {
+  CreateCustomerParams,
+  UpdateCustomerParams,
+  UpdateOwnProfileParams
+} from "../../domain/params/customer.params"
 import { CustomerRepository } from "../../domain/repositories/customer.repository"
 import { CustomerHttpSource } from "../source/customer-http.source"
 
@@ -26,5 +30,13 @@ export class CustomerRepositoryImpl implements CustomerRepository {
 
   update(customer: UpdateCustomerParams) {
     return this.source.update(customer)
+  }
+
+  findOwnProfile() {
+    return this.source.findOwnProfile()
+  }
+
+  updateOwnProfile(profile: UpdateOwnProfileParams) {
+    return this.source.updateOwnProfile(profile)
   }
 }

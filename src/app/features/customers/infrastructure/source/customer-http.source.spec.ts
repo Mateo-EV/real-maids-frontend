@@ -9,6 +9,7 @@ import { CustomerType } from "../../domain/entities/customer.entity"
 import { CustomerRepositoryImpl } from "../repositories/customer.repository-impl"
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { CustomerListQuery } from "../../domain/models/customer-list-query"
+import { UpdateOwnProfileParams } from "../../domain/params/customer.params"
 
 export const customerDto = {
   idCliente: 7,
@@ -442,5 +443,173 @@ describe("Customer real HTTP boundary", () => {
     const result = await pending
     expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
     expect(result).not.toHaveProperty("data")
+  })
+
+  /**
+   * WP10 T7 / S2 — the customer's own profile. The two documented endpoints are `/api/clientes/me`
+   * (read) and `/api/clientes/me` (update, exactly `nombre` + `telefono`); every staff-only field and
+   * every account field is outside that contract and must never travel.
+   */
+  describe("Customer own profile real HTTP boundary", () => {
+    const url = "http://localhost:8080/api/clientes/me"
+
+    const own = (overrides: Record<string, unknown> = {}) => ({
+      ...customerDto,
+      idCliente: 4242,
+      nombre: "Ana Pérez",
+      correo: "ana@example.test",
+      telefono: "+56 9 1234 5678",
+      ...overrides
+    })
+
+    it("reads the caller's own profile without inventing an id or a query", async () => {
+      const pending = firstValueFrom(repository.findOwnProfile())
+      const request = http.expectOne(url)
+      expect(request.request.method).toBe("GET")
+      expect(request.request.params.keys()).toEqual([])
+      expect(request.request.transferCache).toBe(false)
+      request.flush(own())
+      expect(await pending).toMatchObject({
+        success: true,
+        data: {
+          id: 4242,
+          name: "Ana Pérez",
+          email: "ana@example.test",
+          phone: "+56 9 1234 5678",
+          type: "residencial"
+        }
+      })
+    })
+
+    it("maps the documented 404 to a stable no-profile failure, never to data", async () => {
+      const pending = firstValueFrom(repository.findOwnProfile())
+      http
+        .expectOne(url)
+        .flush({ mensaje: "RAW INTERNAL" }, { status: 404, statusText: "Not Found" })
+      const result = await pending
+      expect(result).toMatchObject({ success: false, error: { code: "CUSTOMER_NOT_FOUND" } })
+      expect(result).not.toHaveProperty("data")
+    })
+
+    it.each(
+      [
+        { ...customerDto, idCliente: 0 },
+        { ...customerDto, tipo: "mixto" },
+        { ...customerDto, nombre: null },
+        { ...customerDto, correo: 5 },
+        { ...customerDto, activo: "true" },
+        { ...customerDto, fechaCreacion: "2026-01-01" },
+        { ...customerDto, idUsuario: 11, usuarioActivo: null },
+        null,
+        []
+      ].map(dto => ({ dto }))
+    )("rejects a malformed own profile payload without exposing data: %j", async ({ dto }) => {
+      const pending = firstValueFrom(repository.findOwnProfile())
+      http.expectOne(url).flush(dto)
+      const result = await pending
+      expect(result).toMatchObject({ success: false, error: { code: "INVALID_RESPONSE" } })
+      expect(result).not.toHaveProperty("data")
+    })
+
+    it("updates the own profile with exactly nombre and telefono, decoded from the answer", async () => {
+      const pending = firstValueFrom(
+        repository.updateOwnProfile({ name: "Ana Pérez", phone: "+56 9 1234 5678" })
+      )
+      const request = http.expectOne(url)
+      expect(request.request.method).toBe("PUT")
+      expect(request.request.transferCache).toBe(false)
+      expect(Object.keys(request.request.body)).toEqual(["nombre", "telefono"])
+      expect(request.request.body).toEqual({ nombre: "Ana Pérez", telefono: "+56 9 1234 5678" })
+      request.flush(own())
+      expect(await pending).toMatchObject({ success: true, data: { id: 4242, name: "Ana Pérez" } })
+    })
+
+    it("refuses to send any other field even if the caller carries one", async () => {
+      const pending = firstValueFrom(
+        repository.updateOwnProfile({
+          name: "Ana Pérez",
+          phone: null,
+          correo: "otra@example.test",
+          tipo: "comercial",
+          activo: false,
+          crearCuenta: true,
+          password: "Clave1234"
+        } as UpdateOwnProfileParams)
+      )
+      const request = http.expectOne(url)
+      expect(request.request.body).toEqual({ nombre: "Ana Pérez", telefono: null })
+      expect(Object.keys(request.request.body)).toEqual(["nombre", "telefono"])
+      for (const forbidden of ["correo", "tipo", "activo", "crearCuenta", "password", "idCliente"])
+        expect(Object.keys(request.request.body)).not.toContain(forbidden)
+      request.flush(own({ telefono: null }))
+      expect((await pending).success).toBe(true)
+    })
+
+    it.each([
+      { name: "" },
+      { name: "   " },
+      { name: "a".repeat(151) },
+      { name: "Ana", phone: "123" },
+      { name: "Ana", phone: "+56 9 1234 5678 90 12 34 56 789" },
+      { name: "Ana", phone: "abc 1234" },
+      { name: null }
+    ])("rejects an invalid own-profile payload before HTTP: %j", async profile => {
+      const result = await firstValueFrom(
+        repository.updateOwnProfile(profile as unknown as UpdateOwnProfileParams)
+      )
+      expect(result).toMatchObject({ success: false, error: { code: "INVALID_INPUT" } })
+      http.expectNone(() => true)
+    })
+
+    it("binds a documented validation marker to its own field code, never to server copy", async () => {
+      for (const [marker, code] of [
+        ["nombre", "CUSTOMER_NAME_INVALID"],
+        ["telefono", "CUSTOMER_PHONE_INVALID"]
+      ] as const) {
+        const pending = firstValueFrom(
+          repository.updateOwnProfile({ name: "Ana Pérez", phone: "+56 9 1234 5678" })
+        )
+        http
+          .expectOne(url)
+          .flush(
+            { codigo: 400, mensaje: "PRIVATE SERVER TEXT", errores: { [marker]: "x" } },
+            { status: 400, statusText: "Bad Request" }
+          )
+        const result = await pending
+        expect(!result.success && result.error.code).toBe(code)
+        // The adapter's own message is delivered, never the backend's.
+        expect(!result.success && result.error.message).not.toContain("PRIVATE SERVER TEXT")
+      }
+    })
+
+    it.each([
+      { errores: { correo: "x" } },
+      { errores: { tipo: "x" } },
+      { errores: "nombre" },
+      { mensaje: "nombre" }
+    ])("keeps the generic validation mapping for any other body: %j", async body => {
+      const pending = firstValueFrom(
+        repository.updateOwnProfile({ name: "Ana Pérez", phone: null })
+      )
+      http.expectOne(url).flush(body, { status: 400, statusText: "Bad Request" })
+      expect(await pending).toMatchObject({
+        success: false,
+        error: { code: "INVALID_INPUT" }
+      })
+    })
+
+    it.each([
+      [403, "FORBIDDEN"],
+      [401, "UNAUTHENTICATED"],
+      [409, "CONFLICT"],
+      [500, "UNEXPECTED"]
+    ] as const)("maps a %s answer to %s without replaying the write", async (status, code) => {
+      const pending = firstValueFrom(
+        repository.updateOwnProfile({ name: "Ana Pérez", phone: null })
+      )
+      http.expectOne(url).flush({}, { status, statusText: "Failure" })
+      expect(await pending).toMatchObject({ success: false, error: { code } })
+      http.expectNone(() => true)
+    })
   })
 })

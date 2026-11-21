@@ -12,6 +12,8 @@ import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.en
 import { portalGuard } from "@/app/features/auth/presentation/guards/auth.guard"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { provideCustomerSupportReads } from "@/app/features/customer-support/customer-support.providers"
+import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
+import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
 import { portalPendingLeaveGuard } from "./presentation/navigation/portal-support-create-leave.guard"
 import { PORTAL_ROUTES } from "./portal.routes"
@@ -45,6 +47,8 @@ function setup(session: AuthSession | null) {
       provideHttpClientTesting(),
       provideOperationsRequestReads(),
       provideCustomerSupportReads(),
+      // The profile consumer reads through the real root store and transport.
+      { provide: CUSTOMER_REPOSITORY, useExisting: CustomerRepositoryImpl },
       { provide: API_URL, useValue: "http://localhost:8080" },
       { provide: AuthStore, useValue: auth },
       { provide: ObserveAuthSessionUseCase, useValue: { execute: () => EMPTY } }
@@ -87,7 +91,8 @@ describe("portal routes", () => {
       "services/:id",
       "support",
       "support/new",
-      "support/:id"
+      "support/:id",
+      "profile"
     ])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("requests")
@@ -118,6 +123,12 @@ describe("portal routes", () => {
     expect(children[7].canActivate).toBeUndefined()
     expect(children[7].canDeactivate).toBeUndefined()
     expect(children[7].providers).toBeUndefined()
+    // The own-profile section is a static leaf: no id child, no local guard or provider.
+    expect(children[8].path).toBe("profile")
+    expect(children[8].loadComponent).toBeTypeOf("function")
+    expect(children[8].canActivate).toBeUndefined()
+    expect(children[8].canDeactivate).toBeUndefined()
+    expect(children[8].providers).toBeUndefined()
   })
 
   it("protects the portal for anonymous visitors without any read or shell", async () => {
@@ -158,7 +169,7 @@ describe("portal routes", () => {
     const nav = element.querySelector('nav[aria-label="Navegación del portal"]')!
     expect(nav).not.toBeNull()
     const links = Array.from(nav.querySelectorAll("a"))
-    expect(links).toHaveLength(3)
+    expect(links).toHaveLength(4)
     expect(links[0].textContent?.trim()).toBe("Mis solicitudes")
     expect(links[0].getAttribute("href")).toBe("/portal/requests")
     expect(links[0].getAttribute("aria-current")).toBe("page")
@@ -169,6 +180,10 @@ describe("portal routes", () => {
     expect(links[2].textContent?.trim()).toBe("Soporte")
     expect(links[2].getAttribute("href")).toBe("/portal/support")
     expect(links[2].getAttribute("aria-current")).toBeNull()
+    // «Mi perfil» exists because its consumer exists (WP10 T7).
+    expect(links[3].textContent?.trim()).toBe("Mi perfil")
+    expect(links[3].getAttribute("href")).toBe("/portal/profile")
+    expect(links[3].getAttribute("aria-current")).toBeNull()
     expect(element.querySelector("app-portal-requests-page")).not.toBeNull()
 
     // Nothing administrative is reachable from the customer shell.
@@ -254,6 +269,47 @@ describe("portal routes", () => {
     expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
     expect(element.textContent).toContain("Servicio relacionado (opcional)")
     http.expectNone(() => true)
+  })
+
+  it("opens Mi perfil for a customer with its own caller-scoped read and no admin affordance", async () => {
+    setup(customer())
+    const harness = await RouterTestingHarness.create("/portal/profile")
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    const element = harness.routeNativeElement!
+    expect(TestBed.inject(Router).url).toBe("/portal/profile")
+    expect(element.querySelector("app-portal-profile-page")).not.toBeNull()
+    expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
+    const active = element.querySelector('nav[aria-label="Navegación del portal"] a[aria-current]')
+    expect(active?.textContent?.trim()).toBe("Mi perfil")
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      candidate => candidate.url === "http://localhost:8080/api/clientes/me"
+    )
+    // The backend resolves the caller from the session: no customer id and no query travels.
+    expect(request.request.method).toBe("GET")
+    expect(request.request.params.keys()).toEqual([])
+    request.flush({
+      idCliente: 4242,
+      nombre: "Ana Pérez",
+      tipo: "residencial",
+      correo: "ana@example.test",
+      telefono: null,
+      activo: true,
+      idUsuario: null,
+      usuarioActivo: null,
+      fechaCreacion: "2026-01-01T12:00:00-05:00",
+      fechaActualizacion: null,
+      idProspecto: null,
+      identificacionFiscal: null,
+      sistemaOrigen: null,
+      idExterno: null,
+      usuarioRegistro: null
+    })
+    await harness.fixture.whenStable()
+    harness.detectChanges()
+    expect(element.textContent).toContain("Ana Pérez")
+    TestBed.inject(HttpTestingController).expectNone(() => true)
   })
 
   it("logs the customer out from its own shell", async () => {

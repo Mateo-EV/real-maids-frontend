@@ -9,8 +9,8 @@ import { portalPendingLeaveGuard } from "./presentation/navigation/portal-suppor
  *
  * `/portal` opens the first implemented section. Every later section adds its route and its
  * navigation entry in the same slice that connects its consumer, so no dead destination is created
- * here: `requests` (own service requests), `services` (own service orders) and `support` (own support
- * attentions, list, own creation and detail) are all implemented.
+ * here: `requests` (own service requests), `services` (own service orders), `support` (own support
+ * attentions, list, own creation and detail) and `profile` (own profile, WP10 T7) are all implemented.
  */
 export const PORTAL_ROUTES: Routes = [
   {
@@ -82,6 +82,16 @@ export const PORTAL_ROUTES: Routes = [
         loadComponent: () =>
           import("./presentation/pages/portal-support-detail-page/portal-support-detail-page").then(
             component => component.PortalSupportDetailPage
+          )
+      },
+      // Own profile (WP10 T7). A static leaf: `GET`/`PUT /api/clientes/me` are caller-scoped, so no
+      // id child, no local guard and no local provider exist.
+      {
+        path: "profile",
+        title: "Mi perfil | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/portal-profile-page/portal-profile-page").then(
+            component => component.PortalProfilePage
           )
       }
     ]
