@@ -160,6 +160,39 @@ describe("origin-scoped auth interceptor", () => {
     expect((await firstValueFrom(source.me())).success).toBe(true)
   })
 
+  it("delivers an opted-in 404 once, keeping the session and replaying nothing", async () => {
+    const pending = firstValueFrom(
+      client.get(`${origin}/api/clientes/9`, { context: apiConflictContext() })
+    )
+    const assertion = expect(pending).rejects.toMatchObject({
+      status: 404,
+      error: { mensaje: "RAW NOT FOUND" }
+    })
+    const request = http.expectOne(`${origin}/api/clientes/9`)
+    expect(request.request.headers.get("Authorization")).toBe("Bearer fake-first")
+    expect(request.request.transferCache).toBe(false)
+    request.flush({ mensaje: "RAW NOT FOUND" }, { status: 404, statusText: "Not Found" })
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.expectNone(`${origin}/api/clientes/9`)
+    http.expectNone(`${origin}/api/auth/refresh`)
+    http.expectNone(`${origin}/api/auth/logout`)
+  })
+
+  it("keeps the generic error for a 404 without opt-in", async () => {
+    const pending = firstValueFrom(client.get(`${origin}/api/clientes/9`))
+    const assertion = expect(pending).rejects.toMatchObject({
+      code: "UNEXPECTED",
+      name: "AuthError"
+    })
+    http
+      .expectOne(`${origin}/api/clientes/9`)
+      .flush({ mensaje: "RAW NOT FOUND" }, { status: 404, statusText: "Not Found" })
+    await assertion
+    expect((await firstValueFrom(source.me())).success).toBe(true)
+    http.expectNone(`${origin}/api/clientes/9`)
+  })
+
   it.each([
     [403, "Forbidden", "FORBIDDEN"],
     [500, "Server Error", "UNEXPECTED"]

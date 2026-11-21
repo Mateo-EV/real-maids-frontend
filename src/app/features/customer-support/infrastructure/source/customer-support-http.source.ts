@@ -3,6 +3,7 @@ import { HttpClient } from "@angular/common/http"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
 import { catchError, defer, map, Observable, of } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
+import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
@@ -71,7 +72,10 @@ export class CustomerSupportHttpSource {
     return this.dispatch(() => {
       if (!positiveId(id)) throw failure("VALIDATION")
       return this.http
-        .get<unknown>(`${this.requestsUrl}/${id}`, { transferCache: false })
+        .get<unknown>(`${this.requestsUrl}/${id}`, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
         .pipe(map(value => requestDetail(value, id)))
     })
   }

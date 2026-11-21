@@ -157,7 +157,10 @@ export class CustomerHttpSource {
     return this.transport.request(
       () => {
         input(id(customerId))
-        return this.http.get<unknown>(`${this.url}/${customerId}`, { transferCache: false })
+        return this.http.get<unknown>(`${this.url}/${customerId}`, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
       },
       v => sameId(customerDto(v), customerId),
       "CUSTOMER_NOT_FOUND"
@@ -203,7 +206,11 @@ export class CustomerHttpSource {
    */
   findOwnProfile() {
     return this.transport.request(
-      () => this.http.get<unknown>(`${this.url}/me`, { transferCache: false }),
+      () =>
+        this.http.get<unknown>(`${this.url}/me`, {
+          transferCache: false,
+          context: apiConflictContext()
+        }),
       customerDto,
       "CUSTOMER_NOT_FOUND"
     )

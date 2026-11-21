@@ -1172,3 +1172,41 @@ template, a payload, a guard, a store or a test expectation.
 
 Pending acceptance: rendered Chrome/Edge/Firefox keyboard and responsive passes, an independent review
 of this change, and the live CORS/authorization/redaction runs already listed for T2–T6.
+
+## Documented `404` delivery to detail adapters
+
+Cross-cutting fix for every detail screen that already documented an authoritative absence: the auth
+interceptor used to turn **every** protected-API `404` into a generic `UNEXPECTED` error, so no
+adapter could reach its typed not-found code and each page rendered the *retryable* error state
+instead of the «no disponible» one. The defect was measured live by opening a record the backend
+refuses with `404` (another customer's request), and it invalidated the documented `404` of the
+portal request/service/support details, the portal own profile ("sin perfil vinculado") and every
+staff/customer detail that maps `CUSTOMER_NOT_FOUND`/`NOT_FOUND`.
+
+- **The seam**: the existing opt-in context token (`PRESERVE_API_CONFLICT` / `apiConflictContext()`)
+  now also delivers a `404` to the adapters that ask for it, next to `409` and `400`. Nothing else
+  widened: `401` keeps its credential invalidation and no-replay rule, `403` stays `FORBIDDEN`, `5xx`
+  and status `0` keep their mapping, and a request without the opt-in keeps the generic mapping — so a
+  `404` on a list, a write or any unopted call behaves exactly as before. See
+  [the interceptor contract](../src/app/core/http/README.md).
+- **Opted-in readers** (each maps the status to the typed code it already had, so no new error code was
+  introduced): customer detail `GET /api/clientes/{id}` and own profile `GET /api/clientes/me`
+  (`CUSTOMER_NOT_FOUND`), operations request `GET /api/solicitudes/{id}` and order
+  `GET /api/ordenes/{id}` (`NOT_FOUND`), customer-support attention `GET /api/atenciones/{id}`
+  (`NOT_FOUND`). Their list endpoints do not opt in.
+- **Consumers unchanged**: the pages already projected the authoritative absence as its own
+  non-retryable state (`data-detail-unavailable`, `data-profile-missing`) and excluded it from the
+  retryable error, so the fix required no page rewrite — only proof that the state is now reachable
+  through the real interceptor.
+- **Tests**: `auth.interceptor.spec.ts` pins opted-in `404` preservation (status, body, session kept,
+  nothing replayed) and the non-opted-in `404` staying generic next to the unchanged `401`/`403`/`5xx`
+  cases; `customer-not-found-http.spec.ts`, `operations-not-found-http.spec.ts` and
+  `customer-support-not-found-http.spec.ts` run the real interceptor end-to-end and prove each reader
+  produces its typed code while a list or write without the opt-in keeps today's mapping; the four
+  portal page specs gained an interceptor-mode case proving the distinct non-retryable state renders
+  and the retryable error does not. Observed RED: only the new opted-in/seam cases failed, while the
+  pre-existing cases kept passing.
+
+Pending acceptance: live backend/CORS runs with a real cross-customer `404`, the staff
+(`/api/personal/{id}`, `/api/personal/me`) and customer-history readers whose sources sit outside this
+change and therefore still keep the generic mapping, and browser keyboard/responsive checks.

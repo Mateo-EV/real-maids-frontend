@@ -1,15 +1,18 @@
-import { provideHttpClient } from "@angular/common/http"
+import { provideHttpClient, withInterceptors } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { Component, PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject } from "rxjs"
+import { BehaviorSubject, of } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
+import { AuthPersistentSession } from "@/app/features/auth/infrastructure/session/auth-persistent-session"
+import { authInterceptor } from "@/app/features/auth/infrastructure/interceptors/auth.interceptor"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { CustomerRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer.repository-impl"
 import { PortalProfilePage } from "./portal-profile-page"
@@ -49,12 +52,24 @@ const ownDto = (overrides: Record<string, unknown> = {}) => ({
 const flat = (node: Node | null | undefined) =>
   (node?.textContent ?? "").replace(/\s+/g, " ").trim()
 
-async function setup(options: { server?: boolean } = {}) {
+async function setup(options: { server?: boolean; interceptor?: boolean } = {}) {
   TestBed.resetTestingModule()
   const sessions = new BehaviorSubject<AuthSession | null>(customer())
   TestBed.configureTestingModule({
     providers: [
-      provideHttpClient(),
+      // The real seam: the auth interceptor the app installs, not only the page's own mapping.
+      options.interceptor
+        ? provideHttpClient(withInterceptors([authInterceptor]))
+        : provideHttpClient(),
+      ...(options.interceptor
+        ? [
+            { provide: AuthPersistentSession, useValue: { browser: true, origin } },
+            {
+              provide: AuthHttpSource,
+              useValue: { accessToken: () => of("synthetic-access"), invalidate: () => undefined }
+            }
+          ]
+        : []),
       provideHttpClientTesting(),
       provideRouter([
         { path: "portal/profile", component: PortalProfilePage },
@@ -208,6 +223,20 @@ describe("PortalProfilePage", () => {
     expect(s.text()).not.toContain("RAW INTERNAL")
     expect(s.text()).not.toMatch(/permiso/i)
     expect(s.text()).not.toMatch(/escríbenos|solicítalo|contacta al administrador/i)
+    expect(s.root().querySelectorAll("button")).toHaveLength(0)
+    s.http.expectNone(() => true)
+  })
+
+  it("keeps that stable state when the 404 travels through the real auth interceptor", async () => {
+    const s = await setup({ interceptor: true })
+    s.pendingGet().flush({ mensaje: "RAW INTERNAL" }, { status: 404, statusText: "Not Found" })
+    await s.settle()
+    const missing = s.root().querySelector("[data-profile-missing]")!
+    expect(missing).not.toBeNull()
+    expect(s.flat(missing)).toContain("Sin perfil vinculado")
+    // The retryable state must not appear: the account has no linked profile, it is not a failure.
+    expect(s.root().querySelector("[data-profile-error]")).toBeNull()
+    expect(s.root().querySelector("[data-profile-record]")).toBeNull()
     expect(s.root().querySelectorAll("button")).toHaveLength(0)
     s.http.expectNone(() => true)
   })

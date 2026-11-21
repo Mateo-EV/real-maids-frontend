@@ -1,15 +1,18 @@
-import { provideHttpClient } from "@angular/common/http"
+import { provideHttpClient, withInterceptors } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
 import { Component, PLATFORM_ID } from "@angular/core"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
-import { BehaviorSubject } from "rxjs"
+import { BehaviorSubject, of } from "rxjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
+import { AuthHttpSource } from "@/app/features/auth/infrastructure/source/auth-http.source"
+import { AuthPersistentSession } from "@/app/features/auth/infrastructure/session/auth-persistent-session"
+import { authInterceptor } from "@/app/features/auth/infrastructure/interceptors/auth.interceptor"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
 import { PortalServiceDetailPage } from "./portal-service-detail-page"
 
@@ -139,12 +142,27 @@ function customerScopedDetailDto() {
   )
 }
 
-async function setup(options: { url?: string; server?: boolean } = {}) {
+async function setup(options: { url?: string; server?: boolean; interceptor?: boolean } = {}) {
   TestBed.resetTestingModule()
   const session = new BehaviorSubject<AuthSession | null>(customer())
   TestBed.configureTestingModule({
     providers: [
-      provideHttpClient(),
+      // The real seam: the auth interceptor the app installs, not only the page's own mapping.
+      options.interceptor
+        ? provideHttpClient(withInterceptors([authInterceptor]))
+        : provideHttpClient(),
+      ...(options.interceptor
+        ? [
+            {
+              provide: AuthPersistentSession,
+              useValue: { browser: true, origin: "http://localhost:8080" }
+            },
+            {
+              provide: AuthHttpSource,
+              useValue: { accessToken: () => of("synthetic-access"), invalidate: () => undefined }
+            }
+          ]
+        : []),
       provideHttpClientTesting(),
       provideOperationsRequestReads(),
       provideRouter([
@@ -315,6 +333,20 @@ describe("PortalServiceDetailPage", () => {
     // Not a permission hint, not a retryable failure, and no leaked backend text.
     expect(state.textContent).not.toMatch(/permiso/i)
     expect(s.text()).not.toContain("RAW INTERNAL DETAIL")
+    expect(s.element().querySelector("[data-detail-error]")).toBeNull()
+    expect(s.element().querySelector("[data-detail-record]")).toBeNull()
+    expect(s.buttons()).toHaveLength(0)
+    s.http.expectNone(() => true)
+  })
+
+  it("keeps that distinct state when the 404 travels through the real auth interceptor", async () => {
+    const s = await setup({ interceptor: true })
+    s.pending().flush({ mensaje: "RAW INTERNAL DETAIL" }, { status: 404, statusText: "Not Found" })
+    await s.settle()
+    const state = s.element().querySelector("[data-detail-unavailable]")!
+    expect(state).not.toBeNull()
+    expect(state.textContent).toContain("Servicio no disponible")
+    // The retryable state must not appear: repeating the same GET cannot change the answer.
     expect(s.element().querySelector("[data-detail-error]")).toBeNull()
     expect(s.element().querySelector("[data-detail-record]")).toBeNull()
     expect(s.buttons()).toHaveLength(0)
