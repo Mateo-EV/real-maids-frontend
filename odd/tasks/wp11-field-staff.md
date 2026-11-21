@@ -114,3 +114,11 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   disponible para ese usuario y que la asignación pudo cambiar, y fuerza una lectura; solo el `NOT_FOUND`
   del `GET` enciende la ausencia definitiva sin reintento, y el `PATCH` nunca se reenvía. El test que
   codificaba la interpretación equivocada se reemplazó. Verificación del padre: 91/91 staff.
+- **L13 (revisión nativa, intentada y no preparada):** con RDD `on` y `reviewDue` en el rango acumulado por
+  `auth.guard.ts`, `assess` dio 3823 líneas en 32 archivos, `inspect` devolvió un candidato fresco
+  (`review-8b3e0b7ebeacf873`) y `START` falló con `candidate-owner-preparation-failed` / `ETIMEDOUT`:
+  `lineage_created: false`, `mutation_outcome: none`. Es el mismo defecto reproducible que el proyecto ya
+  registró para WP8 en candidatos acumulados. No se reintentó: un timeout no identifica un lock ni autoriza
+  un retry. El slice de escritura aislado (`0026801..HEAD`) había quedado `reviewDue: false` por
+  `under_budget`, así que el paquete queda con verificación independiente de sus dos slices sensibles y sin
+  la vista nativa adicional.
