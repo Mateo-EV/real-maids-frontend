@@ -50,8 +50,12 @@ export interface StaffServiceStatusDialogContext {
   current: () => boolean
   /** Confirmed success: the owner emits one confirmation and forces exactly one fresh read. */
   onChanged: () => void
-  /** The backend answered 404: the owner falls back to its definitive absence state. */
-  onMissing: () => void
+  /**
+   * The write answered 404. That is a refusal, not proof of absence: the owner keeps the verified
+   * record, closes the dialog and forces exactly one read, because only the GET establishes
+   * visibility for this caller.
+   */
+  onNotAvailable: () => void
 }
 
 const maxObservation = 250
@@ -83,7 +87,8 @@ function statusWriteError(code: OperationsErrorCode, target: StaffServiceStatusT
  * the record optimistically and never presents a cancellation as an undo. Pending state blocks a
  * duplicate submit and every user dismissal; a server refusal (400 business rule, 403 not assigned,
  * 409, network) keeps the same confirmation open for an explicit retry with safe, project-owned
- * copy instead of raw backend text.
+ * copy instead of raw backend text. A `404` is a refusal as well: the dialog closes and the owner
+ * refreshes the read, because the write does not establish whether the service is still visible.
  */
 @Component({
   selector: "app-staff-service-status-dialog",
@@ -172,8 +177,9 @@ export class StaffServiceStatusDialog {
         if (!this.current() || !result) return
         if (!result.success) {
           if (result.error.code === "NOT_FOUND") {
-            // Authoritative: the order is gone or outside this caller's scope.
-            this.context.onMissing()
+            // A write 404 means the change was refused — the assignment may have changed. It is not
+            // proof of absence: the owner keeps the displayed record and refreshes the read.
+            this.context.onNotAvailable()
             if (this.current()) this.dialog.close()
             return
           }

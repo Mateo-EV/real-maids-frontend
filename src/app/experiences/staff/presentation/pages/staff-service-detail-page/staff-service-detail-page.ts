@@ -4,7 +4,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router"
 import { Dialog, DialogConfig, DEFAULT_DIALOG_CONFIG } from "@angular/cdk/dialog"
 import { BrnDialogRef, BrnDialogService } from "@spartan-ng/brain/dialog"
 import { HlmDialogService } from "@spartan-ng/helm/dialog"
-import { distinctUntilChanged, EMPTY, map, Subject, switchMap, takeUntil } from "rxjs"
+import { distinctUntilChanged, EMPTY, map, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from "@spartan-ng/helm/alert"
 import { HlmBadge } from "@spartan-ng/helm/badge"
 import { HlmButton } from "@spartan-ng/helm/button"
@@ -60,7 +60,9 @@ interface StatusAction {
  * and not a client transition table. The PATCH goes through the existing stateless
  * `ChangeOrderStatusUseCase`; no URL is built here, nothing is retried automatically, and nothing is
  * patched optimistically. A refusal stays visible and actionable. Only a confirmed success emits one
- * confirmation and forces exactly one fresh read of that order.
+ * confirmation and forces exactly one fresh read of that order. A `404` on the write is a refusal
+ * too, never proof of absence: the verified record stays on screen with a notice that asks for a
+ * refresh, and the resulting GET — the authority on visibility — forces exactly one read.
  *
  * Helm dependencies are declared by name, never as a spread of an imported `*Imports` constant: the
  * dev server re-applies this metadata through `ɵɵnamespaces` and resolves those entries by index.
@@ -105,15 +107,18 @@ export class StaffServiceDetailPage {
   /** `null` cancels the current observation without issuing a replacement read. */
   private readonly loads = new Subject<{ id: number; force: boolean } | null>()
   private readonly params = signal(this.route.snapshot.queryParamMap)
-  /** Id the backend answered 404 for: absence is definitive within this visit. */
-  private readonly absent = signal<number | null>(null)
+  /**
+   * The write answered `NOT_FOUND`. That is a refusal, not proof of absence: the record was just
+   * displayed, so the page keeps it and asks for a refresh instead of asserting permanence.
+   */
+  private readonly refusal = signal<{ id: number; message: string } | null>(null)
   readonly id = signal<number | null>(null)
   readonly confirmation = signal("")
   private readonly scope = createSessionReadScope(() => {
     // A replaced session must not inherit the previous identity's read, dialog or verified record.
     this.stopDialog()
     this.confirmation.set("")
-    this.absent.set(null)
+    this.refusal.set(null)
     this.loads.next(null)
     const generation = this.scope.generation()
     queueMicrotask(() => {
@@ -126,12 +131,13 @@ export class StaffServiceDetailPage {
     const id = this.id()
     return id === null ? undefined : this.orders.selectOrder(id)
   })
-  /** Authoritative absence: the backend answered 404 for this caller or for this change. */
-  readonly notFound = computed(() => {
-    const absent = this.absent()
-    const id = this.id()
-    return (absent !== null && absent === id) || this.detail()?.error?.code === "NOT_FOUND"
-  })
+  /**
+   * Authoritative absence: only the detail read — never a write — answered 404 for this caller.
+   * A failed revalidation keeps the verified record and sets the typed error, so this reads as the
+   * definitive state the GET established.
+   */
+  readonly notFound = computed(() => this.detail()?.error?.code === "NOT_FOUND")
+  readonly refusalMessage = computed(() => this.refusal()?.message ?? "")
   readonly invalid = computed(() => this.id() === null)
   readonly unavailable = computed(() => this.invalid() || this.notFound())
   readonly record = computed(() => {
@@ -233,7 +239,14 @@ export class StaffServiceDetailPage {
         switchMap(load =>
           load === null
             ? EMPTY
-            : this.orders.observeOrder(load.id, load.force).pipe(takeUntil(this.scope.cancelled$))
+            : this.orders.observeOrder(load.id, load.force).pipe(
+                // A settled read — verified or the GET's own 404 — replaces the write-refusal notice.
+                tap(result => {
+                  if (result.success || result.error.code === "NOT_FOUND")
+                    this.settleRefusal(load.id)
+                }),
+                takeUntil(this.scope.cancelled$)
+              )
         ),
         takeUntilDestroyed(this.destroyRef)
       )
@@ -249,7 +262,7 @@ export class StaffServiceDetailPage {
         // A new route identity owns no dialog and no previous absence of its own.
         this.stopDialog()
         this.confirmation.set("")
-        this.absent.set(null)
+        this.refusal.set(null)
         this.id.set(id)
         if (id === null) this.loads.next(null)
         else this.load(id, false)
@@ -307,10 +320,16 @@ export class StaffServiceDetailPage {
         // Confirmed success alone: exactly one forced read of that order, no page reload.
         this.load(id, true)
       },
-      onMissing: () => {
+      onNotAvailable: () => {
         if (!current()) return
         this.confirmation.set("")
-        this.absent.set(id)
+        this.refusal.set({
+          id,
+          message:
+            "Puede que la asignación haya cambiado. Revisa el estado vigente del servicio o vuelve a Mis servicios para actualizar la lista."
+        })
+        // The GET, never the write, decides visibility: exactly one forced read, no resend.
+        this.load(id, true)
       }
     }
     this.dialog = this.dialogs.open(StaffServiceStatusDialog, {
@@ -328,6 +347,13 @@ export class StaffServiceDetailPage {
     this.ownerChanged.next()
     if (this.destroyRef.destroyed) dialog?.forceClose()
     else dialog?.close()
+  }
+
+  /** A settled read of the refused order replaces the notice with the real, verified state. */
+  private settleRefusal(id: number): void {
+    if (this.destroyRef.destroyed || !this.scope.check() || id !== this.id()) return
+    if (this.refusal()?.id !== id) return
+    this.refusal.set(null)
   }
 
   private current(generation: number): boolean {

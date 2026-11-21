@@ -1,6 +1,7 @@
 import { provideHttpClient } from "@angular/common/http"
 import { HttpTestingController, provideHttpClientTesting } from "@angular/common/http/testing"
-import { PLATFORM_ID, signal } from "@angular/core"
+import { getDebugNode, PLATFORM_ID, signal } from "@angular/core"
+import { DialogRef as CdkDialogRef } from "@angular/cdk/dialog"
 import { TestBed } from "@angular/core/testing"
 import { provideRouter, Router } from "@angular/router"
 import { RouterTestingHarness } from "@angular/router/testing"
@@ -421,7 +422,9 @@ describe("StaffServiceDetailPage status actions", () => {
     ["PENDIENTE", "Pendiente", undefined, "Iniciar servicio"],
     ["COMPLETADA", "Completada", undefined, "Iniciar servicio"],
     ["PAGADO", "Pagado", undefined, "Iniciar servicio"],
-    ["CANCELADA", "Cancelada", undefined, "Iniciar servicio"]
+    ["CANCELADA", "Cancelada", undefined, "Iniciar servicio"],
+    // A code this page does not move (unknown to the two documented moves) offers no action at all.
+    ["SUSPENDIDA", "Suspendida", undefined, "Iniciar servicio"]
   ])(
     "offers only the execution move of the supplied %s state",
     async (status, statusName, offered, absent) => {
@@ -543,7 +546,106 @@ describe("StaffServiceDetailPage status actions", () => {
     expect(statusPatch(s).request.body.estado).toBe("EN_PROCESO")
   })
 
-  it("falls back to the definitive absence state when the order is not found", async () => {
+  it.each([
+    [403, "Forbidden", /permiso/i],
+    [409, "Conflict", /conflicto/i]
+  ] as const)(
+    "keeps the dialog and the record usable without a read or a resend on HTTP %i",
+    async (status, statusText, copy) => {
+      const s = await loaded()
+      await openDialog(s, "Iniciar servicio")
+      await submitDialog(s)
+      statusPatch(s).flush({ mensaje: "RAW BACKEND TEXT" }, { status, statusText })
+      await settleDialog(s)
+      expect(dialogHost()).not.toBeNull()
+      expect(dialogText()).toMatch(copy)
+      expect(dialogText()).not.toContain("RAW BACKEND TEXT")
+      // The supplied record is untouched and no read was forced by the refusal.
+      expect(s.element().textContent).toContain("OS-2026-000017")
+      expect(s.element().textContent).toContain("Programada")
+      expect(s.element().querySelector("[data-detail-refusal]")).toBeNull()
+      s.http.expectNone(() => true)
+    }
+  )
+
+  it("keeps the dialog and the record usable after a network failure", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).error(new ProgressEvent("error"))
+    await settleDialog(s)
+    expect(dialogHost()).not.toBeNull()
+    expect(dialogText()).toMatch(/no se pudo confirmar/i)
+    expect(s.element().textContent).toContain("OS-2026-000017")
+    expect(s.element().querySelector("[data-detail-refusal]")).toBeNull()
+    // No automatic resend and no automatic read after an unknown outcome.
+    s.http.expectNone(() => true)
+  })
+
+  it("refuses Escape and outside dismissal while the write is pending", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    const patch = statusPatch(s)
+    const cdk = getDebugNode(dialogHost()!)!.injector.get(CdkDialogRef)
+    dialogHost()!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true })
+    )
+    cdk.overlayRef.backdropElement!.click()
+    document.body.click()
+    await settleDialog(s)
+    expect(dialogHost()).not.toBeNull()
+    // The dispatched write is still the only one.
+    patch.flush(detailInState("EN_PROCESO", "En proceso"))
+    await settleDialog(s)
+    s.http.expectNone(r => r.method === "PATCH")
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+    s.http.expectNone(() => true)
+  })
+
+  it("does not open a second confirmation while one is already open", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await s.click(s.button("Iniciar servicio"), "Iniciar servicio")
+    expect(document.querySelectorAll("app-staff-service-status-dialog").length).toBe(1)
+    await submitDialog(s)
+    statusPatch(s)
+    await s.click(s.button("Iniciar servicio"), "Iniciar servicio")
+    expect(document.querySelectorAll("app-staff-service-status-dialog").length).toBe(1)
+    // Neither the second page action nor a repeated confirmation dispatched another write.
+    s.http.expectNone(r => r.method === "PATCH")
+  })
+
+  it("sends a blank observation as null and the same payload shape for the completed move", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await fillObservation(s, "   ")
+    await submitDialog(s)
+    const start = statusPatch(s)
+    expect(start.request.body).toEqual({ estado: "EN_PROCESO", observacion: null })
+    start.flush(detailInState("EN_PROCESO", "En proceso"))
+    await settleDialog(s)
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+
+    await openDialog(s, "Completar servicio")
+    await submitDialog(s)
+    const complete = statusPatch(s)
+    // The desired code travels untouched and the payload shape is identical.
+    expect(complete.request.body).toEqual({ estado: "COMPLETADA", observacion: null })
+    complete.flush(detailInState("COMPLETADA", "Completada"))
+    await settleDialog(s)
+    s.detailRequest().flush(detailInState("COMPLETADA", "Completada"))
+    await s.settle()
+    expect(s.element().textContent).toContain("Completada")
+    // A completed service offers neither documented move any more.
+    expect(s.button("Iniciar servicio")).toBeUndefined()
+    expect(s.button("Completar servicio")).toBeUndefined()
+    s.http.expectNone(() => true)
+  })
+
+  it("treats a write 404 as a refusal: record kept, safe notice, one forced read, no resend", async () => {
     const s = await loaded()
     await openDialog(s, "Iniciar servicio")
     await submitDialog(s)
@@ -552,14 +654,83 @@ describe("StaffServiceDetailPage status actions", () => {
       { status: 404, statusText: "Not Found" }
     )
     await settleDialog(s)
+    // The record was just displayed: a 404 on the write never proves absence.
     expect(dialogHost()).toBeNull()
+    expect(s.element().querySelector("[data-detail-unavailable]")).toBeNull()
     const text = s.element().textContent!
-    expect(text).toMatch(/volver a consultarlo no cambiará el resultado/i)
+    expect(text).toContain("OS-2026-000017")
+    expect(text).toMatch(/no está disponible para tu usuario/i)
+    expect(text).not.toMatch(/no cambiará el resultado/i)
     expect(text).not.toContain("RAW INTERNAL DETAIL")
+    // The GET is the authority on visibility: exactly one forced read, never a resent write.
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+    expect(s.element().textContent).toContain("En proceso")
+    expect(s.element().querySelector("[data-detail-refusal]")).toBeNull()
+    expect(s.button("Completar servicio")).toBeDefined()
+    s.http.expectNone(r => r.method === "PATCH")
+    s.http.expectNone(() => true)
+  })
+
+  it("renders the definitive absence only when the forced read itself answers 404", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush({}, { status: 404, statusText: "Not Found" })
+    await settleDialog(s)
+    expect(s.element().querySelector("[data-detail-unavailable]")).toBeNull()
+
+    s.detailRequest().flush(
+      { mensaje: "RAW INTERNAL DETAIL" },
+      { status: 404, statusText: "Not Found" }
+    )
+    await s.settle()
+    const text = s.element().textContent!
     expect(s.element().querySelector("[data-detail-unavailable]")).not.toBeNull()
-    // A 404 is never retried and never forces another read of a record that is gone.
+    // Now the read established the absence, so the copy and the missing retry hold.
+    expect(text).toMatch(/no cambiará el resultado/i)
+    expect(text).not.toContain("RAW INTERNAL DETAIL")
     expect(s.button("Reintentar")).toBeUndefined()
     expect(s.button("Iniciar servicio")).toBeUndefined()
+    s.http.expectNone(r => r.method === "PATCH")
     s.http.expectNone(() => true)
+  })
+
+  it("keeps the record and asks for a refresh when the forced read itself fails transiently", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush({}, { status: 404, statusText: "Not Found" })
+    await settleDialog(s)
+    s.detailRequest().flush(
+      { mensaje: "RAW INTERNAL DETAIL" },
+      { status: 500, statusText: "Server Error" }
+    )
+    await s.settle()
+    // A transient read never turns a write refusal into a definitive absence.
+    expect(s.element().querySelector("[data-detail-unavailable]")).toBeNull()
+    expect(s.element().querySelector("[data-detail-refusal]")).not.toBeNull()
+    expect(s.element().textContent).toContain("OS-2026-000017")
+    expect(s.element().textContent).not.toMatch(/no cambiará el resultado/i)
+    expect(s.button("Reintentar")).toBeDefined()
+    s.http.expectNone(r => r.method === "PATCH")
+  })
+
+  it("delivers no late feedback and reads nothing for the old order after a route change", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    const patch = statusPatch(s)
+    await s.navigate("/staff/services/18")
+    // The abandoned confirmation cannot complete against the new route identity.
+    expect(patch.cancelled).toBe(true)
+    s.detailRequest(18).flush(detail(18))
+    await s.settle()
+    expect(s.element().textContent).toContain("OS-2026-000018")
+    expect(s.element().querySelector("[data-detail-confirmation]")).toBeNull()
+    expect(s.element().querySelector("[data-detail-refusal]")).toBeNull()
+    // No forced read of the abandoned order and no write of any kind.
+    s.http.expectNone(candidate => candidate.url === `${api}/17`)
+    s.http.expectNone(r => r.method === "PATCH")
   })
 })
