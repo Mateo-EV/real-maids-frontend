@@ -267,11 +267,19 @@ export class AcquisitionHttpSource {
       statisticsDto
     )
   }
+  /**
+   * The one prospecto detail read: it documents an authoritative `404`, so it opts in and the
+   * adapter — not the interceptor — classifies the absence as `LEAD_NOT_FOUND`. The list and the
+   * writes deliberately keep the generic mapping; the property surface has no detail read at all.
+   */
   findLead(leadId: number) {
     return this.t.request(
       () => {
         input(id(leadId))
-        return this.http.get<unknown>(`${this.leads}/${leadId}`, { transferCache: false })
+        return this.http.get<unknown>(`${this.leads}/${leadId}`, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
       },
       v => sameId(leadDto(v), leadId),
       "LEAD_NOT_FOUND"

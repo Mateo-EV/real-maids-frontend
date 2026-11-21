@@ -80,6 +80,11 @@ export class LeadDetailPage {
     this.id() === null ? undefined : this.acquisition.selectLead(this.id()!)
   )
   readonly detail = computed(() => this.selection()?.())
+  /**
+   * The adapter's typed absence, distinct from a transient failure: repeating the same `GET` cannot
+   * produce the record, so this state is definitive and offers no retry.
+   */
+  readonly notFound = computed(() => this.detail()?.error?.code === "LEAD_NOT_FOUND")
   readonly lead = computed(() => {
     const entry = this.detail()
     return entry?.loaded && entry.data?.id === this.id() ? entry.data : undefined

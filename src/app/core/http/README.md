@@ -33,8 +33,11 @@ identity or contact data. Every other `400` and `409` remains generic.
 Opted-in detail readers today, all mapping `404` to their own typed absence instead of a generic
 failure: `GET /api/clientes/{id}`, `GET /api/clientes/me`, `GET /api/clientes/{id}/historial`,
 `GET /api/solicitudes/{id}`, `GET /api/ordenes/{id}`, `GET /api/atenciones/{id}`,
-`GET /api/personal/{id}` and `GET /api/personal/me`. Every collection endpoint behind those reads and
-both staff directories stay un-opted-in, so an absence there is still generic.
+`GET /api/personal/{id}`, `GET /api/personal/me` and `GET /api/prospectos/{id}`. Every collection
+endpoint behind those reads, both staff directories and every customer-scoped property call stay
+un-opted-in, so an absence there is still generic. That is why `PROPERTY_NOT_FOUND` remains a
+declared code without an opted-in producer: the property surface has no own-property detail read,
+only `GET /api/clientes/{id}/propiedades` and the create/update/status writes.
 
 Any new call site that opts in inherits this passthrough, so it must decode only documented markers
 or documented absences instead of trusting arbitrary body fields.
@@ -43,6 +46,7 @@ Tests: `auth.interceptor.spec.ts` pins opted-in/default `400`, `404` and `409`, 
 `401`, `403`, `5xx` and network behavior, and the no-replay rule; `customer-email-http.spec.ts`
 exercises the feature operations and the account markers with the real interceptor;
 `customer-not-found-http.spec.ts`, `operations-not-found-http.spec.ts`,
-`customer-support-not-found-http.spec.ts`, `field-staff-not-found-http.spec.ts` and
-`customer-history-not-found-http.spec.ts` prove each detail reader receives the `404` through the real
-interceptor while a list or write without the opt-in keeps the generic mapping.
+`customer-support-not-found-http.spec.ts`, `field-staff-not-found-http.spec.ts`,
+`customer-history-not-found-http.spec.ts` and `acquisition-not-found-http.spec.ts` prove each detail
+reader receives the `404` through the real interceptor while a list or write without the opt-in keeps
+the generic mapping.

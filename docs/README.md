@@ -1275,3 +1275,40 @@ history read and the staff customer detail presentation. All three are now close
 
 Pending acceptance: live backend/CORS runs with a real cross-customer `404` and browser
 keyboard/responsive checks for the three states above.
+
+### Same defect class: the last reader, and the code that must not opt in
+
+The last instance was the prospecto (lead) detail and, by declaration, `PROPERTY_NOT_FOUND`.
+
+- **Confirmed real detail read**: `GET /api/prospectos/{id}` (`AcquisitionHttpSource.findLead`) is the
+  only detail read in the CRM acquisition boundary, and it documents the authoritative `404`. It now
+  passes `apiConflictContext()` and delivers its already-declared `LEAD_NOT_FOUND` through the real
+  interceptor. The prospecto list (`GET /api/prospectos`), its writes (`POST`, `PUT`, `DELETE`), the
+  follow-up list/registration and the conversion request stay un-opted-in, so an absence on any of
+  them keeps today's generic `UNEXPECTED` mapping.
+- **`PROPERTY_NOT_FOUND` left alone, deliberately**: the customer-scoped property surface has **no**
+  own-property detail read. Its whole contract is the owner list `GET /api/clientes/{id}/propiedades`
+  plus `POST` create, `PUT` update and `PATCH …/estado`. `PROPERTY_NOT_FOUND` therefore classifies a
+  list or write response that the interceptor never delivers as a `404`, and opting those calls in
+  would turn an unexpected absence into a page-level "not found". The declared code stays; the caller
+  keeps the generic/conflict-safe behaviour it already had, and the property status dialog and editor
+  keep tolerating it as a failure whose record may no longer exist.
+- **Page state** [LeadDetailPage](../src/app/features/customers/presentation/pages/lead-detail-page/lead-detail-page.ts)
+  had no distinguishable absence: one combined destructive alert with `Reintentar` for `LEAD_NOT_FOUND`
+  and every failure alike. It now follows [StaffDetailPage](../src/app/features/field-operations/presentation/pages/staff-detail-page/staff-detail-page.ts)
+  and the staff [customer detail](../src/app/features/customers/presentation/pages/customer-detail-page/customer-detail-page.ts):
+  `LEAD_NOT_FOUND` renders the definitive `data-lead-unavailable` attribute, the "no está disponible …
+  volver a consultarlo no cambiará el resultado" description and **no** `Reintentar` button; every
+  other code (network, forbidden, missing session, unconfigured origin, malformed response) keeps the
+  retryable alert, its own message and its retry. `LEAD_NOT_FOUND` is only reachable now, so no other
+  behaviour, read, TTL, session or owner fence changed.
+- **Tests**: new `acquisition-not-found-http.spec.ts` runs the real interceptor and proves the typed
+  `LEAD_NOT_FOUND` for `GET /api/prospectos/{id}` while the prospecto list `404`, the prospecto `DELETE`
+  `404`, the property list `404` and the property status `404` stay generic without replay;
+  `lead-detail-page.spec.ts` proves the definitive state renders with no retry affordance while the
+  next record's transient `NETWORK` failure keeps its `Reintentar` (and still refetches that ID).
+  Observed RED: exactly the opt-in context assertion and the new absence assertion failed; the rest of
+  both files, including every list/write "still generic" case, kept passing.
+
+Pending acceptance: live backend/CORS run with a real `404` on the prospecto detail (cross-tenant or
+soft-deleted record) and Chrome/Edge/Firefox keyboard/responsive checks of the new absence state.

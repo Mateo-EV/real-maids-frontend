@@ -254,25 +254,50 @@ describe("Lead read-only detail and independent return context", () => {
   )
 
   it.each([
-    ["LEAD_NOT_FOUND", "No se encontró el prospecto"],
     ["FORBIDDEN", "No tienes permiso"],
     ["UNAUTHENTICATED", "Vuelve a iniciar sesión"],
     ["NETWORK", "No se pudo cargar"],
     ["UNCONFIGURED", "no está disponible en este entorno"],
     ["INVALID_RESPONSE", "No se pudo cargar"]
   ] as [CustomerErrorCode, string][])(
-    "shows safe %s failure and explicit retry, never false empty",
+    "shows safe %s transient failure and explicit retry, never false empty",
     async (code, text) => {
       const s = await setup()
       await s.respond(Result.failure(new CustomerError(code)))
       expect(s.element().querySelector('[role="alert"]')?.textContent).toContain(text)
       expect(s.element().textContent).not.toContain("No registrado")
+      expect(s.element().querySelector("[data-lead-unavailable]")).toBeNull()
       await s.click("Reintentar")
       expect(s.execute).toHaveBeenCalledTimes(2)
       await s.respond(Result.success(lead()))
       expect(s.element().textContent).toContain("Prospecto 7")
     }
   )
+
+  it("renders the typed LEAD_NOT_FOUND as the definitive absence with no retry affordance", async () => {
+    const s = await setup()
+    const labels = () =>
+      Array.from(s.element().querySelectorAll("button")).map(b => b.textContent?.trim())
+    await s.respond(Result.failure(new CustomerError("LEAD_NOT_FOUND")))
+    expect(s.element().textContent).toContain("No se encontró el prospecto")
+    expect(s.element().querySelector("[data-lead-unavailable]")).not.toBeNull()
+    expect(s.element().textContent).toContain("no cambiará el resultado")
+    expect(s.element().textContent).not.toContain("No registrado")
+    // Repeating the same GET cannot produce the record, so no retry is offered for this state.
+    expect(labels()).not.toContain("Reintentar")
+    expect(s.execute).toHaveBeenCalledTimes(1)
+    // A transient failure on the next record still offers its retry and its own alert.
+    await s.harness.navigateByUrl("/admin/customers/leads/8")
+    await s.settle()
+    await s.respond(Result.failure(new CustomerError("NETWORK")))
+    expect(s.element().querySelector("[data-lead-unavailable]")).toBeNull()
+    expect(labels()).toContain("Reintentar")
+    expect(s.element().textContent).toContain("No se pudo cargar el prospecto")
+    await s.click("Reintentar")
+    expect(s.execute).toHaveBeenLastCalledWith(8)
+    await s.respond(Result.success(lead(8)))
+    expect(s.element().textContent).toContain("Prospecto 8")
+  })
 
   it("treats an empty read as invalid rather than fabricated detail", async () => {
     const s = await setup()

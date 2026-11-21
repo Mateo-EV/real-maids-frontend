@@ -53,24 +53,36 @@
       }
       @if (detail()?.error) {
         <div class="p-5">
-          <div hlmAlert variant="destructive" role="alert">
+          <div
+            hlmAlert
+            variant="destructive"
+            role="alert"
+            [attr.data-lead-unavailable]="notFound() ? '' : null"
+          >
             <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
             <div hlmAlertDescription>
-              @if (lead()) {
+              @if (notFound()) {
+                <p>
+                  El prospecto no está disponible para esta sesión o ya no existe. Volver a
+                  consultarlo no cambiará el resultado.
+                </p>
+              } @else if (lead()) {
                 <p>Los datos pueden estar desactualizados.</p>
               }
             </div>
           </div>
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="mt-4"
-            (click)="retry()"
-            [disabled]="detail()?.loading || detail()?.refreshing"
-          >
-            Reintentar
-          </button>
+          @if (!notFound()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="mt-4"
+              (click)="retry()"
+              [disabled]="detail()?.loading || detail()?.refreshing"
+            >
+              Reintentar
+            </button>
+          }
         </div>
       }
       @if (lead(); as prospect) {
