@@ -40,12 +40,12 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
 
 ## Tasks
 
-| ID  | Tarea                                                                                                                                                                               | Specs  | Repo     | Estado                                                               |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------- | -------------------------------------------------------------------- |
-| T1  | `changeOrderStatus` deja de ser UNSUPPORTED: validador del body y de `OrdenDetalleResponse`, source `PATCH`, wire del repositorio y `ChangeOrderStatusUseCase` stateless, con tests | S1, S2 | frontend | **hecho** — `98a6b68`, 77/77 en los dos specs, `tsc` app y spec en 0 |
-| T2  | Audiencia `PERSONAL_CAMPO`: `audience-navigation` aprende la tercera audiencia y `/staff` queda protegida por el guard compartido                                                   | S3     | frontend | pendiente                                                            |
-| T3  | «Mis servicios»: store root con el patrón de lectura compartida, lista de tarjetas móviles y detalle propio                                                                         | S4, S5 | frontend | pendiente                                                            |
-| T4  | Acciones de estado en el detalle, con confirmación, guard de pendiente y refresco tras éxito confirmado                                                                             | S1, S2 | frontend | pendiente                                                            |
+| ID  | Tarea                                                                                                                                                                                                              | Specs  | Repo     | Estado                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | -------------------------------------------------------------------- |
+| T1  | `changeOrderStatus` deja de ser UNSUPPORTED: validador del body y de `OrdenDetalleResponse`, source `PATCH`, wire del repositorio y `ChangeOrderStatusUseCase` stateless, con tests                                | S1, S2 | frontend | **hecho** — `98a6b68`, 77/77 en los dos specs, `tsc` app y spec en 0 |
+| T2  | Audiencia `PERSONAL_CAMPO`: `audience-navigation` aprende la tercera audiencia, `/staff` queda protegida por el guard compartido y la lista «Mis servicios» reutiliza el `ServiceOrdersStore` root sin store nuevo | S3, S4 | frontend | in_progress                                                          |
+| T3  | Detalle propio de «Mis servicios»: `observeOrder` reutilizado, `404` fuera de alcance como ausencia definitiva y retorno a la página efectiva                                                                      | S4, S5 | frontend | pendiente                                                            |
+| T4  | Acciones de estado en el detalle reutilizando `ChangeOrderStatusUseCase`, con confirmación, guard de pendiente e invalidación del store tras éxito confirmado                                                      | S1, S2 | frontend | pendiente                                                            |
 
 ## Log
 
@@ -65,3 +65,9 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   `null`; el source conserva el contexto de conflicto del detalle para que un 404 fuera de alcance siga
   siéndolo. El inventario de métodos sin soporte bajó de 19 a 18 con el ajuste mecánico del spec de
   composición y del README, sin tocar aserciones ajenas. Verificación del padre: 32/32 + 45/45 = 77/77.
+- **L6 (T2, verificado por el padre):** `d94ed9b` abre la tercera audiencia. `audience-navigation` decide por
+  la etiqueta `PERSONAL_CAMPO` y todo rechazo apunta a `homeForRole` de esa misma etiqueta, así que la
+  decisión es simétrica en los tres destinos. `/staff` es un shell lazy protegido por el mismo
+  `protectedExperience` y su primera sección es «Mis servicios» sobre el `ServiceOrdersStore` root, sin
+  store nuevo ni `idPersonal` enviado por el cliente. Verificación del padre: 46/46 en 5 archivos; la query
+  de la página solo lleva `offset`/`limit`.
