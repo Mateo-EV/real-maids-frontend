@@ -1,7 +1,7 @@
 import { isPlatformBrowser } from "@angular/common"
-import { HttpClient } from "@angular/common/http"
+import { HttpClient, HttpErrorResponse } from "@angular/common/http"
 import { inject, Injectable, PLATFORM_ID } from "@angular/core"
-import { catchError, defer, map, Observable, of } from "rxjs"
+import { catchError, defer, map, Observable, of, throwError } from "rxjs"
 import { API_URL } from "@/app/core/tokens/api-url.token"
 import { apiConflictContext } from "@/app/core/http/api-conflict-context"
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
@@ -25,7 +25,11 @@ import { order, orderDetail, orderPage, orderPagination } from "./service-orders
 import { createOrderBody, createdOrderDetail } from "./service-orders-create.validation"
 import { activeReschedulingReasons, scheduleOrderBody } from "./service-orders-schedule.validation"
 import { assignmentsBody, captureAssignments } from "./service-orders-assignments.validation"
-import { changeOrderStatusBody, changedOrderDetail } from "./service-orders-status.validation"
+import {
+  changeOrderStatusBody,
+  changedOrderDetail,
+  orderStatusRefusalMessage
+} from "./service-orders-status.validation"
 
 @Injectable({ providedIn: "root" })
 export class ServiceOrdersHttpSource {
@@ -132,26 +136,44 @@ export class ServiceOrdersHttpSource {
     } catch {
       snapshot = null
     }
-    return this.read(() => {
-      if (!positiveId(id))
-        throw new OperationsError("INVALID_DATA", "Identificador de orden inválido.")
-      const body = changeOrderStatusBody(snapshot)
-      return this.http
-        .patch<unknown>(`${this.url}/${id}/estado`, body, {
-          transferCache: false,
-          // Same 404-aware context as the detail GET: an out-of-scope order stays NOT_FOUND.
-          context: apiConflictContext()
-        })
-        .pipe(map(value => changedOrderDetail(value, id)))
-    }).pipe(
-      map(result =>
-        result.success
-          ? result
-          : Result.failure(
-              new OperationsError(result.error.code, "No se pudo cambiar el estado de la orden.")
-            )
+    // A 400 answers with the documented uniform body whose `mensaje` is the business reason (for
+    // example "not before the programmed date"). Only this write surfaces it, it is captured per
+    // subscription, and every other status keeps the source's own copy untouched.
+    return defer(() => {
+      let refusal: string | null = null
+      return this.read(() => {
+        if (!positiveId(id))
+          throw new OperationsError("INVALID_DATA", "Identificador de orden inválido.")
+        const body = changeOrderStatusBody(snapshot)
+        return this.http
+          .patch<unknown>(`${this.url}/${id}/estado`, body, {
+            transferCache: false,
+            // Same 404-aware context as the detail GET: an out-of-scope order stays NOT_FOUND.
+            context: apiConflictContext()
+          })
+          .pipe(
+            map(value => changedOrderDetail(value, id)),
+            catchError((error: unknown) => {
+              if (error instanceof HttpErrorResponse && error.status === 400)
+                refusal = orderStatusRefusalMessage(error.error)
+              return throwError(() => error)
+            })
+          )
+      }).pipe(
+        map(result =>
+          result.success
+            ? result
+            : Result.failure(
+                new OperationsError(
+                  result.error.code,
+                  result.error.code === "INVALID_DATA" && refusal
+                    ? refusal
+                    : "No se pudo cambiar el estado de la orden."
+                )
+              )
+        )
       )
-    )
+    })
   }
 
   replaceAssignments(

@@ -60,13 +60,26 @@ export interface StaffServiceStatusDialogContext {
 
 const maxObservation = 250
 
-function statusWriteError(code: OperationsErrorCode, target: StaffServiceStatusTarget): string {
+/**
+ * Project-owned copy per failure code. `detail` is the message the transport already validated for
+ * this refusal (only `INVALID_DATA` carries one) and is rendered as plain text by the template;
+ * when there is none, the code's own sentence stands.
+ */
+function statusWriteError(
+  code: OperationsErrorCode,
+  target: StaffServiceStatusTarget,
+  detail?: string
+): string {
   const move = target === "EN_PROCESO" ? "iniciar el servicio" : "completar el servicio"
   switch (code) {
     case "FORBIDDEN":
       return `No tienes permiso para ${move}.`
     case "INVALID_DATA":
-      return "El servidor rechazó el cambio de estado. Revisa el estado actual del servicio antes de reintentar."
+      // A business rule refusal (for example a schedule date in the future) explains itself.
+      return (
+        detail ||
+        "El servidor rechazó el cambio de estado. Revisa el estado actual del servicio antes de reintentar."
+      )
     case "CONFLICT":
       return "El servicio cambió o está en conflicto. Consulta su estado antes de reintentar."
     case "UNAUTHENTICATED":
@@ -183,7 +196,9 @@ export class StaffServiceStatusDialog {
             if (this.current()) this.dialog.close()
             return
           }
-          this.error.set(statusWriteError(result.error.code, this.context.target))
+          this.error.set(
+            statusWriteError(result.error.code, this.context.target, result.error.message)
+          )
           return
         }
         this.context.onChanged()

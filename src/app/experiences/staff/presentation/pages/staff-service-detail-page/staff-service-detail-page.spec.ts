@@ -546,6 +546,87 @@ describe("StaffServiceDetailPage status actions", () => {
     expect(statusPatch(s).request.body.estado).toBe("EN_PROCESO")
   })
 
+  it("renders the server's business reason for a documented 400 refusal as plain text", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    const business = "No puede iniciar el servicio antes de la fecha programada: 2026-12-15."
+    statusPatch(s).flush(
+      {
+        codigo: 400,
+        mensaje: `  ${business} \n <b>no interpretar</b>  `,
+        errores: { fecha: "RAW ERROR FIELD" },
+        timestamp: stamp
+      },
+      { status: 400, statusText: "Bad Request" }
+    )
+    await settleDialog(s)
+    const text = dialogText()
+    // The supplied sentence, not the project's generic copy about the current state.
+    expect(text).toContain(business)
+    expect(text).not.toMatch(/Revisa el estado actual del servicio/)
+    expect(dialogHost()).not.toBeNull()
+    // Plain text only: markup inside the message is printed literally, never interpreted.
+    expect(text).toContain("<b>no interpretar</b>")
+    expect(dialogHost()!.querySelector("b")).toBeNull()
+    // Never the raw error map, the timestamp or any other field of the envelope.
+    expect(text).not.toContain("RAW ERROR FIELD")
+    expect(text).not.toContain(stamp)
+    // No read or resend was triggered by the refusal itself.
+    s.http.expectNone(() => true)
+
+    // The refusal keeps the confirmation usable: one explicit retry dispatches one write.
+    await submitDialog(s)
+    const retry = statusPatch(s)
+    // Pending still blocks a second submit of the same confirmation.
+    const pendingSubmit = dialogHost()!.querySelector<HTMLButtonElement>("button[type=submit]")!
+    expect(pendingSubmit.disabled).toBe(true)
+    await submitDialog(s)
+    s.http.expectNone(r => r.method === "PATCH")
+    retry.flush(detailInState("EN_PROCESO", "En proceso"))
+    await settleDialog(s)
+    s.detailRequest().flush(detailInState("EN_PROCESO", "En proceso"))
+    await s.settle()
+    expect(s.element().textContent).toContain("En proceso")
+    s.http.expectNone(() => true)
+  })
+
+  it.each([
+    ["a blank mensaje", { codigo: 400, mensaje: "  \n " }],
+    ["a non-string mensaje", { codigo: 400, mensaje: 400 }],
+    ["a 301-character mensaje", { codigo: 400, mensaje: "x".repeat(301) }],
+    ["a non-400 codigo", { codigo: 409, mensaje: "Conflicto de negocio ajeno" }]
+  ])("falls back to the safe copy for %s on a 400", async (_label, body) => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush(body, { status: 400, statusText: "Bad Request" })
+    await settleDialog(s)
+    expect(dialogHost()).not.toBeNull()
+    expect(dialogText()).toMatch(/no se confirmó/i)
+    // A safe, project-owned notice: no undecoded text ever reaches the screen.
+    expect(dialogText()).toContain("No se pudo cambiar el estado de la orden.")
+    expect(dialogText()).not.toContain("Conflicto de negocio ajeno")
+    expect(dialogText()).not.toContain("xxx")
+    expect(s.element().textContent).toContain("OS-2026-000017")
+    s.http.expectNone(() => true)
+  })
+
+  it("never leaks a business body carried by a 403 refusal", async () => {
+    const s = await loaded()
+    await openDialog(s, "Iniciar servicio")
+    await submitDialog(s)
+    statusPatch(s).flush(
+      { codigo: 400, mensaje: "BODY MESSAGE MUST NOT LEAK" },
+      { status: 403, statusText: "Forbidden" }
+    )
+    await settleDialog(s)
+    expect(dialogText()).toMatch(/permiso/i)
+    expect(dialogText()).not.toContain("BODY MESSAGE MUST NOT LEAK")
+    expect(dialogHost()).not.toBeNull()
+    s.http.expectNone(() => true)
+  })
+
   it.each([
     [403, "Forbidden", /permiso/i],
     [409, "Conflict", /conflicto/i]
