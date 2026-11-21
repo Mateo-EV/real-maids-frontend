@@ -122,3 +122,12 @@ estado documentadas. El backend ya expone el contrato; este paquete conecta Angu
   un retry. El slice de escritura aislado (`0026801..HEAD`) había quedado `reviewDue: false` por
   `under_budget`, así que el paquete queda con verificación independiente de sus dos slices sensibles y sin
   la vista nativa adicional.
+- **L14 (revisión nativa, causa real):** un segundo intento sobre la generación siguiente devolvió
+  `lens_context_budget_exceeded` en `preflight`: la evidencia completa del candidato (3797 líneas, 29 rutas)
+  no cabe en el presupuesto de contexto del revisor, no se creó autoridad y reintentar el mismo candidato no
+  puede funcionar. El `assess` por slice mide 822 líneas, pero el candidato nativo se construye desde el
+  merge-base (`ecbc583`), así que aislar T4 en una rama derivada no lo reduce: T4 depende de T1–T3. La
+  continuación que el provider indica es partir el trabajo en una secuencia encadenada de commits
+  revisables, cada uno bajo el presupuesto, y refrescar la transición nativa. El paquete queda con las dos
+  verificaciones independientes y sin vista nativa; partir la entrega es una decisión de proceso pendiente,
+  no un defecto del código.
