@@ -38,6 +38,7 @@ factoryCase(
   [
     51,
     61,
+    "cuenta@example.test",
     "Staff name",
     "DOC-123",
     "+15555550101",
@@ -52,6 +53,7 @@ factoryCase(
   [
     "id",
     "userId",
+    "accountEmail",
     "name",
     "document",
     "phone",
@@ -63,7 +65,7 @@ factoryCase(
     "isActive",
     "createdAt"
   ],
-  [1, 4, 5, 7, 8, 9]
+  [1, 2, 5, 6, 8, 9, 10]
 )
 factoryCase(
   "StaffAvailability",

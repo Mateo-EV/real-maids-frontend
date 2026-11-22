@@ -78,6 +78,8 @@ describe("Staff HTTP reads", () => {
             joinedOn: "2024-02-29",
             isActive: false,
             userId: 19,
+            // The wire record carries no `correoUsuario`, so the decoder really yields null here.
+            accountEmail: null,
             availability: [{ weekday: "LUNES", startTime: "08:15:30.123456789", endTime: "17:45" }],
             createdAt: new Date("2026-01-01T17:00:00Z")
           }

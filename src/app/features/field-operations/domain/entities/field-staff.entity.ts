@@ -2,6 +2,7 @@ export class FieldStaff {
   private constructor(
     public id: number,
     public userId: number | null,
+    public accountEmail: string | null,
     public name: string,
     public document: string,
     public phone: string | null,
@@ -17,6 +18,7 @@ export class FieldStaff {
   static create(
     id: number,
     userId: number | null,
+    accountEmail: string | null,
     name: string,
     document: string,
     phone: string | null,
@@ -31,6 +33,7 @@ export class FieldStaff {
     return new FieldStaff(
       id,
       userId,
+      accountEmail,
       name,
       document,
       phone,

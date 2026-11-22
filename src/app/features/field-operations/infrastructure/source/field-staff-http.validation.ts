@@ -67,7 +67,9 @@ export function staffDto(
     return { weekday, startTime: time(slot["horaInicio"]), endTime: time(slot["horaFin"]) }
   })
   const id = readId(p["idPersonal"]),
-    userId = p["idUsuario"] === null ? null : readId(p["idUsuario"])
+    userId = p["idUsuario"] === null ? null : readId(p["idUsuario"]),
+    // Additive nullable member: absent or null means the record has no linked account.
+    accountEmail = p["correoUsuario"] === undefined ? null : nullableText(p["correoUsuario"], 120)
   if ((expectedId !== undefined && id !== expectedId) || (callerId != null && userId !== callerId))
     return invalid()
   return {
@@ -80,6 +82,7 @@ export function staffDto(
     joinedOn: p["fechaIngreso"] === null ? null : calendar(p["fechaIngreso"]),
     isActive: flag(p["activo"]),
     userId,
+    accountEmail,
     availability,
     createdAt: instant(p["fechaCreacion"])
   }

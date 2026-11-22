@@ -32,6 +32,7 @@ const profile = {
   fechaIngreso: "2024-02-29" as string | null,
   activo: false,
   idUsuario: 19 as number | null,
+  correoUsuario: "colaboradora@example.test",
   disponibilidad: [
     { dia: "VIERNES", horaInicio: "08:15:30.123456789", horaFin: "17:45" },
     { dia: "LUNES", horaInicio: "09:00", horaFin: "12:00:00" }
@@ -111,7 +112,9 @@ describe("WP7 T4 S1/S3 staff profile read consumer", () => {
     for (const value of [profile.nombre, "DOC-7", "es", "2024-02-29", "No registrado"])
       expect(text).toContain(value)
     expect(text).toMatch(/inactivo/i)
-    expect(text).toContain("19")
+    expect(text).toContain("Cuenta vinculada")
+    expect(text).toContain("colaboradora@example.test")
+    expect(text).not.toContain("Cuenta de acceso 19")
     expect(text).toContain("2026")
     expect(text).toContain("17:00")
     expect(text).toContain("UTC")

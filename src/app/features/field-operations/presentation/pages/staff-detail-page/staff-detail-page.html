@@ -105,10 +105,13 @@
                   </p>
                 } @else {
                   <p class="text-sm font-medium">Cuenta vinculada</p>
-                  <p class="mt-1 text-xs text-muted-foreground">
-                    Cuenta de acceso {{ person.userId }}. El contrato de personal solo expone su
-                    identificador, no su nombre ni su correo.
-                  </p>
+                  @if (person.accountEmail) {
+                    <p class="mt-1 break-words text-sm">{{ person.accountEmail }}</p>
+                  } @else {
+                    <p class="mt-1 text-sm text-muted-foreground">
+                      Correo de la cuenta no disponible
+                    </p>
+                  }
                 }
               </div>
               @if (person.userId === null) {

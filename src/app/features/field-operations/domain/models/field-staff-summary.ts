@@ -11,6 +11,8 @@ export interface FieldStaffSummary {
   joinedOn: string | null
   isActive: boolean
   userId: number | null
+  /** Email of the linked login account; null when the record has no account. */
+  accountEmail: string | null
   availability: AvailabilitySlotParams[]
   createdAt: Date
 }

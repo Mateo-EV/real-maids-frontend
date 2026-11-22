@@ -72,6 +72,7 @@ it("supports account unlinking and empty whole-availability replacement", async 
     joinedOn: null,
     isActive: true,
     userId: null,
+    accountEmail: null,
     availability: [],
     createdAt: new Date("2028-02-29T10:00:00Z")
   }

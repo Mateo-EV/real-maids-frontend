@@ -34,6 +34,25 @@ módulo dueño del registro y el otro lado advierte.
   el aviso de que la cuenta debe vincularse a una ficha en RRHH para ver sus servicios, con el mismo
   tono que el aviso de `CLIENTE`. La relación se administra en la ficha, igual que en el CRM.
 
+- **S7 — Un solo correo en todo el sistema.** El correo de una ficha de personal es único contra
+  `personal_campo`, `cliente` y `usuario`, incluso entre registros inactivos, con la misma normalización
+  del CRM (recortado y en minúsculas; vacío no reserva). Se apoya en la garantía que ya existe para
+  cliente y usuario en lugar de inventar otra: una migración agrega `correo_normalizado` con restricción
+  única en `personal_campo` y el validador cruzado se extiende para incluirla. Crear o editar una ficha
+  con un correo ya tomado falla con un error tipado, nunca con un duplicado silencioso.
+
+- **S8 — La ficha manda y la cuenta la sigue.** La ficha de personal es la descripción autoritativa del
+  empleado. Al vincular, nombre y correo se copian de la ficha a la cuenta, validando antes que el correo
+  esté libre; editar la ficha de una persona vinculada vuelve a sincronizar nombre y correo a su cuenta en
+  la misma transacción. Editar la cuenta desde IAM no puede hacerla divergir: al guardar una cuenta
+  vinculada, nombre y correo se re-sincronizan desde la ficha. Teléfono, documento, tipo y estado siguen
+  siendo independientes. El correo es la credencial de inicio de sesión, así que la pantalla lo advierte y
+  la sincronización nunca cambia la contraseña.
+
+- **S9 — La ficha muestra la cuenta real.** `PersonalResponse` expone `correoUsuario` (nullable) resuelto
+  en lote para las listas, sin una consulta por fila. La sección «Cuenta de acceso» deja de imprimir el
+  identificador y muestra el correo de la cuenta vinculada.
+
 ## Tasks
 
 | ID  | Tarea                                                                                          | Specs  | Repo     | Estado                |

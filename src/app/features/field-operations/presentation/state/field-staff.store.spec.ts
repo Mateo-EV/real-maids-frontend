@@ -26,6 +26,7 @@ const staff = (id = 7): FieldStaffSummary => ({
   joinedOn: null,
   isActive: true,
   userId: 19,
+  accountEmail: "staff@example.test",
   availability: [],
   createdAt: new Date("2026-01-01T00:00:00Z")
 })

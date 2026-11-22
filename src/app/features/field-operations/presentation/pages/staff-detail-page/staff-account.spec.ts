@@ -17,6 +17,8 @@ import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.r
 import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/repositories/role.repository-impl"
 import { UserRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user.repository-impl"
 import { provideFieldOperationsReads } from "../../../field-operations.providers"
+import { FieldOperationsError } from "../../../domain/errors/field-operations.error"
+import { staffDto } from "../../../infrastructure/source/field-staff-http.validation"
 import { FieldStaffStore } from "../../state/field-staff.store"
 import { StaffDetailPage } from "./staff-detail-page"
 
@@ -31,7 +33,7 @@ const role = {
   activo: true,
   fechaCreacion: "2026-01-01T12:00:00Z"
 }
-const profile = (userId: number | null) => ({
+const profile = (userId: number | null, accountEmail?: string | null) => ({
   idPersonal: 7,
   nombre: "Colaboradora Verificada",
   documento: "DOC-7",
@@ -41,6 +43,7 @@ const profile = (userId: number | null) => ({
   fechaIngreso: "2024-02-29",
   activo: true,
   idUsuario: userId,
+  ...(accountEmail === undefined ? {} : { correoUsuario: accountEmail }),
   disponibilidad: [],
   fechaCreacion: "2026-01-01T12:00:00Z"
 })
@@ -140,9 +143,10 @@ async function setup(userId: number | null = null) {
   }
 }
 
-afterEach(() => TestBed.inject(HttpTestingController).verify())
-
 describe("WP11 staff account section", () => {
+  // Every test here drives the component through HTTP; the decoder suite below does not.
+  afterEach(() => TestBed.inject(HttpTestingController).verify())
+
   it("offers linking when the record has no account, without inventing an identity", async () => {
     const app = await setup(null)
     await app.respondProfile()
@@ -155,16 +159,30 @@ describe("WP11 staff account section", () => {
     app.http.expectNone(() => true)
   })
 
-  it("offers unlinking for the linked account id only, never an invented name or email", async () => {
+  it("offers unlinking for a linked record without inventing an email", async () => {
     const app = await setup(31)
     await app.respondProfile()
     const section = app.element().querySelector("[data-staff-account]")!
     expect(section.getAttribute("data-staff-account")).toBe("linked")
     expect(section.textContent).toContain("Cuenta vinculada")
-    expect(section.textContent).toContain("31")
+    expect(section.textContent).not.toContain("31")
+    expect(section.textContent).toContain("Correo de la cuenta no disponible")
     expect(section.textContent).not.toContain("@")
     expect(section.textContent).toContain("Desvincular cuenta")
     expect(section.textContent).not.toContain("Vincular cuenta")
+    app.http.expectNone(() => true)
+  })
+
+  it("prints the linked account email instead of the bare identifier", async () => {
+    const app = await setup(31)
+    await app.respondProfile(profile(31, "vinculada@example.test"))
+    const section = app.element().querySelector("[data-staff-account]")!
+    expect(section.getAttribute("data-staff-account")).toBe("linked")
+    expect(section.textContent).toContain("Cuenta vinculada")
+    expect(section.textContent).toContain("vinculada@example.test")
+    expect(section.textContent).not.toContain("31")
+    expect(section.textContent).not.toContain("Correo de la cuenta no disponible")
+    expect(section.textContent).toContain("Desvincular cuenta")
     app.http.expectNone(() => true)
   })
 
@@ -260,6 +278,8 @@ describe("WP11 staff account section", () => {
 })
 
 describe("WP11 staff account writes", () => {
+  afterEach(() => TestBed.inject(HttpTestingController).verify())
+
   it("sends one link for the chosen verified account, then emits one message and one forced read", async () => {
     const app = await setup(null)
     await app.respondProfile()
@@ -356,5 +376,28 @@ describe("WP11 staff account writes", () => {
     )
     expect(app.success).toHaveBeenCalledExactlyOnceWith("Cuenta desvinculada correctamente.")
     app.http.expectNone(() => true)
+  })
+})
+
+describe("S9 linked account email in the staff DTO", () => {
+  it("carries the account email and keeps null when the contract omits it", () => {
+    expect(staffDto(profile(31, "vinculada@example.test")).accountEmail).toBe(
+      "vinculada@example.test"
+    )
+    expect(staffDto(profile(31)).accountEmail).toBeNull()
+    expect(staffDto({ ...profile(31), correoUsuario: null }).accountEmail).toBeNull()
+  })
+
+  it("rejects a non-string account email as an invalid response", () => {
+    for (const value of [31, true, {}, [], "x".repeat(121)]) {
+      let caught: unknown
+      try {
+        staffDto({ ...profile(31), correoUsuario: value })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(FieldOperationsError)
+      expect((caught as FieldOperationsError).code).toBe("INVALID_RESPONSE")
+    }
   })
 })
