@@ -1,11 +1,20 @@
 <header class="sticky top-0 z-30 border-b border-[#1e2b48]/10 bg-white/95 backdrop-blur">
-  <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
-    <a href="/landing" class="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#2f6b3a]" aria-label="The Real Maids home">
+  <div
+    class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6"
+  >
+    <a
+      href="/"
+      class="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#2f6b3a]"
+      aria-label="The Real Maids home"
+    >
       <span aria-hidden="true" class="text-2xl text-[#e0a23b]">✿</span>
       <span>The Real <span class="italic">Maids</span></span>
     </a>
 
-    <nav aria-label="Main" class="order-3 flex w-full items-center gap-6 overflow-x-auto text-sm font-semibold sm:order-none sm:w-auto">
+    <nav
+      aria-label="Main"
+      class="order-3 flex w-full items-center gap-6 overflow-x-auto text-sm font-semibold sm:order-none sm:w-auto"
+    >
       @for (item of nav; track item.key) {
         <a
           [attr.href]="item.href"

@@ -4,7 +4,9 @@
   <main>
     <section class="bg-[#fff7ee] px-4 pb-14 pt-14 sm:px-6 sm:pt-20">
       <div class="mx-auto max-w-6xl">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">Helpful answers</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">
+          Helpful answers
+        </p>
         <h1 class="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
           Questions, meet
           <span class="block font-light text-[#f4695c]">clear answers.</span>
@@ -18,21 +20,41 @@
     <section class="px-4 py-14 sm:px-6 lg:py-20">
       <div class="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1fr_1.4fr] lg:items-start">
         <div>
-          <span aria-hidden="true" class="flex h-16 w-16 items-center justify-center rounded-full bg-[#f4695c] text-3xl font-bold text-white">?</span>
+          <span
+            aria-hidden="true"
+            class="flex h-16 w-16 items-center justify-center rounded-full bg-[#f4695c] text-3xl font-bold text-white"
+            >?</span
+          >
           <h2 class="mt-8 text-3xl font-bold tracking-tight">Still wondering?</h2>
-          <p class="mt-4 max-w-xs text-base leading-7 text-[#5b6578]">Our friendly team is happy to help with anything not covered here.</p>
-          <a [attr.href]="contactHref" class="mt-6 inline-block text-sm font-semibold hover:text-[#f4695c]">Call {{ contactPhone }}</a>
+          <p class="mt-4 max-w-xs text-base leading-7 text-[#5b6578]">
+            Our friendly team is happy to help with anything not covered here.
+          </p>
+          <a
+            [attr.href]="contactHref"
+            class="mt-6 inline-block text-sm font-semibold hover:text-[#f4695c]"
+            >Call {{ contactPhone }}</a
+          >
           <br />
-          <a href="/landing/quote" class="mt-3 inline-block text-sm font-semibold hover:text-[#f4695c]">Request a quote</a>
+          <a href="/quote" class="mt-3 inline-block text-sm font-semibold hover:text-[#f4695c]"
+            >Request a quote</a
+          >
         </div>
 
         <div class="flex flex-col gap-4">
           @for (item of faqs; track item.question; let i = $index) {
-            <details class="group rounded-2xl bg-white px-6 py-5 shadow-sm ring-1 ring-[#1e2b48]/5 open:ring-[#f4695c]/40">
-              <summary class="flex cursor-pointer list-none items-center gap-5 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]">
-                <span class="w-6 shrink-0 text-sm text-[#f4695c]">{{ '0' + (i + 1) }}</span>
+            <details
+              class="group rounded-2xl bg-white px-6 py-5 shadow-sm ring-1 ring-[#1e2b48]/5 open:ring-[#f4695c]/40"
+            >
+              <summary
+                class="flex cursor-pointer list-none items-center gap-5 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
+              >
+                <span class="w-6 shrink-0 text-sm text-[#f4695c]">{{ "0" + (i + 1) }}</span>
                 <span class="flex-1">{{ item.question }}</span>
-                <span aria-hidden="true" class="text-xl text-[#1e2b48] transition group-open:rotate-45">+</span>
+                <span
+                  aria-hidden="true"
+                  class="text-xl text-[#1e2b48] transition group-open:rotate-45"
+                  >+</span
+                >
               </summary>
               <p class="mt-4 pl-11 text-sm leading-6 text-[#5b6578]">{{ item.answer }}</p>
             </details>
@@ -43,9 +65,13 @@
   </main>
 
   <footer class="border-t border-[#1e2b48]/10 bg-white px-4 py-8 sm:px-6">
-    <div class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-[#5b6578] sm:flex-row sm:items-center sm:justify-between">
+    <div
+      class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-[#5b6578] sm:flex-row sm:items-center sm:justify-between"
+    >
       <p>© The Real Maids. Family owned since 2012.</p>
-      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]">Call {{ contactPhone }}</a>
+      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]"
+        >Call {{ contactPhone }}</a
+      >
     </div>
   </footer>
 </div>

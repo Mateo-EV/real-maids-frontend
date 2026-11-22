@@ -3,9 +3,16 @@ import { Routes } from "@angular/router"
 
 export const routes: Routes = [
   {
+    // Public marketing landing at the site root. It replaces the former `"" -> login` redirect: an
+    // unauthenticated visitor now reads the site instead of being sent to the sign-in form, which is
+    // still reachable at `/login` and is where the wildcard sends unknown paths.
     path: "",
     pathMatch: "full",
-    redirectTo: "login"
+    title: "The Real Maids | House cleaning in Tampa Bay",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-page/landing-page").then(
+        component => component.LandingPage
+      )
   },
   {
     path: "",
@@ -24,17 +31,9 @@ export const routes: Routes = [
       )
   },
   {
-    // Public marketing landing (The Real Maids). Declared before the guarded lazy groups; it is
-    // not reachable from the root redirect, which still sends visitors to `/login`.
-    path: "landing",
-    title: "The Real Maids | House cleaning in Tampa Bay",
-    loadComponent: () =>
-      import("./features/landing/presentation/pages/landing-page/landing-page").then(
-        component => component.LandingPage
-      )
-  },
-  {
-    path: "landing/quote",
+    // The rest of the public marketing site. Declared before the guarded lazy groups and unguarded
+    // on purpose: the admin, portal and staff families keep their own audience guards.
+    path: "quote",
     title: "Get a Quote | The Real Maids",
     loadComponent: () =>
       import("./features/landing/presentation/pages/landing-quote-page/landing-quote-page").then(
@@ -42,7 +41,7 @@ export const routes: Routes = [
       )
   },
   {
-    path: "landing/work-with-us",
+    path: "work-with-us",
     title: "Work With Us | The Real Maids",
     loadComponent: () =>
       import("./features/landing/presentation/pages/landing-work-page/landing-work-page").then(
@@ -50,7 +49,7 @@ export const routes: Routes = [
       )
   },
   {
-    path: "landing/faq",
+    path: "faq",
     title: "FAQ | The Real Maids",
     loadComponent: () =>
       import("./features/landing/presentation/pages/landing-faq-page/landing-faq-page").then(
@@ -58,13 +57,20 @@ export const routes: Routes = [
       )
   },
   {
-    path: "landing/reviews",
+    path: "reviews",
     title: "Reviews | The Real Maids",
     loadComponent: () =>
       import("./features/landing/presentation/pages/landing-reviews-page/landing-reviews-page").then(
         component => component.LandingReviewsPage
       )
   },
+  // The landing first shipped under `/landing`; those URLs keep working as redirects so an already
+  // shared link does not break.
+  { path: "landing", pathMatch: "full", redirectTo: "" },
+  { path: "landing/quote", pathMatch: "full", redirectTo: "quote" },
+  { path: "landing/work-with-us", pathMatch: "full", redirectTo: "work-with-us" },
+  { path: "landing/faq", pathMatch: "full", redirectTo: "faq" },
+  { path: "landing/reviews", pathMatch: "full", redirectTo: "reviews" },
   {
     path: "",
     loadChildren: () =>

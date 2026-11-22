@@ -1,7 +1,6 @@
 <div class="min-h-dvh bg-[#fff7ee] text-[#1e2b48]">
   <app-landing-header />
 
-
   <main class="px-4 py-14 sm:px-6 lg:py-20">
     <div class="mx-auto max-w-6xl">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">Reviews</p>
@@ -13,7 +12,12 @@
       <ul class="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         @for (review of reviews; track review.name) {
           <li class="flex flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#1e2b48]/5">
-            <p class="text-lg tracking-widest text-[#e0a23b]" [attr.aria-label]="review.rating + ' out of 5 stars'">{{ stars(review.rating) }}</p>
+            <p
+              class="text-lg tracking-widest text-[#e0a23b]"
+              [attr.aria-label]="review.rating + ' out of 5 stars'"
+            >
+              {{ stars(review.rating) }}
+            </p>
             <p class="mt-4 flex-1 text-base leading-7 text-[#3b4558]">“{{ review.text }}”</p>
             <p class="mt-6 text-sm font-semibold">{{ review.name }}</p>
             <p class="text-sm text-[#5b6578]">{{ review.location }}</p>
@@ -21,9 +25,14 @@
         }
       </ul>
 
-      <div class="mt-14 flex flex-col items-start gap-4 rounded-3xl bg-[#1e2b48] p-8 text-white sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="mt-14 flex flex-col items-start gap-4 rounded-3xl bg-[#1e2b48] p-8 text-white sm:flex-row sm:items-center sm:justify-between"
+      >
         <p class="text-lg font-semibold">Ready for a cleaner home?</p>
-        <a href="/landing#quote" class="inline-flex min-h-12 items-center rounded-full bg-[#f4695c] px-6 text-sm font-semibold text-white hover:bg-[#e25a4e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+        <a
+          href="/quote"
+          class="inline-flex min-h-12 items-center rounded-full bg-[#f4695c] px-6 text-sm font-semibold text-white hover:bg-[#e25a4e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
           Get a Quote
         </a>
       </div>

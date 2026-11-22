@@ -4,7 +4,9 @@
   <main>
     <section class="bg-[#fff7ee] px-4 pb-12 pt-14 sm:px-6 sm:pt-20">
       <div class="mx-auto max-w-6xl">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">Free, no-obligation estimate</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">
+          Free, no-obligation estimate
+        </p>
         <h1 class="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
           Tell us about
           <span class="block font-light text-[#f4695c]">your home.</span>
@@ -17,22 +19,38 @@
 
     <section class="px-4 py-14 sm:px-6 lg:py-20">
       <div class="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.6fr_1fr]">
-        <form class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#1e2b48]/5 sm:p-10" novalidate (submit)="$event.preventDefault(); submitQuote()">
+        <form
+          class="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#1e2b48]/5 sm:p-10"
+          novalidate
+          (submit)="$event.preventDefault(); submitQuote()"
+        >
           @if (status() === "validated") {
             <p role="status" class="mb-8 rounded-2xl bg-[#e9f3ee] p-4 text-sm text-[#2f6b3a]">
-              Your request is valid. Sending it to our team is not connected yet, so nothing was delivered.
+              Your request is valid. Sending it to our team is not connected yet, so nothing was
+              delivered.
             </p>
           }
 
           <fieldset class="grid gap-6 sm:grid-cols-2">
             <legend class="col-span-full mb-2 flex items-center gap-3 text-xl font-bold">
-              <span class="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4695c] text-sm text-white">01</span>
+              <span
+                class="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4695c] text-sm text-white"
+                >01</span
+              >
               Home &amp; service details
             </legend>
 
             <div class="flex flex-col gap-2">
               <label for="q-zip" class="text-sm font-semibold">ZIP code *</label>
-              <input id="q-zip" type="text" inputmode="numeric" autocomplete="postal-code" placeholder="33572" [formField]="quoteForm.zip" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
+              <input
+                id="q-zip"
+                type="text"
+                inputmode="numeric"
+                autocomplete="postal-code"
+                placeholder="33572"
+                [formField]="quoteForm.zip"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              />
               @if (quoteForm.zip().touched() && quoteForm.zip().errors().length) {
                 <p class="text-sm text-[#b42318]">{{ quoteForm.zip().errors()[0].message }}</p>
               }
@@ -40,20 +58,30 @@
 
             <div class="flex flex-col gap-2">
               <label for="q-type" class="text-sm font-semibold">Cleaning type *</label>
-              <select id="q-type" [formField]="quoteForm.cleaningType" class="min-h-12 rounded-xl border border-[#1e2b48]/20 bg-white px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30">
+              <select
+                id="q-type"
+                [formField]="quoteForm.cleaningType"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 bg-white px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              >
                 <option value="">Select a service</option>
                 @for (option of cleaningTypes; track option) {
                   <option [value]="option">{{ option }}</option>
                 }
               </select>
               @if (quoteForm.cleaningType().touched() && quoteForm.cleaningType().errors().length) {
-                <p class="text-sm text-[#b42318]">{{ quoteForm.cleaningType().errors()[0].message }}</p>
+                <p class="text-sm text-[#b42318]">
+                  {{ quoteForm.cleaningType().errors()[0].message }}
+                </p>
               }
             </div>
 
             <div class="flex flex-col gap-2">
               <label for="q-size" class="text-sm font-semibold">Home size *</label>
-              <select id="q-size" [formField]="quoteForm.homeSize" class="min-h-12 rounded-xl border border-[#1e2b48]/20 bg-white px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30">
+              <select
+                id="q-size"
+                [formField]="quoteForm.homeSize"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 bg-white px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              >
                 <option value="">Select square footage</option>
                 @for (option of homeSizes; track option) {
                   <option [value]="option">{{ option }}</option>
@@ -66,22 +94,39 @@
 
             <div class="flex flex-col gap-2">
               <label for="q-day" class="text-sm font-semibold">Preferred service day *</label>
-              <input id="q-day" type="date" [formField]="quoteForm.preferredDay" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
+              <input
+                id="q-day"
+                type="date"
+                [formField]="quoteForm.preferredDay"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              />
               @if (quoteForm.preferredDay().touched() && quoteForm.preferredDay().errors().length) {
-                <p class="text-sm text-[#b42318]">{{ quoteForm.preferredDay().errors()[0].message }}</p>
+                <p class="text-sm text-[#b42318]">
+                  {{ quoteForm.preferredDay().errors()[0].message }}
+                </p>
               }
             </div>
           </fieldset>
 
           <fieldset class="mt-10 grid gap-6 sm:grid-cols-2">
             <legend class="col-span-full mb-2 flex items-center gap-3 text-xl font-bold">
-              <span class="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4695c] text-sm text-white">02</span>
+              <span
+                class="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4695c] text-sm text-white"
+                >02</span
+              >
               Your contact details
             </legend>
 
             <div class="flex flex-col gap-2">
               <label for="q-name" class="text-sm font-semibold">Full name *</label>
-              <input id="q-name" type="text" autocomplete="name" placeholder="Your name" [formField]="quoteForm.name" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
+              <input
+                id="q-name"
+                type="text"
+                autocomplete="name"
+                placeholder="Your name"
+                [formField]="quoteForm.name"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              />
               @if (quoteForm.name().touched() && quoteForm.name().errors().length) {
                 <p class="text-sm text-[#b42318]">{{ quoteForm.name().errors()[0].message }}</p>
               }
@@ -89,7 +134,15 @@
 
             <div class="flex flex-col gap-2">
               <label for="q-phone" class="text-sm font-semibold">Phone *</label>
-              <input id="q-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="8139990059" [formField]="quoteForm.phone" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
+              <input
+                id="q-phone"
+                type="tel"
+                autocomplete="tel"
+                inputmode="tel"
+                placeholder="8139990059"
+                [formField]="quoteForm.phone"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              />
               @if (quoteForm.phone().touched() && quoteForm.phone().errors().length) {
                 <p class="text-sm text-[#b42318]">{{ quoteForm.phone().errors()[0].message }}</p>
               }
@@ -97,7 +150,15 @@
 
             <div class="flex flex-col gap-2 sm:col-span-2">
               <label for="q-email" class="text-sm font-semibold">Email *</label>
-              <input id="q-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" [formField]="quoteForm.email" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
+              <input
+                id="q-email"
+                type="email"
+                autocomplete="email"
+                inputmode="email"
+                placeholder="you@example.com"
+                [formField]="quoteForm.email"
+                class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
+              />
               @if (quoteForm.email().touched() && quoteForm.email().errors().length) {
                 <p class="text-sm text-[#b42318]">{{ quoteForm.email().errors()[0].message }}</p>
               }
@@ -113,23 +174,46 @@
         </form>
 
         <aside class="flex flex-col rounded-3xl bg-[#1e2b48] p-8 text-white sm:p-10">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">What happens next</p>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">
+            What happens next
+          </p>
           <ol class="mt-8 space-y-8">
             <li class="flex gap-4">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]">1</span>
-              <div><p class="font-semibold">We review your details</p><p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p></div>
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]"
+                >1</span
+              >
+              <div>
+                <p class="font-semibold">We review your details</p>
+                <p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p>
+              </div>
             </li>
             <li class="flex gap-4">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]">2</span>
-              <div><p class="font-semibold">We tailor your estimate</p><p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p></div>
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]"
+                >2</span
+              >
+              <div>
+                <p class="font-semibold">We tailor your estimate</p>
+                <p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p>
+              </div>
             </li>
             <li class="flex gap-4">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]">3</span>
-              <div><p class="font-semibold">We reach out</p><p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p></div>
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f4695c] text-xs font-bold text-[#f4695c]"
+                >3</span
+              >
+              <div>
+                <p class="font-semibold">We reach out</p>
+                <p class="mt-1 text-sm text-white/70">Friendly follow-up from our team.</p>
+              </div>
             </li>
           </ol>
 
-          <a [attr.href]="contactHref" class="mt-auto rounded-2xl bg-white/10 p-5 transition hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]">
+          <a
+            [attr.href]="contactHref"
+            class="mt-auto rounded-2xl bg-white/10 p-5 transition hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
+          >
             <p class="text-xs text-white/70">Prefer to talk?</p>
             <p class="mt-1 text-2xl font-bold">{{ contactPhone }}</p>
           </a>
@@ -139,9 +223,13 @@
   </main>
 
   <footer class="border-t border-[#1e2b48]/10 bg-white px-4 py-8 sm:px-6">
-    <div class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-[#5b6578] sm:flex-row sm:items-center sm:justify-between">
+    <div
+      class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-[#5b6578] sm:flex-row sm:items-center sm:justify-between"
+    >
       <p>© The Real Maids. Family owned since 2012.</p>
-      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]">Call {{ contactPhone }}</a>
+      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]"
+        >Call {{ contactPhone }}</a
+      >
     </div>
   </footer>
 </div>

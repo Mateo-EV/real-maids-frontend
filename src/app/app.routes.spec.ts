@@ -8,6 +8,11 @@ import { STAFF_ROUTES } from "./experiences/staff/staff.routes"
 import { authGuard, guestGuard } from "./features/auth/presentation/guards/auth.guard"
 import { LoginPage } from "./features/auth/presentation/pages/login-page/login-page"
 import { AdminShell } from "./experiences/admin/presentation/components/admin-shell/admin-shell"
+import { LandingPage } from "./features/landing/presentation/pages/landing-page/landing-page"
+import { LandingQuotePage } from "./features/landing/presentation/pages/landing-quote-page/landing-quote-page"
+import { LandingWorkPage } from "./features/landing/presentation/pages/landing-work-page/landing-work-page"
+import { LandingFaqPage } from "./features/landing/presentation/pages/landing-faq-page/landing-faq-page"
+import { LandingReviewsPage } from "./features/landing/presentation/pages/landing-reviews-page/landing-reviews-page"
 
 const loadRouteSets = async (): Promise<Routes[]> =>
   Promise.all(
@@ -17,9 +22,43 @@ const loadRouteSets = async (): Promise<Routes[]> =>
   )
 
 describe("Application route composition", () => {
-  it("preserves the default and wildcard login redirects", () => {
-    expect(routes[0]).toEqual({ path: "", pathMatch: "full", redirectTo: "login" })
+  it("serves the public landing at the site root and keeps the wildcard login redirect", async () => {
+    const root = routes[0]
+
+    expect(root.path).toBe("")
+    expect(root.pathMatch).toBe("full")
+    expect(root.redirectTo).toBeUndefined()
+    expect(root.title).toBe("The Real Maids | House cleaning in Tampa Bay")
+    expect(await root.loadComponent!()).toBe(LandingPage)
+    // The root is public marketing, so it carries no audience guard.
+    expect(root.canActivate).toBeUndefined()
     expect(routes.at(-1)).toEqual({ path: "**", redirectTo: "login" })
+  })
+
+  it("keeps the remaining public landing pages at root paths without a guard", async () => {
+    const publicPage = (path: string) => routes.find(route => route.path === path)!
+
+    expect(await publicPage("quote").loadComponent!()).toBe(LandingQuotePage)
+    expect(await publicPage("work-with-us").loadComponent!()).toBe(LandingWorkPage)
+    expect(await publicPage("faq").loadComponent!()).toBe(LandingFaqPage)
+    expect(await publicPage("reviews").loadComponent!()).toBe(LandingReviewsPage)
+
+    for (const path of ["", "quote", "work-with-us", "faq", "reviews"]) {
+      expect(publicPage(path).canActivate).toBeUndefined()
+      expect(publicPage(path).canMatch).toBeUndefined()
+    }
+  })
+
+  it("redirects the former /landing URLs to the root paths", () => {
+    const legacyRedirects = routes.filter(route => route.path?.startsWith("landing"))
+
+    expect(legacyRedirects.map(route => [route.path, route.redirectTo])).toEqual([
+      ["landing", ""],
+      ["landing/quote", "quote"],
+      ["landing/work-with-us", "work-with-us"],
+      ["landing/faq", "faq"],
+      ["landing/reviews", "reviews"]
+    ])
   })
 
   it("keeps login as the only auth-owned route", () => {

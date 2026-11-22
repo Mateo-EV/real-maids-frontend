@@ -4,10 +4,10 @@ export const LANDING_CONTACT_PHONE = "965808455"
 export const LANDING_CONTACT_HREF = `tel:${LANDING_CONTACT_PHONE}`
 
 export const LANDING_NAV = [
-  { key: "home", label: "Home", href: "/landing" },
-  { key: "quote", label: "Get a Quote", href: "/landing/quote" },
-  { key: "work", label: "Work With Us", href: "/landing/work-with-us" },
-  { key: "faq", label: "FAQ", href: "/landing/faq" }
+  { key: "home", label: "Home", href: "/" },
+  { key: "quote", label: "Get a Quote", href: "/quote" },
+  { key: "work", label: "Work With Us", href: "/work-with-us" },
+  { key: "faq", label: "FAQ", href: "/faq" }
 ] as const
 
 export type LandingNavKey = (typeof LANDING_NAV)[number]["key"]
