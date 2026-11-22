@@ -8,7 +8,15 @@ import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-c
 import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-policy"
 import { Result } from "@/app/shared/utils/result"
 import { FieldOperationsError } from "../../domain/errors/field-operations.error"
-import { FieldStaffQuery } from "../../domain/params/field-operations.params"
+import {
+  FieldStaffQuery,
+  LinkStaffAccountParams
+} from "../../domain/params/field-operations.params"
+import {
+  staffAccountDto,
+  staffAccountParams,
+  staffAccountTarget
+} from "./field-staff-account.validation"
 import {
   failure,
   positiveId,
@@ -54,6 +62,22 @@ export class FieldStaffHttpSource {
           context: apiConflictContext()
         })
         .pipe(map(value => staffDto(value, id)))
+    })
+  }
+  linkStaffAccount(id: number, params: LinkStaffAccountParams) {
+    // Getter-safe: the requested account is captured now, never when the request is subscribed.
+    const snapshot = { userId: params?.userId }
+    return this.request(() => {
+      const target = staffAccountTarget(id)
+      const body = staffAccountParams(snapshot)
+      // The write documents `404` for a missing staff record or account, so the adapter — not the
+      // interceptor — classifies it as its typed `NOT_FOUND`.
+      return this.http
+        .put<unknown>(`${this.url}/${target}/cuenta`, body, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
+        .pipe(map(value => staffAccountDto(value, target)))
     })
   }
   getMyStaffProfile() {

@@ -10,6 +10,9 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, Router, RouterLink } from "@angular/router"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
 import {
   combineLatest,
   distinctUntilChanged,
@@ -37,6 +40,8 @@ import {
   staffRouteId
 } from "../../navigation/staff-page-context"
 import { FieldStaffStore } from "../../state/field-staff.store"
+import { StaffAccountLinkDialog } from "./staff-account-link-dialog/staff-account-link-dialog"
+import { StaffAccountUnlinkDialog } from "./staff-account-unlink-dialog/staff-account-unlink-dialog"
 
 type Target = { own: true } | { own: false; id: number | null }
 
@@ -61,6 +66,12 @@ export class StaffDetailPage {
   private readonly destroyRef = inject(DestroyRef)
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID))
   private readonly store = inject(FieldStaffStore)
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  /** Emitted synchronously when the route owner changes, before the replacement data is selected. */
+  private readonly ownerChanged = new Subject<void>()
+  readonly ownerChanged$ = this.ownerChanged.asObservable()
+  private accountDialog: BrnDialogRef | undefined
   private readonly navigationState = this.browser
     ? (this.router.currentNavigation()?.extras.state ?? this.location.getState())
     : undefined
@@ -121,7 +132,6 @@ export class StaffDetailPage {
           ["Correo", staff.email],
           ["Idioma", staff.language],
           ["Fecha de ingreso", staff.joinedOn],
-          ["Usuario vinculado (ID)", staff.userId],
           ["Creación (UTC)", staff.createdAt.toISOString()]
         ]
       : []
@@ -144,6 +154,7 @@ export class StaffDetailPage {
   })
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.accountDialog?.close())
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(params => this.params.set(params))
@@ -156,6 +167,8 @@ export class StaffDetailPage {
         ),
         distinctUntilChanged((a, b) => a.own === b.own && (a.own || b.own || a.id === b.id)),
         switchMap(target => {
+          // The owner is replaced: queued dialogs and their feedback must not reach the new record.
+          this.ownerChanged.next()
           this.target.set(target)
           this.admissionError.set(undefined)
           this.live.set(false)
@@ -191,5 +204,64 @@ export class StaffDetailPage {
     if (!this.live()) return
     this.admissionError.set(undefined)
     this.retries.next(true)
+  }
+
+  /** The only refresh a confirmed account write triggers: one fresh read of this exact record. */
+  private readAfterWrite(): void {
+    if (this.destroyRef.destroyed || this.invalid() || !this.live() || !this.scope.check()) return
+    this.admissionError.set(undefined)
+    this.retries.next(true)
+  }
+
+  private accountCurrent(): boolean {
+    return !this.destroyRef.destroyed && this.live() && !this.invalid() && this.scope.check()
+  }
+
+  private openAccount(action: "link" | "unlink"): void {
+    const staff = this.staff()
+    if (!this.accountCurrent() || !staff || this.busy() || this.accountDialog?.open) return
+    if (
+      (action === "link" && staff.userId !== null) ||
+      (action === "unlink" && staff.userId === null)
+    )
+      return
+    const generation = this.scope.generation()
+    const current = () => this.accountCurrent() && generation === this.scope.generation()
+    const record = { id: staff.id, name: staff.name }
+    const done = () => {
+      if (!current()) return
+      this.toast.success(
+        action === "link" ? "Cuenta vinculada correctamente." : "Cuenta desvinculada correctamente."
+      )
+      if (!current()) return
+      this.readAfterWrite()
+    }
+    const common = {
+      owner: this.destroyRef,
+      ownerChanged$: this.ownerChanged$,
+      current
+    }
+    this.accountDialog =
+      action === "link"
+        ? this.dialogs.open(StaffAccountLinkDialog, {
+            context: { ...common, staff: record, onLinked: done },
+            showCloseButton: false,
+            disableClose: true,
+            contentClass: "sm:max-w-lg max-h-[90dvh] overflow-y-auto"
+          })
+        : this.dialogs.open(StaffAccountUnlinkDialog, {
+            context: { ...common, staff: { ...record, userId: staff.userId! }, onUnlinked: done },
+            showCloseButton: false,
+            disableClose: true,
+            contentClass: "sm:max-w-md"
+          })
+  }
+
+  linkAccount(): void {
+    this.openAccount("link")
+  }
+
+  unlinkAccount(): void {
+    this.openAccount("unlink")
   }
 }

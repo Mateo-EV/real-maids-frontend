@@ -1,6 +1,9 @@
 import { inject, Injectable } from "@angular/core"
 import { FIELD_OPERATIONS_REPOSITORY } from "../../domain/repositories/field-operations.repository"
-import { FieldStaffQuery } from "../../domain/params/field-operations.params"
+import {
+  FieldStaffQuery,
+  LinkStaffAccountParams
+} from "../../domain/params/field-operations.params"
 
 @Injectable({ providedIn: "root" })
 export class GetFieldStaffUseCase {
@@ -23,5 +26,13 @@ export class GetMyStaffProfileUseCase {
   private readonly repository = inject(FIELD_OPERATIONS_REPOSITORY)
   execute() {
     return this.repository.getMyStaffProfile()
+  }
+}
+
+@Injectable({ providedIn: "root" })
+export class LinkStaffAccountUseCase {
+  private readonly repository = inject(FIELD_OPERATIONS_REPOSITORY)
+  execute(id: number, params: LinkStaffAccountParams) {
+    return this.repository.linkStaffAccount(id, params)
   }
 }

@@ -14,7 +14,8 @@ import { FieldOperationsRepositoryImpl } from "../../infrastructure/repositories
 import {
   GetFieldStaffUseCase,
   GetFieldStaffByIdUseCase,
-  GetMyStaffProfileUseCase
+  GetMyStaffProfileUseCase,
+  LinkStaffAccountUseCase
 } from "./field-staff.use-cases"
 
 function setup() {
@@ -44,6 +45,7 @@ describe("Field operations root composition and application reads", () => {
     const list = vi.spyOn(source, "getStaff").mockReturnValue(response)
     const detail = vi.spyOn(source, "getStaffById").mockReturnValue(response)
     const me = vi.spyOn(source, "getMyStaffProfile").mockReturnValue(response)
+    const link = vi.spyOn(source, "linkStaffAccount").mockReturnValue(response)
     const q = { offset: 20, limit: 10, isActive: false, search: "Doc" }
     expect(TestBed.inject(GetFieldStaffUseCase).execute(q)).toBe(response)
     expect(list).toHaveBeenCalledExactlyOnceWith(q)
@@ -51,6 +53,8 @@ describe("Field operations root composition and application reads", () => {
     expect(detail).toHaveBeenCalledExactlyOnceWith(7)
     expect(TestBed.inject(GetMyStaffProfileUseCase).execute()).toBe(response)
     expect(me).toHaveBeenCalledExactlyOnceWith()
+    expect(TestBed.inject(LinkStaffAccountUseCase).execute(7, { userId: null })).toBe(response)
+    expect(link).toHaveBeenCalledExactlyOnceWith(7, { userId: null })
     response.subscribe(result =>
       expect(
         result.either(
@@ -131,7 +135,6 @@ describe("Field operations root composition and application reads", () => {
       r.createStaff(profile),
       r.updateStaff(7, profile),
       r.setStaffStatus(7, { isActive: false }),
-      r.linkStaffAccount(7, { userId: null }),
       r.replaceAvailability(7, { slots: [] }),
       r.getCrews({}),
       r.getCrew(1),

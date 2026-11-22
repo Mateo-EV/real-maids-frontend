@@ -87,6 +87,54 @@
               </div>
             }
           </dl>
+          <section aria-labelledby="staff-account-title" class="min-w-0">
+            <h2 id="staff-account-title" class="text-sm font-semibold">Cuenta de acceso</h2>
+            <p class="mt-1 max-w-prose text-xs text-muted-foreground">
+              La cuenta PERSONAL_CAMPO vinculada es la que consulta «Mis servicios» con las órdenes
+              asignadas a esta ficha. La administración de la cuenta pertenece a IAM.
+            </p>
+            <div
+              class="mt-4 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+              [attr.data-staff-account]="person.userId === null ? 'none' : 'linked'"
+            >
+              <div class="min-w-0">
+                @if (person.userId === null) {
+                  <p class="text-sm font-medium">Sin cuenta de acceso</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    Esta ficha todavía no tiene una cuenta que consulte sus servicios.
+                  </p>
+                } @else {
+                  <p class="text-sm font-medium">Cuenta vinculada</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    Cuenta de acceso {{ person.userId }}. El contrato de personal solo expone su
+                    identificador, no su nombre ni su correo.
+                  </p>
+                }
+              </div>
+              @if (person.userId === null) {
+                <button
+                  hlmBtn
+                  type="button"
+                  class="self-start sm:self-auto"
+                  [disabled]="busy()"
+                  (click)="linkAccount()"
+                >
+                  Vincular cuenta
+                </button>
+              } @else {
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  class="self-start sm:self-auto"
+                  [disabled]="busy()"
+                  (click)="unlinkAccount()"
+                >
+                  Desvincular cuenta
+                </button>
+              }
+            </div>
+          </section>
           <section aria-labelledby="staff-weekly-title" class="min-w-0">
             <h2 id="staff-weekly-title" class="text-sm font-semibold">Disponibilidad semanal</h2>
             <p class="mt-1 max-w-prose text-xs text-muted-foreground">

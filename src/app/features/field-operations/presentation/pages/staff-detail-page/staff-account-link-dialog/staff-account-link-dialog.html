@@ -1,0 +1,167 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Vincular cuenta de acceso</h2>
+  <p hlmDialogDescription>{{ context.staff.name }} · ficha de personal {{ context.staff.id }}</p>
+</hlm-dialog-header>
+<p class="mt-3 text-sm text-muted-foreground">
+  Solo se listan cuentas activas con rol PERSONAL_CAMPO. La cuenta elegida verá en «Mis servicios»
+  los servicios asignados a esta ficha.
+</p>
+@if (error()) {
+  <div hlmAlert variant="destructive" role="alert" class="mt-3">
+    <h3 hlmAlertTitle>No se confirmó la vinculación</h3>
+    <p hlmAlertDescription>{{ error() }}</p>
+  </div>
+}
+<section aria-labelledby="staff-account-picker-title" class="mt-4 min-w-0">
+  <h3 id="staff-account-picker-title" class="text-sm font-semibold">Cuentas disponibles</h3>
+  <div class="mt-2">
+    <label class="text-xs text-muted-foreground" for="staff-account-search"
+      >Buscar por nombre o correo</label
+    >
+    <input
+      id="staff-account-search"
+      type="search"
+      class="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+      [attr.disabled]="!page.loaded() || pending() ? '' : null"
+      (input)="search($any($event.target).value)"
+    />
+  </div>
+  @if (rolesLoading()) {
+    <p role="status" class="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+      <hlm-spinner aria-label="Cargando roles" />Cargando catálogo de roles…
+    </p>
+  } @else if (rolesError()) {
+    <div hlmAlert variant="destructive" role="alert" class="mt-3">
+      <h3 hlmAlertTitle>No se pudo consultar el catálogo de roles</h3>
+      <p hlmAlertDescription>Sin el rol PERSONAL_CAMPO no se puede filtrar la lista de cuentas.</p>
+    </div>
+    <button hlmBtn type="button" variant="outline" class="mt-6" (click)="loadRoles(true)">
+      Reintentar roles
+    </button>
+  } @else if (roleMissing()) {
+    <div hlmAlert variant="destructive" role="alert" class="mt-3">
+      <h3 hlmAlertTitle>El catálogo de roles no incluye PERSONAL_CAMPO</h3>
+      <p hlmAlertDescription>
+        No se puede vincular una cuenta mientras el rol no esté disponible en el catálogo.
+      </p>
+    </div>
+    <button hlmBtn type="button" variant="outline" class="mt-6" (click)="loadRoles(true)">
+      Reintentar roles
+    </button>
+  } @else {
+    @if (accountsLoading()) {
+      <p role="status" class="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <hlm-spinner aria-label="Cargando cuentas" />Cargando cuentas…
+      </p>
+    }
+    @if (accountsError()) {
+      <div hlmAlert variant="destructive" role="alert" class="mt-3">
+        <h3 hlmAlertTitle>No se pudieron consultar las cuentas</h3>
+        <p hlmAlertDescription>
+          La lista verificada no está disponible; ninguna cuenta se eligió por suposición.
+        </p>
+      </div>
+      <button
+        hlmBtn
+        type="button"
+        variant="outline"
+        class="mt-3"
+        [disabled]="pending()"
+        (click)="retryAccounts()"
+      >
+        Reintentar cuentas
+      </button>
+    }
+    @if (rows().length) {
+      <ul class="mt-3 grid gap-2" [attr.aria-busy]="page.refreshing()">
+        @for (user of rows(); track user.id) {
+          <li class="min-w-0 rounded-lg border p-3">
+            <label class="flex min-w-0 items-start gap-3">
+              <input
+                type="radio"
+                name="staff-account"
+                class="mt-1"
+                [attr.value]="user.id"
+                [checked]="selection() === user.id"
+                [disabled]="unavailable(user) || !selectable()"
+                (change)="select(user.id)"
+              />
+              <span class="min-w-0">
+                <span class="block break-words text-sm font-medium">{{ user.name }}</span>
+                <span class="block break-words text-xs text-muted-foreground">{{
+                  user.email
+                }}</span>
+                @if (unavailable(user)) {
+                  <span class="mt-1 block text-xs text-destructive"
+                    >Ya vinculada a otra ficha de personal</span
+                  >
+                }
+              </span>
+            </label>
+          </li>
+        }
+      </ul>
+      <div
+        role="group"
+        aria-label="Páginas de cuentas"
+        class="mt-3 flex items-center justify-between gap-2"
+      >
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          size="sm"
+          [disabled]="!canGoBack()"
+          (click)="goToPage(pageNumber() - 1)"
+        >
+          Anterior
+        </button>
+        <span class="text-xs text-muted-foreground"
+          >Página {{ pageNumber() }} de {{ pageCount() }}</span
+        >
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          size="sm"
+          [disabled]="!canGoForward()"
+          (click)="goToPage(pageNumber() + 1)"
+        >
+          Siguiente
+        </button>
+      </div>
+    } @else if (page.loaded() && !accountsError()) {
+      <div hlmEmpty class="mt-3">
+        <div hlmEmptyHeader>
+          <h3 hlmEmptyTitle>Sin cuentas PERSONAL_CAMPO activas en esta página</h3>
+          <p hlmEmptyDescription>
+            La vinculación se administra aquí, en la ficha; el alta de la cuenta se hace en IAM.
+          </p>
+        </div>
+      </div>
+    }
+    @if (linkageError()) {
+      <p class="mt-3 text-xs text-muted-foreground" role="status">
+        No se pudo verificar qué cuentas ya tienen ficha. El servidor rechazará una cuenta ya
+        vinculada.
+      </p>
+    }
+  }
+</section>
+<div class="mt-4 flex items-center justify-end gap-2 border-t pt-3">
+  <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+    Cancelar
+  </button>
+  <button
+    hlmBtn
+    type="button"
+    [disabled]="pending() || !selected()"
+    [attr.aria-busy]="pending()"
+    (click)="save()"
+  >
+    @if (pending()) {
+      <hlm-spinner aria-label="Vinculando la cuenta" />
+    }
+    {{ pending() ? "Vinculando…" : "Vincular cuenta" }}
+  </button>
+</div>

@@ -1,7 +1,10 @@
 import { inject, Injectable } from "@angular/core"
 import { of } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
-import { FieldStaffQuery } from "../../domain/params/field-operations.params"
+import {
+  FieldStaffQuery,
+  LinkStaffAccountParams
+} from "../../domain/params/field-operations.params"
 import { FieldOperationsRepository } from "../../domain/repositories/field-operations.repository"
 import { FieldStaffHttpSource } from "../source/field-staff-http.source"
 import { failure } from "../source/field-staff-http.validation"
@@ -20,12 +23,14 @@ export class FieldOperationsRepositoryImpl implements FieldOperationsRepository 
   getMyStaffProfile() {
     return this.source.getMyStaffProfile()
   }
+  linkStaffAccount(id: number, params: LinkStaffAccountParams) {
+    return this.source.linkStaffAccount(id, params)
+  }
 
   // Confirmed writes are deliberately unwired in this read-only slice.
   createStaff: FieldOperationsRepository["createStaff"] = unsupported
   updateStaff: FieldOperationsRepository["updateStaff"] = unsupported
   setStaffStatus: FieldOperationsRepository["setStaffStatus"] = unsupported
-  linkStaffAccount: FieldOperationsRepository["linkStaffAccount"] = unsupported
   replaceAvailability: FieldOperationsRepository["replaceAvailability"] = unsupported
   // Domain proposals do not establish endpoints or an upload protocol.
   getCrews: FieldOperationsRepository["getCrews"] = unsupported
