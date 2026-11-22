@@ -112,7 +112,8 @@ describe("WP7 T4 S1/S3 staff profile read consumer", () => {
     for (const value of [profile.nombre, "DOC-7", "es", "2024-02-29", "No registrado"])
       expect(text).toContain(value)
     expect(text).toMatch(/inactivo/i)
-    expect(text).toContain("Cuenta vinculada")
+    // T10: the record reads its account from `correoUsuario`; there is no linking model anymore.
+    expect(text).toContain("Cuenta de acceso activa")
     expect(text).toContain("colaboradora@example.test")
     expect(text).not.toContain("Cuenta de acceso 19")
     expect(text).toContain("2026")

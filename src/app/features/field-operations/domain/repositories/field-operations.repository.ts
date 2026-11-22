@@ -18,7 +18,6 @@ import {
   CreateWorkLogParams,
   CrewQuery,
   FieldStaffQuery,
-  LinkStaffAccountParams,
   ReplaceStaffAvailabilityParams,
   SetFieldStaffStatusParams,
   UpdateCrewMemberParams,
@@ -28,6 +27,28 @@ import {
   UpdateServiceEvidenceParams,
   UpdateWorkLogParams
 } from "../params/field-operations.params"
+
+/**
+ * Account rejections the employee editor must render on one of its own inputs. `EMAIL_RESERVED`
+ * covers the global email uniqueness (staff, customer and account rows, including inactive ones).
+ */
+export type StaffAccountFailureReason =
+  | "ACCOUNT_EMAIL_REQUIRED"
+  | "EMAIL_RESERVED"
+  | "ACCOUNT_PASSWORD_REQUIRED"
+  | "ACCOUNT_PASSWORD_WITHOUT_ACCOUNT"
+
+/**
+ * Field-specific write rejection of the employee form. It stays a `FieldOperationsError`, so the
+ * generic code set means exactly what it already means, and it adds the documented account reason
+ * the editor maps to the input the user has to fix. It lives beside the write signatures that emit
+ * it; there is no linking counterpart because the staff account is created with the record.
+ */
+export class StaffAccountFailure extends FieldOperationsError {
+  constructor(public readonly reason: StaffAccountFailureReason) {
+    super("INVALID_DATA", `Staff account rejected: ${reason}`)
+  }
+}
 
 export interface FieldOperationsRepository {
   // Confirmed PersonalController operations, including whole availability replacement.
@@ -46,10 +67,6 @@ export interface FieldOperationsRepository {
   setStaffStatus(
     id: number,
     params: SetFieldStaffStatusParams
-  ): Observable<Result<FieldStaffSummary, FieldOperationsError>>
-  linkStaffAccount(
-    id: number,
-    params: LinkStaffAccountParams
   ): Observable<Result<FieldStaffSummary, FieldOperationsError>>
   replaceAvailability(
     id: number,

@@ -5,6 +5,7 @@
     description="Consulta de personal registrado y sus fichas"
     [busy]="list().loading || list().refreshing"
   >
+    <button catalogControls hlmBtn type="button" (click)="create()">Crear empleado</button>
     <a
       catalogControls
       hlmBtn

@@ -1,7 +1,20 @@
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { EvidenceMoment } from "../entities/service-evidence.entity"
 
-export interface CreateFieldStaffParams {
+/**
+ * Access account intent shared by the employee create/update writes. The tri-state is load-bearing
+ * and must never collapse: `createAccount` **absent** leaves the account untouched, `true` creates
+ * it or reactivates the retained (deactivated) row — both require `password` and the staff email —
+ * and `false` retires an active account. `password` only travels with `true` and its bytes are never
+ * trimmed; `PUT /api/personal/{id}/cuenta` is not part of this model.
+ */
+export interface StaffAccountRequest {
+  readonly createAccount?: boolean
+  readonly password?: string | null
+}
+
+// PersonalRequest fields only: identity, availability and the account intent are separate.
+export interface CreateFieldStaffParams extends StaffAccountRequest {
   name: string
   document: string
   phone: string | null
@@ -9,16 +22,13 @@ export interface CreateFieldStaffParams {
   language: string
   joinedOn: string | null
 }
-export interface UpdateFieldStaffParams {
+export interface UpdateFieldStaffParams extends StaffAccountRequest {
   name: string
   document: string
   phone: string | null
   email: string | null
   language: string
   joinedOn: string | null
-}
-export interface LinkStaffAccountParams {
-  userId: number | null
 }
 export interface SetFieldStaffStatusParams {
   isActive: boolean

@@ -1,0 +1,251 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.staff ? "Editar empleado" : "Crear empleado" }}</h2>
+  <p hlmDialogDescription>
+    {{
+      context.staff
+        ? context.staff.name
+        : "Registra la ficha del empleado y, si corresponde, su cuenta de acceso."
+    }}
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó el guardado</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Datos del empleado</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-name">Nombre (obligatorio)</label>
+      <input
+        hlmInput
+        id="staff-name"
+        autocomplete="off"
+        aria-describedby="staff-name-help staff-name-errors"
+        [formField]="profile.name"
+      />
+      <p hlmFieldDescription id="staff-name-help">
+        Hasta 150 caracteres. Se omiten los espacios al inicio y al final.
+      </p>
+      <div id="staff-name-errors">
+        @if (profile.name().touched()) {
+          @for (error of profile.name().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-document">Documento (obligatorio)</label>
+      <input
+        hlmInput
+        id="staff-document"
+        autocomplete="off"
+        aria-describedby="staff-document-help staff-document-errors"
+        [formField]="profile.document"
+      />
+      <p hlmFieldDescription id="staff-document-help">
+        De 4 a 30 caracteres: letras, dígitos y guiones. No se copia a la cuenta de acceso.
+      </p>
+      <div id="staff-document-errors">
+        @if (profile.document().touched()) {
+          @for (error of profile.document().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-phone">Teléfono (opcional)</label>
+      <input
+        hlmInput
+        id="staff-phone"
+        type="tel"
+        autocomplete="off"
+        aria-describedby="staff-phone-help staff-phone-errors"
+        [formField]="profile.phone"
+      />
+      <p hlmFieldDescription id="staff-phone-help">
+        De 7 a 30 caracteres: números, espacios, paréntesis y guiones; + solo al inicio. Vacío
+        guarda el dato sin registrar.
+      </p>
+      <div id="staff-phone-errors">
+        @if (profile.phone().touched()) {
+          @for (error of profile.phone().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-email">
+        Correo electrónico
+        {{ accountRequested() ? "(obligatorio para la cuenta)" : "(opcional)" }}
+      </label>
+      <input
+        hlmInput
+        id="staff-email"
+        type="email"
+        autocomplete="off"
+        aria-describedby="staff-email-help staff-email-errors"
+        [formField]="profile.email"
+        [attr.aria-invalid]="fieldError()?.field === 'email' ? 'true' : null"
+        (input)="clearFieldError()"
+      />
+      <p hlmFieldDescription id="staff-email-help">
+        Hasta 120 caracteres. Vacío guarda el dato sin registrar, también al editar; con cuenta de
+        acceso el correo es obligatorio y es el usuario con el que la persona inicia sesión.
+      </p>
+      <div id="staff-email-errors">
+        @if (profile.email().touched()) {
+          @for (error of profile.email().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+        @if (fieldError()?.field === "email") {
+          <hlm-field-error forceShow id="staff-email-account-error">
+            {{ fieldError()!.message }}
+          </hlm-field-error>
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-language">Idioma (obligatorio)</label>
+      <hlm-native-select selectId="staff-language" [formField]="profile.language" class="w-full">
+        <option value="es">Español</option>
+        <option value="en">Inglés</option>
+      </hlm-native-select>
+      <p hlmFieldDescription id="staff-language-help">
+        Es el idioma de la ficha; no configura la interfaz.
+      </p>
+      @if (profile.language().touched()) {
+        @for (error of profile.language().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+        }
+      }
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="staff-joined-on">Fecha de ingreso (opcional)</label>
+      <input
+        hlmInput
+        id="staff-joined-on"
+        type="date"
+        autocomplete="off"
+        aria-describedby="staff-joined-on-help"
+        [formField]="profile.joinedOn"
+      />
+      <p hlmFieldDescription id="staff-joined-on-help">
+        Día del calendario, tal como se registra. Vacío guarda el dato sin registrar.
+      </p>
+    </div>
+  </fieldset>
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend>Cuenta de acceso</legend>
+    <p hlmFieldDescription id="staff-account-state">
+      Estado actual de la cuenta: {{ accountStateLabel() }}. {{ accountDescription() }}
+    </p>
+    <div hlmField orientation="horizontal">
+      <input
+        id="staff-create-account"
+        type="checkbox"
+        class="size-4 accent-primary"
+        aria-describedby="staff-account-state staff-account-help"
+        [formField]="profile.createAccount"
+        (change)="accountToggled()"
+      />
+      <label hlmFieldLabel for="staff-create-account">{{ accountToggleLabel() }}</label>
+    </div>
+    <p hlmFieldDescription id="staff-account-help">
+      Sin marcar, la cuenta no se modifica y el correo queda opcional. Marcada, se crea o se
+      reactiva la misma cuenta con la contraseña inicial indicada, y el correo de la ficha es
+      obligatorio. Desmarcada sobre una cuenta activa, el acceso se da de baja.
+    </p>
+    @if (retireRequested()) {
+      <div hlmAlert variant="destructive" role="group" aria-live="polite">
+        <p hlmAlertTitle>Baja del acceso</p>
+        <p hlmAlertDescription>
+          Al guardar se retirará el acceso de este empleado de inmediato: su cuenta dejará de poder
+          iniciar sesión y dejará de ver sus servicios. La ficha conserva las asignaciones.
+        </p>
+        @if (retireConfirmed()) {
+          <p hlmAlertDescription>Baja confirmada; se aplicará al guardar.</p>
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="keepAccount()">
+              Mantener la cuenta
+            </button>
+          </div>
+        } @else {
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" variant="destructive" size="sm" (click)="confirmRetire()">
+              Confirmar baja del acceso
+            </button>
+            <button hlmBtn type="button" variant="outline" size="sm" (click)="keepAccount()">
+              Mantener la cuenta
+            </button>
+          </div>
+        }
+      </div>
+    }
+    @if (accountRequested()) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel for="staff-account-password"> Contraseña inicial (obligatoria) </label>
+        <input
+          hlmInput
+          id="staff-account-password"
+          type="password"
+          autocomplete="new-password"
+          aria-describedby="staff-account-password-help staff-account-password-errors"
+          [formField]="profile.password"
+          [attr.aria-invalid]="fieldError()?.field === 'password' ? 'true' : null"
+          (input)="clearFieldError()"
+        />
+        <p hlmFieldDescription id="staff-account-password-help">
+          La define quien registra al empleado. No se muestran ni se registran sus valores, y la
+          persona deberá cambiarla en su primer ingreso.
+        </p>
+        <div id="staff-account-password-errors">
+          @if (profile.password().touched()) {
+            @for (error of profile.password().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+          @if (fieldError()?.field === "password") {
+            <hlm-field-error forceShow id="staff-account-password-error">
+              {{ fieldError()!.message }}
+            </hlm-field-error>
+          }
+        </div>
+      </div>
+    }
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting() || retireBlocked()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{
+        profile().submitting()
+          ? "Guardando…"
+          : context.staff
+            ? "Guardar empleado"
+            : "Crear empleado"
+      }}
+    </button>
+  </hlm-dialog-footer>
+</form>

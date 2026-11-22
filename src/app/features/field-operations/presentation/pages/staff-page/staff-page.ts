@@ -11,6 +11,9 @@ import {
 } from "@angular/core"
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
 import { ActivatedRoute, RouterLink } from "@angular/router"
+import { BrnDialogRef } from "@spartan-ng/brain/dialog"
+import { HlmDialogService } from "@spartan-ng/helm/dialog"
+import { HotToastService } from "@ngxpert/hot-toast"
 import { catchError, debounceTime, EMPTY, Subject, switchMap, takeUntil, tap } from "rxjs"
 import { HlmAlertImports } from "@spartan-ng/helm/alert"
 import { HlmBadgeImports } from "@spartan-ng/helm/badge"
@@ -35,6 +38,7 @@ import {
   StaffNavigationOwner
 } from "../../navigation/staff-page-context"
 import { FieldStaffStore } from "../../state/field-staff.store"
+import { StaffEditor } from "../../components/staff-editor/staff-editor"
 
 type Query = FieldStaffQuery & { offset: number; limit: number }
 
@@ -63,6 +67,9 @@ export class StaffPage implements OnInit {
   private readonly route = inject(ActivatedRoute)
   private readonly location = inject(Location)
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID))
+  private readonly dialogs = inject(HlmDialogService)
+  private readonly toast = inject(HotToastService)
+  private editor: BrnDialogRef | undefined
   private readonly requested = signal<Query>(staffPageContext(this.route.snapshot.queryParamMap))
   private readonly navigationOwner = signal<StaffNavigationOwner | null>(null)
   // Only controls and admission failures are local; verified read state stays in the root store.
@@ -122,6 +129,36 @@ export class StaffPage implements OnInit {
       this.load({ offset: 0, limit: 20 })
     })
   })
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.editor?.close())
+  }
+
+  /**
+   * The only write entry point of the directory: registration with the optional access account,
+   * fenced by the session/route generation, the dialog lifecycle and its pending gate.
+   */
+  create(): void {
+    if (this.destroyRef.destroyed || !this.scope.check() || this.editor?.open) return
+    const generation = this.scope.generation()
+    const current = () =>
+      !this.destroyRef.destroyed && this.scope.check() && generation === this.scope.generation()
+    this.editor = this.dialogs.open(StaffEditor, {
+      context: {
+        staff: null,
+        owner: this.destroyRef,
+        onSaved: () => {
+          if (!current()) return
+          this.toast.success("Empleado creado correctamente.")
+          // Confirmed success only: one fresh read of the page this consumer is showing.
+          if (current()) this.load(this.query(), true)
+        }
+      },
+      showCloseButton: false,
+      disableClose: true,
+      contentClass: "sm:max-w-lg max-h-[90dvh] overflow-y-auto"
+    })
+  }
 
   ngOnInit(): void {
     const ready = this.scope.check()

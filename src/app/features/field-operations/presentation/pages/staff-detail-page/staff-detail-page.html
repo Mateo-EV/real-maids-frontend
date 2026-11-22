@@ -17,7 +17,8 @@
     [busy]="busy()"
   >
     @if (staff()) {
-      <div catalogControls>
+      <div catalogControls class="flex flex-wrap items-center gap-2">
+        <button hlmBtn type="button" [disabled]="busy()" (click)="edit()">Editar</button>
         <button hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="retry()">
           Actualizar perfil
         </button>
@@ -90,52 +91,25 @@
           <section aria-labelledby="staff-account-title" class="min-w-0">
             <h2 id="staff-account-title" class="text-sm font-semibold">Cuenta de acceso</h2>
             <p class="mt-1 max-w-prose text-xs text-muted-foreground">
-              La cuenta PERSONAL_CAMPO vinculada es la que consulta «Mis servicios» con las órdenes
-              asignadas a esta ficha. La administración de la cuenta pertenece a IAM.
+              La cuenta PERSONAL_CAMPO es la que consulta «Mis servicios» con las órdenes asignadas
+              a esta ficha. Se crea, se reactiva o se da de baja desde «Editar».
             </p>
             <div
-              class="mt-4 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
-              [attr.data-staff-account]="person.userId === null ? 'none' : 'linked'"
+              class="mt-4 flex flex-col gap-3 rounded-lg border p-4"
+              [attr.data-staff-account]="person.accountEmail ? 'active' : 'none'"
             >
               <div class="min-w-0">
-                @if (person.userId === null) {
+                @if (person.accountEmail) {
+                  <p class="text-sm font-medium">Cuenta de acceso activa</p>
+                  <p class="mt-1 break-words text-sm">{{ person.accountEmail }}</p>
+                } @else {
                   <p class="text-sm font-medium">Sin cuenta de acceso</p>
                   <p class="mt-1 text-xs text-muted-foreground">
-                    Esta ficha todavía no tiene una cuenta que consulte sus servicios.
+                    Esta ficha no tiene acceso activo: no puede consultar sus servicios. Una cuenta
+                    retirada no se muestra acá.
                   </p>
-                } @else {
-                  <p class="text-sm font-medium">Cuenta vinculada</p>
-                  @if (person.accountEmail) {
-                    <p class="mt-1 break-words text-sm">{{ person.accountEmail }}</p>
-                  } @else {
-                    <p class="mt-1 text-sm text-muted-foreground">
-                      Correo de la cuenta no disponible
-                    </p>
-                  }
                 }
               </div>
-              @if (person.userId === null) {
-                <button
-                  hlmBtn
-                  type="button"
-                  class="self-start sm:self-auto"
-                  [disabled]="busy()"
-                  (click)="linkAccount()"
-                >
-                  Vincular cuenta
-                </button>
-              } @else {
-                <button
-                  hlmBtn
-                  type="button"
-                  variant="outline"
-                  class="self-start sm:self-auto"
-                  [disabled]="busy()"
-                  (click)="unlinkAccount()"
-                >
-                  Desvincular cuenta
-                </button>
-              }
             </div>
           </section>
           <section aria-labelledby="staff-weekly-title" class="min-w-0">

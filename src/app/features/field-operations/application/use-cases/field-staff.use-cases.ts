@@ -1,8 +1,9 @@
 import { inject, Injectable } from "@angular/core"
 import { FIELD_OPERATIONS_REPOSITORY } from "../../domain/repositories/field-operations.repository"
 import {
+  CreateFieldStaffParams,
   FieldStaffQuery,
-  LinkStaffAccountParams
+  UpdateFieldStaffParams
 } from "../../domain/params/field-operations.params"
 
 @Injectable({ providedIn: "root" })
@@ -29,10 +30,22 @@ export class GetMyStaffProfileUseCase {
   }
 }
 
+/**
+ * Employee creation, including the access account it may create in the same write (`createAccount`
+ * plus `password`). There is no linking counterpart: the staff account is created with the record.
+ */
 @Injectable({ providedIn: "root" })
-export class LinkStaffAccountUseCase {
+export class CreateFieldStaffUseCase {
   private readonly repository = inject(FIELD_OPERATIONS_REPOSITORY)
-  execute(id: number, params: LinkStaffAccountParams) {
-    return this.repository.linkStaffAccount(id, params)
+  execute(params: CreateFieldStaffParams) {
+    return this.repository.createStaff(params)
+  }
+}
+
+@Injectable({ providedIn: "root" })
+export class UpdateFieldStaffUseCase {
+  private readonly repository = inject(FIELD_OPERATIONS_REPOSITORY)
+  execute(id: number, params: UpdateFieldStaffParams) {
+    return this.repository.updateStaff(id, params)
   }
 }

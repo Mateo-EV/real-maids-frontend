@@ -12,10 +12,11 @@ import { provideFieldOperationsReads } from "../../field-operations.providers"
 import { FieldStaffHttpSource } from "../../infrastructure/source/field-staff-http.source"
 import { FieldOperationsRepositoryImpl } from "../../infrastructure/repositories/field-operations.repository-impl"
 import {
+  CreateFieldStaffUseCase,
   GetFieldStaffUseCase,
   GetFieldStaffByIdUseCase,
   GetMyStaffProfileUseCase,
-  LinkStaffAccountUseCase
+  UpdateFieldStaffUseCase
 } from "./field-staff.use-cases"
 
 function setup() {
@@ -45,7 +46,8 @@ describe("Field operations root composition and application reads", () => {
     const list = vi.spyOn(source, "getStaff").mockReturnValue(response)
     const detail = vi.spyOn(source, "getStaffById").mockReturnValue(response)
     const me = vi.spyOn(source, "getMyStaffProfile").mockReturnValue(response)
-    const link = vi.spyOn(source, "linkStaffAccount").mockReturnValue(response)
+    const create = vi.spyOn(source, "createStaff").mockReturnValue(response)
+    const update = vi.spyOn(source, "updateStaff").mockReturnValue(response)
     const q = { offset: 20, limit: 10, isActive: false, search: "Doc" }
     expect(TestBed.inject(GetFieldStaffUseCase).execute(q)).toBe(response)
     expect(list).toHaveBeenCalledExactlyOnceWith(q)
@@ -53,8 +55,20 @@ describe("Field operations root composition and application reads", () => {
     expect(detail).toHaveBeenCalledExactlyOnceWith(7)
     expect(TestBed.inject(GetMyStaffProfileUseCase).execute()).toBe(response)
     expect(me).toHaveBeenCalledExactlyOnceWith()
-    expect(TestBed.inject(LinkStaffAccountUseCase).execute(7, { userId: null })).toBe(response)
-    expect(link).toHaveBeenCalledExactlyOnceWith(7, { userId: null })
+    const fields = {
+      name: "Staff",
+      document: "DOC-7",
+      phone: null,
+      email: null,
+      language: "es",
+      joinedOn: null
+    }
+    // The only account write left is the record write: the account travels with it.
+    expect(TestBed.inject(CreateFieldStaffUseCase).execute(fields)).toBe(response)
+    expect(create).toHaveBeenCalledExactlyOnceWith(fields)
+    expect(TestBed.inject(UpdateFieldStaffUseCase).execute(7, fields)).toBe(response)
+    expect(update).toHaveBeenCalledExactlyOnceWith(7, fields)
+    expect("linkStaffAccount" in TestBed.inject(FIELD_OPERATIONS_REPOSITORY)).toBe(false)
     response.subscribe(result =>
       expect(
         result.either(
@@ -132,8 +146,6 @@ describe("Field operations root composition and application reads", () => {
       description: null
     }
     const requests = [
-      r.createStaff(profile),
-      r.updateStaff(7, profile),
       r.setStaffStatus(7, { isActive: false }),
       r.replaceAvailability(7, { slots: [] }),
       r.getCrews({}),

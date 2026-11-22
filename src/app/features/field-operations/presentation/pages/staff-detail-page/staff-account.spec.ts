@@ -12,33 +12,21 @@ import { API_URL } from "@/app/core/tokens/api-url.token"
 import { ObserveAuthSessionUseCase } from "@/app/features/auth/application/use-cases/observe-auth-session.use-case"
 import { AuthSession } from "@/app/features/auth/domain/entities/auth-session.entity"
 import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
-import { ROLE_REPOSITORY } from "@/app/features/users/domain/repositories/role.repository"
-import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
-import { RoleRepositoryImpl } from "@/app/features/users/infrastructure/repositories/role.repository-impl"
-import { UserRepositoryImpl } from "@/app/features/users/infrastructure/repositories/user.repository-impl"
 import { provideFieldOperationsReads } from "../../../field-operations.providers"
 import { FieldOperationsError } from "../../../domain/errors/field-operations.error"
+import { FieldStaffHttpSource } from "../../../infrastructure/source/field-staff-http.source"
 import { staffDto } from "../../../infrastructure/source/field-staff-http.validation"
 import { FieldStaffStore } from "../../state/field-staff.store"
 import { StaffDetailPage } from "./staff-detail-page"
 
 const api = "http://localhost:8080/api/personal"
-const usersApi = "http://localhost:8080/api/usuarios"
-const rolesApi = "http://localhost:8080/api/roles"
 const deadline = 4102444800000
-const role = {
-  idRol: 4,
-  nombre: "PERSONAL_CAMPO",
-  descripcion: "Personal de campo",
-  activo: true,
-  fechaCreacion: "2026-01-01T12:00:00Z"
-}
 const profile = (userId: number | null, accountEmail?: string | null) => ({
   idPersonal: 7,
   nombre: "Colaboradora Verificada",
   documento: "DOC-7",
-  telefono: null,
-  correo: null,
+  telefono: "999 888 777",
+  correo: "ficha@example.test",
   idioma: "es",
   fechaIngreso: "2024-02-29",
   activo: true,
@@ -47,35 +35,8 @@ const profile = (userId: number | null, accountEmail?: string | null) => ({
   disponibilidad: [],
   fechaCreacion: "2026-01-01T12:00:00Z"
 })
-const account = (id: number, name: string, email: string) => ({
-  idUsuario: id,
-  nombre: name,
-  correo: email,
-  idRol: 4,
-  idioma: "es",
-  activo: true,
-  ultimoAcceso: null,
-  fechaCreacion: "2026-01-01T12:00:00Z",
-  fechaActualizacion: "2026-01-01T12:00:00Z"
-})
-const page = (
-  contenido: unknown[],
-  pagina = 0,
-  tamanio = 10,
-  totalElementos = contenido.length
-) => ({
-  contenido,
-  pagina,
-  tamanio,
-  totalElementos,
-  totalPaginas: Math.ceil(totalElementos / tamanio)
-})
 
-/** The dialog's own primary action, whichever label pending has replaced. */
-const primary = (within: ParentNode) =>
-  [...within.querySelectorAll<HTMLButtonElement>("button")].at(-1)!
-
-async function setup(userId: number | null = null) {
+async function setup(userId: number | null = null, accountEmail?: string | null) {
   const session = new BehaviorSubject<AuthSession | null>(
     AuthSession.create("Caller", "caller@example.test", null, deadline, 19)
   )
@@ -84,8 +45,6 @@ async function setup(userId: number | null = null) {
     providers: [
       provideRouter([{ path: "admin/staff/:id", component: StaffDetailPage }]),
       provideFieldOperationsReads(),
-      { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },
-      { useExisting: RoleRepositoryImpl, provide: ROLE_REPOSITORY },
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: API_URL, useValue: "http://localhost:8080" },
@@ -96,8 +55,8 @@ async function setup(userId: number | null = null) {
   })
   const http = TestBed.inject(HttpTestingController)
   const store = TestBed.inject(FieldStaffStore)
-  const harness = await RouterTestingHarness.create()
   const router = TestBed.inject(Router)
+  const harness = await RouterTestingHarness.create()
   await router.navigateByUrl("/admin/staff/7")
   const settle = async () => {
     harness.detectChanges()
@@ -106,7 +65,8 @@ async function setup(userId: number | null = null) {
   }
   await settle()
   const element = () => harness.routeNativeElement!
-  const dialog = (selector: string) => document.querySelector<HTMLElement>(selector)
+  const dialog = () => document.querySelector<HTMLElement>("app-staff-editor")
+  const control = <T extends HTMLElement>(selector: string) => dialog()!.querySelector<T>(selector)!
   const click = async (label: string, within: ParentNode = element()) => {
     const button = [...within.querySelectorAll<HTMLButtonElement>("button")].find(
       b => b.textContent?.trim() === label || b.getAttribute("aria-label") === label
@@ -115,267 +75,228 @@ async function setup(userId: number | null = null) {
     button!.click()
     await settle()
   }
-  const respondProfile = async (dto = profile(userId)) => {
+  const fill = async (selector: string, value: string) => {
+    const input = control<HTMLInputElement>(selector)
+    input.value = value
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("blur"))
+    await settle()
+  }
+  const submit = async () => {
+    dialog()!
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await settle()
+  }
+  const respond = async (dto = profile(userId, accountEmail)) => {
     const request = http.expectOne(`${api}/7`)
     expect(request.request.method).toBe("GET")
     request.flush(dto)
     await settle()
   }
-  /** The selector resolves the PERSONAL_CAMPO role and reads one filtered, active users page. */
-  const openLink = async () => {
-    await click("Vincular cuenta")
-    http.expectOne(rolesApi).flush([role])
-    await settle()
-    const accounts = http.expectOne(r => r.url.endsWith("/usuarios"))
-    return accounts
+  const openEdit = async () => {
+    await click("Editar")
+    expect(dialog()).not.toBeNull()
   }
+  const account = () => element().querySelector("[data-staff-account]")!
   return {
     http,
     store,
+    router,
+    harness,
     settle,
     element,
     dialog,
+    control,
     click,
-    respondProfile,
-    openLink,
-    session,
+    fill,
+    submit,
+    respond,
+    openEdit,
+    account,
     success
   }
 }
 
-describe("WP11 staff account section", () => {
-  // Every test here drives the component through HTTP; the decoder suite below does not.
-  afterEach(() => TestBed.inject(HttpTestingController).verify())
-
-  it("offers linking when the record has no account, without inventing an identity", async () => {
-    const app = await setup(null)
-    await app.respondProfile()
-    const section = app.element().querySelector("[data-staff-account]")!
-    expect(section.getAttribute("data-staff-account")).toBe("none")
-    expect(section.textContent).toContain("Sin cuenta de acceso")
-    expect(section.textContent).not.toContain("@")
-    expect(section.textContent).toContain("Vincular cuenta")
-    expect(section.textContent).not.toContain("Desvincular cuenta")
-    app.http.expectNone(() => true)
+describe("WP11 staff access account derived from the record", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.querySelectorAll(".cdk-overlay-container").forEach(element => element.remove())
+    TestBed.inject(HttpTestingController).verify()
   })
 
-  it("offers unlinking for a linked record without inventing an email", async () => {
+  it("reads a record without accountEmail as sin cuenta de acceso even when the identifier remains", async () => {
     const app = await setup(31)
-    await app.respondProfile()
-    const section = app.element().querySelector("[data-staff-account]")!
-    expect(section.getAttribute("data-staff-account")).toBe("linked")
-    expect(section.textContent).toContain("Cuenta vinculada")
-    expect(section.textContent).not.toContain("31")
-    expect(section.textContent).toContain("Correo de la cuenta no disponible")
-    expect(section.textContent).not.toContain("@")
-    expect(section.textContent).toContain("Desvincular cuenta")
-    expect(section.textContent).not.toContain("Vincular cuenta")
+    await app.respond()
+    expect(app.account().getAttribute("data-staff-account")).toBe("none")
+    expect(app.account().textContent).toContain("Sin cuenta de acceso")
+    // A retained identifier is not an account: nothing invents an email or a linking action.
+    expect(app.account().textContent).not.toContain("31")
+    expect(app.element().textContent).not.toMatch(/Vincular cuenta|Desvincular cuenta/)
     app.http.expectNone(() => true)
   })
 
-  it("prints the linked account email instead of the bare identifier", async () => {
-    const app = await setup(31)
-    await app.respondProfile(profile(31, "vinculada@example.test"))
-    const section = app.element().querySelector("[data-staff-account]")!
-    expect(section.getAttribute("data-staff-account")).toBe("linked")
-    expect(section.textContent).toContain("Cuenta vinculada")
-    expect(section.textContent).toContain("vinculada@example.test")
-    expect(section.textContent).not.toContain("31")
-    expect(section.textContent).not.toContain("Correo de la cuenta no disponible")
-    expect(section.textContent).toContain("Desvincular cuenta")
+  it("prints the active account email and never the bare identifier", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    expect(app.account().getAttribute("data-staff-account")).toBe("active")
+    expect(app.account().textContent).toContain("Cuenta de acceso activa")
+    expect(app.account().textContent).toContain("activa@example.test")
+    expect(app.account().textContent).not.toContain("31")
     app.http.expectNone(() => true)
   })
 
-  it("reads exactly one bounded staff page for the linkage index and marks a linked account unavailable", async () => {
+  it("retires the existing-account linking screen and its transport", async () => {
     const app = await setup(null)
-    await app.respondProfile()
-    const accounts = await app.openLink()
-    // Documented server filters: the resolved PERSONAL_CAMPO role and active accounts, page 0.
-    expect(accounts.request.method).toBe("GET")
-    expect(accounts.request.params.get("idRol")).toBe("4")
-    expect(accounts.request.params.get("activo")).toBe("true")
-    expect(accounts.request.params.get("pagina")).toBe("0")
-    expect(accounts.request.params.get("tamanio")).toBe("10")
-    const index = app.http.expectOne(`${api}?pagina=0&tamanio=100`)
-    expect(index.request.method).toBe("GET")
-    index.flush(page([{ ...profile(31), idPersonal: 12 }], 0, 100, 1))
-    accounts.flush(
-      page([
-        account(31, "Cuenta Vinculada", "vinculada@example.test"),
-        account(44, "Cuenta Libre", "libre@example.test")
-      ])
-    )
-    await app.settle()
-    const dialog = app.dialog("app-staff-account-link-dialog")!
-    expect(dialog.textContent).toContain("Cuenta Vinculada")
-    expect(dialog.textContent).toContain("vinculada@example.test")
-    expect(dialog.textContent).toContain("Ya vinculada a otra ficha de personal")
-    const radios = [...dialog.querySelectorAll<HTMLInputElement>('input[type="radio"]')]
-    expect(radios[0].disabled).toBe(true)
-    expect(radios[1].disabled).toBe(false)
-  })
-
-  it("pages the account selector on the server, keeping the documented filters", async () => {
-    const app = await setup(null)
-    await app.respondProfile()
-    const accounts = await app.openLink()
-    app.http.expectOne(`${api}?pagina=0&tamanio=100`).flush(page([], 0, 100, 0))
-    accounts.flush(
-      page(
-        Array.from({ length: 10 }, (_v, index) =>
-          account(100 + index, `Cuenta ${100 + index}`, `cuenta${100 + index}@example.test`)
-        ),
-        0,
-        10,
-        20
-      )
-    )
-    await app.settle()
-    const next = app
-      .dialog("app-staff-account-link-dialog")!
-      .querySelectorAll<HTMLButtonElement>("button")
-    const forward = [...next].find(b => b.textContent?.trim() === "Siguiente")!
-    expect(forward.disabled).toBe(false)
-    forward.click()
-    await app.settle()
-    const second = app.http.expectOne(r => r.url.endsWith("/usuarios"))
-    expect(second.request.params.get("pagina")).toBe("1")
-    expect(second.request.params.get("tamanio")).toBe("10")
-    expect(second.request.params.get("idRol")).toBe("4")
-    expect(second.request.params.get("activo")).toBe("true")
-    second.flush(
-      page(
-        Array.from({ length: 10 }, (_v, index) =>
-          account(110 + index, `Otra Cuenta ${110 + index}`, `otra${110 + index}@example.test`)
-        ),
-        1,
-        10,
-        20
-      )
-    )
-    await app.settle()
-    expect(app.dialog("app-staff-account-link-dialog")!.textContent).toContain("Otra Cuenta 110")
-  })
-
-  it("keeps account loading, verified empty and error states independent with their own retry", async () => {
-    const app = await setup(null)
-    await app.respondProfile()
-    const accounts = await app.openLink()
-    app.http.expectOne(`${api}?pagina=0&tamanio=100`).flush(page([], 0, 100, 0))
-    const dialog = () => app.dialog("app-staff-account-link-dialog")!
-    expect(dialog().textContent).toContain("Cargando cuentas")
-    accounts.flush({ mensaje: "privado" }, { status: 403, statusText: "Forbidden" })
-    await app.settle()
-    expect(dialog().textContent).toContain("No se pudieron consultar las cuentas")
-    expect(dialog().textContent).not.toContain("privado")
-    expect(dialog().textContent).not.toContain("Sin cuentas PERSONAL_CAMPO activas")
-    await app.click("Reintentar cuentas", dialog())
-    app.http.expectOne(r => r.url.endsWith("/usuarios")).flush(page([]))
-    await app.settle()
-    expect(dialog().textContent).toContain("Sin cuentas PERSONAL_CAMPO activas")
-    expect(dialog().textContent).not.toContain("No se pudieron consultar las cuentas")
+    await app.respond()
+    await app.openEdit()
+    // No selector, no page of users, no `/cuenta` write, no linking dialog in the document.
+    expect(document.querySelector("app-staff-account-link-dialog")).toBeNull()
+    expect(document.querySelector("app-staff-account-unlink-dialog")).toBeNull()
+    expect(app.dialog()!.textContent).not.toMatch(/Vincular cuenta|Desvincular cuenta/)
+    expect(app.dialog()!.textContent).toContain("Cuenta de acceso")
+    app.http.expectNone(r => r.url.endsWith("/usuarios") || r.url.endsWith("/cuenta"))
+    expect("linkStaffAccount" in TestBed.inject(FieldStaffHttpSource)).toBe(false)
   })
 })
 
-describe("WP11 staff account writes", () => {
-  afterEach(() => TestBed.inject(HttpTestingController).verify())
+describe("WP11 employee edit from the record", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.querySelectorAll(".cdk-overlay-container").forEach(element => element.remove())
+    TestBed.inject(HttpTestingController).verify()
+  })
 
-  it("sends one link for the chosen verified account, then emits one message and one forced read", async () => {
-    const app = await setup(null)
-    await app.respondProfile()
-    const accounts = await app.openLink()
-    app.http.expectOne(`${api}?pagina=0&tamanio=100`).flush(page([], 0, 100, 0))
-    accounts.flush(page([account(44, "Cuenta Libre", "libre@example.test")]))
-    await app.settle()
-    const dialog = () => app.dialog("app-staff-account-link-dialog")!
-    dialog().querySelector<HTMLInputElement>('input[type="radio"]')!.click()
-    await app.settle()
-    await app.click("Vincular cuenta", dialog())
-    const write = app.http.expectOne(`${api}/7/cuenta`)
+  it("leaves an unchanged active account alone and sends no account key", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    await app.openEdit()
+    expect(app.control("#staff-account-state").textContent).toContain("activa")
+    expect(app.control<HTMLInputElement>("#staff-create-account").checked).toBe(true)
+    expect(app.control<HTMLInputElement>("#staff-name").value).toBe("Colaboradora Verificada")
+    await app.submit()
+    const write = app.http.expectOne(`${api}/7`)
     expect(write.request.method).toBe("PUT")
-    expect(write.request.body).toEqual({ idUsuario: 44 })
-    // Nothing is optimised while the write is in flight.
-    expect(app.store.selectStaffById(7).result?.userId).toBeNull()
-    expect(primary(dialog()).disabled).toBe(true)
-    write.flush(profile(44))
+    expect(write.request.body).toEqual({
+      nombre: "Colaboradora Verificada",
+      documento: "DOC-7",
+      telefono: "999 888 777",
+      correo: "ficha@example.test",
+      idioma: "es",
+      fechaIngreso: "2024-02-29"
+    })
+    write.flush(profile(31, "activa@example.test"))
     await app.settle()
-    // Only the confirmed success causes the single fresh read; the record is not patched.
+    // One message, exactly one fresh read of this record, and no second write.
+    expect(app.success).toHaveBeenCalledExactlyOnceWith("Empleado actualizado correctamente.")
     const reread = app.http.expectOne(`${api}/7`)
     expect(reread.request.method).toBe("GET")
-    reread.flush(profile(44))
+    reread.flush(profile(31, "activa@example.test"))
     await app.settle()
-    expect(app.element().querySelector("[data-staff-account]")!.textContent).toContain(
-      "Cuenta vinculada"
-    )
-    expect(app.success).toHaveBeenCalledExactlyOnceWith("Cuenta vinculada correctamente.")
+    expect(app.dialog()).toBeNull()
     app.http.expectNone(() => true)
   })
 
-  it("blocks a duplicate link and every dismissal while pending, keeping the refusal inline", async () => {
-    const app = await setup(null)
-    await app.respondProfile()
-    const accounts = await app.openLink()
-    app.http.expectOne(`${api}?pagina=0&tamanio=100`).flush(page([], 0, 100, 0))
-    accounts.flush(page([account(44, "Cuenta Libre", "libre@example.test")]))
+  it("reactivates the retained account instead of creating a second one", async () => {
+    const app = await setup(31)
+    await app.respond()
+    await app.openEdit()
+    expect(app.control("#staff-account-state").textContent).toContain("sin cuenta de acceso")
+    expect(app.control<HTMLInputElement>("#staff-create-account").checked).toBe(false)
+    expect(app.dialog()!.textContent).toContain("Recrear la cuenta de acceso")
+    app.control<HTMLInputElement>("#staff-create-account").click()
     await app.settle()
-    const dialog = () => app.dialog("app-staff-account-link-dialog")!
-    dialog().querySelector<HTMLInputElement>('input[type="radio"]')!.click()
+    await app.fill("#staff-account-password", "Clave1234")
+    await app.submit()
+    const write = app.http.expectOne(`${api}/7`)
+    expect(write.request.body).toMatchObject({ crearCuenta: true, password: "Clave1234" })
+    write.flush(profile(31, "ficha@example.test"))
     await app.settle()
-    await app.click("Vincular cuenta", dialog())
-    const write = app.http.expectOne(`${api}/7/cuenta`)
-    // Pending blocks a duplicate submit and both dismissal paths.
-    expect(primary(dialog()).disabled).toBe(true)
-    primary(dialog()).click()
+    app.http.expectOne(`${api}/7`).flush(profile(31, "ficha@example.test"))
     await app.settle()
-    dialog().dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true })
-    )
-    await app.settle()
-    app.http.expectNone(r => r.method === "PUT")
-    await app.click("Cancelar", dialog())
-    const cdk = getDebugNode(dialog())!.injector.get(CdkDialogRef)
-    cdk.overlayRef.backdropElement!.click()
-    await app.settle()
-    expect(app.dialog("app-staff-account-link-dialog")).not.toBeNull()
-    write.flush(
-      { mensaje: "La cuenta ya está vinculada al colaborador Otro Nombre" },
-      { status: 409, statusText: "Conflict" }
-    )
-    await app.settle()
-    expect(dialog().textContent).toContain("La cuenta ya está vinculada a otra ficha de personal")
-    expect(dialog().textContent).not.toContain("Otro Nombre")
-    expect(app.dialog("app-staff-account-link-dialog")).not.toBeNull()
-    expect(app.success).not.toHaveBeenCalled()
-    app.http.expectNone(r => r.method === "GET" && r.url === `${api}/7`)
+    expect(app.success).toHaveBeenCalledExactlyOnceWith("Empleado actualizado correctamente.")
   })
 
-  it("unlinks only after explicit confirmation naming the collaborator, then reads once", async () => {
-    const app = await setup(31)
-    await app.respondProfile(profile(31))
-    await app.click("Desvincular cuenta")
-    const dialog = () => app.dialog("app-staff-account-unlink-dialog")!
-    expect(dialog().textContent).toContain("Colaboradora Verificada")
-    expect(dialog().textContent).toContain("dejará de ver los servicios")
-    expect(dialog().textContent).toContain("Las asignaciones")
-    expect(dialog().textContent).toMatch(/no se cierran las sesiones/i)
-    expect(dialog().textContent).toMatch(/ni se desactiva la cuenta/i)
-    await app.click("Desvincular cuenta", dialog())
-    const write = app.http.expectOne(`${api}/7/cuenta`)
-    expect(write.request.method).toBe("PUT")
-    expect(write.request.body).toEqual({ idUsuario: null })
-    expect(primary(dialog()).disabled).toBe(true)
-    primary(dialog()).click()
+  it("requires explicit confirmation before retiring the access, then sends false without a password", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    await app.openEdit()
+    app.control<HTMLInputElement>("#staff-create-account").click()
     await app.settle()
+    expect(app.dialog()!.textContent).toContain("Baja del acceso")
+    expect(app.dialog()!.textContent).toContain("dejará de poder iniciar sesión")
+    await app.submit()
     app.http.expectNone(r => r.method === "PUT")
-    write.flush(profile(null))
+    await app.click("Confirmar baja del acceso", app.dialog()!)
+    expect(app.dialog()!.textContent).toContain("Baja confirmada")
+    await app.submit()
+    const write = app.http.expectOne(`${api}/7`)
+    expect(write.request.body).toMatchObject({ crearCuenta: false })
+    expect(Object.keys(write.request.body)).not.toContain("password")
+    write.flush(profile(31))
     await app.settle()
-    app.http.expectOne(`${api}/7`).flush(profile(null))
+    app.http.expectOne(`${api}/7`).flush(profile(31))
+    await app.settle()
+    expect(app.success).toHaveBeenCalledExactlyOnceWith("Empleado actualizado correctamente.")
+    expect(app.account().textContent).toContain("Sin cuenta de acceso")
+  })
+
+  it("withdraws the retirement by keeping the account and sends no account key", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    await app.openEdit()
+    app.control<HTMLInputElement>("#staff-create-account").click()
+    await app.settle()
+    await app.click("Confirmar baja del acceso", app.dialog()!)
+    await app.click("Mantener la cuenta", app.dialog()!)
+    expect(app.control<HTMLInputElement>("#staff-create-account").checked).toBe(true)
+    expect(app.dialog()!.textContent).not.toContain("Confirmar baja del acceso")
+    await app.submit()
+    const write = app.http.expectOne(`${api}/7`)
+    expect(Object.keys(write.request.body)).not.toContain("crearCuenta")
+    write.flush(profile(31, "activa@example.test"))
+    await app.settle()
+    app.http.expectOne(`${api}/7`).flush(profile(31, "activa@example.test"))
+    await app.settle()
+  })
+
+  it("keeps the draft, blocks duplicate submits and refuses dismissal when the write fails", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    await app.openEdit()
+    await app.fill("#staff-name", "  Nombre Corregido  ")
+    await app.submit()
+    const write = app.http.expectOne(`${api}/7`)
+    await app.submit()
+    app.http.expectNone(r => r.method === "PUT")
+    const cdk = getDebugNode(app.dialog()!)!.injector.get(CdkDialogRef)
+    cdk.overlayRef.backdropElement!.click()
+    app
+      .dialog()!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true }))
+    await app.settle()
+    expect(app.dialog()).not.toBeNull()
+    write.flush({ mensaje: "privado" }, { status: 403, statusText: "Forbidden" })
+    await app.settle()
+    expect(app.dialog()!.textContent).toContain("No tienes permiso")
+    expect(app.dialog()!.textContent).not.toContain("privado")
+    expect(app.control<HTMLInputElement>("#staff-name").value).toContain("Nombre Corregido")
+    expect(app.success).not.toHaveBeenCalled()
+    app.http.expectNone(r => r.method === "GET")
+  })
+
+  it("closes the captured editor when the route owner is replaced, without applying it to the new record", async () => {
+    const app = await setup(31, "activa@example.test")
+    await app.respond()
+    await app.openEdit()
+    await app.router.navigateByUrl("/admin/staff/8")
+    await app.settle()
+    expect(app.dialog()).toBeNull()
+    app.http.expectOne(`${api}/8`).flush({ ...profile(null), idPersonal: 8 })
     await app.settle()
     expect(app.element().querySelector("[data-staff-account]")!.textContent).toContain(
       "Sin cuenta de acceso"
     )
-    expect(app.success).toHaveBeenCalledExactlyOnceWith("Cuenta desvinculada correctamente.")
-    app.http.expectNone(() => true)
   })
 })
 

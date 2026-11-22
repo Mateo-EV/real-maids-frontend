@@ -9,14 +9,10 @@ import { apiOrigin } from "@/app/features/auth/infrastructure/http/auth-http-pol
 import { Result } from "@/app/shared/utils/result"
 import { FieldOperationsError } from "../../domain/errors/field-operations.error"
 import {
+  CreateFieldStaffParams,
   FieldStaffQuery,
-  LinkStaffAccountParams
+  UpdateFieldStaffParams
 } from "../../domain/params/field-operations.params"
-import {
-  staffAccountDto,
-  staffAccountParams,
-  staffAccountTarget
-} from "./field-staff-account.validation"
 import {
   failure,
   positiveId,
@@ -25,6 +21,11 @@ import {
   staffPage,
   staffPagination
 } from "./field-staff-http.validation"
+import {
+  staffAccountMarker,
+  staffWriteBody,
+  staffWriteTarget
+} from "./field-staff-write.validation"
 
 @Injectable({ providedIn: "root" })
 export class FieldStaffHttpSource {
@@ -64,20 +65,42 @@ export class FieldStaffHttpSource {
         .pipe(map(value => staffDto(value, id)))
     })
   }
-  linkStaffAccount(id: number, params: LinkStaffAccountParams) {
-    // Getter-safe: the requested account is captured now, never when the request is subscribed.
-    const snapshot = { userId: params?.userId }
+  /**
+   * The access account is created with the record (`crearCuenta`/`password`), never by linking an
+   * existing one: the staff form owns its own account, exactly like the customer editor.
+   */
+  createStaff(params: CreateFieldStaffParams) {
+    // Getter-safe: the caller's input is captured now, never when the request is subscribed.
+    const snapshot = { ...params }
     return this.request(() => {
-      const target = staffAccountTarget(id)
-      const body = staffAccountParams(snapshot)
-      // The write documents `404` for a missing staff record or account, so the adapter — not the
-      // interceptor — classifies it as its typed `NOT_FOUND`.
+      const body = staffWriteBody(snapshot)
       return this.http
-        .put<unknown>(`${this.url}/${target}/cuenta`, body, {
+        .post<unknown>(this.url, body, {
           transferCache: false,
           context: apiConflictContext()
         })
-        .pipe(map(value => staffAccountDto(value, target)))
+        .pipe(
+          staffAccountMarker(),
+          map(value => staffDto(value))
+        )
+    })
+  }
+  updateStaff(id: number, params: UpdateFieldStaffParams) {
+    const snapshot = { ...params }
+    return this.request(() => {
+      const target = staffWriteTarget(id)
+      const body = staffWriteBody(snapshot)
+      // The write documents `404` for a missing record, so the adapter — not the interceptor —
+      // classifies it as its typed `NOT_FOUND`, and the response must name the same record.
+      return this.http
+        .put<unknown>(`${this.url}/${target}`, body, {
+          transferCache: false,
+          context: apiConflictContext()
+        })
+        .pipe(
+          staffAccountMarker(),
+          map(value => staffDto(value, target))
+        )
     })
   }
   getMyStaffProfile() {

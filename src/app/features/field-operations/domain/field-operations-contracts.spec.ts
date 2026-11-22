@@ -5,7 +5,9 @@ import { Result } from "@/app/shared/utils/result"
 import { FieldOperationsError } from "./errors/field-operations.error"
 import {
   FIELD_OPERATIONS_REPOSITORY,
-  FieldOperationsRepository
+  FieldOperationsRepository,
+  StaffAccountFailure,
+  StaffAccountFailureReason
 } from "./repositories/field-operations.repository"
 import {
   CreateFieldStaffParams,
@@ -13,8 +15,8 @@ import {
   CreateWorkLogParams,
   UpdateServiceChecklistParams,
   CreateServiceEvidenceParams,
-  LinkStaffAccountParams,
-  ReplaceStaffAvailabilityParams
+  ReplaceStaffAvailabilityParams,
+  UpdateFieldStaffParams
 } from "./params/field-operations.params"
 
 it("binds all staff, crew and execution capabilities with typed errors", async () => {
@@ -31,7 +33,6 @@ it("binds all staff, crew and execution capabilities with typed errors", async (
     createStaff: fail,
     updateStaff: fail,
     setStaffStatus: fail,
-    linkStaffAccount: fail,
     replaceAvailability: fail,
     getCrews: fail,
     getCrew: fail,
@@ -61,7 +62,7 @@ it("binds all staff, crew and execution capabilities with typed errors", async (
   }
 })
 
-it("supports account unlinking and empty whole-availability replacement", async () => {
+it("carries the account tri-state on the record write and keeps empty availability replacement", async () => {
   const staff = {
     id: 3,
     name: "Staff",
@@ -76,8 +77,9 @@ it("supports account unlinking and empty whole-availability replacement", async 
     availability: [],
     createdAt: new Date("2028-02-29T10:00:00Z")
   }
-  const link: FieldOperationsRepository["linkStaffAccount"] = (_id, params) => {
-    expect(params.userId).toBeNull()
+  const create: FieldOperationsRepository["createStaff"] = params => {
+    expect(params.createAccount).toBe(true)
+    expect(params.password).toBe("Clave1234")
     return of(Result.success(staff))
   }
   const availability: FieldOperationsRepository["replaceAvailability"] = (_id, params) => {
@@ -85,13 +87,32 @@ it("supports account unlinking and empty whole-availability replacement", async 
     return of(Result.success(staff))
   }
   for (const result of [
-    await firstValueFrom(link(3, { userId: null })),
+    await firstValueFrom(
+      create({
+        name: "S",
+        document: "DOC-3",
+        phone: null,
+        email: "a@b.test",
+        language: "es",
+        joinedOn: null,
+        createAccount: true,
+        password: "Clave1234"
+      })
+    ),
     await firstValueFrom(availability(3, { slots: [] }))
   ]) {
     expect(result.success).toBe(true)
     if (result.success) expect(result.data).toEqual(staff)
   }
-  expectTypeOf<LinkStaffAccountParams["userId"]>().toEqualTypeOf<number | null>()
+  // The retired linking model leaves no member behind on the port.
+  expectTypeOf<
+    "linkStaffAccount" extends keyof FieldOperationsRepository ? true : false
+  >().toEqualTypeOf<false>()
+  expectTypeOf<
+    "userId" extends keyof CreateFieldStaffParams | keyof UpdateFieldStaffParams ? true : false
+  >().toEqualTypeOf<false>()
+  expectTypeOf<CreateFieldStaffParams["createAccount"]>().toEqualTypeOf<boolean | undefined>()
+  expectTypeOf<CreateFieldStaffParams["password"]>().toEqualTypeOf<string | null | undefined>()
   expectTypeOf<ReplaceStaffAvailabilityParams["slots"][number]["weekday"]>().toEqualTypeOf<string>()
   expectTypeOf<
     Extract<
@@ -107,4 +128,13 @@ it("supports account unlinking and empty whole-availability replacement", async 
   expectTypeOf<
     Extract<"id" | "uploadedAt", keyof CreateServiceEvidenceParams>
   >().toEqualTypeOf<never>()
+})
+
+it("keeps the account field rejection typed as a field operations error", () => {
+  const failure = new StaffAccountFailure("EMAIL_RESERVED")
+  expect(failure).toBeInstanceOf(FieldOperationsError)
+  expect(failure.code).toBe("INVALID_DATA")
+  expect(failure.reason).toBe("EMAIL_RESERVED")
+  expect(failure.message).not.toContain("correo@")
+  expectTypeOf(failure.reason).toEqualTypeOf<StaffAccountFailureReason>()
 })

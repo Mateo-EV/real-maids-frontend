@@ -29,35 +29,26 @@ function setup() {
 afterEach(() => TestBed.inject(HttpTestingController).verify())
 
 describe("field operations root composition", () => {
-  it("keeps the linked-staff write on the shared root source, not on a second adapter", () => {
+  it("keeps the staff writes on the shared root source, not on a second adapter", () => {
     const app = setup()
     expect(app.repository).toBe(app.impl)
     expect(app.repository).not.toBe(app.source)
   })
 
-  it("wires the account link while the other staff writes keep the shared stub", () => {
+  it("wires the employee record writes and leaves status and availability on the shared stub", () => {
     const app = setup()
     expect(app.repository).toBe(app.impl)
     expect(app.repository).not.toBe(app.source)
-    // The delegation itself is pinned by the use-case spec; here only the wiring differs.
-    expect(app.repository.linkStaffAccount).not.toBe(app.repository.createStaff)
-    expect(app.repository.createStaff).toBe(app.repository.setStaffStatus)
+    // The retired linking model leaves no member behind, and the record writes are not stubbed.
+    expect("linkStaffAccount" in app.repository).toBe(false)
+    expect(app.repository.createStaff).not.toBe(app.repository.setStaffStatus)
+    expect(app.repository.updateStaff).not.toBe(app.repository.setStaffStatus)
     expect(app.repository.setStaffStatus).toBe(app.repository.replaceAvailability)
   })
 
   it("keeps every remaining unwired write and proposal explicitly unsupported without HTTP", async () => {
     const app = setup()
-    const staff = {
-      name: "S",
-      document: "D",
-      phone: null,
-      email: null,
-      language: "es",
-      joinedOn: null
-    }
     const requests = [
-      app.repository.createStaff(staff),
-      app.repository.updateStaff(7, staff),
       app.repository.setStaffStatus(7, { isActive: false }),
       app.repository.replaceAvailability(7, { slots: [] }),
       app.repository.getCrews({}),
