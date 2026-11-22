@@ -96,6 +96,15 @@
         }
       }
     </div>
+    @if (staffAccountNotice()) {
+      <div hlmAlert id="user-staff-warning" aria-live="polite">
+        <p hlmAlertTitle>Requiere vincular una ficha de personal</p>
+        <p hlmAlertDescription>
+          Una cuenta con rol PERSONAL_CAMPO sólo verá sus servicios asignados cuando esté vinculada
+          a una ficha de personal. La vinculación se administra en RRHH, no en este alta.
+        </p>
+      </div>
+    }
     @if (customerAccountRequired()) {
       <div hlmAlert id="user-customer-warning" aria-live="polite">
         <p hlmAlertTitle>Se creará un cliente nuevo</p>

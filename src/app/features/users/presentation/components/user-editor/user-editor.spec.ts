@@ -53,7 +53,9 @@ describe("UserEditor Signal Forms", () => {
         Role.create(index + 1, `Role ${index + 1}`, "", true, now)
       ),
       // El backend crea la ficha del cliente sólo para su rol CLIENTE, identificado por nombre exacto.
-      Role.create(6, "CLIENTE", "Cuenta del portal", true, now)
+      Role.create(6, "CLIENTE", "Cuenta del portal", true, now),
+      // Etiqueta que `PerfilResponse.rol` devuelve para la audiencia de personal de campo.
+      Role.create(7, "PERSONAL_CAMPO", "Personal de campo", true, now)
     ]
     data = Array.from({ length: 48 }, (_, index) =>
       User.create(
@@ -198,6 +200,15 @@ describe("UserEditor Signal Forms", () => {
   }
   function clientRole(roles: { roles(): Role[] }): Role {
     return roles.roles().find(role => role.name === "CLIENTE")!
+  }
+
+  function staffRole(roles: { roles(): Role[] }): Role {
+    return roles.roles().find(role => role.name === "PERSONAL_CAMPO")!
+  }
+
+  function staffUser(): User {
+    const now = new Date("2026-09-01T00:00:00Z")
+    return User.create(98, "Personal Campo", "campo@example.test", Lang.ES, true, now, now, 7, null)
   }
 
   function customerAccountUser(customerId: number | null): User {
@@ -774,6 +785,82 @@ describe("UserEditor Signal Forms", () => {
       customerId: 12
     })
     expect(ref.state()).toBe("closed")
+  })
+
+  it("warns that a new PERSONAL_CAMPO account needs a staff record and hides it for other roles", async () => {
+    const { editor, element, roles, ref } = await setup()
+    expect(element.querySelector("#user-staff-warning")).toBeNull()
+    const staff = staffRole(roles)
+    await selectRole(element, staff.id)
+    expect(editor.model().roleId).toBe(String(staff.id))
+    const warning = element.querySelector("#user-staff-warning")!
+    expect(warning.textContent).toContain("PERSONAL_CAMPO")
+    expect(warning.textContent).toContain("servicios asignados")
+    expect(warning.textContent).toContain("ficha de personal")
+    expect(warning.textContent).toContain("RRHH")
+    // No se optimiza ni se promete vinculación automática, y el aviso no se puede descartar.
+    expect(warning.textContent).not.toMatch(/automátic|se crear|se vinculará sola/i)
+    expect(warning.querySelector("button")).toBeNull()
+    expect(element.querySelector("#user-staff-warning")).toBe(warning)
+    await selectRole(element, clientRole(roles).id)
+    expect(element.querySelector("#user-staff-warning")).toBeNull()
+    await selectRole(element, staff.id)
+    expect(element.querySelector("#user-staff-warning")).not.toBeNull()
+    await selectRole(element, roles.roles()[0].id)
+    expect(element.querySelector("#user-staff-warning")).toBeNull()
+    ref.forceClose()
+  })
+
+  it("submits the same payload with and without the PERSONAL_CAMPO notice", async () => {
+    const { editor, users, roles, element, ref } = await setup()
+    const create = vi
+      .spyOn(users, "createUser")
+      .mockReturnValue(of(Result.failure(new UserError("UNEXPECTED"))))
+    const staff = staffRole(roles)
+    await selectRole(element, staff.id)
+    expect(element.querySelector("#user-staff-warning")).not.toBeNull()
+    editor.model.update(model => ({
+      ...model,
+      name: "Personal Campo",
+      email: "campo@example.test",
+      password: "FakePassword1"
+    }))
+    await flush(editor.save())
+    const notified = create.mock.calls.at(-1)![0] as unknown as Record<string, unknown>
+    await selectRole(element, roles.roles()[0].id)
+    expect(element.querySelector("#user-staff-warning")).toBeNull()
+    editor.model.update(model => ({ ...model, email: "persona@example.test" }))
+    await flush(editor.save())
+    const plain = create.mock.calls.at(-1)![0] as unknown as Record<string, unknown>
+    expect(Object.keys(notified).sort()).toEqual(Object.keys(plain).sort())
+    expect(notified).toEqual({
+      ...plain,
+      email: "campo@example.test",
+      roleId: staff.id
+    })
+    expect(notified).not.toHaveProperty("customerType")
+    expect(notified).not.toHaveProperty("phone")
+    ref.forceClose()
+  })
+
+  it("leaves editing an existing user without the notice and with its current payload", async () => {
+    const { editor, users, element, ref } = await setup(staffUser())
+    expect(element.querySelector("#user-staff-warning")).toBeNull()
+    const update = vi
+      .spyOn(users, "updateUserById")
+      .mockReturnValue(of(Result.success(staffUser())))
+    editor.model.update(model => ({ ...model, name: "Editado" }))
+    await flush(editor.save())
+    expect(update).toHaveBeenCalledOnce()
+    // El alta advertida no toca la edición: la carga útil conserva las claves de hoy y la
+    // contraseña vacía sigue significando «sin cambios».
+    expect(Object.keys(update.mock.calls[0][1]).sort()).toEqual(
+      ["email", "isActive", "lang", "name", "password", "roleId"].sort()
+    )
+    expect(update.mock.calls[0][1].password).toBe("")
+    expect(update.mock.calls[0][1]).not.toHaveProperty("customerType")
+    expect(update.mock.calls[0][1]).not.toHaveProperty("phone")
+    ref.forceClose()
   })
 
   it("keeps the customer-only fields out of the edit form and payload", async () => {

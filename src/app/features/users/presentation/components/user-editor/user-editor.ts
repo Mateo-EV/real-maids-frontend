@@ -6,6 +6,7 @@ import {
   inject,
   signal
 } from "@angular/core"
+import { FIELD_STAFF_ROLE_NAME } from "@/app/features/auth/presentation/routing/audience-navigation"
 import {
   applyWhen,
   email,
@@ -45,6 +46,11 @@ export interface UserEditorContext {
   user: User | null
   onSaved: (saved?: UserSavedEvent) => void
 }
+
+/**
+ * Identity, not ACL: `PERSONAL_CAMPO` is the label `PerfilResponse.rol` returns for the field staff
+ * audience, the same one the auth routing names `FIELD_STAFF_ROLE_NAME`.
+ */
 
 @Component({
   selector: "app-user-editor",
@@ -94,6 +100,13 @@ export class UserEditor {
    */
   readonly customerAccountRequired = computed(
     () => !this.context.user && this.selectedRole()?.name === CUSTOMER_ROLE_NAME
+  )
+  /**
+   * Only a new PERSONAL_CAMPO account is announced: the staff record that decides what «Mis
+   * servicios» shows is linked from RRHH, never from this alta, so editing keeps its flow.
+   */
+  readonly staffAccountNotice = computed(
+    () => !this.context.user && this.selectedRole()?.name === FIELD_STAFF_ROLE_NAME
   )
   readonly userForm = form(this.model, path => {
     // required(path.name, { message: "Ingresa el nombre." })
