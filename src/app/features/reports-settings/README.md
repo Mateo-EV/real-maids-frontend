@@ -1,6 +1,6 @@
 # Reports and settings domain — area J
 
-All five SQL tables have domain entities. Report/dashboard operations are source-confirmed; KPI administration, safe settings reads and migration history are explicitly proposed. No HTTP adapter, application action, UI, route, provider or dependency is added. M10/RF13/HU13/P12 and M11/RF14/HU14/P02 provide report/dashboard intent; settings/migration-specific RF/HU traceability remains missing.
+All five SQL tables have domain entities. Report catalogue, paged history, explicit generation and CSV download are connected at `/admin/reports` through an HTTP adapter, application actions and a route. Dashboard is a separate feature. KPI administration, safe settings reads and migration history remain proposed. M10/RF13/HU13/P12 and M11/RF14/HU14/P02 provide report/dashboard intent; settings/migration-specific RF/HU traceability remains missing.
 
 ## Schema coverage
 
@@ -49,4 +49,4 @@ Java BigDecimal/Long JSON serialization is not proven lossless by DTO declaratio
 
 ## Verification surface
 
-[Factory tests](domain/reports-settings.spec.ts) cover all fields, nulls, leap-day calendar strings, decimal scale and Date metadata. [Boundary tests](domain/reports-settings-contract.spec.ts) cover token substitution, every repository signature, Result success/failure, typed errors, nullable patches and absence of settings/migration writes. These contracts do not deliver P02/P12 or certify live API/CSV/browser behavior.
+[Factory tests](domain/reports-settings.spec.ts) cover all fields, nulls, leap-day calendar strings, decimal scale and Date metadata. [Boundary tests](domain/reports-settings-contract.spec.ts) cover token substitution, every repository signature, Result success/failure, typed errors, nullable patches and absence of settings/migration writes. These domain contracts alone do not certify live API/CSV/browser behavior; the connected dashboard and reports have separate implementation and acceptance evidence.

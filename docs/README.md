@@ -457,15 +457,14 @@ and no longer redirects to users, which was the temporary placeholder since the 
 - **403 is an error, not an empty board**: a missing `DASHBOARD_LEER` is shown as an explicit permission error,
   because an empty board and a denied board look identical to a reader.
 
-Reports, the generated-report history and the CSV export are **not** connected yet. Their contract is verified —
-`GET /api/reportes`, `/generados`, `/{tipo}` and `/{tipo}/csv` — with one hazard that governs their design:
-`GET /api/reportes/{tipo}` **generates** a report and appends it to the history, so it is a side effect over a GET
-and must stay behind an explicit user action, never on mount, refresh or retry. Where that history lives and what
-the CSV shows is still an open decision.
+The `/admin/reports` page connects the report catalogue, paged history, explicit generation and CSV download.
+Generation and CSV requests have server-side effects despite using GET; they require an explicit action and are never
+automatically replayed. See the [reports implementation](../src/app/features/reports-settings/).
 
-Acceptance gap, recorded rather than implied: live backend/CORS, real permission outcomes, the live JSON
-serialization of the decimal fields (the decoder expects JSON numbers), the undocumented units of the compliance
-rate, browser acceptance in Chrome/Edge/Firefox and exhaustive accessibility remain unverified. The `Landing`
+The user reports acceptance and security checks. Prior live checks observed JSON numbers and a percentage rate;
+independent verification is not exhaustive. On 2026-11-22, 101 focused tests passed, the production build succeeded
+with budget warnings, and unauthenticated dashboard and report reads returned 401. Independent frontend review did
+not verify backend permissions or CSV content. The `Landing`
 sidebar entry stays a disabled non-navigating button; the dashboard is reached through its own `Inicio` entry in the
 General group, which is active only on the bare `/admin` route.
 
