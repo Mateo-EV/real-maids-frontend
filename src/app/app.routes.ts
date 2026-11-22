@@ -24,6 +24,48 @@ export const routes: Routes = [
       )
   },
   {
+    // Public marketing landing (The Real Maids). Declared before the guarded lazy groups; it is
+    // not reachable from the root redirect, which still sends visitors to `/login`.
+    path: "landing",
+    title: "The Real Maids | House cleaning in Tampa Bay",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-page/landing-page").then(
+        component => component.LandingPage
+      )
+  },
+  {
+    path: "landing/quote",
+    title: "Get a Quote | The Real Maids",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-quote-page/landing-quote-page").then(
+        component => component.LandingQuotePage
+      )
+  },
+  {
+    path: "landing/work-with-us",
+    title: "Work With Us | The Real Maids",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-work-page/landing-work-page").then(
+        component => component.LandingWorkPage
+      )
+  },
+  {
+    path: "landing/faq",
+    title: "FAQ | The Real Maids",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-faq-page/landing-faq-page").then(
+        component => component.LandingFaqPage
+      )
+  },
+  {
+    path: "landing/reviews",
+    title: "Reviews | The Real Maids",
+    loadComponent: () =>
+      import("./features/landing/presentation/pages/landing-reviews-page/landing-reviews-page").then(
+        component => component.LandingReviewsPage
+      )
+  },
+  {
     path: "",
     loadChildren: () =>
       import("./experiences/admin/admin.routes").then(routes => routes.ADMIN_ROUTES)
