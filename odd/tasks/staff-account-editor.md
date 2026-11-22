@@ -71,3 +71,9 @@ empleado y su cuenta nacen juntos, se editan juntos y la cuenta se retira desact
 - **L7 (usuario, reactivación):** «al momento de vincular o activar la cuenta se vuelve a crear el usuario,
   pero como en la mayoria de casos ese usuario solo está desactivado solo se vuelve a activar y queda».
   Confirmado: activar reutiliza la fila existente, nunca crea una segunda cuenta para la misma ficha.
+- **L8 (revisión nativa, tercer intento fallido):** con el candidato del editor (33 archivos desde
+  `f09d2b1`), `inspect` ofreció `review.start` y `START` volvió a fallar con
+  `candidate-owner-preparation-failed`/`ETIMEDOUT`, sin crear lineage ni mutar nada. Es el tercer fallo
+  consecutivo del proveedor (antes: `ETIMEDOUT`, `lens_context_budget_exceeded`, `ETIMEDOUT`), con
+  candidatos de tamaños distintos, así que no depende del volumen. No se reintentó. El paquete queda con
+  verificación propia y sin vista nativa; la aceptación en vivo sigue siendo la fuente de verdad.
