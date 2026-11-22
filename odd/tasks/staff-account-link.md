@@ -36,11 +36,11 @@ módulo dueño del registro y el otro lado advierte.
 
 ## Tasks
 
-| ID  | Tarea                                                                                          | Specs  | Repo     | Estado    |
-| --- | ---------------------------------------------------------------------------------------------- | ------ | -------- | --------- |
-| T1  | `linkStaffAccount` deja de ser UNSUPPORTED: validador, `PUT`, wire del repositorio y use case    | S1, S5 | frontend | pendiente |
-| T2  | Sección «Cuenta de acceso» en la ficha: estado, vincular con selector y desvincular confirmado   | S2-S5  | frontend | pendiente |
-| T3  | Aviso de vinculación en el alta de usuario `PERSONAL_CAMPO`                                      | S6     | frontend | pendiente |
+| ID  | Tarea                                                                                          | Specs  | Repo     | Estado                |
+| --- | ---------------------------------------------------------------------------------------------- | ------ | -------- | --------------------- |
+| T1  | `linkStaffAccount` deja de ser UNSUPPORTED: validador, `PUT`, wire del repositorio y use case  | S1, S5 | frontend | **hecho** — `3c1eae8` |
+| T2  | Sección «Cuenta de acceso» en la ficha: estado, vincular con selector y desvincular confirmado | S2-S5  | frontend | **hecho** — `3c1eae8` |
+| T3  | Aviso de vinculación en el alta de usuario `PERSONAL_CAMPO`                                    | S6     | frontend | **hecho** — `b91ccd6` |
 
 ## Log
 
@@ -56,3 +56,12 @@ módulo dueño del registro y el otro lado advierte.
 - **L4 (evidencia CRM):** el CRM no vincula cuentas existentes: crea la cuenta con el cliente o la
   retira, y el alta de usuario `CLIENTE` solo advierte. Por eso la gestión vive en la ficha y el lado
   IAM solo advierte. En la base hay 1 cuenta `PERSONAL_CAMPO` y 11 fichas libres.
+- **L5 (cierre de implementación):** los tres slices están commiteados (`3c1eae8`, `b91ccd6`). Suite completa 4351/4351
+  en 238 archivos, `tsc` app y spec en 0, formato limpio. El literal del rol se unificó: el editor de usuarios importa
+  `FIELD_STAFF_ROLE_NAME` del routing de audiencias en lugar de repetirlo.
+- **L6 (revisión nativa, no preparada):** con la base ya movida a `f09d2b1` el candidato son 18 archivos, pero `START`
+  volvió a fallar con `candidate-owner-preparation-failed`/`ETIMEDOUT` sin crear lineage ni mutar nada. El defecto es
+  intermitente del provider y no depende del tamaño del candidato. No se reintentó.
+- **L7 (pendiente de aceptación):** prueba en vivo de desvincular y revincular desde la ficha, backend real/CORS,
+  redacción entre fichas y navegadores. El marcado de cuentas ocupadas puede quedarse corto por diseño; el 409 del
+  servidor sigue siendo la autoridad.
