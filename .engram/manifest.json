@@ -48,6 +48,14 @@
       "sessions": 2,
       "memories": 1,
       "prompts": 0
+    },
+    {
+      "id": "7b21cd0d",
+      "created_by": "rioja",
+      "created_at": "2026-11-22T17:24:34.7425316Z",
+      "sessions": 108,
+      "memories": 22,
+      "prompts": 0
     }
   ]
 }
