@@ -1,26 +1,5 @@
 <div class="min-h-dvh bg-[#fff7ee] text-[#1e2b48]">
-  <header class="sticky top-0 z-30 border-b border-[#1e2b48]/10 bg-white/95 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-      <a href="#top" class="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#2f6b3a]" aria-label="The Real Maids home">
-        <span aria-hidden="true" class="text-2xl text-[#e0a23b]">✿</span>
-        <span>The Real <span class="italic">Maids</span></span>
-      </a>
-
-      <nav aria-label="Main" class="hidden items-center gap-7 text-sm font-medium md:flex">
-        <a href="#top" class="border-b-2 border-[#f4695c] pb-1 text-[#f4695c]">Home</a>
-        <a href="#services" class="text-[#1e2b48] hover:text-[#f4695c]">Services</a>
-        <a href="#tampa-bay" class="text-[#1e2b48] hover:text-[#f4695c]">Tampa Bay</a>
-        <a href="#quote" class="text-[#1e2b48] hover:text-[#f4695c]">Contact</a>
-      </nav>
-
-      <a
-        href="#quote"
-        class="inline-flex min-h-11 items-center rounded-full bg-[#1e2b48] px-5 text-sm font-semibold text-white transition hover:bg-[#2b3d63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
-      >
-        Get a quote
-      </a>
-    </div>
-  </header>
+  <app-landing-header active="home" />
 
   <main id="top">
     <!-- Hero -->
@@ -41,16 +20,16 @@
               [attr.href]="contactHref"
               class="inline-flex min-h-12 items-center rounded-full bg-[#f4695c] px-6 text-sm font-semibold text-white transition hover:bg-[#e25a4e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e2b48]"
             >
-              Call us
+              Call {{ contactPhone }}
             </a>
             <a
-              href="#quote"
+              href="/landing/quote"
               class="inline-flex min-h-12 items-center rounded-full bg-[#1e2b48] px-6 text-sm font-semibold text-white transition hover:bg-[#2b3d63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
             >
               Get a quote
             </a>
             <a
-              href="#services"
+              href="/landing/reviews"
               class="inline-flex min-h-12 items-center rounded-full px-5 text-sm font-semibold text-[#1e2b48] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
             >
               Reviews
@@ -68,7 +47,6 @@
           <svg viewBox="0 0 520 440" class="h-auto w-full" role="img" aria-label="Illustration of a bright, freshly cleaned home with cleaning supplies">
             <rect width="520" height="440" fill="#f8e6cf"/>
             <circle cx="390" cy="110" r="150" fill="#f6d8a8" opacity="0.7"/>
-            <!-- house -->
             <rect x="90" y="150" width="340" height="230" rx="10" fill="#ffffff"/>
             <polygon points="70,160 260,60 450,160" fill="#1e2b48"/>
             <rect x="230" y="250" width="70" height="130" rx="6" fill="#2f6b3a"/>
@@ -79,18 +57,15 @@
             <line x1="130" y1="260" x2="202" y2="260" stroke="#ffffff" stroke-width="4"/>
             <line x1="366" y1="230" x2="366" y2="290" stroke="#ffffff" stroke-width="4"/>
             <line x1="330" y1="260" x2="402" y2="260" stroke="#ffffff" stroke-width="4"/>
-            <!-- plant -->
             <rect x="40" y="330" width="44" height="50" rx="6" fill="#f4695c"/>
             <path d="M62 330 C40 300 40 280 58 262 C70 290 72 305 62 330Z" fill="#2f6b3a"/>
             <path d="M62 330 C84 300 90 282 74 262 C60 290 56 305 62 330Z" fill="#4f8f5b"/>
-            <!-- supplies -->
             <rect x="330" y="350" width="120" height="62" rx="12" fill="#f4695c"/>
             <rect x="346" y="340" width="88" height="14" rx="6" fill="#e25a4e"/>
             <rect x="180" y="366" width="60" height="18" rx="6" fill="#d9a441"/>
             <rect x="240" y="368" width="56" height="30" rx="8" fill="#9fd3dc"/>
             <path d="M478 330 L478 250 Q478 232 494 232 Q510 232 510 250 L510 330Z" fill="#2f6b3a"/>
             <rect x="482" y="200" width="24" height="34" rx="8" fill="#e9f3ee"/>
-            <!-- sparkles -->
             <g fill="#e0a23b">
               <path d="M120 120 L124 132 L136 136 L124 140 L120 152 L116 140 L104 136 L116 132Z"/>
               <path d="M440 210 L443 218 L451 221 L443 224 L440 232 L437 224 L429 221 L437 218Z"/>
@@ -114,12 +89,7 @@
             From Lutz to Palmetto, our teams care for homes across the Tampa Bay area.
           </p>
 
-          <form
-            class="mt-8 max-w-sm"
-            novalidate
-            aria-describedby="zip-help"
-            (submit)="$event.preventDefault(); checkZip()"
-          >
+          <form class="mt-8 max-w-sm" novalidate aria-describedby="zip-help" (submit)="$event.preventDefault()">
             <label for="zip-check" class="text-sm font-semibold">Check your ZIP code</label>
             <div class="mt-2 flex gap-2">
               <input
@@ -128,41 +98,29 @@
                 inputmode="numeric"
                 autocomplete="postal-code"
                 placeholder="33601"
-                [formField]="zipForm.zip"
                 class="min-h-12 w-full rounded-full border border-[#1e2b48]/20 bg-white px-5 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"
               />
-              <button
-                type="submit"
-                class="min-h-12 shrink-0 rounded-full bg-[#1e2b48] px-5 text-sm font-semibold text-white hover:bg-[#2b3d63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
+              <a
+                href="/landing/quote"
+                class="inline-flex min-h-12 shrink-0 items-center rounded-full bg-[#1e2b48] px-5 text-sm font-semibold text-white hover:bg-[#2b3d63] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
               >
                 Check
-              </button>
+              </a>
             </div>
-            <p id="zip-help" class="mt-2 min-h-5 text-sm" aria-live="polite">
-              @if (zipForm.zip().touched() && zipForm.zip().errors().length) {
-                <span class="text-[#b42318]">{{ zipForm.zip().errors()[0].message }}</span>
-              } @else if (zipChecked()) {
-                <span class="text-[#2f6b3a]">Thanks! Enter your details below to request a quote.</span>
-              }
-            </p>
+            <p id="zip-help" class="mt-2 text-sm text-[#5b6578]">Enter your ZIP code to start your free quote.</p>
           </form>
         </div>
 
         <figure class="overflow-hidden rounded-[2rem] shadow-xl shadow-[#1e2b48]/10">
           <svg viewBox="0 0 480 380" class="h-auto w-full" role="img" aria-label="Map of the Tampa Bay service area: Lutz, Tampa and Palmetto">
             <rect width="480" height="380" fill="#dbeff2"/>
-            <!-- land -->
             <path d="M0 0 L300 0 C320 60 300 110 330 160 C360 210 345 260 380 300 C400 330 410 360 420 380 L0 380Z" fill="#f6e7cf"/>
-            <!-- bay -->
             <path d="M300 0 C320 60 300 110 330 160 C360 210 345 260 380 300 C400 330 410 360 420 380 L480 380 L480 0Z" fill="#9fd3dc"/>
-            <!-- grid -->
             <g stroke="#ffffff" stroke-width="1" opacity="0.6">
               <line x1="0" y1="95" x2="480" y2="95"/><line x1="0" y1="190" x2="480" y2="190"/><line x1="0" y1="285" x2="480" y2="285"/>
               <line x1="95" y1="0" x2="95" y2="380"/><line x1="190" y1="0" x2="190" y2="380"/>
             </g>
-            <!-- service route -->
             <path d="M120 80 C170 120 190 170 230 190 S300 230 330 260" fill="none" stroke="#f4695c" stroke-width="3" stroke-dasharray="7 7"/>
-            <!-- pins -->
             <g>
               <circle cx="120" cy="80" r="13" fill="#f4695c"/><circle cx="120" cy="80" r="5" fill="#ffffff"/>
               <text x="140" y="84" font-size="16" font-weight="600" fill="#1e2b48">Lutz</text>
@@ -246,7 +204,7 @@
                 <li>✓ Tailored to your home</li>
               </ul>
               <a
-                href="#quote"
+                href="/landing/quote"
                 class="mt-6 inline-flex min-h-11 items-center self-start text-sm font-semibold text-[#1e2b48] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4695c]"
               >
                 Get a quote
@@ -256,96 +214,12 @@
         </ul>
       </div>
     </section>
-
-    <!-- Quote -->
-    <section id="quote" class="px-4 py-16 sm:px-6 lg:py-24">
-      <div class="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_1.2fr]">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[#f4695c]">Get a quote</p>
-          <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Tell us about your home.</h2>
-          <p class="mt-4 text-base leading-7 text-[#5b6578]">
-            Share a few details and we will get back to you with a quote and available times.
-          </p>
-        </div>
-
-        <form
-          class="grid gap-5 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-[#1e2b48]/5 sm:grid-cols-2 sm:p-8"
-          novalidate
-          (submit)="$event.preventDefault(); submitQuote()"
-        >
-          @if (quoteStatus() === "validated") {
-            <p role="status" class="rounded-2xl bg-[#e9f3ee] p-4 text-sm text-[#2f6b3a] sm:col-span-2">
-              Your request is valid. Sending it to our team is not connected yet, so nothing was delivered.
-            </p>
-          }
-
-          <div class="flex flex-col gap-2">
-            <label for="q-name" class="text-sm font-semibold">Full name</label>
-            <input id="q-name" type="text" autocomplete="name" [formField]="quoteForm.name" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
-            @if (quoteForm.name().touched() && quoteForm.name().errors().length) {
-              <p class="text-sm text-[#b42318]">{{ quoteForm.name().errors()[0].message }}</p>
-            }
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label for="q-email" class="text-sm font-semibold">Email</label>
-            <input id="q-email" type="email" autocomplete="email" inputmode="email" [formField]="quoteForm.email" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
-            @if (quoteForm.email().touched() && quoteForm.email().errors().length) {
-              <p class="text-sm text-[#b42318]">{{ quoteForm.email().errors()[0].message }}</p>
-            }
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label for="q-phone" class="text-sm font-semibold">Phone</label>
-            <input id="q-phone" type="tel" autocomplete="tel" inputmode="tel" [formField]="quoteForm.phone" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
-            @if (quoteForm.phone().touched() && quoteForm.phone().errors().length) {
-              <p class="text-sm text-[#b42318]">{{ quoteForm.phone().errors()[0].message }}</p>
-            }
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label for="q-zip" class="text-sm font-semibold">ZIP code</label>
-            <input id="q-zip" type="text" inputmode="numeric" autocomplete="postal-code" [formField]="quoteForm.zip" class="min-h-12 rounded-xl border border-[#1e2b48]/20 px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30" />
-            @if (quoteForm.zip().touched() && quoteForm.zip().errors().length) {
-              <p class="text-sm text-[#b42318]">{{ quoteForm.zip().errors()[0].message }}</p>
-            }
-          </div>
-
-          <div class="flex flex-col gap-2 sm:col-span-2">
-            <label for="q-service" class="text-sm font-semibold">Service</label>
-            <select id="q-service" [formField]="quoteForm.service" class="min-h-12 rounded-xl border border-[#1e2b48]/20 bg-white px-4 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30">
-              <option value="">Choose a service</option>
-              @for (option of serviceOptions; track option) {
-                <option [value]="option">{{ option }}</option>
-              }
-            </select>
-            @if (quoteForm.service().touched() && quoteForm.service().errors().length) {
-              <p class="text-sm text-[#b42318]">{{ quoteForm.service().errors()[0].message }}</p>
-            }
-          </div>
-
-          <div class="flex flex-col gap-2 sm:col-span-2">
-            <label for="q-details" class="text-sm font-semibold">Details <span class="font-normal text-[#5b6578]">(optional)</span></label>
-            <textarea id="q-details" rows="3" [formField]="quoteForm.details" class="rounded-xl border border-[#1e2b48]/20 px-4 py-3 text-sm outline-none focus:border-[#f4695c] focus:ring-2 focus:ring-[#f4695c]/30"></textarea>
-          </div>
-
-          <div class="sm:col-span-2">
-            <button
-              type="submit"
-              class="min-h-12 w-full rounded-full bg-[#f4695c] px-6 text-sm font-semibold text-white transition hover:bg-[#e25a4e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e2b48] sm:w-auto"
-            >
-              Request my quote
-            </button>
-          </div>
-        </form>
-      </div>
-    </section>
   </main>
 
   <footer class="border-t border-[#1e2b48]/10 bg-white px-4 py-8 sm:px-6">
     <div class="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-[#5b6578] sm:flex-row sm:items-center sm:justify-between">
       <p>© The Real Maids. Family owned since 2012.</p>
-      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]">{{ contactPhone }}</a>
+      <a [attr.href]="contactHref" class="font-semibold text-[#1e2b48] hover:text-[#f4695c]">Call {{ contactPhone }}</a>
     </div>
   </footer>
 </div>
