@@ -65,12 +65,13 @@ export const routes: Routes = [
       )
   },
   // The landing first shipped under `/landing`; those URLs keep working as redirects so an already
-  // shared link does not break.
-  { path: "landing", pathMatch: "full", redirectTo: "" },
-  { path: "landing/quote", pathMatch: "full", redirectTo: "quote" },
-  { path: "landing/work-with-us", pathMatch: "full", redirectTo: "work-with-us" },
-  { path: "landing/faq", pathMatch: "full", redirectTo: "faq" },
-  { path: "landing/reviews", pathMatch: "full", redirectTo: "reviews" },
+  // shared link does not break. The targets are absolute: a relative `redirectTo` resolves against
+  // this route's own `landing/` prefix, which made `/landing/quote` redirect to itself forever.
+  { path: "landing", pathMatch: "full", redirectTo: "/" },
+  { path: "landing/quote", pathMatch: "full", redirectTo: "/quote" },
+  { path: "landing/work-with-us", pathMatch: "full", redirectTo: "/work-with-us" },
+  { path: "landing/faq", pathMatch: "full", redirectTo: "/faq" },
+  { path: "landing/reviews", pathMatch: "full", redirectTo: "/reviews" },
   {
     path: "",
     loadChildren: () =>

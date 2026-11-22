@@ -1,5 +1,7 @@
-import { Routes } from "@angular/router"
-import { describe, expect, it } from "vitest"
+import { provideRouter, Router, Routes } from "@angular/router"
+import { TestBed } from "@angular/core/testing"
+import { RouterTestingHarness } from "@angular/router/testing"
+import { beforeEach, describe, expect, it } from "vitest"
 import { routes } from "./app.routes"
 import { AUTH_ROUTES } from "./features/auth/auth.routes"
 import { ADMIN_ROUTES } from "./experiences/admin/admin.routes"
@@ -52,12 +54,14 @@ describe("Application route composition", () => {
   it("redirects the former /landing URLs to the root paths", () => {
     const legacyRedirects = routes.filter(route => route.path?.startsWith("landing"))
 
+    // Absolute targets: a relative one resolves against the route's own `landing/` prefix and sends
+    // `/landing/quote` back to itself.
     expect(legacyRedirects.map(route => [route.path, route.redirectTo])).toEqual([
-      ["landing", ""],
-      ["landing/quote", "quote"],
-      ["landing/work-with-us", "work-with-us"],
-      ["landing/faq", "faq"],
-      ["landing/reviews", "reviews"]
+      ["landing", "/"],
+      ["landing/quote", "/quote"],
+      ["landing/work-with-us", "/work-with-us"],
+      ["landing/faq", "/faq"],
+      ["landing/reviews", "/reviews"]
     ])
   })
 
@@ -116,5 +120,37 @@ describe("Application route composition", () => {
     expect(staff.children?.[1].loadComponent).toBeTypeOf("function")
     expect(staff.children?.[1].canActivate).toBeUndefined()
     expect(staff.children?.[1].providers).toBeUndefined()
+  })
+})
+
+describe("Public landing navigation through the composed routes", () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideRouter(routes)] })
+  })
+
+  it.each([
+    ["/", LandingPage],
+    ["/quote", LandingQuotePage],
+    ["/work-with-us", LandingWorkPage],
+    ["/faq", LandingFaqPage],
+    ["/reviews", LandingReviewsPage]
+  ])("renders %s for a visitor without a session", async (url, component) => {
+    const harness = await RouterTestingHarness.create(url as string)
+    await harness.fixture.whenStable()
+
+    expect(TestBed.inject(Router).url).toBe(url)
+    expect(harness.routeDebugElement!.componentInstance).toBeInstanceOf(component)
+  })
+
+  it.each([
+    ["/landing", "/"],
+    ["/landing/quote", "/quote"],
+    ["/landing/work-with-us", "/work-with-us"],
+    ["/landing/faq", "/faq"],
+    ["/landing/reviews", "/reviews"]
+  ])("resolves the former %s to the new public path %s", async (from, to) => {
+    await RouterTestingHarness.create(from)
+
+    expect(TestBed.inject(Router).url).toBe(to)
   })
 })
