@@ -1,0 +1,77 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ title() }}</h2>
+  <p hlmDialogDescription>
+    @if (context.actor === "owner") {
+      Esta solicitud dejará de estar pendiente. La decisión de RRHH ya no podrá aplicarse.
+    } @else {
+      La decisión queda registrada con el empleado, los días y el estado que muestra esta
+      confirmación.
+    }
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se completó la operación</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+    <dt class="text-muted-foreground">Empleado</dt>
+    <dd class="break-words">{{ context.absence.staffName }}</dd>
+    <dt class="text-muted-foreground">Días</dt>
+    <dd class="break-words">
+      {{ context.absence.startDate }} → {{ context.absence.endDate }} ({{ context.absence.days }}
+      {{ context.absence.days === 1 ? "día" : "días" }}
+      completos)
+    </dd>
+    <dt class="text-muted-foreground">Estado</dt>
+    <dd class="break-words">{{ currentName() }} → {{ targetName() }}</dd>
+  </dl>
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="pending()">
+    <legend hlmFieldLegend class="sr-only">Detalle de la resolución</legend>
+    @if (asksObservation()) {
+      <div hlmField class="min-w-0 gap-1.5">
+        <label hlmFieldLabel for="absence-resolution-observation">
+          Observación de la resolución (opcional)
+        </label>
+        <textarea
+          hlmTextarea
+          id="absence-resolution-observation"
+          rows="3"
+          autocomplete="off"
+          aria-describedby="absence-resolution-observation-help absence-resolution-observation-errors"
+          [formField]="profile.observation"
+        ></textarea>
+        <p hlmFieldDescription id="absence-resolution-observation-help">
+          Queda asociada a esta resolución: hasta 250 caracteres. No sustituye la resolución de los
+          servicios en conflicto, que el servidor valida antes de aprobar.
+        </p>
+        <div id="absence-resolution-observation-errors">
+          @if (profile.observation().touched()) {
+            @for (error of profile.observation().errors(); track error.kind) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+      </div>
+    }
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button hlmBtn type="button" variant="outline" [disabled]="pending()" (click)="cancel()">
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [variant]="context.target === 'APROBADA' ? 'default' : 'destructive'"
+      [disabled]="pending()"
+      [attr.aria-busy]="pending()"
+    >
+      @if (pending()) {
+        <hlm-spinner aria-label="Confirmando" />
+      }
+      {{ pending() ? "Confirmando…" : confirmLabel() }}
+    </button>
+  </hlm-dialog-footer>
+</form>

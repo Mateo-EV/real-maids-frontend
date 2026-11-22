@@ -1,7 +1,7 @@
 import { Component, inject } from "@angular/core"
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router"
 import { NgIcon, provideIcons } from "@ng-icons/core"
-import { lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
+import { lucideCalendarDays, lucideLogOut, lucideSparkles } from "@ng-icons/lucide"
 import { HlmAvatar, HlmAvatarFallback } from "@spartan-ng/helm/avatar"
 import { HlmBadge } from "@spartan-ng/helm/badge"
 import { HlmButton } from "@spartan-ng/helm/button"
@@ -36,7 +36,7 @@ interface StaffSection {
     HlmBadge,
     HlmButton
   ],
-  providers: [provideIcons({ lucideLogOut, lucideSparkles })],
+  providers: [provideIcons({ lucideCalendarDays, lucideLogOut, lucideSparkles })],
   templateUrl: "./staff-shell.html",
   styleUrl: "./staff-shell.css"
 })
@@ -45,7 +45,9 @@ export class StaffShell {
   private readonly router = inject(Router)
   readonly session = this.auth.session
   readonly sections: readonly StaffSection[] = [
-    { label: "Mis servicios", path: "/staff/services", icon: "lucideSparkles" }
+    { label: "Mis servicios", path: "/staff/services", icon: "lucideSparkles" },
+    // S2: the employee's own absence requests; only listed because its consumer exists.
+    { label: "Mis ausencias", path: "/staff/absences", icon: "lucideCalendarDays" }
   ]
 
   sessionInitials(): string {

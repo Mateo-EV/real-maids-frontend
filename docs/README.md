@@ -1384,3 +1384,88 @@ proven end to end against the real API; and the advisory/refuter native review (
 for these candidates. The weekly projection was not built because the assigned-order query does not
 support it. WP11 is delivered as implementation, not as an accepted package, and no role-aware API
 authorization is claimed: the backend remains authoritative on scope, transitions and permissions.
+
+## Staff absences — frontend T3 (S2–S7, S9–S11)
+
+M06/RF07/HU07/P07 context (RNF09/RNF10/RNF12). The frontend now consumes the documented absence
+contract of the WIP backend: `GET /api/ausencias`
+(`estado`|`idPersonal`|`desde`|`hasta`|`pagina`|`tamanio`), `GET /api/ausencias/{id}`,
+`POST /api/ausencias` (`fechaInicio`/`fechaFin`/`motivo`) and `PATCH /api/ausencias/{id}/estado`
+(`estado`/`observacion`). The response is
+`{idAusencia, idPersonal, nombrePersonal, fechaInicio, fechaFin, dias, motivo, estado,
+observacionResolucion, fechaRegistro, fechaResolucion}` with the closed set
+`PENDIENTE | APROBADA | RECHAZADA | CANCELADA | RETIRADA`.
+
+- **Two audiences, one contract**: the employee requests and cancels at `/staff/absences` («Mis
+  ausencias», second section of the field staff shell); HR reviews, approves, rejects and withdraws at
+  `/admin/staff/absences`, reached from the RRHH directory and resolved before the `:id` staff detail.
+  The frontend never encodes the transition table: `PENDIENTE` is only the initial state (never a
+  target), the employee is offered `CANCELADA` on a pending request only, and HR is offered
+  `APROBADA`/`RECHAZADA` on a pending one and `RETIRADA` on an approved one. Every move — the overlap
+  or duplicate rejection (S11) and the "resolve the conflicting services first" rule that blocks an
+  approval (S5) — is the server's answer, surfaced inline.
+- **The reason is owner/HR data** (S7, S9): `motivo` is mandatory, trimmed, printed as plain text and
+  never written to a URL, a route parameter, a toast, a cache key or a log. It is transported only as a
+  POST body field.
+- **The documented bounds are enforced, not guessed**: the actual `AusenciaDtos` declares
+  `@Size(max = 500)` on `motivo` and `@Size(max = 250)` on the resolution's `observacion`. The editor
+  explains the limit inline and keeps the draft, and the store and the transport refuse an
+  over-length value as `INVALID_DATA` before any dispatch; both are counted on the trimmed text that
+  actually travels, so padding cannot exceed them. A response that exceeds either bound is an
+  `INVALID_RESPONSE` instead of silently accepted data. Nothing is truncated while the user types and
+  no message ever repeats the text.
+- **Days, not clocks** (S4): both dates are inclusive `YYYY-MM-DD` calendar days validated as real
+  days, `fechaFin >= fechaInicio` is refused before dispatch, `dias` and both resolution instants are
+  printed exactly as supplied (instants as UTC), and no day arithmetic, browser-derived "today",
+  timezone or business clock is introduced.
+- **Caller scope**: no consumer sends a staff id for its own reads or its own request — the backend
+  resolves the caller's staff record. `idPersonal` exists in the domain query and wire mapping for the
+  documented filter, and no page invents a catalog to use it.
+- **Reads**: one root `StaffAbsencesStore` owns a paged keyed registry and a detail registry with
+  30000 ms success-only freshness, shared ref-counted flights, verified same-key data kept on failure,
+  a bounded pinned history and session/SSR fencing. The employee queue sends paging only; the HR queue
+  sends the closed `estado` filter plus paging. Both adopt the returned effective metadata, keep the
+  effective size across filter changes, and perform one fenced out-of-range recovery per user action.
+  Paging and filters are page state, not URL state: nothing about an absence is serialized into the
+  address bar (S9). The HR detail (`GET /api/ausencias/{id}`) is read only when explicitly opened, so
+  the queue performs no N+1 lookup.
+- **A denial owns the screen, and it latches** (S9): when a list or detail read answers `FORBIDDEN`,
+  the store drops that key's verified payload and both pages stop rendering the rows, the reason text,
+  the range and total, an open detail and any open overlay — the denial also cancels an overlay path
+  instead of letting a protected response land. The latch is then the primary fact of the page: a
+  later transient failure is still reported only as a retryable denial, and while the latch holds every
+  read is a real server read, so a cached entry of a previously authorized query cannot stand in for
+  the authorization that clears it. Only a successful authorized read clears the latch and re-renders;
+  a retained detail of a denied record cannot be reopened meanwhile. Outside a denial, a transient
+  failure still keeps verified same-key rows with a stale notice and an explicit retry, and no later
+  transient error resurrects what the server denied. A denied page renders the project-owned permission
+  message, never protected content; this projection is presentation only and proves nothing about
+  backend authorization.
+- **Writes**: both actions share one pending gate on that store — a duplicate submit is refused before
+  dispatch, not queued. Only a confirmed current-generation success invalidates the page variants and
+  the affected detail; observed keys re-read exactly once and inactive entries only expire. No
+  optimistic row, status patch, totals arithmetic, automatic retry or rollback/idempotency promise is
+  added. A new request must come back `PENDIENTE` and a resolution must name the same record in the
+  requested state, otherwise it is an `INVALID_RESPONSE`. Refusals keep project-owned copy (never raw
+  backend text) and preserve the draft for an explicit retry; pending also blocks Cancel/Escape/outside
+  dismissal, and a cancelled subscription cannot undo a dispatched write.
+- **Session and SSR**: a session replacement or destruction cancels reads/writes, closes the overlay
+  through the captured owner and clears the page state; same-session credential renewal preserves the
+  work. The transport dispatches nothing without a validated API origin or on the server platform, and
+  no absence read, filter or reason is ever sent during SSR.
+- **Evidence**: settled orders — transport 15/15, store 12/12, employee page 12/12, HR page 14/14, and
+  the combined `field-operations` + `experiences/staff` suites 425/425 across 23 files. The bounds
+  arrived as RED (a 501-character `motivo`, a 251-character `observación` and an over-length response
+  were accepted) and are GREEN with the exact boundary cases: 500/250 accepted, 501/251 refused before
+  dispatch. The denial defect was reproduced as RED on both audiences before the fix: a refresh that
+  answered `FORBIDDEN` still rendered the previous rows and their reasons, an open HR detail kept the
+  record and the queue stayed actionable; the same tests are GREEN now, together with the counterpart
+  cases that keep verified same-key rows on a transient failure and refuse to resurrect them later.
+  Production build exit 0 with one prerendered route; existing bundle warnings remain (initial
+  720.36/500 kB, `agenda-board.css` 7.44/4 kB).
+- **Confirmed envelope**: the listing is the real `PaginaResponse`
+  (`contenido`, `pagina`, `tamanio`, `totalElementos`, `totalPaginas`), which is exactly what the
+  adapter validates, so effective metadata and the page/size arithmetic rest on the documented shape.
+- **Not claimed**: nothing was verified against a running server. Live backend/CORS, the permission split between the two HR profiles (S10), real
+  concurrency of S3/S5 (assignment and scheduling conflicts), the audit exclusion of the reason text
+  (S9), browser keyboard/responsive acceptance and native review remain pending.

@@ -1,0 +1,145 @@
+<main
+  data-staff-absences
+  class="bg-background text-foreground mx-auto flex w-full flex-col gap-5 px-4 py-6 sm:px-6"
+>
+  <app-catalog-frame
+    titleId="staff-absences-title"
+    title="Mis ausencias"
+    description="Días completos que no podrás trabajar, con el motivo que solo verán RRHH y tú"
+    [busy]="list().loading || list().refreshing"
+  >
+    <button catalogControls hlmBtn type="button" (click)="create()">Solicitar ausencia</button>
+    @if (list().loading) {
+      <div role="status" class="flex min-h-64 items-center justify-center gap-3">
+        <hlm-spinner />Cargando ausencias…
+      </div>
+    }
+    @if (list().refreshing) {
+      <p role="status" class="px-4 py-2 text-xs text-muted-foreground">Actualizando ausencias…</p>
+    }
+    @if (error()) {
+      <div class="p-5">
+        <div hlmAlert variant="destructive" role="alert">
+          <h2 hlmAlertTitle>{{ errorMessage() }}</h2>
+          <div hlmAlertDescription>
+            @if (result()) {
+              <p>Los datos pueden estar desactualizados.</p>
+            }
+          </div>
+        </div>
+        <button
+          hlmBtn
+          type="button"
+          variant="outline"
+          class="mt-4"
+          (click)="retry()"
+          [disabled]="list().loading || list().refreshing"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+    @if (result(); as page) {
+      @if (rows().length) {
+        <ul
+          class="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3"
+          aria-label="Mis ausencias registradas"
+        >
+          @for (absence of rows(); track absence.id) {
+            <li
+              class="flex min-w-0 flex-col rounded-xl border p-4"
+              [attr.data-absence]="absence.id"
+            >
+              <div class="flex flex-wrap items-center gap-3">
+                <h2 class="min-w-0 flex-1 text-sm font-semibold break-words">
+                  {{ absence.startDate }} → {{ absence.endDate }}
+                </h2>
+                <span hlmBadge variant="outline" [appBadgeTone]="statusLabel(absence)">
+                  {{ statusLabel(absence) }}
+                </span>
+              </div>
+              <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-muted-foreground">Días completos</dt>
+                <dd>{{ absence.days }}</dd>
+                <dt class="text-muted-foreground">Motivo</dt>
+                <dd class="break-words">{{ absence.reason }}</dd>
+                <dt class="text-muted-foreground">Registro (UTC)</dt>
+                <dd class="break-words">{{ absence.registeredAt.toISOString() }}</dd>
+                @if (absence.resolvedAt) {
+                  <dt class="text-muted-foreground">Resolución (UTC)</dt>
+                  <dd class="break-words">{{ absence.resolvedAt.toISOString() }}</dd>
+                }
+                @if (absence.resolutionObservation) {
+                  <dt class="text-muted-foreground">Observación de RRHH</dt>
+                  <dd class="break-words">{{ absence.resolutionObservation }}</dd>
+                }
+              </dl>
+              @if (canCancel(absence)) {
+                <button
+                  data-absence-cancel
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="mt-4 self-start"
+                  [attr.aria-label]="cancelLabel(absence)"
+                  (click)="cancel(absence)"
+                >
+                  Cancelar
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <div hlmEmpty class="min-h-64">
+          <div hlmEmptyHeader>
+            <h2 hlmEmptyTitle>
+              {{
+                page.total === 0
+                  ? "Aún no tienes ausencias registradas"
+                  : "Esta página ya no tiene registros"
+              }}
+            </h2>
+            <p hlmEmptyDescription>
+              {{
+                page.total === 0
+                  ? "Cuando solicites días de ausencia aparecerán aquí con su estado."
+                  : "La lista cambió. Vuelve a la primera página o reintenta."
+              }}
+            </p>
+          </div>
+          @if (page.total > 0 && !error()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              (click)="retry()"
+              [disabled]="list().refreshing"
+            >
+              Reintentar
+            </button>
+          }
+        </div>
+      }
+    }
+    <ng-container catalogFooter>
+      @if (!denied()) {
+        <p class="text-xs text-muted-foreground" role="status">
+          @if (result(); as page) {
+            {{ rangeStart() }}–{{ rangeEnd() }} de {{ page.total }} registros
+          } @else {
+            Resultados sin verificar
+          }
+        </p>
+        <app-table-pagination
+          label="Paginación de mis ausencias"
+          [currentPage]="currentPage()"
+          [pageCount]="pageCount()"
+          [disabled]="list().loading || !result()"
+          (pageSelected)="goToPage($event)"
+        />
+      }
+    </ng-container>
+  </app-catalog-frame>
+</main>

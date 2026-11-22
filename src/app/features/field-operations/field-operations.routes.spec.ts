@@ -10,19 +10,23 @@ import { appConfig } from "@/app/core/config/app.config"
 import { FIELD_OPERATIONS_ROUTES } from "./field-operations.routes"
 import { StaffPage } from "./presentation/pages/staff-page/staff-page"
 import { StaffDetailPage } from "./presentation/pages/staff-detail-page/staff-detail-page"
+import { StaffAbsencesReviewPage } from "./presentation/pages/staff-absences-review-page/staff-absences-review-page"
 import { FieldStaffStore } from "./presentation/state/field-staff.store"
 
 // WP7 T4 / S1,S3: public route metadata and real environment-injector boundaries.
 describe("FIELD_OPERATIONS_ROUTES", () => {
-  it("orders directory, static own profile and dynamic staff detail without extra consumers", () => {
-    expect(FIELD_OPERATIONS_ROUTES.map(route => route.path)).toEqual(["", "me", ":id"])
+  it("orders directory, static own profile, HR absence queue and dynamic staff detail", () => {
+    // The two static paths precede `:id`, so neither resolves as a staff record.
+    expect(FIELD_OPERATIONS_ROUTES.map(route => route.path)).toEqual(["", "me", "absences", ":id"])
     expect(FIELD_OPERATIONS_ROUTES[1].data).toEqual({ ownStaffProfile: true })
     expect(FIELD_OPERATIONS_ROUTES[2].data?.["ownStaffProfile"]).not.toBe(true)
+    expect(FIELD_OPERATIONS_ROUTES[3].data?.["ownStaffProfile"]).not.toBe(true)
   })
 
   it.each([
     ["", StaffPage],
     ["me", StaffDetailPage],
+    ["absences", StaffAbsencesReviewPage],
     [":id", StaffDetailPage]
   ] as const)(
     "lazy loads the actual %s consumer behind the existing auth guard",
@@ -37,7 +41,7 @@ describe("FIELD_OPERATIONS_ROUTES", () => {
   )
 
   it("owns complete shared toast scopes per route while inheriting the root stores", () => {
-    expect(FIELD_OPERATIONS_ROUTES).toHaveLength(3)
+    expect(FIELD_OPERATIONS_ROUTES).toHaveLength(4)
     TestBed.configureTestingModule({ providers: appConfig.providers })
     const root = TestBed.inject(EnvironmentInjector)
     const reference = createEnvironmentInjector(provideCatalogToast(), root)
@@ -58,8 +62,8 @@ describe("FIELD_OPERATIONS_ROUTES", () => {
         expect(scope.get(FieldStaffStore)).toBe(rootStaff)
         expect(scope.get(AuthStore)).toBe(rootAuth)
       })
-      expect(new Set(toasts).size).toBe(3)
-      expect(new Set(views).size).toBe(3)
+      expect(new Set(toasts).size).toBe(4)
+      expect(new Set(views).size).toBe(4)
     } finally {
       scopes.forEach(scope => scope.destroy())
       reference.destroy()

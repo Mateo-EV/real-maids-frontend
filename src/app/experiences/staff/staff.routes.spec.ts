@@ -126,8 +126,8 @@ describe("staff routes", () => {
     expect(staff.canActivate).toEqual([staffGuard])
     expect(staff.loadComponent).toBeTypeOf("function")
     const children = staff.children!
-    // No dead entries: `/staff` opens the only implemented section, and its detail follows the list.
-    expect(children.map(route => route.path)).toEqual(["", "services", "services/:id"])
+    // No dead entries: `/staff` opens the implemented sections, and their detail follows its list.
+    expect(children.map(route => route.path)).toEqual(["", "services", "services/:id", "absences"])
     expect(children[0].pathMatch).toBe("full")
     expect(children[0].redirectTo).toBe("services")
     expect(children[1].title).toBe("Mis servicios | The Real Maids")
@@ -139,6 +139,11 @@ describe("staff routes", () => {
     // The detail inherits the tree's guard: it never repeats or invents its own.
     expect(children[2].canActivate).toBeUndefined()
     expect(children[2].providers).toBeUndefined()
+    expect(children[3].title).toBe("Mis ausencias | The Real Maids")
+    expect(children[3].loadComponent).toBeTypeOf("function")
+    // The own absence queue also inherits the tree's guard.
+    expect(children[3].canActivate).toBeUndefined()
+    expect(children[3].providers).toBeUndefined()
   })
 
   it("opens one assigned service detail inside the same guarded shell", async () => {
@@ -155,7 +160,8 @@ describe("staff routes", () => {
     expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
     const nav = element.querySelector('nav[aria-label="Navegación del personal"]')!
     expect(Array.from(nav.querySelectorAll("a")).map(link => link.getAttribute("href"))).toEqual([
-      "/staff/services"
+      "/staff/services",
+      "/staff/absences"
     ])
 
     const request = TestBed.inject(HttpTestingController).expectOne(
@@ -218,13 +224,16 @@ describe("staff routes", () => {
     expect(element.querySelector(".catalog-metrics")).toBeNull()
     expect(element.querySelectorAll('a[href^="/admin"]')).toHaveLength(0)
 
-    // One real section, marked as the current page.
+    // Real implemented sections only; the current one is marked as the page.
     const nav = element.querySelector('nav[aria-label="Navegación del personal"]')!
     const links = Array.from(nav.querySelectorAll("a"))
-    expect(links).toHaveLength(1)
+    expect(links).toHaveLength(2)
     expect(links[0].textContent?.trim()).toBe("Mis servicios")
     expect(links[0].getAttribute("href")).toBe("/staff/services")
     expect(links[0].getAttribute("aria-current")).toBe("page")
+    expect(links[1].textContent?.trim()).toBe("Mis ausencias")
+    expect(links[1].getAttribute("href")).toBe("/staff/absences")
+    expect(links[1].getAttribute("aria-current")).toBeNull()
     expect(element.querySelector("app-staff-services-page")).not.toBeNull()
 
     const request = TestBed.inject(HttpTestingController).expectOne(

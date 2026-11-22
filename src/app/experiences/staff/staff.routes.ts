@@ -38,6 +38,15 @@ export const STAFF_ROUTES: Routes = [
           import("./presentation/pages/staff-service-detail-page/staff-service-detail-page").then(
             component => component.StaffServiceDetailPage
           )
+      },
+      {
+        // S2/S6: the employee's own absence requests, with their reason visible only to them.
+        path: "absences",
+        title: "Mis ausencias | The Real Maids",
+        loadComponent: () =>
+          import("./presentation/pages/staff-absences-page/staff-absences-page").then(
+            component => component.StaffAbsencesPage
+          )
       }
     ]
   }

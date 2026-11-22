@@ -1,0 +1,104 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Solicitar ausencia</h2>
+  <p hlmDialogDescription>
+    Indica los días completos que no podrás trabajar. Tu solicitud queda pendiente hasta que RRHH la
+    resuelva.
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se registró la solicitud</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Días y motivo de la ausencia</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="absence-start-date">Primer día (obligatorio)</label>
+      <input
+        hlmInput
+        id="absence-start-date"
+        type="date"
+        autocomplete="off"
+        aria-describedby="absence-start-date-help absence-start-date-errors"
+        [formField]="profile.startDate"
+      />
+      <p hlmFieldDescription id="absence-start-date-help">
+        Día del calendario, sin horas. Cuenta como día completo de ausencia.
+      </p>
+      <div id="absence-start-date-errors">
+        @if (profile.startDate().touched()) {
+          @for (error of profile.startDate().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="absence-end-date">Último día (obligatorio)</label>
+      <input
+        hlmInput
+        id="absence-end-date"
+        type="date"
+        autocomplete="off"
+        aria-describedby="absence-end-date-help absence-end-date-errors"
+        [formField]="profile.endDate"
+      />
+      <p hlmFieldDescription id="absence-end-date-help">
+        También inclusivo: si empieza y termina el mismo día, la ausencia es de un día.
+      </p>
+      <div id="absence-end-date-errors">
+        @if (profile.endDate().touched()) {
+          @for (error of profile.endDate().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="absence-reason">Motivo (obligatorio)</label>
+      <textarea
+        hlmTextarea
+        id="absence-reason"
+        rows="3"
+        autocomplete="off"
+        aria-describedby="absence-reason-help absence-reason-errors"
+        [formField]="profile.reason"
+      ></textarea>
+      <p hlmFieldDescription id="absence-reason-help">
+        Hasta 500 caracteres. Solo lo verán RRHH y tú: no se escribe en la auditoría general ni en
+        la dirección de la página.
+      </p>
+      <div id="absence-reason-errors">
+        @if (profile.reason().touched()) {
+          @for (error of profile.reason().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Enviando" />
+      }
+      {{ profile().submitting() ? "Enviando…" : "Enviar solicitud" }}
+    </button>
+  </hlm-dialog-footer>
+</form>
