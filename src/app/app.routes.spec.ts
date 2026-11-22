@@ -1,8 +1,14 @@
 import { provideRouter, Router, Routes } from "@angular/router"
+import { RenderMode } from "@angular/ssr"
 import { TestBed } from "@angular/core/testing"
 import { RouterTestingHarness } from "@angular/router/testing"
 import { beforeEach, describe, expect, it } from "vitest"
 import { routes } from "./app.routes"
+import { serverRoutes } from "./app.routes.server"
+import {
+  isPublicSitePath,
+  PUBLIC_SITE_PATHS
+} from "./features/landing/presentation/routing/public-site"
 import { AUTH_ROUTES } from "./features/auth/auth.routes"
 import { ADMIN_ROUTES } from "./experiences/admin/admin.routes"
 import { PORTAL_ROUTES } from "./experiences/portal/portal.routes"
@@ -120,6 +126,40 @@ describe("Application route composition", () => {
     expect(staff.children?.[1].loadComponent).toBeTypeOf("function")
     expect(staff.children?.[1].canActivate).toBeUndefined()
     expect(staff.children?.[1].providers).toBeUndefined()
+  })
+})
+
+describe("Static rendering of the public site", () => {
+  it("prerenders every public page plus login, and leaves the rest client-rendered", () => {
+    const prerenderedPaths = serverRoutes
+      .filter(route => route.renderMode === RenderMode.Prerender)
+      .map(route => route.path)
+
+    // S1: the build emits real HTML for the marketing pages, which is only true because the root
+    // component renders the outlet for them (see `isPublicSitePath`).
+    expect(prerenderedPaths).toEqual([...PUBLIC_SITE_PATHS, "login"])
+    expect(serverRoutes.at(-1)).toEqual({ path: "**", renderMode: RenderMode.Client })
+  })
+
+  it.each(PUBLIC_SITE_PATHS.map(path => [path === "" ? "/" : `/${path}`, path]))(
+    "pairs the prerendered %s with its unguarded public route",
+    (url, path) => {
+      const route = routes.find(candidate => candidate.path === path)!
+
+      // The prerender is only useful when the same URL also renders the page without a session.
+      expect(isPublicSitePath(url)).toBe(true)
+      expect(route.loadComponent).toBeTypeOf("function")
+      expect(route.canActivate).toBeUndefined()
+      expect(route.canMatch).toBeUndefined()
+      expect(route.loadChildren).toBeUndefined()
+    }
+  )
+
+  it("does not prerender a private experience or the wildcard", () => {
+    for (const path of ["login", "change-password", "admin", "portal", "staff", "**"]) {
+      expect(isPublicSitePath(`/${path}`)).toBe(false)
+    }
+    expect(serverRoutes.filter(route => route.path === "**")).toHaveLength(1)
   })
 })
 

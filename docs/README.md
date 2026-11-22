@@ -1469,3 +1469,49 @@ observacionResolucion, fechaRegistro, fechaResolucion}` with the closed set
 - **Not claimed**: nothing was verified against a running server. Live backend/CORS, the permission split between the two HR profiles (S10), real
   concurrency of S3/S5 (assignment and scheduling conflicts), the audit exclusion of the reason text
   (S9), browser keyboard/responsive acceptance and native review remain pending.
+
+## Public site rendering and the private loading boundary (S1–S2)
+
+M03/RF03/HU03 remains the closest traceability context for the public site; a dedicated marketing
+RF/HU/P identifier is still missing (RNF04/RNF07/RNF08). No new product behaviour is claimed beyond
+how the existing public pages are delivered.
+
+- **One list decides both halves**: `PUBLIC_SITE_PATHS` in
+  `src/app/features/landing/presentation/routing/public-site.ts` feeds `app.routes.server.ts`, which
+  marks `/`, `/quote`, `/work-with-us`, `/faq` and `/reviews` as `RenderMode.Prerender` (with `/login`
+  still prerendered and `**` still `Client`), and `isPublicSitePath`, which `app.ts` uses to decide
+  whether the document is public. A page therefore cannot be prerendered without also rendering
+  outside the private boundary, or the reverse.
+- **S1 — real static HTML**: the build reports `Prerendered 6 static routes` and emits
+  `browser/index.html`, `quote/index.html`, `work-with-us/index.html`, `faq/index.html`,
+  `reviews/index.html` and `login/index.html`. The five public files contain the page markup
+  (`app-landing-page`/`app-landing-header`, per-route `<title>`) and no `Preparando tu espacio`;
+  `login/index.html` still contains only the neutral loading view. `index.csr.html` remains the
+  client shell for deep links to routes that have no prerendered file.
+- **S2 — the loading view belongs to private screens**: for a public document `app.ts` renders
+  `<router-outlet />` on the first pass, so the prerendered markup is what the browser starts from and
+  no gate can hide it; `/login` and the admin/portal/staff entries keep the exact neutral view and
+  retry behaviour. The decision reads `ENTRY_PATH` — `REQUEST` during SSR/prerender, the document
+  pathname in the browser — so the server snapshot and the first client render agree and hydration
+  reuses the DOM instead of discarding it.
+- **Navigation**: the landing pages use plain `href`s, so every entry into the public site (including
+  `/faq` → `/quote`) is a document load answered with prerendered HTML: no loading view and no blank
+  client shell. The former `/landing*` URLs are treated as public too because they only redirect to
+  public pages.
+- **Deployment**: `vercel.json` now maps `/` and the four public paths to their prerendered
+  `index.html` before the existing `/(.*)` → `/index.csr.html` fallback, so the static host answers a
+  public deep link with the prerendered page and a private one with the client shell.
+- **Evidence**: focused `app.spec.ts` and `app.routes.spec.ts` plus the new `public-site.spec.ts` pass
+  51/51 across 3 files. The RED was behavioural: with the previous implementation the public entry
+  rendered `Preparando tu espacio` instead of the page (browser and “server” platform) and the server
+  route table still prerendered only `/login` — 3 failed / 32 passed — and the same suite is GREEN
+  after the change. A development build was served and loaded in Chromium: `/`, `/quote`,
+  `/work-with-us`, `/faq` and `/reviews` reported `Angular hydrated N component(s)` with 0 skipped
+  components, no hydration error, no loading view, and `/login` plus `/admin/users` → `/login` kept
+  the gate. A production build exits 0 with the six prerendered routes and the existing warnings
+  (initial bundle 728.69/500 kB, `agenda-board.css` 7.44/4 kB).
+- **Not claimed**: no live host/Vercel deployment was exercised, so the literal rewrite resolution on
+  that platform is unverified; crawler/SEO scoring, Edge/Firefox rendering, keyboard/responsive
+  acceptance and native review remain pending. The prerendered public pages still carry the accepted
+  landing debt (sample reviews, non-delivering forms, invented marketing claims, hard-coded colors) and
+  remain English-only.

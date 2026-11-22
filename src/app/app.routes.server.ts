@@ -1,19 +1,25 @@
 import { RenderMode, ServerRoute } from "@angular/ssr"
+import { PUBLIC_SITE_PATHS } from "./features/landing/presentation/routing/public-site"
 
 /**
  * Render modes for the static deployment (`outputMode: "static"`).
  *
- * Prerendering a route here only emits the `app-root` shell: the root component deliberately keeps
- * its neutral loading view until a browser navigation and the first render both complete (see
- * `app.ts`), so a build-time snapshot never contains the page content. That is why the public
- * landing stays `Client` — prerendering it would ship marketing URLs whose HTML is a spinner, which
- * is worse for crawlers than the client shell. `/login` keeps its existing prerender for the same
- * historical reason; it is not a content guarantee.
+ * The public marketing site is prerendered at build time so the host serves real page HTML both to
+ * search engines and to a visitor opening a deep link: `/`, `/quote`, `/work-with-us`, `/faq` and
+ * `/reviews` emit their own page instead of the client shell. That only works together with the
+ * root component, which renders the router outlet on the first pass for those paths
+ * (`isPublicSitePath`) instead of its neutral loading view, so a build-time snapshot contains the
+ * page instead of a spinner. Both sides read the same list, so a page cannot be prerendered as a
+ * splash screen.
+ *
+ * `/login` keeps its own prerender: it is the one private screen that is safe to snapshot, and its
+ * neutral loading view is exactly the markup the root component hydrates there.
  *
  * Every other route is `Client`: the admin, portal and staff experiences need a session and real
- * API reads, and the static host serves the client shell for deep links.
+ * API reads, and the static host serves the client shell for those deep links.
  */
 export const serverRoutes: ServerRoute[] = [
+  ...PUBLIC_SITE_PATHS.map<ServerRoute>(path => ({ path, renderMode: RenderMode.Prerender })),
   {
     path: "login",
     renderMode: RenderMode.Prerender

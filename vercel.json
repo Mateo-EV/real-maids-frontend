@@ -1,5 +1,12 @@
 {
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/real-maids-frontend/browser",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.csr.html" }]
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/quote", "destination": "/quote/index.html" },
+    { "source": "/work-with-us", "destination": "/work-with-us/index.html" },
+    { "source": "/faq", "destination": "/faq/index.html" },
+    { "source": "/reviews", "destination": "/reviews/index.html" },
+    { "source": "/(.*)", "destination": "/index.csr.html" }
+  ]
 }

@@ -9,13 +9,14 @@ import {
 } from "@angular/router"
 import { ReplaySubject } from "rxjs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { App } from "./app"
+import { App, ENTRY_PATH } from "./app"
 import { AuthStore } from "./features/auth/presentation/state/auth.store"
 import { authGuard, guestGuard } from "./features/auth/presentation/guards/auth.guard"
 import { AuthSession } from "./features/auth/domain/entities/auth-session.entity"
 
 const loginConstructed = vi.fn()
 const protectedConstructed = vi.fn()
+const publicConstructed = vi.fn()
 
 @Component({ template: '<form><input name="email" /><input type="password" /></form>' })
 class LoginProbe {
@@ -34,19 +35,31 @@ class UsersProbe {
   }
 }
 
+@Component({ template: "<main data-public-page><h1>Limpieza del hogar</h1></main>" })
+class PublicProbe {
+  constructor() {
+    publicConstructed()
+  }
+}
+
 describe("Initial routed presentation", () => {
   let restoration: ReplaySubject<AuthSession | null>
   let router: Router
   let fixture: ComponentFixture<App>
   let rejectNavigation: boolean
   let failNavigation: boolean
+  // Path of the document that bootstrapped the app. The private loading boundary is the default
+  // here because that is what this suite protects; public entries override it per test.
+  let entryPath: string | null
 
   beforeEach(() => {
     restoration = new ReplaySubject(1)
     rejectNavigation = false
     failNavigation = false
+    entryPath = "/login"
     loginConstructed.mockClear()
     protectedConstructed.mockClear()
+    publicConstructed.mockClear()
     TestBed.configureTestingModule({
       imports: [App],
       providers: [
@@ -66,6 +79,7 @@ describe("Initial routed presentation", () => {
               { path: "users", component: UsersProbe }
             ]
           },
+          { path: "quote", component: PublicProbe },
           {
             path: "retry",
             component: LoginProbe,
@@ -77,7 +91,8 @@ describe("Initial routed presentation", () => {
             ]
           }
         ]),
-        { provide: AuthStore, useValue: { restoreSession: () => restoration } }
+        { provide: AuthStore, useValue: { restoreSession: () => restoration } },
+        { provide: ENTRY_PATH, useFactory: () => entryPath }
       ]
     })
   })
@@ -108,6 +123,15 @@ describe("Initial routed presentation", () => {
     fixture.detectChanges()
     await fixture.whenStable()
     fixture.detectChanges()
+  }
+
+  function expectPublicPage() {
+    const root: HTMLElement = fixture.nativeElement
+    expect(root.querySelector("[data-public-page]")).not.toBeNull()
+    expect(root.textContent).toContain("Limpieza del hogar")
+    expect(root.querySelector('[role="status"]')).toBeNull()
+    expect(root.textContent).not.toContain("Preparando tu espacio")
+    expect(root.querySelector('[role="alert"]')).toBeNull()
   }
 
   it("keeps server presentation neutral even after successful route selection", async () => {
@@ -239,5 +263,61 @@ describe("Initial routed presentation", () => {
     expect(router.url).toBe("/retry")
     expect(loginConstructed).toHaveBeenCalledOnce()
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  // S2: a public page never waits behind the private loading boundary, and it never asks for a
+  // session to render.
+  it("renders a public entry page on the first pass instead of the loading view", async () => {
+    entryPath = "/quote"
+    create()
+    fixture.detectChanges()
+
+    // The very first rendered DOM is hydration-sensitive: it must already be the outlet, never
+    // the spinner that the private experiences start with.
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull()
+    expect(fixture.nativeElement.textContent).not.toContain("Preparando tu espacio")
+
+    await router.navigateByUrl("/quote")
+    await render()
+
+    expectPublicPage()
+    expect(publicConstructed).toHaveBeenCalledOnce()
+    expect(loginConstructed).not.toHaveBeenCalled()
+    expect(protectedConstructed).not.toHaveBeenCalled()
+    // No session was restored, so no auth work can delay or gate the public page.
+    expect(restoration.observed).toBe(false)
+  })
+
+  // S1: the prerenderer renders each public route on the server, so the emitted HTML must be the
+  // page itself. This is the same template the build snapshots.
+  it("emits the public page itself on the server so the prerendered HTML is real content", async () => {
+    TestBed.overrideProvider(PLATFORM_ID, { useValue: "server" })
+    entryPath = "/quote"
+    create()
+    await router.navigateByUrl("/quote")
+    await render()
+
+    expectPublicPage()
+    expect(publicConstructed).toHaveBeenCalledOnce()
+  })
+
+  // The boundary still belongs to the private document: opening `/login` directly keeps the
+  // neutral view as the server and the first browser render.
+  it("keeps the private loading view when the document itself is a private page", async () => {
+    create()
+    fixture.detectChanges()
+
+    expectNeutral()
+    expect(publicConstructed).not.toHaveBeenCalled()
+  })
+
+  // A platform that cannot name the document must not be treated as the site root: the private
+  // boundary is the safe default.
+  it("keeps the private loading view when the entry path is unknown", async () => {
+    entryPath = null
+    create()
+    fixture.detectChanges()
+
+    expectNeutral()
   })
 })
