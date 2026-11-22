@@ -9,17 +9,21 @@ import { ServiceEvidence } from "../entities/service-evidence.entity"
 import { WorkLog } from "../entities/work-log.entity"
 import { FieldOperationsError } from "../errors/field-operations.error"
 import { FieldStaffSummary } from "../models/field-staff-summary"
+import { StaffAbsence } from "../models/staff-absence"
 import {
   CreateCrewMemberParams,
   CreateCrewParams,
   CreateFieldStaffParams,
   CreateServiceChecklistParams,
   CreateServiceEvidenceParams,
+  CreateStaffAbsenceParams,
   CreateWorkLogParams,
   CrewQuery,
   FieldStaffQuery,
   ReplaceStaffAvailabilityParams,
   SetFieldStaffStatusParams,
+  SetStaffAbsenceStatusParams,
+  StaffAbsenceQuery,
   UpdateCrewMemberParams,
   UpdateCrewParams,
   UpdateFieldStaffParams,
@@ -72,6 +76,19 @@ export interface FieldOperationsRepository {
     id: number,
     params: ReplaceStaffAvailabilityParams
   ): Observable<Result<FieldStaffSummary, FieldOperationsError>>
+
+  // Confirmed AusenciaController operations: own request plus the status resolution write.
+  getAbsences(
+    query: StaffAbsenceQuery
+  ): Observable<Result<PaginationResponse<StaffAbsence>, FieldOperationsError>>
+  getAbsenceById(id: number): Observable<Result<StaffAbsence, FieldOperationsError>>
+  createAbsence(
+    params: CreateStaffAbsenceParams
+  ): Observable<Result<StaffAbsence, FieldOperationsError>>
+  setAbsenceStatus(
+    id: number,
+    params: SetStaffAbsenceStatusParams
+  ): Observable<Result<StaffAbsence, FieldOperationsError>>
 
   // Proposed crew/execution capabilities; no HTTP implementation or upload protocol.
   getCrews(query: CrewQuery): Observable<Result<PaginationResponse<Crew>, FieldOperationsError>>

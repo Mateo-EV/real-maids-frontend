@@ -1,5 +1,6 @@
 import { PaginationParams } from "@/app/shared/pagination/pagination.params"
 import { EvidenceMoment } from "../entities/service-evidence.entity"
+import { StaffAbsenceDecision, StaffAbsenceStatus } from "../models/staff-absence"
 
 /**
  * Access account intent shared by the employee create/update writes. The tri-state is load-bearing
@@ -94,3 +95,27 @@ export interface FieldStaffQuery extends PaginationParams {
   isActive?: boolean
 }
 export interface CrewQuery extends PaginationParams {}
+
+/**
+ * Documented `GET /api/ausencias` filters, plus shared paging. `status` is the closed enum, `staffId`
+ * is `idPersonal` and the range is inclusive calendar days (`desde`/`hasta`), never a clock.
+ */
+export interface StaffAbsenceQuery extends PaginationParams {
+  status?: StaffAbsenceStatus
+  staffId?: number
+  from?: string
+  until?: string
+}
+
+/** Own request: the inclusive day range and the mandatory reason text, nothing else. */
+export interface CreateStaffAbsenceParams {
+  startDate: string
+  endDate: string
+  reason: string
+}
+
+/** The documented resolution write; the observation is optional and travels as `null` when blank. */
+export interface SetStaffAbsenceStatusParams {
+  status: StaffAbsenceDecision
+  observation: string | null
+}
