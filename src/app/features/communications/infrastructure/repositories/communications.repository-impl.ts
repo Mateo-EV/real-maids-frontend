@@ -1,5 +1,5 @@
 import { inject, Injectable } from "@angular/core"
-import { CommunicationsRepository } from "../../domain/repositories/communications.repository"
+import { CrmCommunicationsRepository } from "../../domain/repositories/communications.repository"
 import {
   CreateCrmNoteParams,
   CrmCommunicationQuery,
@@ -10,7 +10,7 @@ import {
 import { CommunicationsHttpSource } from "../source/communications-http.source"
 
 @Injectable({ providedIn: "root" })
-export class CommunicationsRepositoryImpl implements CommunicationsRepository {
+export class CommunicationsRepositoryImpl implements CrmCommunicationsRepository {
   private readonly source = inject(CommunicationsHttpSource)
   listNotes(target: CrmTarget, query: CrmCommunicationQuery) {
     return this.source.listNotes(target, query)
