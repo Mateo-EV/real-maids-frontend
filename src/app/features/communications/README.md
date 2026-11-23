@@ -1,10 +1,76 @@
-# Communications domain — area H
+# Communications — CRM notes and email
 
-Domain-only schema coverage for channels, templates, sent notifications and customer preferences. All repository operations are **proposed**, not implemented APIs. No message sending, delivery worker, retry operation, UI, route or third-party integration is added.
+M03/RF03/HU03 supplies the customer/lead context; WP12 (`odd/tasks/crm-communications.md`) supplies the
+communications intent S1–S8. The confirmed backend contract is now connected on the two verified detail
+pages: **notes** (author-only editing, never deleted) and **email** (recorded deliveries of the first
+channel). The earlier schema-only stubs (channels, templates, sent notifications, preferences) are kept
+below as unwired entity coverage; their proposed repository operations were replaced by the real CRM
+contract, and nothing else in the repo imported them.
 
-## Schema coverage
+## Connected contract
 
-Evidence: read-only `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, area H. All assigned tables and their nullable fields are covered.
+Wire prefixes are `/api/crm`; paths start there.
+
+| Purpose               | Contract                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Note list             | `GET /clientes/{idCliente}/notas?pagina&tamanio`, `GET /prospectos/{idProspecto}/notas?pagina&tamanio` → `PaginaResponse<NotaResponse>`                                                                                                                                                                                                                                                        |
+| Note create           | `POST` the same two paths, body `{ contenido }`; trimmed, required, max 4000 → `201 NotaResponse`                                                                                                                                                                                                                                                                                              |
+| Note edit             | `PUT /{clientes\|prospectos}/{id}/notas/{idNota}`, body `{ contenido }` → `NotaResponse`; the backend answers `403` when the caller is not the author, and there is **no delete endpoint**                                                                                                                                                                                                     |
+| `NotaResponse`        | `{ idNota, idCliente, idProspecto, contenido, idAutor, autor, fechaRegistro, fechaEdicion }`; exactly one owner column is set and the other is `null`                                                                                                                                                                                                                                          |
+| Email templates       | `GET /plantillas-correo` → `PlantillaCorreoResponse[]` `{ idPlantilla, evento, idioma, asunto, cuerpo }`                                                                                                                                                                                                                                                                                       |
+| Email history         | `GET /{clientes\|prospectos}/{id}/correos?pagina&tamanio` → paged `CorreoResponse`                                                                                                                                                                                                                                                                                                             |
+| Email send            | `POST /{clientes\|prospectos}/{id}/correos` body `{ idPlantilla?, asunto?, cuerpo? }` → `201 CorreoResponse`. Blank `asunto`/`cuerpo` fall back to the chosen template; without a template both are required. `409`/`400` when the record has no valid email, `502` when SMTP is unconfigured or the transport fails (the attempt is recorded as `FALLIDO`, so the UI never retries by itself) |
+| `CorreoResponse`      | `{ idCorreo, idCliente, idProspecto, idPlantilla, destinatario, asunto, cuerpo, estado (ENVIADO\|FALLIDO), detalleError, idAutor, autor, fechaEnvio }`; the client never sends a recipient address                                                                                                                                                                                             |
+| Permissions (backend) | `NOTA_LEER`, `NOTA_CREAR`, `NOTA_ACTUALIZAR`, `CORREO_LEER`, `CORREO_ENVIAR` — enforced by the server only; the frontend reflects `403` and never infers an ACL from a role name                                                                                                                                                                                                               |
+
+[Domain](domain/), [application use cases](application/use-cases/crm-communications.use-cases.ts),
+[HTTP source](infrastructure/source/communications-http.source.ts) and the root
+[CrmCommunicationsStore](presentation/state/crm-communications.store.ts) are bound in
+`src/app/core/config/app.config.ts` (`COMMUNICATIONS_REPOSITORY` → `useExisting`
+`CommunicationsRepositoryImpl`). Sources own validation/mapping; the store owns presentation state.
+
+## Validation and safety
+
+- Every payload is validated before it is trusted: positive int32 IDs, exactly one owner column matching
+  the addressed target, ISO instants, `ENVIADO`/`FALLIDO` only, nonblank text, duplicated page/template
+  IDs rejected, and the documented page envelope (`pagina`/`tamanio`/`totalElementos`/`totalPaginas`)
+  including a returned size above the requested one. Malformed input returns
+  `INVALID_INPUT`/`INVALID_RESPONSE` without a synchronous throw and without HTTP.
+- `transferCache` is disabled; SSR or an unconfigured origin fails closed with `UNCONFIGURED` and
+  dispatches nothing.
+- Note content is trimmed before it travels and the edited note must answer the addressed record.
+  Email bodies send only the template reference plus non-blank overrides; the recipient and the author
+  are backend-owned.
+- Errors are safe typed codes (`NOT_FOUND`, `INVALID_INPUT`, `INVALID_RESPONSE`, `FORBIDDEN`,
+  `UNAUTHENTICATED`, `CONFLICT`, `NETWORK`, `UNCONFIGURED`, `UNEXPECTED`); backend copy, recipients and
+  message content are never rendered or logged through them.
+
+## Presentation decisions
+
+- Root `CrmCommunicationsStore`: separate keyed registries for notes pages, email pages and one template
+  entry; success-only freshness (30000 ms notes/email, 120000 ms templates), ref-counted shared flights,
+  bounded inactive history with active-key pinning, effective page metadata adoption and session/SSR
+  fencing. Writes are counted behind one pending gate and never retried, cached or replayed.
+- **Authoritative denial.** A `FORBIDDEN` answer latches the key: the verified payload is dropped and the
+  panel shows a permission outcome plus retry instead of an empty or stale list. Only a successful
+  authorized read clears the latch, so a later transient failure cannot present a denial as staleness.
+  A failed read zeroes freshness, keeping verified rows visible with a retryable stale notice.
+- Confirmed writes invalidate only the affected owner's family; mounted panels observe their key, so they
+  re-read exactly once and nothing is optimistically appended.
+- Panels own paging (offset/limit, effective size kept on navigation, one bounded out-of-range
+  correction per user action) and open the two dialogs. Dialogs reuse the shared
+  `customerDialogLifecycle`: pending blocks duplicate submit and Cancel/Escape/outside dismissal, a safe
+  inline error preserves the draft, and only a confirmed `Result` reaches the caller.
+- Editability follows stored authorship: the edit action is offered only when `NotaResponse.idAutor`
+  equals the authenticated session id. It is a data fact, not an inferred ACL — an attempt from another
+  session is refused by the server with `403`, rendered as a permission outcome.
+- A recorded `FALLIDO` delivery is shown as such and never re-sent: there is no resend control and no
+  automatic retry.
+
+## Unwired schema coverage (area H)
+
+Evidence: read-only `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sql`, area H. These rows
+have no API in the connected contract above and stay entity-only; no administration contract is invented.
 
 | SQL table                  | Entity                                                                      | Content and important types                                                                                                            |
 | -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,29 +79,24 @@ Evidence: read-only `D:/java/sistema_the_real_maids/realmaids_mysql_64_tablas.sq
 | `notificacion_enviada`     | [SentNotification](domain/entities/sent-notification.entity.ts)             | **BIGINT ID is string**; nullable INT template/user/order IDs; recipient, open delivery status, nullable error detail, sent timestamp. |
 | `preferencia_notificacion` | [NotificationPreference](domain/entities/notification-preference.entity.ts) | INT ID/customer/channel IDs; language and enabled flag. Customer/channel identify the unique preference.                               |
 
-## Proposed domain contracts
-
-[CommunicationsRepository](domain/repositories/communications.repository.ts) returns Observable/shared Result with [CommunicationsError](domain/errors/communications.error.ts). Paged results use shared `PaginationResponse` and queries extend shared `PaginationParams`. [Params](domain/params/communications.params.ts) are explicit interfaces, not generic CRUD/mapped entity types.
-
-| Purpose                           | Proposal and boundary                                                                                                                                                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Read channels                     | Read-only catalog; no channel administration contract inferred from schema.                                                                                                                                                                      |
-| Query/create/update templates     | Query by channel/event/language; create excludes generated ID. Update includes mutable fields only, with optional `subject: null` distinct from omission. No rendering, interpolation, provider validation or template execution is implemented. |
-| Read/set a customer's preferences | Customer/channel supplied as scalar identity; language/enabled input only, backend allocates row ID. This is a purpose-oriented proposal, not a confirmed upsert endpoint or concurrency guarantee.                                              |
-| Read sent notification history    | Full-query shared pagination and single-ID read, accepting the original BIGINT string. No arbitrary creation/edit/delete of delivery history.                                                                                                    |
-
-No endpoints, message dispatch actions, retries, resend behavior, delivery guarantees or client-side generation of logs are invented. Backend delivery orchestration and API/DTO/pagination/error/authorization contracts must be confirmed before implementation. Error codes are frontend normalization proposals, not claims about backend payloads. Sent history is backend-generated and deliberately has no create/update params. All four tables are represented; no empty placeholders or omitted entity fields are used.
-
-## Types and security
-
-- All SQL INT IDs use `number`; new BIGINT notification identity uses `string`, preserving values above `Number.MAX_SAFE_INTEGER`. Never coerce it through `Number`.
-- DATETIME → `Date`; nullable fields → explicit `| null`. This area has no DECIMAL/DATE/TIME columns; future ones follow project policy: decimal strings and calendar/time strings, without financial arithmetic or implicit timezone conversion.
-- Event, language, channel name and delivery status remain open strings: SQL has no CHECK on them. Default/seed values do not establish a closed set; language is not restricted to the existing auth enum.
-- Foreign keys stay IDs without cross-feature entity imports. Constructors are private and positional with `static create`, preserving supplied values rather than claiming runtime DTO validation.
-- No credential columns occur in area H. Recipient/message/error content can nevertheless be sensitive; future adapters must validate responses and supply sanitized delivery errors without provider credentials or raw secret-bearing payloads. Nothing here logs or persists records, sends notifications or authorizes access.
+All SQL INT IDs use `number`; DATETIME → `Date`; nullable fields → explicit `| null`; open strings stay
+open (language is not narrowed to the auth enum). These factories preserve supplied values and claim no
+runtime DTO validation. The proposed repository operations that used to describe their administration were replaced by the
+confirmed CRM contract, and the schema-only params file went with them: nothing imported either of them.
+The entity classes stay because they document the tables and their specs still cover them.
 
 ## Verification and traceability
 
-[Factory tests](domain/communications-domain.spec.ts) compare every field, all nullable alternatives, extensible values, Date preservation and BIGINT precision. [Contract tests](domain/communications-contracts.spec.ts) exercise DI token, typed errors, shared Result/pages, string-ID reads and preference/template params. They do not certify delivery or backend acceptance.
+Focused specs: [domain factories](domain/communications-domain.spec.ts) (retained entities plus notes,
+emails and templates), [contract](domain/communications-contracts.spec.ts) (token, typed errors, paged
+notes/emails, body shapes), [HTTP boundary](infrastructure/repositories/communications.repository-impl.spec.ts)
+(paths/query/body mapping, owner and envelope validation, `403`, `409`, SSR/unconfigured safety) and
+[the store](presentation/state/crm-communications.store.spec.ts) (TTL, shared flights, stale data,
+denial latch, owner-scoped invalidation, pending/failed writes, session fencing, SSR). Page specs live
+with the consumers: `customer-detail-page/crm-notes.spec.ts`, `customer-detail-page/crm-emails.spec.ts`
+and `lead-detail-page/crm-communications.spec.ts`.
 
-RNF09/RNF10/RNF12 guide separation and validation. The inherited product plan has no communications-specific RF/HU; area H comes from the approved SQL/PDF grouping, and dedicated functional traceability remains open. Domain completeness is not a completed notification feature.
+RNF09/RNF10/RNF12 guide separation and validation; there is still no communications-specific RF/HU in the
+inherited product plan. **Pending:** live backend/CORS, real SMTP delivery and the recorded `FALLIDO`
+path, `NOTA_*`/`CORREO_*` permission denials for each profile, author-only enforcement observed live,
+`NOTA_ACTUALIZAR`/`CORREO_ENVIAR` in a real session, and Chrome/Edge/Firefox keyboard/responsive checks.

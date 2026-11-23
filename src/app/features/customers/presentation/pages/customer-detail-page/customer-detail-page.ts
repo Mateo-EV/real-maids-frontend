@@ -41,6 +41,8 @@ import { PropertyStatusDialog } from "../../components/property-status-dialog/pr
 import { CustomerHistoryPanel } from "../../components/customer-history/customer-history-panel"
 import { CustomerContacts } from "../../components/customer-contacts/customer-contacts"
 import { CustomerPreferences } from "../../components/customer-preferences/customer-preferences"
+import { CrmNotes } from "@/app/features/communications/presentation/components/crm-notes/crm-notes"
+import { CrmEmails } from "@/app/features/communications/presentation/components/crm-emails/crm-emails"
 
 @Component({
   selector: "app-customer-detail-page",
@@ -56,7 +58,9 @@ import { CustomerPreferences } from "../../components/customer-preferences/custo
     HlmSpinnerImports,
     CustomerContacts,
     CustomerPreferences,
-    CustomerHistoryPanel
+    CustomerHistoryPanel,
+    CrmNotes,
+    CrmEmails
   ],
   templateUrl: "./customer-detail-page.html"
 })

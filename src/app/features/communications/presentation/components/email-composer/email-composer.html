@@ -1,0 +1,116 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>Redactar correo</h2>
+  <p hlmDialogDescription>
+    {{ context.kind === "customer" ? "Cliente" : "Prospecto" }}:
+    {{ context.targetName ?? "No registrado" }} · ID {{ context.targetId }}
+    <span class="block">
+      Destinatario registrado:
+      {{ context.recipient ?? "Sin correo válido registrado" }}
+    </span>
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se registró el correo</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Correo para el registro</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="email-template">Plantilla (opcional)</label>
+      <hlm-native-select
+        selectId="email-template"
+        [value]="model().templateId"
+        (valueChange)="chooseTemplate($event)"
+        aria-describedby="email-template-help"
+      >
+        <option value="">Sin plantilla: asunto y cuerpo propios</option>
+        @for (template of templates().data ?? []; track template.id) {
+          <option [value]="'' + template.id">{{ template.event }} · {{ template.language }}</option>
+        }
+      </hlm-native-select>
+      <p hlmFieldDescription id="email-template-help">
+        Elegir una plantilla copia su asunto y su cuerpo; puedes ajustarlos antes de enviar.
+        @if (templates().pendingReads) {
+          <span> Actualizando plantillas…</span>
+        }
+        @if (templates().denied) {
+          <span> No tienes permiso para consultar las plantillas.</span>
+        } @else if (templates().error) {
+          <span> No se pudieron consultar las plantillas.</span>
+        }
+      </p>
+      @if (templates().error) {
+        <button hlmBtn type="button" variant="outline" size="sm" (click)="retryTemplates()">
+          Reintentar plantillas
+        </button>
+      }
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="email-subject">Asunto</label>
+      <input
+        hlmInput
+        id="email-subject"
+        autocomplete="off"
+        [formField]="profile.subject"
+        aria-describedby="email-subject-help email-subject-errors"
+      />
+      <p hlmFieldDescription id="email-subject-help">
+        En blanco se usa el asunto de la plantilla elegida.
+      </p>
+      <div id="email-subject-errors">
+        @if (profile.subject().touched()) {
+          @for (item of profile.subject().errors(); track item.kind) {
+            <hlm-field-error [validator]="item.kind">{{ item.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="email-body">Cuerpo</label>
+      <textarea
+        hlmTextarea
+        id="email-body"
+        rows="8"
+        [formField]="profile.body"
+        aria-describedby="email-body-help email-body-errors"
+      ></textarea>
+      <p hlmFieldDescription id="email-body-help">
+        En blanco se usa el cuerpo de la plantilla elegida. El servidor registra el envío y decide
+        si el intento queda como enviado o fallido.
+      </p>
+      <div id="email-body-errors">
+        @if (profile.body().touched()) {
+          @for (item of profile.body().errors(); track item.kind) {
+            <hlm-field-error [validator]="item.kind">{{ item.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      id="email-cancel"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Enviando" />
+      }
+      {{ profile().submitting() ? "Enviando…" : "Enviar correo" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

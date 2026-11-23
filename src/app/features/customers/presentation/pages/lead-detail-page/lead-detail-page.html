@@ -114,6 +114,19 @@
     }
   </app-catalog-frame>
   @for (owner of lead() ? [lead()!] : []; track owner.id) {
+    <app-crm-notes
+      kind="lead"
+      [targetId]="owner.id"
+      [targetName]="owner.name"
+      [ownerChanged$]="ownerChanged$"
+    />
+    <app-crm-emails
+      kind="lead"
+      [targetId]="owner.id"
+      [targetName]="owner.name"
+      [recipient]="owner.email"
+      [ownerChanged$]="ownerChanged$"
+    />
     <details
       #followUpsDisclosure
       [open]="followUpsOpen()"

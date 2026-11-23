@@ -216,6 +216,19 @@
       [propertyRead]="propertyRead()"
       (confirmedWrite)="refreshHistory()"
     />
+    <app-crm-notes
+      kind="customer"
+      [targetId]="owner.id"
+      [targetName]="owner.name"
+      [ownerChanged$]="ownerChanged$"
+    />
+    <app-crm-emails
+      kind="customer"
+      [targetId]="owner.id"
+      [targetName]="owner.name"
+      [recipient]="owner.email"
+      [ownerChanged$]="ownerChanged$"
+    />
     <app-catalog-frame
       titleId="customer-history-title"
       title="Historial oficial"

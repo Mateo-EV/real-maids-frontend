@@ -1,0 +1,67 @@
+<hlm-dialog-header>
+  <h2 hlmDialogTitle>{{ context.note ? "Editar nota" : "Nueva nota" }}</h2>
+  <p hlmDialogDescription>
+    {{ context.kind === "customer" ? "Cliente" : "Prospecto" }}:
+    {{ context.targetName ?? "No registrado" }} · ID {{ context.targetId }}
+    @if (context.note; as note) {
+      <span class="block">Nota: ID {{ note.id }} · {{ note.author }}</span>
+    } @else {
+      <span class="block">El autor y la fecha los registra el servidor con tu sesión.</span>
+    }
+  </p>
+</hlm-dialog-header>
+<form class="mt-4 flex flex-col gap-3" [formRoot]="profile" (submit)="save()">
+  @if (error()) {
+    <div hlmAlert variant="destructive" role="alert">
+      <p hlmAlertTitle>No se guardó la nota</p>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  <fieldset hlmFieldSet class="grid min-w-0 gap-3.5" [disabled]="profile().submitting()">
+    <legend hlmFieldLegend class="sr-only">Contenido de la nota</legend>
+    <div hlmField class="min-w-0 gap-1.5">
+      <label hlmFieldLabel for="note-content">Contenido (obligatorio, máximo 4000)</label>
+      <textarea
+        hlmTextarea
+        id="note-content"
+        rows="6"
+        [formField]="profile.content"
+        aria-describedby="note-content-help note-content-errors"
+      ></textarea>
+      <p hlmFieldDescription id="note-content-help">
+        Se omiten espacios al inicio y al final. Las notas no se eliminan; solo su autor puede
+        editarlas.
+      </p>
+      <div id="note-content-errors">
+        @if (profile.content().touched()) {
+          @for (item of profile.content().errors(); track item.kind) {
+            <hlm-field-error [validator]="item.kind">{{ item.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </fieldset>
+  <hlm-dialog-footer class="border-t pt-3">
+    <button
+      hlmBtn
+      type="button"
+      variant="outline"
+      id="note-cancel"
+      [disabled]="profile().submitting()"
+      (click)="cancel()"
+    >
+      Cancelar
+    </button>
+    <button
+      hlmBtn
+      type="submit"
+      [disabled]="profile().submitting()"
+      [attr.aria-busy]="profile().submitting()"
+    >
+      @if (profile().submitting()) {
+        <hlm-spinner aria-label="Guardando" />
+      }
+      {{ profile().submitting() ? "Guardando…" : "Guardar nota" }}
+    </button>
+  </hlm-dialog-footer>
+</form>

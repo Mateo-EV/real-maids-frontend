@@ -27,6 +27,8 @@ import { BrnDialogRef } from "@spartan-ng/brain/dialog"
 import { HotToastService } from "@ngxpert/hot-toast"
 import { LeadEditor } from "../../components/lead-editor/lead-editor"
 import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
+import { CrmNotes } from "@/app/features/communications/presentation/components/crm-notes/crm-notes"
+import { CrmEmails } from "@/app/features/communications/presentation/components/crm-emails/crm-emails"
 
 @Component({
   selector: "app-lead-detail-page",
@@ -39,7 +41,9 @@ import { LeadFollowUps } from "../../components/lead-follow-ups/lead-follow-ups"
     HlmSpinnerImports,
     HlmBadgeImports,
     BadgeTone,
-    LeadFollowUps
+    LeadFollowUps,
+    CrmNotes,
+    CrmEmails
   ],
   templateUrl: "./lead-detail-page.html"
 })

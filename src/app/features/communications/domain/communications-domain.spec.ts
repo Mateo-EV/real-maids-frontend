@@ -3,6 +3,9 @@ import { CommunicationChannel } from "./entities/communication-channel.entity"
 import { MessageTemplate } from "./entities/message-template.entity"
 import { SentNotification } from "./entities/sent-notification.entity"
 import { NotificationPreference } from "./entities/notification-preference.entity"
+import { CrmNote } from "./entities/crm-note.entity"
+import { CrmEmail } from "./entities/crm-email.entity"
+import { EmailTemplate } from "./entities/email-template.entity"
 
 const date = new Date("2026-03-02T12:34:56Z")
 
@@ -74,6 +77,87 @@ describe("communications schema factories", () => {
       channelId: 3,
       language: "pt",
       isEnabled: false
+    })
+  })
+})
+
+describe("CRM note and email factories", () => {
+  it("keeps exactly one recorded owner and the supplied content, author and instants", () => {
+    const note = CrmNote.create(4, 7, null, "Contenido literal", 12, "Autora", date, null)
+    expect({ ...note }).toEqual({
+      id: 4,
+      customerId: 7,
+      leadId: null,
+      content: "Contenido literal",
+      authorId: 12,
+      author: "Autora",
+      registeredAt: date,
+      editedAt: null
+    })
+    expect(note.registeredAt).toBe(date)
+    expect({ ...CrmNote.create(5, null, 9, "Prospecto", 12, "Autora", date, date) }).toMatchObject({
+      id: 5,
+      customerId: null,
+      leadId: 9,
+      editedAt: date
+    })
+  })
+
+  it("preserves the delivered email record without deriving the recipient", () => {
+    expect({
+      ...CrmEmail.create(
+        8,
+        7,
+        null,
+        3,
+        "cliente@example.test",
+        "Asunto",
+        "Cuerpo",
+        "ENVIADO",
+        null,
+        12,
+        "Autora",
+        date
+      )
+    }).toEqual({
+      id: 8,
+      customerId: 7,
+      leadId: null,
+      templateId: 3,
+      recipient: "cliente@example.test",
+      subject: "Asunto",
+      body: "Cuerpo",
+      status: "ENVIADO",
+      errorDetail: null,
+      authorId: 12,
+      author: "Autora",
+      sentAt: date
+    })
+    expect(
+      CrmEmail.create(
+        9,
+        null,
+        9,
+        null,
+        "lead@example.test",
+        "S",
+        "B",
+        "FALLIDO",
+        "Detail",
+        12,
+        "A",
+        date
+      ).status
+    ).toBe("FALLIDO")
+  })
+
+  it("keeps the template subject nullable and the supplied event/language", () => {
+    expect({ ...EmailTemplate.create(3, "bienvenida", "es", null, "Cuerpo") }).toEqual({
+      id: 3,
+      event: "bienvenida",
+      language: "es",
+      subject: null,
+      body: "Cuerpo"
     })
   })
 })

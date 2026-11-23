@@ -32,6 +32,8 @@ import { PROPERTY_REPOSITORY } from "@/app/features/customers/domain/repositorie
 import { PropertyRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/property.repository-impl"
 import { CUSTOMER_HISTORY_REPOSITORY } from "@/app/features/customers/domain/repositories/customer-history.repository"
 import { CustomerHistoryRepositoryImpl } from "@/app/features/customers/infrastructure/repositories/customer-history.repository-impl"
+import { COMMUNICATIONS_REPOSITORY } from "@/app/features/communications/domain/repositories/communications.repository"
+import { CommunicationsRepositoryImpl } from "@/app/features/communications/infrastructure/repositories/communications.repository-impl"
 
 import { provideFieldOperationsReads } from "@/app/features/field-operations/field-operations.providers"
 import { provideOperationsRequestReads } from "@/app/features/operations/operations.providers"
@@ -60,6 +62,7 @@ export const appConfig: ApplicationConfig = {
     { useExisting: CustomerRelationsRepositoryImpl, provide: CUSTOMER_RELATIONS_REPOSITORY },
     { useExisting: PropertyRepositoryImpl, provide: PROPERTY_REPOSITORY },
     { useExisting: CustomerHistoryRepositoryImpl, provide: CUSTOMER_HISTORY_REPOSITORY },
+    { useExisting: CommunicationsRepositoryImpl, provide: COMMUNICATIONS_REPOSITORY },
     { useExisting: UserRepositoryImpl, provide: USER_REPOSITORY },
     { useExisting: RoleRepositoryImpl, provide: ROLE_REPOSITORY },
     { useExisting: AuditLogRepositoryImpl, provide: AUDIT_LOG_REPOSITORY },

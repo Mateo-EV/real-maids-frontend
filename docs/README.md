@@ -387,6 +387,47 @@ Observed parent checks: Operations **1192/1192 across 37 files passed**; full su
 
 The user authorized local commits and merge into main, without push. A temporary Auth diagnostic candidate passed 3262/3262, but did not prove the original cause; it is archived under ignored tmp, and the Auth spec is restored exactly, with no Auth production changes. Therefore the retained-delivery evidence remains Operations1192/1192 and SSRexit0, with the earlier full-suite3260/3262 Auth failures explicitly deferred. Independent source review found no severe defect; its old runtime run timed out. The new browser probe remained an unexecuted draft and is not acceptance evidence. Local integration is not full WP7/live/backend/browser approval.
 
+## WP12 — CRM notes and email (customer and lead detail)
+
+M03/RF03/HU03 supplies the customer/lead context; WP12 (S2–S4, S7, S8) supplies the intent: notes and
+email for a customer **or** a lead, seen by administrators and administrative staff, sent immediately
+when confirmed, editable as templates, and notes editable only by their author and never deleted.
+
+The verified customer detail and the verified lead detail mount the same two panels from
+`src/app/features/communications` — `<app-crm-notes>` and `<app-crm-emails>` — with `kind="customer"` or
+`kind="lead"`, so the server routes to `/api/crm/clientes/{id}/…` or `/api/crm/prospectos/{id}/…`.
+Nothing is rendered before the owner record is verified, and neither page synthesizes the other identity.
+
+- **Notes.** `GET`/`POST …/notas` and `PUT …/notas/{idNota}`; content is trimmed, required and ≤ 4000.
+  `NotaResponse` carries exactly one owner column, the stored author, `fechaRegistro` and `fechaEdicion`.
+  «Editar nota» appears only when the stored `idAutor` is the authenticated session — an authorship fact,
+  not an inferred permission — and the server's `403` for anyone else is shown as a permission outcome.
+  There is no delete action because there is no delete endpoint.
+- **Email.** Templates come from `GET /api/crm/plantillas-correo`; the history from
+  `GET …/correos`; a send is `POST …/correos` with `{ idPlantilla?, asunto?, cuerpo? }`. Choosing a
+  template copies its subject and body into the draft for editing; blank values fall back to the
+  template and, without one, both are required. The client never supplies the recipient: the backend
+  resolves it from the stored record, answers `409`/`400` when it has no valid address and `502` when
+  SMTP is unconfigured or the transport fails, recording the attempt as `FALLIDO`. The panel shows the
+  recorded `ENVIADO`/`FALLIDO` state with its sanitized detail and offers no resend.
+- **Permissions** (`NOTA_LEER`, `NOTA_CREAR`, `NOTA_ACTUALIZAR`, `CORREO_LEER`, `CORREO_ENVIAR`) stay
+  backend-enforced. A `403` latches that panel: the verified payload is dropped, the page states the
+  permission outcome and offers a retry, and a later transient failure cannot present it as staleness.
+  Transient failures otherwise keep the verified rows visible with a stale notice and an explicit retry.
+- **State.** One root store with success-only freshness (30 s notes/email, 120 s templates), ref-counted
+  shared flights, bounded pinned history, effective page metadata, one pending write gate and
+  session/SSR fencing. Panels page with the returned effective size and allow one bounded out-of-range
+  correction per user action. Confirmed writes invalidate only that owner's family and the mounted
+  panel re-reads once; pending blocks duplicate submit and dialog dismissal, safe inline errors keep the
+  draft, and a send is never retried or replayed automatically.
+
+Validation (owner identity, int32 IDs, instants, the closed delivery status, duplicated IDs and the page
+envelope) lives in the HTTP source with the shared `Result` conventions; transfer cache is disabled and
+SSR or an unconfigured origin dispatches nothing. Pending verification: live backend/CORS, the real
+`NOTA_*`/`CORREO_*` denials per profile, author-only enforcement observed live, SMTP success and the
+recorded `FALLIDO` path, and Chrome/Edge/Firefox keyboard/responsive acceptance. See the
+[feature boundary](../src/app/features/communications/README.md).
+
 ## CRM customer email reservation
 
 M03/RF03/HU03: the approved rule reserves each nonblank customer email even while inactive.

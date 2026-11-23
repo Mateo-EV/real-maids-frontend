@@ -394,3 +394,40 @@ No catalog downloads, new store/cache/TTL, root lifetime or authentication chang
 Backend Flyway V10 adds a normalized generated UNIQUE key. Historical duplicate rows stop migration;
 no automatic deletion, merge or email rewrite is permitted. Technical test results are recorded in
 `odd/tasks/crm-email-uniqueness.md`; live browser/permission acceptance is not implied by source wiring.
+
+## Connected CRM notes and email (WP12)
+
+M03/RF03/HU03 supplies the customer/lead context and WP12 (`odd/tasks/crm-communications.md`) the intent
+S2–S4/S7/S8. Both verified detail pages mount the communications capability from
+[`features/communications`](../communications/README.md): `<app-crm-notes>` and `<app-crm-emails>`.
+Nothing is duplicated here except the mount points; the notes/email contract, validation, root
+`CrmCommunicationsStore` and dialogs live in that feature and are bound at `app.config.ts`.
+
+- **Customer detail** mounts both panels for the verified customer
+  (`kind="customer"`, the customer id, its name and its stored email as composer context). **Lead detail**
+  mounts the same panels with `kind="lead"`, so the server routes them to
+  `/api/crm/prospectos/{id}/notas|correos`. The pages never synthesize a customer identity for a lead or
+  the reverse, and no panel is rendered before its owner record is verified.
+- Notes show the stored author, registration instant, an edit marker with `fechaEdicion`, and offer
+  «Editar nota» only when `idAutor` equals the authenticated session id. There is no delete action: the
+  API has no note deletion endpoint. An attempt from another session is refused by the server with `403`
+  and rendered as a permission outcome, never as an empty list.
+- The email panel lists the recorded deliveries with their real `ENVIADO`/`FALLIDO` status, recipient,
+  subject, body, author and template reference. `FALLIDO` keeps its sanitized `detalleError` visible and
+  has no resend control: a send is never replayed automatically.
+- Notes and email history are paged (offset/limit, effective size kept on navigation, one bounded
+  out-of-range correction per user action). Loading, verified empty, transient error with a retry, and
+  an authoritative `403` are distinct states; `403` hides the content of that panel.
+- The two dialogs (note editor, email composer) use Signal Forms and the unchanged
+  `customerDialogLifecycle`: pending blocks duplicate submit and Cancel/Escape/outside dismissal, a safe
+  inline error preserves the draft, and only a confirmed `Result` emits generic route-local feedback
+  and triggers exactly one revalidation of the observed panel page — no optimistic row, no write replay.
+- The composer shows the stored address as context only; the recipient is resolved by the backend. A
+  template copies its subject and body into the editable draft, blank values fall back to the template,
+  and without a template both fields are required.
+
+Existing contacts, preferences, properties, history and profile/edit behavior are unchanged. Pending
+live/backend acceptance: real `NOTA_LEER`/`NOTA_CREAR`/`NOTA_ACTUALIZAR`/`CORREO_LEER`/`CORREO_ENVIAR`
+denials per profile, author-only editing observed end to end, CORS, a real SMTP send plus the recorded
+`FALLIDO` path, and Chrome/Edge/Firefox keyboard/responsive checks. Deterministic page/store/HTTP specs
+are technical evidence only.

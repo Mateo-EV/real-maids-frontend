@@ -7,116 +7,124 @@ import {
   COMMUNICATIONS_REPOSITORY,
   CommunicationsRepository
 } from "./repositories/communications.repository"
+import { CrmNote } from "./entities/crm-note.entity"
+import { CrmEmail } from "./entities/crm-email.entity"
+import { EmailTemplate } from "./entities/email-template.entity"
 import {
-  CreateMessageTemplateParams,
-  UpdateMessageTemplateParams,
-  SetNotificationPreferenceParams
-} from "./params/communications.params"
-import { SentNotification } from "./entities/sent-notification.entity"
-import { NotificationPreference } from "./entities/notification-preference.entity"
+  CreateCrmNoteParams,
+  CrmTarget,
+  SendCrmEmailParams,
+  UpdateCrmNoteParams
+} from "./params/crm-communications.params"
 
 const codes: CommunicationsErrorCode[] = [
   "NOT_FOUND",
-  "VALIDATION",
-  "UNAUTHENTICATED",
-  "FORBIDDEN",
-  "CONFLICT",
-  "UNAVAILABLE",
+  "INVALID_INPUT",
   "INVALID_RESPONSE",
+  "FORBIDDEN",
+  "UNAUTHENTICATED",
+  "CONFLICT",
+  "NETWORK",
+  "UNCONFIGURED",
   "UNEXPECTED"
 ]
 
+const date = new Date("2026-03-02T12:00:00Z")
+const note = CrmNote.create(4, 7, null, "Contenido", 12, "Autora", date, null)
+
 describe("communications contracts", () => {
-  it.each(codes)("exposes safe typed %s errors", code => {
+  it.each(codes)("exposes a safe typed %s error", code => {
     const error = new CommunicationsError(code)
     expect(error).toBeInstanceOf(Error)
     expect(error.code).toBe(code)
     expect(error.name).toBe("CommunicationsError")
-    expect(error.message).toBe(`Communications operation failed: ${code}`)
+    expect(error.message).not.toContain("http")
   })
 
-  it("injects read-only delivery history with string IDs and purpose-oriented preferences", async () => {
-    const id = "9223372036854775807"
-    const notification = SentNotification.create(
-      id,
-      null,
-      null,
-      null,
-      "Recipient",
-      "pending",
-      null,
-      new Date("2026-03-02T12:00:00Z")
-    )
-    const failure = () => of(Result.failure(new CommunicationsError("UNAVAILABLE")))
+  it("injects the CRM contract through the domain token with paged notes and emails", async () => {
+    const customer: CrmTarget = { kind: "customer", id: 7 }
+    const lead: CrmTarget = { kind: "lead", id: 9 }
     const repository: CommunicationsRepository = {
-      getChannels: failure,
-      getTemplatesPage: failure,
-      createTemplate: failure,
-      updateTemplate: failure,
-      getPreferences: failure,
-      setPreference: vi.fn((customerId, channelId, params) =>
-        of(
-          Result.success(
-            NotificationPreference.create(
-              1,
-              customerId,
-              channelId,
-              params.language,
-              params.isEnabled
-            )
-          )
-        )
-      ),
-      getNotificationsPage: vi.fn(() =>
-        of(Result.success({ items: [notification], total: 1, offset: 0, limit: 20 }))
-      ),
-      getNotification: vi.fn(failure)
+      listNotes: vi.fn(() => of(Result.success({ items: [note], total: 1, offset: 0, limit: 20 }))),
+      createNote: vi.fn(() => of(Result.success(note))),
+      updateNote: vi.fn(() => of(Result.success(note))),
+      listEmails: vi.fn(() => of(Result.success({ items: [], total: 0, offset: 0, limit: 20 }))),
+      sendEmail: vi.fn(() => of(Result.failure(new CommunicationsError("CONFLICT")))),
+      listTemplates: vi.fn(() =>
+        of(Result.success([EmailTemplate.create(3, "e", "es", null, "B")]))
+      )
     }
     const injector = Injector.create({
       providers: [{ provide: COMMUNICATIONS_REPOSITORY, useValue: repository }]
     })
     const injected = injector.get(COMMUNICATIONS_REPOSITORY)
     expect(injected).toBe(repository)
-    const query = {
-      templateId: 1,
-      userId: 2,
-      orderId: 3,
-      deliveryStatus: "future-state",
-      offset: 0,
-      limit: 20
-    }
-    expect(await firstValueFrom(injected.getNotificationsPage(query))).toEqual(
-      Result.success({ items: [notification], total: 1, offset: 0, limit: 20 })
+
+    expect(await firstValueFrom(injected.listNotes(customer, { offset: 0, limit: 20 }))).toEqual(
+      Result.success({ items: [note], total: 1, offset: 0, limit: 20 })
     )
-    expect(repository.getNotificationsPage).toHaveBeenCalledWith(query)
-    expect(await firstValueFrom(injected.getNotification(id))).toEqual(
-      Result.failure(new CommunicationsError("UNAVAILABLE"))
+    expect(repository.listNotes).toHaveBeenCalledWith(customer, { offset: 0, limit: 20 })
+
+    const create: CreateCrmNoteParams = { content: "Contenido" }
+    expect(await firstValueFrom(injected.createNote(customer, create))).toEqual(
+      Result.success(note)
     )
-    expect(repository.getNotification).toHaveBeenCalledWith(id)
-    const params: SetNotificationPreferenceParams = { language: "fr", isEnabled: false }
-    expect(await firstValueFrom(injected.setPreference(7, 8, params))).toEqual(
-      Result.success(NotificationPreference.create(1, 7, 8, "fr", false))
+    expect(repository.createNote).toHaveBeenCalledWith(customer, create)
+
+    const update: UpdateCrmNoteParams = { id: 4, content: "Contenido editado" }
+    expect(await firstValueFrom(injected.updateNote(customer, update))).toEqual(
+      Result.success(note)
     )
-    expect(repository.setPreference).toHaveBeenCalledWith(7, 8, params)
+    expect(repository.updateNote).toHaveBeenCalledWith(customer, update)
+
+    expect(await firstValueFrom(injected.listEmails(lead, {}))).toEqual(
+      Result.success({ items: [], total: 0, offset: 0, limit: 20 })
+    )
+    expect(repository.listEmails).toHaveBeenCalledWith(lead, {})
+
+    const send: SendCrmEmailParams = { templateId: null, subject: "Asunto", body: "Cuerpo" }
+    expect(await firstValueFrom(injected.sendEmail(lead, send))).toEqual(
+      Result.failure(new CommunicationsError("CONFLICT"))
+    )
+    expect(repository.sendEmail).toHaveBeenCalledWith(lead, send)
+
+    const templates = await firstValueFrom(injected.listTemplates())
+    expect(templates.success && templates.data.map(t => t.id)).toEqual([3])
     injector.destroy()
   })
 
-  it("distinguishes nullable template updates from omission and excludes generated IDs", () => {
-    const create: CreateMessageTemplateParams = {
-      channelId: 1,
-      event: "custom-event",
-      language: "pt",
-      subject: null,
-      body: "Body",
-      isActive: true
+  it("separates a note update from its generated metadata", () => {
+    const update: UpdateCrmNoteParams = { id: 4, content: "Editado" }
+    expect(Object.keys(update).sort()).toEqual(["content", "id"])
+    // @ts-expect-error Authorship always comes from the authenticated session, never the body.
+    const body: CreateCrmNoteParams = { content: "x", authorId: 1 }
+    expect(body).toHaveProperty("authorId")
+    const send: SendCrmEmailParams = {
+      templateId: null,
+      subject: "s",
+      body: "b",
+      // @ts-expect-error The client never supplies the recipient address.
+      recipient: "a@b.c"
     }
-    const clear: UpdateMessageTemplateParams = { subject: null }
-    const keep: UpdateMessageTemplateParams = { body: "New body" }
-    expect(create.subject).toBeNull()
-    expect(clear).toHaveProperty("subject", null)
-    expect(keep).not.toHaveProperty("subject")
-    // @ts-expect-error Preference row IDs are generated by the backend.
-    const generated: SetNotificationPreferenceParams = { language: "en", isEnabled: true, id: 1 }
-    expect(generated).toHaveProperty("id")
+    expect(send).toHaveProperty("recipient")
+  })
+
+  it("keeps emails typed with their recorded status", () => {
+    expect(
+      CrmEmail.create(
+        1,
+        7,
+        null,
+        null,
+        "cliente@example.test",
+        "Asunto",
+        "Cuerpo",
+        "FALLIDO",
+        "Detalle",
+        12,
+        "Autora",
+        date
+      ).status
+    ).toBe("FALLIDO")
   })
 })
