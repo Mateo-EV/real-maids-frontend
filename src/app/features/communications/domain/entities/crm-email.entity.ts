@@ -1,5 +1,9 @@
-/** The backend only reports a send it attempted: a failed transport is recorded, never retried. */
-export type CrmEmailStatus = "ENVIADO" | "FALLIDO"
+/**
+ * The backend records the attempt before delivering it, so `INTENTO` is a row whose outcome is still
+ * unknown; `ENVIADO` and `FALLIDO` are the settled answers. A failed transport is recorded, never
+ * retried.
+ */
+export type CrmEmailStatus = "INTENTO" | "ENVIADO" | "FALLIDO"
 
 /**
  * One recorded email delivery for a customer or a lead. `recipient` is resolved by the backend from

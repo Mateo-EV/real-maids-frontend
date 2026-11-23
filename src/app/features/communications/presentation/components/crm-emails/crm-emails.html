@@ -73,16 +73,23 @@
                   <span
                     hlmBadge
                     variant="outline"
-                    [appBadgeTone]="email.status"
+                    [appBadgeTone]="email.status === 'INTENTO' ? null : email.status"
                     badgeToneKind="catalog-name"
+                    [attr.data-email-status]="email.status"
                   >
-                    {{ email.status }}
+                    {{ email.status === "INTENTO" ? "Sin confirmar" : email.status }}
                   </span>
                 </div>
                 <p class="mt-1 text-xs text-muted-foreground break-words">
                   Destinatario: {{ email.recipient }} · Envío (UTC)
                   {{ email.sentAt.toISOString() }}
                 </p>
+                @if (email.status === "INTENTO") {
+                  <p class="mt-2 max-w-prose leading-relaxed break-words" data-email-unknown>
+                    No se pudo confirmar el resultado de este envío. Es posible que el destinatario
+                    ya lo haya recibido.
+                  </p>
+                }
                 <p class="mt-2 max-w-prose leading-relaxed break-words whitespace-pre-wrap">
                   {{ email.body }}
                 </p>

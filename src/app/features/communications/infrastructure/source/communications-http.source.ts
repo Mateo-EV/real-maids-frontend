@@ -1,6 +1,6 @@
 import { Injectable } from "@angular/core"
 import { CrmNote } from "../../domain/entities/crm-note.entity"
-import { CrmEmail } from "../../domain/entities/crm-email.entity"
+import { CrmEmail, CrmEmailStatus } from "../../domain/entities/crm-email.entity"
 import { EmailTemplate } from "../../domain/entities/email-template.entity"
 import {
   CreateCrmNoteParams,
@@ -58,12 +58,14 @@ function noteDto(v: unknown, target: CrmTarget) {
     nullableDate(p["fechaEdicion"])
   )
 }
+/** Closed delivery set: `INTENTO` is the recorded attempt whose outcome the server has not settled. */
+function emailStatus(v: unknown): CrmEmailStatus {
+  return v === "INTENTO" || v === "ENVIADO" || v === "FALLIDO" ? v : invalid()
+}
 function emailDto(v: unknown, target: CrmTarget) {
   const p = record(v),
-    owner = ownerOf(p),
-    estado = p["estado"]
+    owner = ownerOf(p)
   owned(owner, target)
-  if (estado !== "ENVIADO" && estado !== "FALLIDO") invalid()
   return CrmEmail.create(
     readId(p["idCorreo"]),
     owner.customerId,
@@ -72,7 +74,7 @@ function emailDto(v: unknown, target: CrmTarget) {
     text(p["destinatario"]),
     text(p["asunto"]),
     text(p["cuerpo"]),
-    estado,
+    emailStatus(p["estado"]),
     nullableText(p["detalleError"]),
     readId(p["idAutor"]),
     text(p["autor"]),

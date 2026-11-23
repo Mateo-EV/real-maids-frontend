@@ -160,8 +160,11 @@ export class CrmEmails implements OnInit {
         current,
         onSent: (email: CrmEmail) => {
           if (!current()) return
-          // A recorded failure is reported as such: the attempt is never retried by itself.
+          // A recorded outcome is reported as recorded: the attempt is never retried by itself, and
+          // an unsettled `INTENTO` is reported as unknown instead of sent or failed.
           if (email.status === "ENVIADO") this.toast.success("Correo registrado como enviado.")
+          else if (email.status === "INTENTO")
+            this.toast.warning("Correo registrado; no se pudo confirmar la entrega.")
           else this.toast.error("El intento de envío quedó registrado como fallido.")
         }
       },

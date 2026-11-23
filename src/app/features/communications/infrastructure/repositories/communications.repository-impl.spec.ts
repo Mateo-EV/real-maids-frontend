@@ -221,6 +221,17 @@ describe("CRM communications HTTP boundary", () => {
     expect(result.data.items[0].recipient).toBe("cliente@example.test")
   })
 
+  it("accepts an INTENTO attempt whose delivery outcome is still unknown", async () => {
+    const pending = firstValueFrom(repository.listEmails(customer, {}))
+    http
+      .expectOne(`${base}/clientes/7/correos?pagina=0&tamanio=20`)
+      .flush(wirePage([{ ...emailDto, idCorreo: 10, idPlantilla: null, estado: "INTENTO" }]))
+    const result = await pending
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.items.map(item => [item.id, item.status])).toEqual([[10, "INTENTO"]])
+  })
+
   it("rejects an unknown delivery status instead of rendering it as sent", async () => {
     const pending = firstValueFrom(repository.listEmails(lead, {}))
     http
