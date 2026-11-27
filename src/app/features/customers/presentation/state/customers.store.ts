@@ -13,6 +13,7 @@ import {
   tap
 } from "rxjs"
 import { Result } from "@/app/shared/utils/result"
+import { LINKED_IDENTITY_SYNC } from "@/app/core/config/linked-identity-sync"
 import { CustomerListQuery } from "../../domain/models/customer-list-query"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { createKeyedReads, KeyedEntry, keyedState } from "@/app/shared/state/keyed-reads"
@@ -227,6 +228,7 @@ export const CustomersStore = signalStore(
   }),
   withMethods(store => {
     const injector = inject(Injector)
+    const identitySync = inject(LINKED_IDENTITY_SYNC)
     const scope = createSessionReadScope(() => {
       // Keyed state is cleared before the coordinators reset, so no teardown write reappears.
       pages.reset()
@@ -336,10 +338,21 @@ export const CustomersStore = signalStore(
       // A customer-specific invalidation touches only that profile; a broad one touches all.
       details.markMutated(entry => customerId === undefined || entry.query === customerId)
     }
+    /**
+     * Cross-feature identity revalidation, not a CRM write: an IAM account edit may have renamed
+     * the linked customer. Names/emails decide CRM filter membership, so every page variant
+     * expires, and the identified profile expires when the backend-validated link is known. The
+     * KPI aggregate, status and history are not identities and keep their own freshness.
+     */
+    const invalidateLinkedIdentity = (customerId: number | null): void => {
+      if (!scope.check()) return
+      pages.markMutated()
+      if (customerId !== null) details.markMutated(entry => entry.query === customerId)
+    }
     const mutate = (
       request: () => Observable<DetailResult>,
       message: string,
-      history: boolean
+      options: { history?: boolean; linkedIdentity?: boolean } = {}
     ): Observable<DetailResult> =>
       defer(() => {
         if (!scope.check()) return of(Result.failure(new CustomerError("UNAUTHENTICATED")))
@@ -372,8 +385,18 @@ export const CustomersStore = signalStore(
               })
             patchState(store, { successMessage: message })
             invalidateCustomers(customer.id)
+            // The backend shares this profile's name/email with its IAM account, so a confirmed
+            // linked edit makes IAM pages stale. That is identity synchronization only: it
+            // refreshes no CRM KPI, status or history.
+            if (
+              options.linkedIdentity &&
+              customer.userId !== null &&
+              scope.check() &&
+              generation === scope.generation()
+            )
+              identitySync.invalidateUserPages()
             // Observer feedback may synchronously log out or replace the session.
-            if (history && scope.check() && generation === scope.generation())
+            if (options.history && scope.check() && generation === scope.generation())
               injector.get(CustomerHistoryStore).invalidateCustomer(customer.id)
           }),
           finalize(() => {
@@ -473,29 +496,29 @@ export const CustomersStore = signalStore(
         })
       },
       invalidateCustomers,
+      invalidateLinkedIdentity,
       createCustomer: (params: CreateCustomerParams) =>
         mutate(
           () => injector.get(CreateCustomerUseCase).execute(params),
-          "Customer created successfully",
-          false
+          "Customer created successfully"
         ),
       updateCustomer: (params: UpdateCustomerParams) =>
         mutate(
           () => injector.get(UpdateCustomerUseCase).execute(params),
           "Customer updated successfully",
-          true
+          { history: true, linkedIdentity: true }
         ),
       setCustomerStatus: (params: SetCustomerStatusParams) =>
         mutate(
           () => injector.get(SetCustomerStatusUseCase).execute(params),
           "Customer status updated successfully",
-          true
+          { history: true }
         ),
       linkCustomerAccount: (params: LinkCustomerAccountParams) =>
         mutate(
           () => injector.get(LinkCustomerAccountUseCase).execute(params),
           "Customer account linked successfully",
-          true
+          { history: true }
         ),
       clearFeedback() {
         scope.check()

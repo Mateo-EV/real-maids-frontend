@@ -20,6 +20,7 @@ import { customerQueryKey, CustomersStore } from "./customers.store"
 import { CustomerHistoryStore } from "./customer-history.store"
 import { GetCustomerStatisticsUseCase } from "../../application/use-cases/get-customer-statistics.use-case"
 import { LinkCustomerAccountUseCase } from "../../application/use-cases/link-customer-account.use-case"
+import { LINKED_IDENTITY_SYNC } from "@/app/core/config/linked-identity-sync"
 
 const page = (
   items: Customer[] = [],
@@ -31,6 +32,24 @@ type PageResult = Result<PaginationResponse<Customer>, CustomerError>
 type ProfileResult = Result<Customer, CustomerError>
 type CustomerStatisticsResult = Result<ClienteEstadisticas, CustomerError>
 const customerTotals: ClienteEstadisticas = { total: 32, activos: 30, inactivos: 2 }
+/** A customer row that carries its IAM link; the default fixture has no account. */
+const linkedCustomer = (id: number, name: string, userId: number | null) =>
+  Customer.create(
+    id,
+    name,
+    userId,
+    CustomerType.RESIDENTIAL,
+    null,
+    null,
+    null,
+    null,
+    null,
+    true,
+    new Date("2026-01-01T00:00:00Z"),
+    null,
+    null,
+    null
+  )
 
 describe("CustomersStore", () => {
   let store: InstanceType<typeof CustomersStore>
@@ -41,7 +60,9 @@ describe("CustomersStore", () => {
     status: ReturnType<typeof vi.fn>,
     link: ReturnType<typeof vi.fn>,
     statistics: ReturnType<typeof vi.fn>,
-    invalidateHistory: ReturnType<typeof vi.fn>
+    invalidateHistory: ReturnType<typeof vi.fn>,
+    invalidateUserPages: ReturnType<typeof vi.fn>,
+    invalidateCustomerIdentity: ReturnType<typeof vi.fn>
   let session: BehaviorSubject<AuthSession | null>
   beforeEach(() => {
     list = vi.fn()
@@ -52,11 +73,17 @@ describe("CustomersStore", () => {
     link = vi.fn()
     statistics = vi.fn()
     invalidateHistory = vi.fn()
+    invalidateUserPages = vi.fn()
+    invalidateCustomerIdentity = vi.fn()
     session = new BehaviorSubject<AuthSession | null>(
       AuthSession.create("Test", "fake@example.test", null, Date.now() + 60000, 7)
     )
     TestBed.configureTestingModule({
       providers: [
+        {
+          provide: LINKED_IDENTITY_SYNC,
+          useValue: { invalidateUserPages, invalidateCustomerIdentity }
+        },
         { provide: CustomerHistoryStore, useValue: { invalidateCustomer: invalidateHistory } },
         { provide: GetCustomerStatisticsUseCase, useValue: { execute: statistics } },
         { provide: LinkCustomerAccountUseCase, useValue: { execute: link } },
@@ -238,6 +265,143 @@ describe("CustomersStore", () => {
       expect(store.successMessage()).not.toBeNull()
       expect(store.currentQuery()).toEqual({ offset: 20, limit: 20 })
       expect(list).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it("expires IAM pages only after a confirmed linked profile edit", () => {
+    const linked = linkedCustomer(7, "Adriana", 41),
+      renamed = linkedCustomer(7, "Adriana Actualizada", 41)
+    const response = new Subject<ProfileResult>()
+    update.mockReturnValue(response)
+    store
+      .updateCustomer({
+        id: 7,
+        name: "Adriana Actualizada",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+      .subscribe()
+    expect(invalidateUserPages).not.toHaveBeenCalled()
+    response.next(Result.success(renamed))
+    response.complete()
+    expect(invalidateUserPages).toHaveBeenCalledExactlyOnceWith()
+    // An unlinked customer and a failed edit leave the IAM cache alone.
+    update.mockReturnValue(of(Result.success(linkedCustomer(8, "Sin cuenta", null))))
+    store
+      .updateCustomer({
+        id: 8,
+        name: "Sin cuenta",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+      .subscribe()
+    update.mockReturnValue(of(Result.failure(new CustomerError("CONFLICT"))))
+    store
+      .updateCustomer({
+        id: 7,
+        name: "Rechazada",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+      .subscribe()
+    expect(invalidateUserPages).toHaveBeenCalledOnce()
+    // Account lifecycle writes are not shared identity edits.
+    create.mockReturnValue(of(Result.success(linkedCustomer(9, "Otra", 42))))
+    store.createCustomer(customerInput("Otra")).subscribe()
+    status.mockReturnValue(of(Result.success(linked)))
+    store.setCustomerStatus({ customerId: 7, isActive: true }).subscribe()
+    link.mockReturnValue(of(Result.success(linked)))
+    store.linkCustomerAccount({ customerId: 7, userId: 41 }).subscribe()
+    expect(invalidateUserPages).toHaveBeenCalledOnce()
+  })
+
+  it("expires every CRM page and the identified profile from an IAM edit without KPI refresh", () => {
+    const linked = linkedCustomer(7, "Adriana", 41)
+    list.mockReturnValue(of(Result.success(page([linked], 1))))
+    store.loadCustomers().subscribe()
+    detail.mockReturnValue(of(Result.success(linked)))
+    store.loadCustomer(7).subscribe()
+    statistics.mockReturnValue(of(Result.success(customerTotals)))
+    store.loadStatistics().subscribe()
+    const kpiExpiry = store.selectStatistics().expires
+    expect(store.selectQuery().expires).not.toBe(0)
+    expect(store.selectCustomer(7).expires).not.toBe(0)
+    store.invalidateLinkedIdentity(7)
+    expect(store.selectQuery().expires).toBe(0)
+    expect(store.selectCustomer(7).expires).toBe(0)
+    // Only identity-derived entries expire; the CRM KPI aggregate is a write concern.
+    expect(store.selectStatistics().expires).toBe(kpiExpiry)
+    // Expired, never patched: rows and totals stay the verified server values.
+    expect(store.customers()).toEqual([linked])
+    expect(store.total()).toBe(1)
+    expect(list).toHaveBeenCalledOnce()
+    store.loadCustomers().subscribe()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it("expires no profile when the linked customer id is unknown", () => {
+    const row = customerFixture(7, "Sin relación")
+    list.mockReturnValue(of(Result.success(page([row], 1))))
+    store.loadCustomers().subscribe()
+    detail.mockReturnValue(of(Result.success(row)))
+    store.loadCustomer(7).subscribe()
+    store.invalidateLinkedIdentity(null)
+    expect(store.selectQuery().expires).toBe(0)
+    expect(store.selectCustomer(7).expires).not.toBe(0)
+  })
+
+  it("applies no IAM invalidation from a profile edit that settles after replacement", () => {
+    const response = new Subject<ProfileResult>()
+    update.mockReturnValue(response)
+    store
+      .updateCustomer({
+        id: 7,
+        name: "Adriana Actualizada",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+      .subscribe()
+    const old = session.value!
+    session.next(AuthSession.create(old.name, old.email, null, old.expiresAt, 9))
+    response.next(Result.success(linkedCustomer(7, "Adriana Actualizada", 41)))
+    response.complete()
+    expect(invalidateUserPages).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 9])(
+    "does not expire IAM pages after a synchronous refresh changes the session to %s",
+    replacement => {
+      const linked = linkedCustomer(7, "Adriana", 41)
+      list.mockReturnValue(of(Result.success(page([linked]))))
+      let reads = 0
+      const a = store.observeQuery().subscribe(() => {
+        if (++reads === 2) {
+          const old = session.value!
+          session.next(
+            replacement === null
+              ? null
+              : AuthSession.create(old.name, old.email, null, old.expiresAt, replacement)
+          )
+        }
+      })
+      const b = store.observeQuery().subscribe()
+      update.mockReturnValue(of(Result.success(linked)))
+      store
+        .updateCustomer({
+          id: 7,
+          name: "Adriana",
+          type: CustomerType.RESIDENTIAL,
+          email: null,
+          phone: null
+        })
+        .subscribe()
+      expect(invalidateUserPages).not.toHaveBeenCalled()
+      a.unsubscribe()
+      b.unsubscribe()
     }
   )
 
@@ -736,10 +900,15 @@ describe("CustomersStore", () => {
 
 describe("CustomersStore SSR boundary", () => {
   it("dispatches no reads/writes and never initializes Auth on the server", async () => {
-    const execute = vi.fn()
+    const execute = vi.fn(),
+      invalidateUserPages = vi.fn()
     TestBed.configureTestingModule({
       providers: [
         { provide: PLATFORM_ID, useValue: "server" },
+        {
+          provide: LINKED_IDENTITY_SYNC,
+          useValue: { invalidateUserPages, invalidateCustomerIdentity: vi.fn() }
+        },
         ...[
           ListCustomersUseCase,
           GetCustomerByIdUseCase,
@@ -762,6 +931,18 @@ describe("CustomersStore SSR boundary", () => {
       await firstValueFrom(store.setCustomerStatus({ customerId: 7, isActive: false }))
     ).toMatchObject({ success: false })
     expect(await firstValueFrom(store.loadStatistics())).toMatchObject({ success: false })
+    // A cross-feature identity refresh never resolves Auth, and a server write signals nothing.
+    store.invalidateLinkedIdentity(7)
+    await firstValueFrom(
+      store.updateCustomer({
+        id: 7,
+        name: "Adriana",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+    )
+    expect(invalidateUserPages).not.toHaveBeenCalled()
     expect(execute).not.toHaveBeenCalled()
     expect(store.customers()).toEqual([])
     expect(store.total()).toBeNull()

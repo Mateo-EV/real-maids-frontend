@@ -1,7 +1,10 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from "@angular/core"
+import { ApplicationConfig, Injector, provideBrowserGlobalErrorListeners } from "@angular/core"
 import { provideHttpClient, withInterceptors } from "@angular/common/http"
 import { authInterceptor } from "@/app/features/auth/infrastructure/interceptors/auth.interceptor"
 import { API_URL } from "../tokens/api-url.token"
+import { LINKED_IDENTITY_SYNC } from "./linked-identity-sync"
+import { UserStore } from "@/app/features/users/presentation/state/user.store"
+import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { environment } from "@/environments/environment"
 import { provideRouter } from "@angular/router"
 import { routes } from "../../app.routes"
@@ -49,6 +52,21 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(),
     provideHttpClient(withInterceptors([authInterceptor])),
     { provide: API_URL, useValue: environment.apiUrl },
+    /**
+     * The customer/account identity is shared by the backend, so each feature's root store must be
+     * able to expire the other side's cached presentation data. These callbacks are the only
+     * cross-feature knowledge, and they resolve the peer store lazily: composing the application
+     * creates neither store for this seam and dispatches no read.
+     */
+    {
+      provide: LINKED_IDENTITY_SYNC,
+      useFactory: (injector: Injector) => ({
+        invalidateUserPages: () => injector.get(UserStore).invalidateLinkedIdentity(),
+        invalidateCustomerIdentity: (customerId: number | null) =>
+          injector.get(CustomersStore).invalidateLinkedIdentity(customerId)
+      }),
+      deps: [Injector]
+    },
     provideFieldOperationsReads(),
     provideOperationsRequestReads(),
     provideCustomerSupportReads(),

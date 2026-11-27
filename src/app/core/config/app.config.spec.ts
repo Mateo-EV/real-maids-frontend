@@ -18,6 +18,7 @@ import { AuthStore } from "@/app/features/auth/presentation/state/auth.store"
 import { CUSTOMER_REPOSITORY } from "@/app/features/customers/domain/repositories/customer.repository"
 import { CustomersStore } from "@/app/features/customers/presentation/state/customers.store"
 import { customerInput } from "@/app/features/customers/domain/customer.fixture"
+import { CustomerType } from "@/app/features/customers/domain/entities/customer.entity"
 import { AdminShell } from "@/app/experiences/admin/presentation/components/admin-shell/admin-shell"
 
 import { USER_REPOSITORY } from "@/app/features/users/domain/repositories/user.repository"
@@ -56,6 +57,40 @@ async function settle<T>(stream: Observable<T>): Promise<T> {
   await vi.runAllTimersAsync()
   return pending
 }
+
+/** One customer and its IAM account: the backend keeps both names/emails synchronized. */
+const linkedUserDto = (overrides: Record<string, unknown> = {}) => ({
+  idUsuario: 41,
+  nombre: "Adriana",
+  correo: "adriana@example.test",
+  idRol: 3,
+  rol: "Cliente",
+  idioma: "es",
+  activo: true,
+  ultimoAcceso: null,
+  fechaCreacion: "2026-01-01T00:00:00Z",
+  fechaActualizacion: "2026-01-01T00:00:00Z",
+  idCliente: 70,
+  ...overrides
+})
+const linkedCustomerDto = (overrides: Record<string, unknown> = {}) => ({
+  idCliente: 70,
+  nombre: "Adriana",
+  tipo: "residencial",
+  correo: "adriana@example.test",
+  telefono: null,
+  activo: true,
+  idUsuario: 41,
+  usuarioActivo: true,
+  fechaCreacion: "2026-01-01T00:00:00Z",
+  fechaActualizacion: null,
+  idProspecto: null,
+  identificacionFiscal: null,
+  sistemaOrigen: null,
+  idExterno: null,
+  usuarioRegistro: 7,
+  ...overrides
+})
 
 describe("Application repository composition", () => {
   beforeEach(() => {
@@ -367,6 +402,121 @@ describe("Application repository composition", () => {
     await vi.runAllTimersAsync()
     expect((await loggedOut).success).toBe(false)
     expect(TestBed.inject(AuthStore)).toBe(store)
+  })
+
+  it("revalidates warm IAM pages after a linked CRM profile edit through the lazy seam", async () => {
+    await establishHttpAuth()
+    const http = TestBed.inject(HttpTestingController)
+    const users = TestBed.inject(UserStore)
+    const customers = TestBed.inject(CustomersStore)
+    const query = { offset: 0, limit: 20 }
+    const warmed = firstValueFrom(users.readPage(query))
+    http
+      .expectOne(r => r.url === "http://localhost:8080/api/usuarios")
+      .flush({
+        contenido: [linkedUserDto()],
+        pagina: 0,
+        tamanio: 20,
+        totalElementos: 1,
+        totalPaginas: 1
+      })
+    expect((await warmed).success).toBe(true)
+    // Warm: a second read is answered by the store, not by HTTP.
+    await firstValueFrom(users.readPage(query))
+    const edit = firstValueFrom(
+      customers.updateCustomer({
+        id: 70,
+        name: "Adriana Actualizada",
+        type: CustomerType.RESIDENTIAL,
+        email: null,
+        phone: null
+      })
+    )
+    const put = http.expectOne("http://localhost:8080/api/clientes/70")
+    expect(put.request.method).toBe("PUT")
+    put.flush(linkedCustomerDto({ nombre: "Adriana Actualizada" }))
+    expect((await edit).success).toBe(true)
+    // No orphan read: the IAM side re-reads only when one of its consumers asks again.
+    http.verify()
+    const revalidated = firstValueFrom(users.readPage(query))
+    http
+      .expectOne(r => r.url === "http://localhost:8080/api/usuarios")
+      .flush({
+        contenido: [linkedUserDto({ nombre: "Adriana Actualizada" })],
+        pagina: 0,
+        tamanio: 20,
+        totalElementos: 1,
+        totalPaginas: 1
+      })
+    expect(await revalidated).toMatchObject({
+      success: true,
+      data: { items: [{ name: "Adriana Actualizada" }] }
+    })
+    http.verify()
+  })
+
+  it("revalidates warm CRM pages and profile, never the KPI, after a linked IAM edit", async () => {
+    await establishHttpAuth()
+    const http = TestBed.inject(HttpTestingController)
+    const users = TestBed.inject(UserStore)
+    const customers = TestBed.inject(CustomersStore)
+    const pageRead = firstValueFrom(customers.readPage({}))
+    http
+      .expectOne(r => r.url === "http://localhost:8080/api/clientes")
+      .flush({
+        contenido: [linkedCustomerDto()],
+        pagina: 0,
+        tamanio: 20,
+        totalElementos: 1,
+        totalPaginas: 1
+      })
+    expect((await pageRead).success).toBe(true)
+    const detailRead = firstValueFrom(customers.loadCustomer(70))
+    http.expectOne("http://localhost:8080/api/clientes/70").flush(linkedCustomerDto())
+    expect((await detailRead).success).toBe(true)
+    const statisticsRead = firstValueFrom(customers.loadStatistics())
+    http
+      .expectOne("http://localhost:8080/api/clientes/estadisticas")
+      .flush({ total: 1, activos: 1, inactivos: 0 })
+    expect((await statisticsRead).success).toBe(true)
+    const edit = firstValueFrom(
+      users.updateUserById(41, {
+        name: "Adriana Actualizada",
+        email: "adriana@example.test",
+        lang: Lang.ES,
+        isActive: true,
+        roleId: 3
+      })
+    )
+    const put = http.expectOne("http://localhost:8080/api/usuarios/41")
+    expect(put.request.method).toBe("PUT")
+    put.flush(linkedUserDto({ nombre: "Adriana Actualizada" }))
+    expect((await edit).success).toBe(true)
+    // No orphan CRM read and no KPI refresh: identity synchronization is not a CRM write.
+    http.expectNone(r => r.url.startsWith("http://localhost:8080/api/clientes"))
+    http.verify()
+    await firstValueFrom(customers.loadStatistics())
+    http.verify()
+    const revalidatedPage = firstValueFrom(customers.readPage({}))
+    http
+      .expectOne(r => r.url === "http://localhost:8080/api/clientes")
+      .flush({
+        contenido: [linkedCustomerDto({ nombre: "Adriana Actualizada" })],
+        pagina: 0,
+        tamanio: 20,
+        totalElementos: 1,
+        totalPaginas: 1
+      })
+    expect((await revalidatedPage).success).toBe(true)
+    const revalidatedDetail = firstValueFrom(customers.loadCustomer(70))
+    http
+      .expectOne("http://localhost:8080/api/clientes/70")
+      .flush(linkedCustomerDto({ nombre: "Adriana Actualizada" }))
+    expect(await revalidatedDetail).toMatchObject({
+      success: true,
+      data: { name: "Adriana Actualizada" }
+    })
+    http.verify()
   })
 
   it("connects the root customer store to authenticated HTTP, never its demo fixture", async () => {

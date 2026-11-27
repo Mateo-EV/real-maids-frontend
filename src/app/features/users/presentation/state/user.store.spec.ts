@@ -14,6 +14,8 @@ import { CreateUserUseCase } from "../../application/use-cases/create-user.use-c
 import { UpdateUserStatusByIdUseCase } from "../../application/use-cases/update-user-status-by-id.use-case"
 import { UpdateUserByIdUseCase } from "../../application/use-cases/update-user-by-id.use-case"
 import { DeleteUserByIdUseCase } from "../../application/use-cases/delete-user-by-id.use-case"
+import { GetUserStatisticsUseCase } from "../../application/use-cases/get-user-statistics.use-case"
+import { LINKED_IDENTITY_SYNC } from "@/app/core/config/linked-identity-sync"
 import { UserStore } from "./user.store"
 
 const params = {
@@ -34,18 +36,28 @@ describe("UserStore writes and shared query cache", () => {
     update = { execute: vi.fn() },
     status = { execute: vi.fn() },
     remove = { execute: vi.fn() },
+    stats = { execute: vi.fn() },
     read = { execute: vi.fn() }
+  let invalidateCustomerIdentity: ReturnType<typeof vi.fn>,
+    invalidateUserPages: ReturnType<typeof vi.fn>
   let session = signal<AuthSession | null>(identity())
   let changes = new Subject<AuthSession | null>()
   beforeEach(() => {
     vi.resetAllMocks()
+    invalidateCustomerIdentity = vi.fn()
+    invalidateUserPages = vi.fn()
     session = signal<AuthSession | null>(identity())
     changes = new Subject<AuthSession | null>()
     TestBed.configureTestingModule({
       providers: [
+        {
+          provide: LINKED_IDENTITY_SYNC,
+          useValue: { invalidateUserPages, invalidateCustomerIdentity }
+        },
         { provide: AuthStore, useValue: { session } },
         { provide: ObserveAuthSessionUseCase, useValue: { execute: () => changes } },
         { provide: GetUsersPageUseCase, useValue: read },
+        { provide: GetUserStatisticsUseCase, useValue: stats },
         { provide: CreateUserUseCase, useValue: create },
         { provide: UpdateUserByIdUseCase, useValue: update },
         { provide: UpdateUserStatusByIdUseCase, useValue: status },
@@ -244,6 +256,221 @@ describe("UserStore writes and shared query cache", () => {
     expect(received).not.toHaveBeenCalled()
     expect(read.execute).toHaveBeenCalledTimes(2)
   })
+  it("expires every warm page variant for a linked customer edit without KPIs or patching", () => {
+    stats.execute.mockReturnValue(of(Result.success({ total: 9, active: 8, inactive: 1 })))
+    store.readStatistics().subscribe()
+    const kpiExpiry = store.selectStatistics().expires()
+    store.readPage({ roleId: 1 }).subscribe()
+    store.readPage({ search: "adriana", isActive: false }).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(2)
+    store.invalidateLinkedIdentity()
+    // Names/emails decide filter membership: every variant expires and none is patched.
+    expect(store.selectStatistics().expires()).toBe(kpiExpiry)
+    store.readPage({ roleId: 1 }).subscribe()
+    store.readPage({ search: "adriana", isActive: false }).subscribe()
+    expect(read.execute).toHaveBeenCalledTimes(4)
+    expect(store.selectStatistics().result()).toEqual({ total: 9, active: 8, inactive: 1 })
+    expect(store.selectStatistics().expires()).toBe(kpiExpiry)
+    expect(stats.execute).toHaveBeenCalledOnce()
+  })
+  it("invalidates the linked CRM identity only from a confirmed linked profile edit", async () => {
+    const linked = User.create(
+      1,
+      "Adriana",
+      "adriana@example.test",
+      Lang.ES,
+      true,
+      new Date(),
+      new Date(),
+      1,
+      null,
+      55
+    )
+    update.execute.mockReturnValue(of(Result.success(linked)))
+    await firstValueFrom(store.updateUserById(1, params))
+    expect(invalidateCustomerIdentity).toHaveBeenCalledExactlyOnceWith(55)
+    invalidateCustomerIdentity.mockClear()
+    // An account without a customer link is not CRM identity.
+    update.execute.mockReturnValue(
+      of(
+        Result.success(
+          User.create(
+            2,
+            "Sin cliente",
+            "sin@example.test",
+            Lang.ES,
+            true,
+            new Date(),
+            new Date(),
+            1
+          )
+        )
+      )
+    )
+    await firstValueFrom(store.updateUserById(2, params))
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    update.execute.mockReturnValue(of(Result.failure(new UserError("EMAIL_ALREADY_EXISTS"))))
+    await firstValueFrom(store.updateUserById(1, params))
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    // Account creation/status/retirement stay outside shared identity synchronization.
+    create.execute.mockReturnValue(of(Result.success(linked)))
+    status.execute.mockReturnValue(of(Result.success(linked)))
+    await firstValueFrom(store.createUser(params))
+    await firstValueFrom(store.updateUserStatusById(1, false))
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+  })
+  it("keeps partial-update identity evidence to verified links, never unlinked CRM data", async () => {
+    const partial = of(Result.failure(new UserError("PARTIAL_UPDATE")))
+    // No verified record: the relation stays unknown, so only CRM page variants expire.
+    update.execute.mockReturnValue(partial)
+    await firstValueFrom(store.updateUserById(1, params))
+    expect(invalidateCustomerIdentity).toHaveBeenCalledExactlyOnceWith(null)
+    expect(store.error()?.code).toBe("PARTIAL_UPDATE")
+    invalidateCustomerIdentity.mockClear()
+    // A verified page proves account 2 has no customer row: no CRM data is expired for it.
+    const unlinked = User.create(
+      2,
+      "Sin cliente",
+      "sin@example.test",
+      Lang.ES,
+      true,
+      new Date(),
+      new Date(),
+      1
+    )
+    read.execute.mockReturnValue(
+      of(Result.success({ items: [unlinked], offset: 0, limit: 20, total: 1 }))
+    )
+    store.readPage({}).subscribe()
+    await firstValueFrom(store.updateUserById(2, params))
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    // A verified page proves account 1 is linked: its profile expires with the variants.
+    const linked = User.create(
+      1,
+      "Adriana",
+      "adriana@example.test",
+      Lang.ES,
+      true,
+      new Date(),
+      new Date(),
+      1,
+      null,
+      55
+    )
+    read.execute.mockReturnValue(
+      of(Result.success({ items: [linked], offset: 0, limit: 20, total: 1 }))
+    )
+    store.readPage({}).subscribe()
+    update.execute.mockReturnValue(partial)
+    await firstValueFrom(store.updateUserById(1, params))
+    expect(invalidateCustomerIdentity).toHaveBeenCalledExactlyOnceWith(55)
+    expect(store.error()?.code).toBe("PARTIAL_UPDATE")
+  })
+  it("signals no CRM identity for a write that settles after session replacement", () => {
+    // The store observes its session through a read, exactly like the IAM page does.
+    store.readPage({}).subscribe()
+    const pending = new Subject<Result<User, UserError>>()
+    update.execute.mockReturnValue(pending)
+    store.updateUserById(1, params).subscribe()
+    session.set(AuthSession.create("Other", "other@example.test", null, null, 2))
+    changes.next(session())
+    pending.next(
+      Result.success(
+        User.create(
+          1,
+          "Adriana",
+          "adriana@example.test",
+          Lang.ES,
+          true,
+          new Date(),
+          new Date(),
+          1,
+          null,
+          55
+        )
+      )
+    )
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    expect(store.mutationRevision()).toBe(0)
+  })
+  it("signals no CRM identity for a cold write that settles after session replacement", () => {
+    // No prior read: this store has not observed any session yet, so only the write's own
+    // dispatch-time evidence can tell that its result belongs to a replaced session.
+    const pending = new Subject<Result<User, UserError>>()
+    update.execute.mockReturnValue(pending)
+    store.updateUserById(1, params).subscribe()
+    session.set(AuthSession.create("Other", "other@example.test", null, null, 2))
+    changes.next(session())
+    pending.next(
+      Result.success(
+        User.create(
+          1,
+          "Adriana",
+          "adriana@example.test",
+          Lang.ES,
+          true,
+          new Date(),
+          new Date(),
+          1,
+          null,
+          55
+        )
+      )
+    )
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    expect(store.mutationRevision()).toBe(0)
+  })
+  it("signals the CRM identity for a valid cold linked write", () => {
+    update.execute.mockReturnValue(
+      of(
+        Result.success(
+          User.create(
+            1,
+            "Adriana",
+            "adriana@example.test",
+            Lang.ES,
+            true,
+            new Date(),
+            new Date(),
+            1,
+            null,
+            55
+          )
+        )
+      )
+    )
+    store.updateUserById(1, params).subscribe()
+    expect(invalidateCustomerIdentity).toHaveBeenCalledExactlyOnceWith(55)
+  })
+  it("signals no CRM identity when a synchronous observer refresh ends the session", () => {
+    const linked = User.create(
+      1,
+      "Adriana",
+      "adriana@example.test",
+      Lang.ES,
+      true,
+      new Date(),
+      new Date(),
+      1,
+      null,
+      55
+    )
+    read.execute.mockReturnValue(
+      of(Result.success({ items: [linked], offset: 0, limit: 20, total: 1 }))
+    )
+    let reads = 0
+    const observer = store.observeQuery({}).subscribe(() => {
+      if (++reads === 2) {
+        session.set(null)
+        changes.next(null)
+      }
+    })
+    update.execute.mockReturnValue(of(Result.success(linked)))
+    store.updateUserById(1, params).subscribe()
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
+    expect(store.mutationRevision()).toBe(1)
+    observer.unsubscribe()
+  })
   it("dispatches no user reads on the server", () => {
     TestBed.resetTestingModule()
     TestBed.configureTestingModule({
@@ -254,5 +481,38 @@ describe("UserStore writes and shared query cache", () => {
     })
     TestBed.inject(UserStore).readPage({}).subscribe()
     expect(read.execute).not.toHaveBeenCalled()
+  })
+  it("never signals a CRM identity from the server", async () => {
+    TestBed.resetTestingModule()
+    update.execute.mockReturnValue(
+      of(
+        Result.success(
+          User.create(
+            1,
+            "Adriana",
+            "adriana@example.test",
+            Lang.ES,
+            true,
+            new Date(),
+            new Date(),
+            1,
+            null,
+            55
+          )
+        )
+      )
+    )
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PLATFORM_ID, useValue: "server" },
+        { provide: UpdateUserByIdUseCase, useValue: update },
+        {
+          provide: LINKED_IDENTITY_SYNC,
+          useValue: { invalidateUserPages: vi.fn(), invalidateCustomerIdentity }
+        }
+      ]
+    })
+    await firstValueFrom(TestBed.inject(UserStore).updateUserById(1, params))
+    expect(invalidateCustomerIdentity).not.toHaveBeenCalled()
   })
 })

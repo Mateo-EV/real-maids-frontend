@@ -11,6 +11,7 @@ import { User } from "../../domain/entities/user.entity"
 import { PaginationResponse } from "@/app/shared/pagination/pagination.response"
 import { Result } from "@/app/shared/utils/result"
 import { createSessionReadScope } from "@/app/features/auth/presentation/state/session-read-scope"
+import { LINKED_IDENTITY_SYNC } from "@/app/core/config/linked-identity-sync"
 import { createReadResource, ReadResourceState } from "@/app/shared/state/read-resource"
 import { DestroyRef, inject, Injector, Signal } from "@angular/core"
 import { selectUserQuery } from "./user-list.store"
@@ -97,6 +98,7 @@ export const UserStore = signalStore(
   withMethods(store => {
     const injector = inject(Injector),
       destroyRef = inject(DestroyRef)
+    const identitySync = inject(LINKED_IDENTITY_SYNC)
     const normalizeError = (error: unknown) =>
       error instanceof UserError ? error : new UserError("UNEXPECTED")
     const resourceState = <T>(entry: {
@@ -230,21 +232,70 @@ export const UserStore = signalStore(
           })
         )
       })
+    /**
+     * Verified link state for one account, read only from pages this app actually loaded. A found
+     * row is real evidence (`customerId` `null` means the backend says it has no customer); no row
+     * is no evidence either way, so the relation stays ambiguous instead of invented.
+     */
+    const verifiedLink = (userId: number): { customerId: number | null } | undefined => {
+      for (const entry of Object.values(store.entries())) {
+        const user = entry.result?.items.find(candidate => candidate.id === userId)
+        if (user) return { customerId: user.customerId }
+      }
+      return undefined
+    }
+    /**
+     * `PARTIAL_UPDATE` proves the identity PUT committed but returns no record, so the link can
+     * come only from a verified page: a linked account expires its identified profile, a verified
+     * unlinked account is not CRM identity at all and expires nothing, and no verified record
+     * leaves the relation unknown — CRM page variants expire conservatively while no profile id
+     * is fabricated.
+     */
+    const partialEvidence = (userId: number): { customerId: number | null } | undefined => {
+      const verified = verifiedLink(userId)
+      if (!verified) return { customerId: null }
+      return verified.customerId === null ? undefined : { customerId: verified.customerId }
+    }
+    /**
+     * Cross-feature identity evidence. A confirmed profile PUT changed the name/email the CRM
+     * shares; `PARTIAL_UPDATE` also means that PUT committed before a later unrelated write
+     * failed, so it still carries the identity change. Anything else is not identity.
+     */
+    const identityEvidence = <T>(
+      result: Result<T, UserError>,
+      link?: { userId: number; customerIdOf(data: T): number | null }
+    ): { customerId: number | null } | undefined => {
+      if (!link) return undefined
+      if (result.success) {
+        const customerId = link.customerIdOf(result.data)
+        return customerId === null ? undefined : { customerId }
+      }
+      return result.error.code === "PARTIAL_UPDATE" ? partialEvidence(link.userId) : undefined
+    }
     const mutate = <T>(
-      request: () => Observable<Result<T, UserError>>
+      request: () => Observable<Result<T, UserError>>,
+      link?: { userId: number; customerIdOf(data: T): number | null }
     ): Observable<Result<T, UserError>> =>
       defer(() => {
-        if (observing) checkSession()
+        // Evidence only, never a gate: an identity write observes its session before dispatch so a
+        // replacement during the flight fences the outbound notification. Without that, a cold
+        // store adopted whatever session existed when the result arrived and expired new-session
+        // CRM data. Dispatch and result semantics stay exactly as before.
+        const sessionObserved = link !== undefined || observing ? checkSession() : false
         const started = scope.generation()
         return execute(request).pipe(
           tap(result => {
             // An old session's dispatched write cannot roll back, but cannot affect the new view.
             if (started !== scope.generation()) return
+            const evidence = identityEvidence(result, link)
             if (!result.success) patchState(store, { error: result.error })
             if (result.success || result.error.code === "PARTIAL_UPDATE") {
               patchState(store, { mutationRevision: store.mutationRevision() + 1 })
               invalidate("mutation")
             }
+            // Only evidence captured under a still-current session may expire the CRM cache.
+            if (evidence && sessionObserved && checkSession())
+              identitySync.invalidateCustomerIdentity(evidence.customerId)
           })
         )
       })
@@ -260,6 +311,16 @@ export const UserStore = signalStore(
       })
     return {
       selectStatistics: () => selectUserStatistics(store.statistics),
+      /**
+       * Cross-feature identity revalidation, not an IAM write: a linked CRM profile edit may have
+       * renamed this account. Names/emails decide filter membership, so every page variant
+       * expires and no row is patched. Statistics, sessions and audit are not identities and keep
+       * their own freshness; only caller-owned observers re-read, so nothing is dispatched here.
+       */
+      invalidateLinkedIdentity(): void {
+        if (!checkSession()) return
+        pages.markMutated()
+      },
       readStatistics,
       observeStatistics(): Observable<StatisticsResult> {
         return defer(() => {
@@ -288,7 +349,10 @@ export const UserStore = signalStore(
       createUser: (params: CreateUserParams) =>
         mutate(() => injector.get(CreateUserUseCase).execute(params)),
       updateUserById: (id: number, params: UpdateUserParams) =>
-        mutate(() => injector.get(UpdateUserByIdUseCase).execute(id, params)),
+        mutate(() => injector.get(UpdateUserByIdUseCase).execute(id, params), {
+          userId: id,
+          customerIdOf: user => user.customerId
+        }),
       updateUserStatusById: (id: number, isActive: boolean) =>
         mutate(() => injector.get(UpdateUserStatusByIdUseCase).execute(id, isActive)),
       deleteUserById: (id: number) => mutate(() => injector.get(DeleteUserByIdUseCase).execute(id))
